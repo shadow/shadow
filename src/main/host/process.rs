@@ -42,6 +42,7 @@ use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::context::ProcessContext;
 use crate::host::descriptor::{CompatFile, Descriptor};
+use crate::host::managed_thread::ManagedThread;
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
@@ -86,6 +87,12 @@ impl From<ProcessId> for u32 {
 impl From<ProcessId> for libc::pid_t {
     fn from(val: ProcessId) -> Self {
         val.0.try_into().unwrap()
+    }
+}
+
+impl From<ThreadId> for ProcessId {
+    fn from(value: ThreadId) -> Self {
+        ProcessId::try_from(libc::pid_t::from(value)).unwrap()
     }
 }
 
@@ -623,7 +630,6 @@ impl Process {
     /// once it has been added to the `Host`'s process list.
     pub fn spawn(
         host: &Host,
-        process_id: ProcessId,
         plugin_name: CString,
         plugin_path: &CStr,
         envv: Vec<CString>,
@@ -632,6 +638,11 @@ impl Process {
         strace_logging_options: Option<FmtOptions>,
         expected_final_state: ProcessFinalState,
     ) -> RootedRc<RootedRefCell<Process>> {
+        debug!("starting process '{:?}'", plugin_name);
+
+        let main_thread_id = host.get_new_thread_id();
+        let process_id = ProcessId::from(main_thread_id);
+
         let desc_table = RefCell::new(DescriptorTable::new());
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
@@ -689,26 +700,82 @@ impl Process {
         // cpu_delay_timer? We previously did, but it's a little complex to do so,
         // and it shouldn't matter much.
 
-        let main_thread = Self::create_and_exec_thread_group_leader(
-            host,
-            process_id,
-            pause_for_debugging,
-            plugin_name.to_str().unwrap(),
-            plugin_path,
-            &mut desc_table.borrow_mut(),
-            &strace_logging,
-            &file_basename,
-            &working_dir,
-            envv,
-            argv,
-        );
+        {
+            let mut descriptor_table = desc_table.borrow_mut();
+            Self::open_stdio_file_helper(
+                &mut descriptor_table,
+                libc::STDIN_FILENO.try_into().unwrap(),
+                "/dev/null".into(),
+                OFlag::O_RDONLY,
+            );
 
-        let (main_thread_id, native_pid) = {
-            let main_thread = main_thread.borrow(host.root());
-            (main_thread.id(), main_thread.native_pid())
-        };
+            let name = Self::static_output_file_name(&file_basename, "stdout");
+            Self::open_stdio_file_helper(
+                &mut descriptor_table,
+                libc::STDOUT_FILENO.try_into().unwrap(),
+                name,
+                OFlag::O_WRONLY,
+            );
+
+            let name = Self::static_output_file_name(&file_basename, "stderr");
+            Self::open_stdio_file_helper(
+                &mut descriptor_table,
+                libc::STDERR_FILENO.try_into().unwrap(),
+                name,
+                OFlag::O_WRONLY,
+            );
+        }
+
+        let shimlog_path = CString::new(
+            Self::static_output_file_name(&file_basename, "shimlog")
+                .as_os_str()
+                .as_bytes(),
+        )
+        .unwrap();
+
+        let mthread = ManagedThread::spawn(
+            plugin_path,
+            argv,
+            envv,
+            &working_dir,
+            strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
+            &shimlog_path,
+        );
+        let native_pid = mthread.native_pid();
+        let main_thread = Thread::wrap_mthread(host, mthread, process_id, main_thread_id).unwrap();
+
+        debug!("process '{:?}' started", plugin_name);
+
+        if pause_for_debugging {
+            // will block until logger output has been flushed
+            // there is a race condition where other threads may log between the
+            // `eprintln` and `raise` below, but it should be rare
+            log::logger().flush();
+
+            // Use a single `eprintln` to ensure we hold the lock for the whole message.
+            // Defensively pre-construct a single string so that `eprintln` is
+            // more likely to use a single `write` call, to minimize the chance
+            // of more lines being written to stdout in the meantime, and in
+            // case of C code writing to `STDERR` directly without taking Rust's
+            // lock.
+            let msg = format!(
+                "\
+              \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
+              \n** '{plugin_name:?}' (pid {native_pid}).\
+              \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
+              \n** this task, and then typing \"fg\".\
+              \n** If running GDB, resume Shadow by typing \"signal SIGCONT\"."
+            );
+            eprintln!("{}", msg);
+
+            nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
+        }
+
         let memory_manager = unsafe { MemoryManager::new(native_pid) };
-        let threads = RefCell::new(BTreeMap::from([(main_thread_id, main_thread)]));
+        let threads = RefCell::new(BTreeMap::from([(
+            main_thread_id,
+            RootedRc::new(host.root(), RootedRefCell::new(host.root(), main_thread)),
+        )]));
 
         let common = Common {
             id: process_id,
@@ -768,102 +835,6 @@ impl Process {
     pub fn thread_group_leader_id(&self) -> ThreadId {
         // tid of the thread group leader is equal to the pid.
         ThreadId::from(self.id())
-    }
-
-    /// Creates the thread group leader. After return, the thread group leader
-    /// is ready to be run.
-    fn create_and_exec_thread_group_leader(
-        host: &Host,
-        process_id: ProcessId,
-        pause_for_debugging: bool,
-        plugin_name: &str,
-        plugin_path: &CStr,
-        descriptor_table: &mut DescriptorTable,
-        strace_logging: &Option<StraceLogging>,
-        file_basename: &Path,
-        working_dir: &CString,
-        envv: Vec<CString>,
-        argv: Vec<CString>,
-    ) -> RootedRc<RootedRefCell<Thread>> {
-        Self::open_stdio_file_helper(
-            descriptor_table,
-            libc::STDIN_FILENO.try_into().unwrap(),
-            "/dev/null".into(),
-            OFlag::O_RDONLY,
-        );
-
-        let name = Self::static_output_file_name(file_basename, "stdout");
-        Self::open_stdio_file_helper(
-            descriptor_table,
-            libc::STDOUT_FILENO.try_into().unwrap(),
-            name,
-            OFlag::O_WRONLY,
-        );
-
-        let name = Self::static_output_file_name(file_basename, "stderr");
-        Self::open_stdio_file_helper(
-            descriptor_table,
-            libc::STDERR_FILENO.try_into().unwrap(),
-            name,
-            OFlag::O_WRONLY,
-        );
-
-        // Create the main thread and add it to our thread list.
-        let tid = ThreadId::from(process_id);
-        let main_thread = {
-            debug!("starting process '{}'", plugin_name);
-
-            Process::set_shared_time(host);
-
-            let shimlog_path = CString::new(
-                Self::static_output_file_name(file_basename, "shimlog")
-                    .as_os_str()
-                    .as_bytes(),
-            )
-            .unwrap();
-
-            Thread::spawn(
-                host,
-                process_id,
-                tid,
-                plugin_path,
-                argv,
-                envv,
-                working_dir,
-                strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
-                &shimlog_path,
-            )
-        };
-
-        debug!("process '{}' started", plugin_name);
-
-        if pause_for_debugging {
-            // will block until logger output has been flushed
-            // there is a race condition where other threads may log between the
-            // `eprintln` and `raise` below, but it should be rare
-            log::logger().flush();
-
-            // Use a single `eprintln` to ensure we hold the lock for the whole message.
-            // Defensively pre-construct a single string so that `eprintln` is
-            // more likely to use a single `write` call, to minimize the chance
-            // of more lines being written to stdout in the meantime, and in
-            // case of C code writing to `STDERR` directly without taking Rust's
-            // lock.
-            let msg = format!(
-                "\
-              \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
-              \n** '{plugin_name}' (pid {native_pid}).\
-              \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
-              \n** this task, and then typing \"fg\".\
-              \n** If running GDB, resume Shadow by typing \"signal SIGCONT\".",
-                native_pid = i32::from(main_thread.borrow(host.root()).native_pid())
-            );
-            eprintln!("{}", msg);
-
-            nix::sys::signal::raise(Signal::SIGTSTP).unwrap();
-        }
-
-        main_thread
     }
 
     /// Resume execution of `tid` (if it exists).

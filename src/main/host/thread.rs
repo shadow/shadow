@@ -1,11 +1,8 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::{CStr, CString};
-use std::os::fd::RawFd;
+use std::ops::Deref;
 
 use nix::errno::Errno;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
-use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
@@ -53,6 +50,11 @@ pub struct Thread {
 impl IsSend for Thread {}
 
 impl Thread {
+    /// Minimal wrapper around the native managed thread.
+    pub fn mthread(&self) -> impl Deref<Target = ManagedThread> + '_ {
+        self.mthread.borrow()
+    }
+
     /// Have the plugin thread natively execute the given syscall.
     fn native_syscall_raw(
         &self,
@@ -291,83 +293,30 @@ impl Thread {
         Ok(())
     }
 
-    pub fn spawn(
+    /// Create a new `Thread`, wrapping `mthread`. Intended for use by
+    /// syscall handlers such as `clone`.
+    pub fn wrap_mthread(
         host: &Host,
-        process_id: ProcessId,
-        thread_id: ThreadId,
-        plugin_path: &CStr,
-        argv: Vec<CString>,
-        envv: Vec<CString>,
-        working_dir: &CStr,
-        strace_fd: Option<RawFd>,
-        log_path: &CStr,
-    ) -> RootedRc<RootedRefCell<Self>> {
-        let mthread =
-            ManagedThread::spawn(plugin_path, argv, envv, working_dir, strace_fd, log_path);
-
-        let thread = Self {
+        mthread: ManagedThread,
+        pid: ProcessId,
+        tid: ThreadId,
+    ) -> Result<Thread, Errno> {
+        let child = Self {
             mthread: RefCell::new(mthread),
             syscallhandler: unsafe {
-                SendPointer::new(c::syscallhandler_new(
-                    host.id(),
-                    process_id.into(),
-                    thread_id.into(),
-                ))
+                SendPointer::new(c::syscallhandler_new(host.id(), pid.into(), tid.into()))
             },
             cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
-            id: thread_id,
+            id: tid,
             host_id: host.id(),
-            process_id,
+            process_id: pid,
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
-                thread_id.into(),
+                tid.into(),
             )),
         };
-        let root = host.root();
-        RootedRc::new(root, RootedRefCell::new(root, thread))
-    }
-
-    pub fn handle_clone_syscall(
-        &self,
-        ctx: &ProcessContext,
-        flags: libc::c_ulong,
-        child_stack: ForeignPtr<()>,
-        ptid: ForeignPtr<libc::pid_t>,
-        ctid: ForeignPtr<libc::pid_t>,
-        newtls: libc::c_ulong,
-    ) -> Result<ThreadId, Errno> {
-        let child_tid = ThreadId::from(ctx.host.get_new_process_id());
-        let child_mthread = self.mthread.borrow().handle_clone_syscall(
-            &ctx.with_thread(self),
-            flags,
-            child_stack,
-            ptid,
-            ctid,
-            newtls,
-        )?;
-        let child = Self {
-            mthread: RefCell::new(child_mthread),
-            syscallhandler: unsafe {
-                SendPointer::new(c::syscallhandler_new(
-                    ctx.host.id(),
-                    ctx.process.id().into(),
-                    child_tid.into(),
-                ))
-            },
-            cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
-            id: child_tid,
-            host_id: ctx.host.id(),
-            process_id: ctx.process.id(),
-            tid_address: Cell::new(ForeignPtr::null()),
-            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
-                &ctx.host.shim_shmem_lock_borrow().unwrap(),
-                child_tid.into(),
-            )),
-        };
-        let childrc = RootedRc::new(ctx.host.root(), RootedRefCell::new(ctx.host.root(), child));
-        ctx.process.add_thread(ctx.host, childrc);
-        Ok(child_tid)
+        Ok(child)
     }
 
     /// Shared memory for this thread.
@@ -548,37 +497,6 @@ mod export {
     pub unsafe extern "C" fn thread_getID(thread: *const Thread) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.id().into()
-    }
-
-    /// Create a new child thread as for `clone(2)`. Returns the new thread id
-    /// on success, or a negative errno on failure.
-    #[no_mangle]
-    pub unsafe extern "C" fn thread_clone(
-        thread: *const Thread,
-        flags: libc::c_ulong,
-        child_stack: UntypedForeignPtr,
-        ptid: UntypedForeignPtr,
-        ctid: UntypedForeignPtr,
-        newtls: libc::c_ulong,
-    ) -> libc::pid_t {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            Worker::with_active_process(|process| {
-                thread
-                    .handle_clone_syscall(
-                        &ProcessContext::new(host, process),
-                        flags,
-                        child_stack,
-                        ptid.cast::<libc::pid_t>(),
-                        ctid.cast::<libc::pid_t>(),
-                        newtls,
-                    )
-                    .map(libc::pid_t::from)
-                    .unwrap_or_else(|e| -(e as i32))
-            })
-            .unwrap()
-        })
-        .unwrap()
     }
 
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread

@@ -100,7 +100,7 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        debug!("forking new mthread with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
+        debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
             log_path,
@@ -287,15 +287,11 @@ impl ManagedThread {
     }
 
     /// Execute the specified `clone` syscall in `self`, and use create a new
-    /// `ManagedThread` object to manage it. If the `clone` syscall fails, the
-    /// native error is returned.
+    /// `ManagedThread` object to manage it. The new thread will be managed
+    /// by Shadow, and suitable for use with `Thread::wrap_mthread`.
     ///
-    /// TODO: The separation of duties between this, `Thread::handle_clone_syscall`, and
-    /// the shadow `clone` syscall handler is currently a bit confusing. Refactor to decouple
-    /// making the native `clone` syscall (which here should be a "dumb" pass-through) and
-    /// constructing the `ManagedThread` and `Thread` for the new native thread, such that
-    /// all the "glue" and emulation code is in the shadow `clone` syscall handler.
-    pub fn handle_clone_syscall(
+    /// If the `clone` syscall fails, the native error is returned.
+    pub fn native_clone(
         &self,
         ctx: &ThreadContext,
         flags: libc::c_ulong,
