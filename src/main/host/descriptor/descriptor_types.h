@@ -6,8 +6,6 @@
 #ifndef SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_
 #define SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_
 
-#include <glib.h>
-
 #include "main/bindings/c/bindings-opaque.h"
 
 typedef enum _LegacyFileType LegacyFileType;
@@ -49,9 +47,9 @@ struct _LegacyFile {
     LegacyFileType type;
     Status status;
     RootedRefCell_StateEventSource* event_source;
-    gint refCountStrong;
-    gint refCountWeak;
-    gint flags;
+    int refCountStrong;
+    int refCountWeak;
+    int flags;
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;
