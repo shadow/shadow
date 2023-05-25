@@ -3,7 +3,6 @@ use crate::bindings;
 #[derive(Copy, Clone)]
 // Defined in libc as an `int`, but u16 is sufficient
 // to represent all values, and is what is used in `linux_errno`.
-#[allow(non_camel_case_types)]
 //
 // We want to allow unknown values, but only up to Errno::MAX, making
 // it difficult to use an `enum` here. e.g. if we used `num_enum` with a `catch_all` `Unknown`

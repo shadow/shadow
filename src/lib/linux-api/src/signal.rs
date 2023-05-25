@@ -1,8 +1,11 @@
 use bytemuck::TransparentWrapper;
+use linux_syscall::syscall;
+use linux_syscall::Result as LinuxSyscallResult;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings::{self, linux_sigval};
+use crate::errno::Errno;
 
 /// Definition is sometimes missing in the userspace headers.
 //
@@ -1070,6 +1073,18 @@ pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
     }
 }
 
+/// Low-level version of [`kill`], to avoid unnecessary conversions.
+pub fn kill_raw(pid: i32, sig: i32) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_kill, pid, sig) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// Execute the `kill` syscall.
+pub fn kill(pid: i32, sig: Option<Signal>) -> Result<(), Errno> {
+    kill_raw(pid, sig.map(i32::from).unwrap_or(0))
+}
+
 mod export {
     use crate::bindings::{linux_siginfo_t, linux_sigset_t};
 
@@ -1173,6 +1188,14 @@ mod export {
     ) -> linux_siginfo_t {
         let signal = Signal::try_from(lsi_signo).unwrap();
         unsafe { SigInfo::peel(SigInfo::new_for_kill(signal, sender_pid, sender_uid)) }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn linux_kill(pid: i32, sig: i32) -> i32 {
+        match kill_raw(pid, sig) {
+            Ok(()) => 0,
+            Err(e) => e.to_negated_i32(),
+        }
     }
 
     #[no_mangle]
