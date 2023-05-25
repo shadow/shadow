@@ -1,8 +1,10 @@
 use core::mem::MaybeUninit;
-
+use linux_syscall::syscall;
+use linux_syscall::Result as LinuxSyscallResult;
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
+use crate::errno::Errno;
 
 pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 
@@ -609,6 +611,12 @@ pub fn defaultaction(sig: LinuxSignal) -> LinuxDefaultAction {
     }
 }
 
+pub unsafe fn kill(pid: i32, sig: LinuxSignal) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_kill, pid, i32::from(sig)) }
+        .check()
+        .map_err(Errno::from)
+}
+
 mod export {
     use super::*;
 
@@ -698,6 +706,17 @@ mod export {
         // TODO: Lift errno and code types.
         let signal = LinuxSignal::try_from(lsi_signo).unwrap();
         linux_siginfo_t::new(signal, lsi_errno, lsi_code)
+    }
+    
+    #[no_mangle]
+    pub unsafe extern "C" fn linux_kill(pid: i32, sig: i32) -> i32 {
+        let Ok(sig) = LinuxSignal::try_from(sig) else {
+            return Errno::EINVAL.to_negated_i32()
+        };
+        match unsafe { kill(pid, sig) } {
+            Ok(()) => 0,
+            Err(e) => e.to_negated_i32(),
+        }
     }
 
     #[no_mangle]
