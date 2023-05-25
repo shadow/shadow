@@ -327,7 +327,7 @@ impl linux_sigset_t {
                 return Some(s);
             }
         }
-        unreachable!("");
+        unreachable!();
     }
 
     pub fn is_empty(&self) -> bool {
