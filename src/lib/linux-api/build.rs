@@ -9,6 +9,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         after_includes: Some("typedef int32_t LinuxSigActionFlags;\n".into()),
         export: cbindgen::ExportConfig {
             include: vec!["linux_sigaction".into(), "linux_siginfo_t".into()],
+            exclude: vec!["Errno".into()],
             ..base_config.export.clone()
         },
         ..base_config

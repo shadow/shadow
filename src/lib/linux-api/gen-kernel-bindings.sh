@@ -48,6 +48,11 @@ bindgen_flags+=("--ctypes-prefix=::core::ffi")
 bindgen_flags+=("--raw-line=/* Build script: $0 */")
 bindgen_flags+=("--raw-line=/* Kernel tag: $LINUX_TAG */")
 
+# Errno values. This is a bit overly broad, but we can't really do
+# better without either enumerating all the values here or splitting
+# into multiple bindgen invocations.
+bindgen_flags+=("--allowlist-var=E.*")
+
 # Signal names
 bindgen_flags+=("--allowlist-var=SIG.*")
 
@@ -61,6 +66,13 @@ bindgen_flags+=("--allowlist-var=SA_.*")
 bindgen_flags+=("--allowlist-type=sigset_t")
 bindgen_flags+=("--allowlist-type=siginfo_t")
 bindgen_flags+=("--allowlist-type=sigaction")
+
+# Time types
+bindgen_flags+=("--allowlist-type=__kernel_clockid_t")
+bindgen_flags+=("--allowlist-type=timespec")
+
+# Clock types
+bindgen_flags+=("--allowlist-var=CLOCK_.*")
 
 # Clone flags
 bindgen_flags+=("--allowlist-var=CLONE_.*")
