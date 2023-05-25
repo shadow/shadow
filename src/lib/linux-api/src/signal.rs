@@ -250,7 +250,7 @@ impl linux_siginfo_t {
     }
 
     /// # Safety
-    /// 
+    ///
     /// The overrun field must be known to be initialized.
     #[inline]
     pub unsafe fn get_overrun(&mut self) -> i32 {
