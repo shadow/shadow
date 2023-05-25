@@ -70,7 +70,7 @@ impl<'a> SysCallConditionRefMut<'a> {
 
     pub fn wakeup_for_signal(&mut self, host: &Host, signal: LinuxSignal) -> bool {
         unsafe {
-            cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal as i32)
+            cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal.into())
         }
     }
 }

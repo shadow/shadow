@@ -209,10 +209,15 @@ pub struct ProcessShmemProtected {
     signal_actions: [linux_sigaction; LINUX_SIGRT_MAX as usize],
 }
 
+// We have several arrays indexed by signal number - 1.
+fn signal_idx(signal: LinuxSignal) -> usize {
+    (i32::from(signal) - 1) as usize
+}
+
 impl ProcessShmemProtected {
     pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&linux_siginfo_t> {
         if self.pending_signals.has(signal) {
-            Some(&self.pending_standard_siginfos[signal as usize - 1])
+            Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
             None
         }
@@ -220,7 +225,7 @@ impl ProcessShmemProtected {
 
     pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &linux_siginfo_t) {
         assert!(self.pending_signals.has(signal));
-        self.pending_standard_siginfos[signal as usize - 1] = *info;
+        self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
 
     /// # Safety
@@ -229,7 +234,7 @@ impl ProcessShmemProtected {
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
     pub unsafe fn signal_action(&self, signal: LinuxSignal) -> &linux_sigaction {
-        &self.signal_actions[signal as usize - 1]
+        &self.signal_actions[signal_idx(signal)]
     }
 
     /// # Safety
@@ -238,7 +243,7 @@ impl ProcessShmemProtected {
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
     pub unsafe fn signal_action_mut(&mut self, signal: LinuxSignal) -> &mut linux_sigaction {
-        &mut self.signal_actions[signal as usize - 1]
+        &mut self.signal_actions[signal_idx(signal)]
     }
 
     pub fn take_pending_unblocked_signal(
@@ -314,7 +319,7 @@ pub struct ThreadShmemProtected {
 impl ThreadShmemProtected {
     pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&linux_siginfo_t> {
         if self.pending_signals.has(signal) {
-            Some(&self.pending_standard_siginfos[signal as usize - 1])
+            Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
             None
         }
@@ -322,7 +327,7 @@ impl ThreadShmemProtected {
 
     pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &linux_siginfo_t) {
         assert!(self.pending_signals.has(signal));
-        self.pending_standard_siginfos[signal as usize - 1] = *info;
+        self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
 
     /// # Safety
@@ -365,13 +370,6 @@ unsafe impl Send for StackWrapper {}
 // SAFETY: We ensure the contained pointers isn't dereferenced
 // except from the original virtual address space: in the shim.
 unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
-
-// FIXME: temporary workaround for nix's lack of support for realtime
-// signals.
-fn signal_from_i32(s: i32) -> LinuxSignal {
-    assert!(s <= libc::SIGRTMAX());
-    unsafe { std::mem::transmute(s) }
-}
 
 pub mod export {
     use std::sync::atomic::Ordering;
@@ -599,7 +597,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
         *protected
-            .pending_standard_siginfo(signal_from_i32(sig))
+            .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
             .unwrap()
     }
 
@@ -619,7 +617,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
         let info = unsafe { info.as_ref().unwrap() };
-        protected.set_pending_standard_siginfo(signal_from_i32(sig), info);
+        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
     }
 
     /// # Safety
@@ -634,7 +632,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        *unsafe { protected.signal_action(signal_from_i32(sig)) }
+        *unsafe { protected.signal_action(LinuxSignal::try_from(sig).unwrap()) }
     }
 
     /// # Safety
@@ -650,7 +648,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        unsafe { *protected.signal_action_mut(signal_from_i32(sig)) = *action };
+        unsafe { *protected.signal_action_mut(LinuxSignal::try_from(sig).unwrap()) = *action };
     }
 
     #[no_mangle]
@@ -715,7 +713,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
         *protected
-            .pending_standard_siginfo(signal_from_i32(sig))
+            .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
             .unwrap()
     }
 
@@ -735,7 +733,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         let info = unsafe { info.as_ref().unwrap() };
-        protected.set_pending_standard_siginfo(signal_from_i32(sig), info.into());
+        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info.into());
     }
 
     /// # Safety
@@ -830,7 +828,7 @@ pub mod export {
             if !info.is_null() {
                 unsafe { info.write(info_res) };
             }
-            signal as i32
+            signal.into()
         } else {
             0
         }

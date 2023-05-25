@@ -1,6 +1,5 @@
 use core::mem::MaybeUninit;
 
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
@@ -33,46 +32,68 @@ pub const LINUX_SIG_IGN: usize = 1;
 pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
 
 // signal names
-#[derive(Debug, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum LinuxSignal {
-    SIGHUP = bindings::SIGHUP as i32,
-    SIGINT = bindings::SIGINT as i32,
-    SIGQUIT = bindings::SIGQUIT as i32,
-    SIGILL = bindings::SIGILL as i32,
-    SIGTRAP = bindings::SIGTRAP as i32,
-    SIGABRT = bindings::SIGABRT as i32,
-    SIGBUS = bindings::SIGBUS as i32,
-    SIGFPE = bindings::SIGFPE as i32,
-    SIGKILL = bindings::SIGKILL as i32,
-    SIGUSR1 = bindings::SIGUSR1 as i32,
-    SIGSEGV = bindings::SIGSEGV as i32,
-    SIGUSR2 = bindings::SIGUSR2 as i32,
-    SIGPIPE = bindings::SIGPIPE as i32,
-    SIGALRM = bindings::SIGALRM as i32,
-    SIGTERM = bindings::SIGTERM as i32,
-    SIGSTKFLT = bindings::SIGSTKFLT as i32,
-    SIGCHLD = bindings::SIGCHLD as i32,
-    SIGCONT = bindings::SIGCONT as i32,
-    SIGSTOP = bindings::SIGSTOP as i32,
-    SIGTSTP = bindings::SIGTSTP as i32,
-    SIGTTIN = bindings::SIGTTIN as i32,
-    SIGTTOU = bindings::SIGTTOU as i32,
-    SIGURG = bindings::SIGURG as i32,
-    SIGXCPU = bindings::SIGXCPU as i32,
-    SIGXFSZ = bindings::SIGXFSZ as i32,
-    SIGVTALRM = bindings::SIGVTALRM as i32,
-    SIGPROF = bindings::SIGPROF as i32,
-    SIGWINCH = bindings::SIGWINCH as i32,
-    SIGIO = bindings::SIGIO as i32,
-    SIGPWR = bindings::SIGPWR as i32,
-    SIGSYS = bindings::SIGSYS as i32,
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct LinuxSignal(i32);
+
+#[derive(Debug, Copy, Clone)]
+pub struct LinuxSignalFromI32Error(pub i32);
+
+impl TryFrom<i32> for LinuxSignal {
+    type Error = LinuxSignalFromI32Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        if (1..=LINUX_SIGRT_MAX).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(LinuxSignalFromI32Error(value))
+        }
+    }
+}
+
+impl From<LinuxSignal> for i32 {
+    fn from(value: LinuxSignal) -> Self {
+        value.0
+    }
 }
 
 impl LinuxSignal {
+    pub const SIGHUP: Self = Self(bindings::SIGHUP as i32);
+    pub const SIGINT: Self = Self(bindings::SIGINT as i32);
+    pub const SIGQUIT: Self = Self(bindings::SIGQUIT as i32);
+    pub const SIGILL: Self = Self(bindings::SIGILL as i32);
+    pub const SIGTRAP: Self = Self(bindings::SIGTRAP as i32);
+    pub const SIGABRT: Self = Self(bindings::SIGABRT as i32);
+    pub const SIGBUS: Self = Self(bindings::SIGBUS as i32);
+    pub const SIGFPE: Self = Self(bindings::SIGFPE as i32);
+    pub const SIGKILL: Self = Self(bindings::SIGKILL as i32);
+    pub const SIGUSR1: Self = Self(bindings::SIGUSR1 as i32);
+    pub const SIGSEGV: Self = Self(bindings::SIGSEGV as i32);
+    pub const SIGUSR2: Self = Self(bindings::SIGUSR2 as i32);
+    pub const SIGPIPE: Self = Self(bindings::SIGPIPE as i32);
+    pub const SIGALRM: Self = Self(bindings::SIGALRM as i32);
+    pub const SIGTERM: Self = Self(bindings::SIGTERM as i32);
+    pub const SIGSTKFLT: Self = Self(bindings::SIGSTKFLT as i32);
+    pub const SIGCHLD: Self = Self(bindings::SIGCHLD as i32);
+    pub const SIGCONT: Self = Self(bindings::SIGCONT as i32);
+    pub const SIGSTOP: Self = Self(bindings::SIGSTOP as i32);
+    pub const SIGTSTP: Self = Self(bindings::SIGTSTP as i32);
+    pub const SIGTTIN: Self = Self(bindings::SIGTTIN as i32);
+    pub const SIGTTOU: Self = Self(bindings::SIGTTOU as i32);
+    pub const SIGURG: Self = Self(bindings::SIGURG as i32);
+    pub const SIGXCPU: Self = Self(bindings::SIGXCPU as i32);
+    pub const SIGXFSZ: Self = Self(bindings::SIGXFSZ as i32);
+    pub const SIGVTALRM: Self = Self(bindings::SIGVTALRM as i32);
+    pub const SIGPROF: Self = Self(bindings::SIGPROF as i32);
+    pub const SIGWINCH: Self = Self(bindings::SIGWINCH as i32);
+    pub const SIGIO: Self = Self(bindings::SIGIO as i32);
+    pub const SIGPWR: Self = Self(bindings::SIGPWR as i32);
+    pub const SIGSYS: Self = Self(bindings::SIGSYS as i32);
+    pub const SIGRT_MIN: Self = Self(LINUX_SIGRT_MIN);
+    pub const SIGRT_MAX: Self = Self(LINUX_SIGRT_MAX);
+
     const fn const_alias(from: u32, to: Self) -> Self {
-        if to as i32 != from as i32 {
+        if to.0 as i32 != from as i32 {
             // Can't use a format string here since this function is `const`
             panic!("Incorrect alias")
         }
@@ -81,6 +102,10 @@ impl LinuxSignal {
     pub const SIGIOT: Self = Self::const_alias(bindings::SIGIOT, Self::SIGABRT);
     pub const SIGPOLL: Self = Self::const_alias(bindings::SIGPOLL, Self::SIGIO);
     pub const SIGUNUSED: Self = Self::const_alias(bindings::SIGUNUSED, Self::SIGSYS);
+
+    pub fn is_realtime(&self) -> bool {
+        (i32::from(Self::SIGRT_MIN)..=i32::from(Self::SIGRT_MAX)).contains(&self.0)
+    }
 }
 
 bitflags::bitflags! {
@@ -320,7 +345,7 @@ impl linux_sigset_t {
 
 impl From<LinuxSignal> for linux_sigset_t {
     fn from(value: LinuxSignal) -> Self {
-        let value = value as i32;
+        let value = i32::from(value);
         debug_assert!(value <= 64);
         Self {
             val: 1 << (value - 1),
@@ -536,44 +561,48 @@ pub enum LinuxDefaultAction {
 
 pub fn defaultaction(sig: LinuxSignal) -> LinuxDefaultAction {
     use LinuxDefaultAction as Action;
-    use LinuxSignal::*;
     match sig  {
-        SIGCONT => Action::CONT,
+        LinuxSignal::SIGCONT => Action::CONT,
         // aka SIGIOT
-        SIGABRT
-        | SIGBUS
-        | SIGFPE
-        | SIGILL
-        | SIGQUIT
-        | SIGSEGV
-        | SIGSYS
-        | SIGTRAP
-        | SIGXCPU
-        | SIGXFSZ => Action::CORE,
+        LinuxSignal::SIGABRT
+        | LinuxSignal::SIGBUS
+        | LinuxSignal::SIGFPE
+        | LinuxSignal::SIGILL
+        | LinuxSignal::SIGQUIT
+        | LinuxSignal::SIGSEGV
+        | LinuxSignal::SIGSYS
+        | LinuxSignal::SIGTRAP
+        | LinuxSignal::SIGXCPU
+        | LinuxSignal::SIGXFSZ => Action::CORE,
         // aka SIGCLD
-        SIGCHLD
-        | SIGURG
-        | SIGWINCH => Action::IGN,
-        SIGSTOP
-        | SIGTSTP
-        | SIGTTIN
-        | SIGTTOU => Action::STOP,
-        SIGALRM
+        LinuxSignal::SIGCHLD
+        | LinuxSignal::SIGURG
+        | LinuxSignal::SIGWINCH => Action::IGN,
+        LinuxSignal::SIGSTOP
+        | LinuxSignal::SIGTSTP
+        | LinuxSignal::SIGTTIN
+        | LinuxSignal::SIGTTOU => Action::STOP,
+        LinuxSignal::SIGALRM
         //| SIGEMT
-        | SIGHUP
-        | SIGINT
+        | LinuxSignal::SIGHUP
+        | LinuxSignal::SIGINT
         // aka SIGPOLL
-        | SIGIO
-        | SIGKILL
+        | LinuxSignal::SIGIO
+        | LinuxSignal::SIGKILL
         //| SIGLOST
-        | SIGPIPE
-        | SIGPROF
-        | SIGPWR
-        | SIGSTKFLT
-        | SIGTERM
-        | SIGUSR1
-        | SIGUSR2
-        | SIGVTALRM => Action::TERM,
+        | LinuxSignal::SIGPIPE
+        | LinuxSignal::SIGPROF
+        | LinuxSignal::SIGPWR
+        | LinuxSignal::SIGSTKFLT
+        | LinuxSignal::SIGTERM
+        | LinuxSignal::SIGUSR1
+        | LinuxSignal::SIGUSR2
+        | LinuxSignal::SIGVTALRM => Action::TERM,
+        //  realtime
+        other => {
+            assert!(other.is_realtime());
+            Action::IGN
+        },
     }
 }
 
@@ -646,7 +675,7 @@ mod export {
     pub unsafe extern "C" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
         let set = unsafe { set.as_ref().unwrap() };
         match set.lowest() {
-            Some(s) => s as i32,
+            Some(s) => s.into(),
             None => 0,
         }
     }
