@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, LinuxSignal};
+use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -412,7 +412,7 @@ impl RunnableProcess {
         delta
     }
 
-    fn interrupt_with_signal(&self, host: &Host, signal: LinuxSignal) {
+    fn interrupt_with_signal(&self, host: &Host, signal: Signal) {
         let threads = self.threads.borrow();
         for thread in threads.values() {
             let thread = thread.borrow(host.root());
@@ -451,7 +451,7 @@ impl RunnableProcess {
         if *siginfo.signo() == 0 {
             return;
         }
-        let signal = LinuxSignal::try_from(*siginfo.signo()).unwrap();
+        let signal = Signal::try_from(*siginfo.signo()).unwrap();
 
         // Scope for `process_shmem_protected`
         {

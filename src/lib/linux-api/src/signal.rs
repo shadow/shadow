@@ -33,30 +33,30 @@ pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
 // signal names
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct LinuxSignal(i32);
+pub struct Signal(i32);
 
 #[derive(Debug, Copy, Clone)]
-pub struct LinuxSignalFromI32Error(pub i32);
+pub struct SignalFromI32Error(pub i32);
 
-impl TryFrom<i32> for LinuxSignal {
-    type Error = LinuxSignalFromI32Error;
+impl TryFrom<i32> for Signal {
+    type Error = SignalFromI32Error;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         if (1..=LINUX_SIGRT_MAX).contains(&value) {
             Ok(Self(value))
         } else {
-            Err(LinuxSignalFromI32Error(value))
+            Err(SignalFromI32Error(value))
         }
     }
 }
 
-impl From<LinuxSignal> for i32 {
-    fn from(value: LinuxSignal) -> Self {
+impl From<Signal> for i32 {
+    fn from(value: Signal) -> Self {
         value.0
     }
 }
 
-impl LinuxSignal {
+impl Signal {
     pub const SIGHUP: Self = Self(bindings::LINUX_SIGHUP as i32);
     pub const SIGINT: Self = Self(bindings::LINUX_SIGINT as i32);
     pub const SIGQUIT: Self = Self(bindings::LINUX_SIGQUIT as i32);
@@ -210,7 +210,7 @@ impl siginfo_t {
     }
 
     #[inline]
-    pub fn new(signal: LinuxSignal, errno: i32, code: i32) -> Self {
+    pub fn new(signal: Signal, errno: i32, code: i32) -> Self {
         Self(bindings::linux_siginfo_t {
             l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
                 l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
@@ -228,7 +228,7 @@ impl siginfo_t {
         Self(bindings::linux_siginfo_t {
             l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
                 l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
-                    lsi_signo: LinuxSignal::SIGALRM.into(),
+                    lsi_signo: Signal::SIGALRM.into(),
                     lsi_errno: 0,
                     lsi_code: bindings::LINUX_SI_TIMER,
                     l_sifields: bindings::linux__sifields {
@@ -276,16 +276,16 @@ impl sigset_t {
         unsafe { &mut *(c as *mut _ as *mut Self) }
     }
 
-    pub fn has(&self, sig: LinuxSignal) -> bool {
+    pub fn has(&self, sig: Signal) -> bool {
         (*self & sigset_t::from(sig)).0 != 0
     }
 
-    pub fn lowest(&self) -> Option<LinuxSignal> {
+    pub fn lowest(&self) -> Option<Signal> {
         if self.0 == 0 {
             return None;
         }
         for i in 1..=LINUX_SIGRT_MAX {
-            let s = LinuxSignal::try_from(i).unwrap();
+            let s = Signal::try_from(i).unwrap();
             if self.has(s) {
                 return Some(s);
             }
@@ -297,18 +297,18 @@ impl sigset_t {
         *self == sigset_t::EMPTY
     }
 
-    pub fn del(&mut self, sig: LinuxSignal) {
+    pub fn del(&mut self, sig: Signal) {
         *self &= !sigset_t::from(sig);
     }
 
-    pub fn add(&mut self, sig: LinuxSignal) {
+    pub fn add(&mut self, sig: Signal) {
         *self |= sigset_t::from(sig);
     }
 }
 
-impl From<LinuxSignal> for sigset_t {
+impl From<Signal> for sigset_t {
     #[inline]
-    fn from(value: LinuxSignal) -> Self {
+    fn from(value: Signal) -> Self {
         let value = i32::from(value);
         debug_assert!(value <= 64);
         Self(1 << (value - 1))
@@ -317,9 +317,9 @@ impl From<LinuxSignal> for sigset_t {
 
 #[test]
 fn test_from_signal() {
-    let sigset = sigset_t::from(LinuxSignal::SIGABRT);
-    assert!(sigset.has(LinuxSignal::SIGABRT));
-    assert!(!sigset.has(LinuxSignal::SIGSEGV));
+    let sigset = sigset_t::from(Signal::SIGABRT);
+    assert!(sigset.has(Signal::SIGABRT));
+    assert!(!sigset.has(Signal::SIGSEGV));
     assert_ne!(sigset, sigset_t::EMPTY);
 }
 
@@ -333,10 +333,10 @@ impl core::ops::BitOr for sigset_t {
 
 #[test]
 fn test_bitor() {
-    let sigset = sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGSEGV);
-    assert!(sigset.has(LinuxSignal::SIGABRT));
-    assert!(sigset.has(LinuxSignal::SIGSEGV));
-    assert!(!sigset.has(LinuxSignal::SIGALRM));
+    let sigset = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    assert!(sigset.has(Signal::SIGABRT));
+    assert!(sigset.has(Signal::SIGSEGV));
+    assert!(!sigset.has(Signal::SIGALRM));
 }
 
 impl core::ops::BitOrAssign for sigset_t {
@@ -347,11 +347,11 @@ impl core::ops::BitOrAssign for sigset_t {
 
 #[test]
 fn test_bitorassign() {
-    let mut sigset = sigset_t::from(LinuxSignal::SIGABRT);
-    sigset |= sigset_t::from(LinuxSignal::SIGSEGV);
-    assert!(sigset.has(LinuxSignal::SIGABRT));
-    assert!(sigset.has(LinuxSignal::SIGSEGV));
-    assert!(!sigset.has(LinuxSignal::SIGALRM));
+    let mut sigset = sigset_t::from(Signal::SIGABRT);
+    sigset |= sigset_t::from(Signal::SIGSEGV);
+    assert!(sigset.has(Signal::SIGABRT));
+    assert!(sigset.has(Signal::SIGSEGV));
+    assert!(!sigset.has(Signal::SIGALRM));
 }
 
 impl core::ops::BitAnd for sigset_t {
@@ -364,12 +364,12 @@ impl core::ops::BitAnd for sigset_t {
 
 #[test]
 fn test_bitand() {
-    let lhs = sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGSEGV);
-    let rhs = sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGALRM);
+    let lhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    let rhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
     let and = lhs & rhs;
-    assert!(and.has(LinuxSignal::SIGABRT));
-    assert!(!and.has(LinuxSignal::SIGSEGV));
-    assert!(!and.has(LinuxSignal::SIGALRM));
+    assert!(and.has(Signal::SIGABRT));
+    assert!(!and.has(Signal::SIGSEGV));
+    assert!(!and.has(Signal::SIGALRM));
 }
 
 impl core::ops::BitAndAssign for sigset_t {
@@ -380,11 +380,11 @@ impl core::ops::BitAndAssign for sigset_t {
 
 #[test]
 fn test_bitand_assign() {
-    let mut set = sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGSEGV);
-    set &= sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGALRM);
-    assert!(set.has(LinuxSignal::SIGABRT));
-    assert!(!set.has(LinuxSignal::SIGSEGV));
-    assert!(!set.has(LinuxSignal::SIGALRM));
+    let mut set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    set &= sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
+    assert!(set.has(Signal::SIGABRT));
+    assert!(!set.has(Signal::SIGSEGV));
+    assert!(!set.has(Signal::SIGALRM));
 }
 
 impl core::ops::Not for sigset_t {
@@ -397,11 +397,11 @@ impl core::ops::Not for sigset_t {
 
 #[test]
 fn test_not() {
-    let set = sigset_t::from(LinuxSignal::SIGABRT) | sigset_t::from(LinuxSignal::SIGSEGV);
+    let set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
     let set = !set;
-    assert!(!set.has(LinuxSignal::SIGABRT));
-    assert!(!set.has(LinuxSignal::SIGSEGV));
-    assert!(set.has(LinuxSignal::SIGALRM));
+    assert!(!set.has(Signal::SIGABRT));
+    assert!(!set.has(Signal::SIGSEGV));
+    assert!(set.has(Signal::SIGALRM));
 }
 
 pub type SignalHandlerFn = unsafe extern "C" fn(i32);
@@ -466,45 +466,45 @@ pub enum LinuxDefaultAction {
     CONT,
 }
 
-pub fn defaultaction(sig: LinuxSignal) -> LinuxDefaultAction {
+pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
     use LinuxDefaultAction as Action;
     match sig  {
-        LinuxSignal::SIGCONT => Action::CONT,
+        Signal::SIGCONT => Action::CONT,
         // aka SIGIOT
-        LinuxSignal::SIGABRT
-        | LinuxSignal::SIGBUS
-        | LinuxSignal::SIGFPE
-        | LinuxSignal::SIGILL
-        | LinuxSignal::SIGQUIT
-        | LinuxSignal::SIGSEGV
-        | LinuxSignal::SIGSYS
-        | LinuxSignal::SIGTRAP
-        | LinuxSignal::SIGXCPU
-        | LinuxSignal::SIGXFSZ => Action::CORE,
+        Signal::SIGABRT
+        | Signal::SIGBUS
+        | Signal::SIGFPE
+        | Signal::SIGILL
+        | Signal::SIGQUIT
+        | Signal::SIGSEGV
+        | Signal::SIGSYS
+        | Signal::SIGTRAP
+        | Signal::SIGXCPU
+        | Signal::SIGXFSZ => Action::CORE,
         // aka SIGCLD
-        LinuxSignal::SIGCHLD
-        | LinuxSignal::SIGURG
-        | LinuxSignal::SIGWINCH => Action::IGN,
-        LinuxSignal::SIGSTOP
-        | LinuxSignal::SIGTSTP
-        | LinuxSignal::SIGTTIN
-        | LinuxSignal::SIGTTOU => Action::STOP,
-        LinuxSignal::SIGALRM
+        Signal::SIGCHLD
+        | Signal::SIGURG
+        | Signal::SIGWINCH => Action::IGN,
+        Signal::SIGSTOP
+        | Signal::SIGTSTP
+        | Signal::SIGTTIN
+        | Signal::SIGTTOU => Action::STOP,
+        Signal::SIGALRM
         //| SIGEMT
-        | LinuxSignal::SIGHUP
-        | LinuxSignal::SIGINT
+        | Signal::SIGHUP
+        | Signal::SIGINT
         // aka SIGPOLL
-        | LinuxSignal::SIGIO
-        | LinuxSignal::SIGKILL
+        | Signal::SIGIO
+        | Signal::SIGKILL
         //| SIGLOST
-        | LinuxSignal::SIGPIPE
-        | LinuxSignal::SIGPROF
-        | LinuxSignal::SIGPWR
-        | LinuxSignal::SIGSTKFLT
-        | LinuxSignal::SIGTERM
-        | LinuxSignal::SIGUSR1
-        | LinuxSignal::SIGUSR2
-        | LinuxSignal::SIGVTALRM => Action::TERM,
+        | Signal::SIGPIPE
+        | Signal::SIGPROF
+        | Signal::SIGPWR
+        | Signal::SIGSTKFLT
+        | Signal::SIGTERM
+        | Signal::SIGUSR1
+        | Signal::SIGUSR2
+        | Signal::SIGVTALRM => Action::TERM,
         //  realtime
         other => {
             assert!(other.is_realtime());
@@ -535,14 +535,14 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::deref_mut_c(unsafe { set.as_mut().unwrap() });
-        let signo = LinuxSignal::try_from(signo).unwrap();
+        let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::deref_mut_c(unsafe { set.as_mut().unwrap() });
-        let signo = LinuxSignal::try_from(signo).unwrap();
+        let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
@@ -595,7 +595,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
-        let sig = LinuxSignal::try_from(signo).unwrap();
+        let sig = Signal::try_from(signo).unwrap();
         defaultaction(sig)
     }
 
@@ -607,7 +607,7 @@ mod export {
         lsi_code: i32,
     ) {
         // TODO: Lift errno and code types.
-        let signal = LinuxSignal::try_from(lsi_signo).unwrap();
+        let signal = Signal::try_from(lsi_signo).unwrap();
         let si = siginfo_t::wrap_mut(unsafe { si.as_mut().unwrap() });
         *si = siginfo_t::new(signal, lsi_errno, lsi_code)
     }

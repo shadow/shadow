@@ -1,6 +1,6 @@
 use libc::stack_t;
 use linux_api::signal::{
-    sigaction, siginfo_t, sigset_t, LinuxSignal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
+    sigaction, siginfo_t, sigset_t, Signal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
@@ -209,12 +209,12 @@ pub struct ProcessShmemProtected {
 }
 
 // We have several arrays indexed by signal number - 1.
-fn signal_idx(signal: LinuxSignal) -> usize {
+fn signal_idx(signal: Signal) -> usize {
     (i32::from(signal) - 1) as usize
 }
 
 impl ProcessShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&siginfo_t> {
+    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
@@ -222,7 +222,7 @@ impl ProcessShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &siginfo_t) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
@@ -232,7 +232,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action(&self, signal: LinuxSignal) -> &sigaction {
+    pub unsafe fn signal_action(&self, signal: Signal) -> &sigaction {
         &self.signal_actions[signal_idx(signal)]
     }
 
@@ -241,14 +241,14 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action_mut(&mut self, signal: LinuxSignal) -> &mut sigaction {
+    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut sigaction {
         &mut self.signal_actions[signal_idx(signal)]
     }
 
     pub fn take_pending_unblocked_signal(
         &mut self,
         thread: &ThreadShmemProtected,
-    ) -> Option<(LinuxSignal, siginfo_t)> {
+    ) -> Option<(Signal, siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !thread.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -316,7 +316,7 @@ pub struct ThreadShmemProtected {
 }
 
 impl ThreadShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&siginfo_t> {
+    pub fn pending_standard_siginfo(&self, signal: Signal) -> Option<&siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
@@ -324,7 +324,7 @@ impl ThreadShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &siginfo_t) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: Signal, info: &siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
@@ -346,7 +346,7 @@ impl ThreadShmemProtected {
         &mut self.sigaltstack.0
     }
 
-    pub fn take_pending_unblocked_signal(&mut self) -> Option<(LinuxSignal, siginfo_t)> {
+    pub fn take_pending_unblocked_signal(&mut self) -> Option<(Signal, siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !self.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -593,7 +593,7 @@ pub mod export {
         let protected = process_mem.protected.borrow(&lock.root);
         siginfo_t::peel(
             *protected
-                .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
+                .pending_standard_siginfo(Signal::try_from(sig).unwrap())
                 .unwrap(),
         )
     }
@@ -614,7 +614,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
         let info = siginfo_t::wrap_ref(unsafe { info.as_ref().unwrap() });
-        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
+        protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
     }
 
     /// # Safety
@@ -629,7 +629,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        sigaction::peel(*unsafe { protected.signal_action(LinuxSignal::try_from(sig).unwrap()) })
+        sigaction::peel(*unsafe { protected.signal_action(Signal::try_from(sig).unwrap()) })
     }
 
     /// # Safety
@@ -646,7 +646,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let action = sigaction::wrap_ref(unsafe { action.as_ref().unwrap() });
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        unsafe { *protected.signal_action_mut(LinuxSignal::try_from(sig).unwrap()) = *action };
+        unsafe { *protected.signal_action_mut(Signal::try_from(sig).unwrap()) = *action };
     }
 
     #[no_mangle]
@@ -712,7 +712,7 @@ pub mod export {
         let protected = thread_mem.protected.borrow(&lock.root);
         siginfo_t::peel(
             *protected
-                .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
+                .pending_standard_siginfo(Signal::try_from(sig).unwrap())
                 .unwrap(),
         )
     }
@@ -733,7 +733,7 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         let info = siginfo_t::wrap_ref(unsafe { info.as_ref().unwrap() });
-        protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
+        protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
     }
 
     /// # Safety

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use linux_api::signal::LinuxSignal;
+use linux_api::signal::Signal;
 
 use super::host::Host;
 use crate::cshadow;
@@ -68,7 +68,7 @@ impl<'a> SysCallConditionRefMut<'a> {
         unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr, file_ptr) };
     }
 
-    pub fn wakeup_for_signal(&mut self, host: &Host, signal: LinuxSignal) -> bool {
+    pub fn wakeup_for_signal(&mut self, host: &Host, signal: Signal) -> bool {
         unsafe {
             cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal.into())
         }
