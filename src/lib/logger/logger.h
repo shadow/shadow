@@ -14,14 +14,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 #include "lib/logger/log_level.h"
 
 /* convenience macros for logging messages at various levels */
 // clang-format off
 
-#define panic(...)    { logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); abort(); }
+#define panic(...)    { logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__); logger_abort();}
 #define error(...)      logger_log(logger_getDefault(), LOGLEVEL_ERROR, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define warning(...)    logger_log(logger_getDefault(), LOGLEVEL_WARNING, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define info(...)       logger_log(logger_getDefault(), LOGLEVEL_INFO, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
@@ -48,6 +47,11 @@ struct _Logger {
     void (*setLevel)(Logger* logger, LogLevel level);
     bool (*isEnabled)(Logger* logger, LogLevel level);
 };
+
+// For internal  use by panic macro.
+// This lets us avoid include <stdlib.h> here in the header, where it can
+// cause conflicts with kernel headers.
+_Noreturn void logger_abort();
 
 // Not thread safe. The previously set logger, if any, will be destroyed.
 // `logger` may be NULL, which will effectively disable logging.

@@ -6,13 +6,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <inttypes.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <inttypes.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"

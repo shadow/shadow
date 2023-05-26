@@ -18,7 +18,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/utility/utility.h"
 
-void utility_handleError(const gchar* file, gint line, const gchar* function, const gchar* message,
+void utility_handleError(const char* file, int line, const char* function, const char* message,
                          ...) {
     va_list vargs;
     va_start(vargs, message);
@@ -26,7 +26,7 @@ void utility_handleError(const gchar* file, gint line, const gchar* function, co
     va_end(vargs);
 }
 
-gboolean utility_isRandomPath(const gchar* path) {
+bool utility_isRandomPath(const char* path) {
     if(path) {
         return !g_ascii_strcasecmp(path, "/dev/random") ||
            !g_ascii_strcasecmp(path, "/dev/urandom") ||
@@ -36,11 +36,11 @@ gboolean utility_isRandomPath(const gchar* path) {
     }
 }
 
-gchar* utility_strvToNewStr(gchar** strv) {
+char* utility_strvToNewStr(char** strv) {
     GString* strBuffer = g_string_new(NULL);
 
     if(strv) {
-        for(gint i = 0; strv[i] != NULL; i++) {
+        for (int i = 0; strv[i] != NULL; i++) {
             if(strv[i+1] == NULL) {
                 g_string_append_printf(strBuffer, "%s", strv[i]);
             } else {
