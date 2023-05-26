@@ -1,7 +1,5 @@
 use libc::stack_t;
-use linux_api::signal::{
-    SigAction, SigInfo, SigSet, Signal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
-};
+use linux_api::signal::{SigAction, SigInfo, SigSet, Signal};
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
@@ -182,8 +180,8 @@ impl ProcessShmem {
                     host_id,
                     pending_signals: SigSet::EMPTY,
                     pending_standard_siginfos: [SigInfo::default();
-                        LINUX_STANDARD_SIGNAL_MAX_NO as usize],
-                    signal_actions: [SigAction::default(); LINUX_SIGRT_MAX as usize],
+                        Signal::STANDARD_MAX.as_i32() as usize],
+                    signal_actions: [SigAction::default(); Signal::MAX.as_i32() as usize],
                 },
             ),
         }
@@ -199,13 +197,13 @@ pub struct ProcessShmemProtected {
     pub pending_signals: SigSet,
 
     // siginfo for each of the standard signals.
-    pending_standard_siginfos: [SigInfo; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [SigInfo; Signal::STANDARD_MAX.as_i32() as usize],
 
     // actions for both standard and realtime signals.
     // We currently support configuring handlers for realtime signals, but not
     // actually delivering them. This is to handle the case where handlers are
     // defensively installed, but not used in practice.
-    signal_actions: [SigAction; LINUX_SIGRT_MAX as usize],
+    signal_actions: [SigAction; Signal::MAX.as_i32() as usize],
 }
 
 // We have several arrays indexed by signal number - 1.
@@ -282,7 +280,7 @@ impl ThreadShmem {
                     host_id: host.host_id,
                     pending_signals: SigSet::EMPTY,
                     pending_standard_siginfos: [SigInfo::default();
-                        LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+                        Signal::STANDARD_MAX.as_i32() as usize],
                     blocked_signals: SigSet::EMPTY,
                     sigaltstack: StackWrapper(stack_t {
                         ss_sp: std::ptr::null_mut(),
@@ -304,7 +302,7 @@ pub struct ThreadShmemProtected {
     pub pending_signals: SigSet,
 
     // siginfo for each of the 32 standard signals.
-    pending_standard_siginfos: [SigInfo; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [SigInfo; Signal::STANDARD_MAX.as_i32() as usize],
 
     // Signal mask, e.g. as set by `sigprocmask`.
     // We don't use sigset_t since glibc uses a much larger bitfield than

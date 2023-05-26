@@ -3,19 +3,6 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings;
 
-pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
-
-/// Lowest realtime signal number.
-// We defined as a constant and cross-validate so that it gets exported
-// via cbindgen.
-pub const LINUX_SIGRT_MIN: i32 = 32;
-static_assertions::const_assert_eq!(LINUX_SIGRT_MIN, bindings::LINUX_SIGRTMIN as i32);
-
-/// Highest realtime signal number.
-//
-// According to signal(7). bindgen fails to bind this one.
-pub const LINUX_SIGRT_MAX: i32 = 64;
-
 /// Definition is sometimes missing in the userspace headers.
 //
 // bindgen fails to bind this one.
@@ -42,7 +29,7 @@ impl TryFrom<i32> for Signal {
     type Error = SignalFromI32Error;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
-        if (1..=LINUX_SIGRT_MAX).contains(&value) {
+        if (1..=i32::from(Signal::SIGRT_MAX)).contains(&value) {
             Ok(Self(value))
         } else {
             Err(SignalFromI32Error(value))
@@ -52,7 +39,7 @@ impl TryFrom<i32> for Signal {
 
 impl From<Signal> for i32 {
     fn from(value: Signal) -> Self {
-        value.0
+        value.as_i32()
     }
 }
 
@@ -88,8 +75,15 @@ impl Signal {
     pub const SIGIO: Self = Self(bindings::LINUX_SIGIO as i32);
     pub const SIGPWR: Self = Self(bindings::LINUX_SIGPWR as i32);
     pub const SIGSYS: Self = Self(bindings::LINUX_SIGSYS as i32);
-    pub const SIGRT_MIN: Self = Self(LINUX_SIGRT_MIN);
-    pub const SIGRT_MAX: Self = Self(LINUX_SIGRT_MAX);
+
+    pub const STANDARD_MAX: Self = Self::SIGSYS;
+
+    pub const SIGRT_MIN: Self = Self(bindings::LINUX_SIGRTMIN as i32);
+    // According to signal(7). bindgen fails to bind this one.
+    pub const SIGRT_MAX: Self = Self(64);
+
+    pub const MIN: Self = Self(1);
+    pub const MAX: Self = Self::SIGRT_MAX;
 
     const fn const_alias(from: u32, to: Self) -> Self {
         if from as i32 != to.0 {
@@ -104,6 +98,10 @@ impl Signal {
 
     pub fn is_realtime(&self) -> bool {
         (i32::from(Self::SIGRT_MIN)..=i32::from(Self::SIGRT_MAX)).contains(&self.0)
+    }
+
+    pub const fn as_i32(&self) -> i32 {
+        self.0
     }
 }
 
@@ -282,7 +280,7 @@ impl SigSet {
         if self.0 == 0 {
             return None;
         }
-        for i in 1..=LINUX_SIGRT_MAX {
+        for i in i32::from(Signal::MIN)..=i32::from(Signal::MAX) {
             let s = Signal::try_from(i).unwrap();
             if self.has(s) {
                 return Some(s);
@@ -519,6 +517,19 @@ mod export {
     pub type LinuxSigHandlerFn = unsafe extern "C" fn(i32);
     pub type LinuxSigActionFn =
         unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void);
+
+    #[no_mangle]
+    pub extern "C" fn linux_signal_is_valid(signo: i32) -> bool {
+        Signal::try_from(signo).is_ok()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn linux_signal_is_realtime(signo: i32) -> bool {
+        let Ok(signal) = Signal::try_from(signo) else {
+            return false;
+        };
+        signal.is_realtime()
+    }
 
     #[no_mangle]
     pub extern "C" fn linux_sigemptyset() -> linux_sigset_t {

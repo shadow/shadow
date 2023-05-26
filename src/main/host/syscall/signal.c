@@ -35,17 +35,17 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 
 static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Process* process,
                                                    int sig) {
-    if (sig < 0 || sig > LINUX_SIGRT_MAX) {
+    if (sig == 0) {
+        return syscallreturn_makeDoneI64(0);
+    }
+
+    if (!linux_signal_is_valid(sig)) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    if (sig > LINUX_STANDARD_SIGNAL_MAX_NO) {
+    if (linux_signal_is_realtime(sig)) {
         warning("Unimplemented signal %d", sig);
         return syscallreturn_makeDoneErrno(ENOSYS);
-    }
-
-    if (sig == 0) {
-        return syscallreturn_makeDoneI64(0);
     }
 
     linux_siginfo_t siginfo;
@@ -59,17 +59,17 @@ static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Pr
 
 static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thread* thread,
                                                   int sig) {
-    if (sig < 0 || sig > LINUX_SIGRT_MAX) {
+    if (sig == 0) {
+        return syscallreturn_makeDoneI64(0);
+    }
+
+    if (!linux_signal_is_valid(sig)) {
         return syscallreturn_makeDoneErrno(EINVAL);
     }
 
-    if (sig > LINUX_STANDARD_SIGNAL_MAX_NO) {
+    if (linux_signal_is_realtime(sig)) {
         warning("Unimplemented signal %d", sig);
         return syscallreturn_makeDoneErrno(ENOSYS);
-    }
-
-    if (sig == 0) {
-        return syscallreturn_makeDoneI64(0);
     }
 
     const Process* process = thread_getProcess(thread);
