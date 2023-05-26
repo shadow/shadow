@@ -425,12 +425,12 @@ pub type linux_sigaction = bindings::linux_sigaction;
 /// the corresponding field names in glibc.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct sigaction(linux_sigaction);
-unsafe impl VirtualAddressSpaceIndependent for sigaction {}
-unsafe impl Send for sigaction {}
-unsafe impl TransparentWrapper<linux_sigaction> for sigaction {}
+pub struct SigAction(linux_sigaction);
+unsafe impl VirtualAddressSpaceIndependent for SigAction {}
+unsafe impl Send for SigAction {}
+unsafe impl TransparentWrapper<linux_sigaction> for SigAction {}
 
-impl sigaction {
+impl SigAction {
     pub fn handler(&self) -> SignalHandler {
         let as_usize = self.0.lsa_handler.map(|f| f as usize).unwrap_or(0);
         if as_usize == LINUX_SIG_IGN {
@@ -447,7 +447,7 @@ impl sigaction {
     }
 }
 
-impl Default for sigaction {
+impl Default for SigAction {
     fn default() -> Self {
         unsafe { core::mem::zeroed() }
     }
@@ -630,7 +630,7 @@ mod export {
     pub unsafe extern "C" fn linux_sigaction_handler(
         sa: *const linux_sigaction,
     ) -> LinuxSigHandlerFn {
-        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         match sa.handler() {
             SignalHandler::Handler(h) => h,
             _ => unsafe { core::mem::transmute(core::ptr::null::<core::ffi::c_void>()) },
@@ -645,7 +645,7 @@ mod export {
     pub unsafe extern "C" fn linux_sigaction_action(
         sa: *const linux_sigaction,
     ) -> LinuxSigActionFn {
-        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         match sa.handler() {
             SignalHandler::Action(h) =>
             // We need to transmute the function pointer here, to one that takes
@@ -657,13 +657,13 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaction_is_ign(sa: *const linux_sigaction) -> bool {
-        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(sa.handler(), SignalHandler::SigIgn)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaction_is_dfl(sa: *const linux_sigaction) -> bool {
-        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(sa.handler(), SignalHandler::SigDfl)
     }
 }

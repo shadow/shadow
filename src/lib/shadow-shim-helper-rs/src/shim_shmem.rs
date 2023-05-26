@@ -1,6 +1,6 @@
 use libc::stack_t;
 use linux_api::signal::{
-    sigaction, SigInfo, SigSet, Signal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
+    SigAction, SigInfo, SigSet, Signal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
@@ -183,7 +183,7 @@ impl ProcessShmem {
                     pending_signals: SigSet::EMPTY,
                     pending_standard_siginfos: [SigInfo::default();
                         LINUX_STANDARD_SIGNAL_MAX_NO as usize],
-                    signal_actions: [sigaction::default(); LINUX_SIGRT_MAX as usize],
+                    signal_actions: [SigAction::default(); LINUX_SIGRT_MAX as usize],
                 },
             ),
         }
@@ -205,7 +205,7 @@ pub struct ProcessShmemProtected {
     // We currently support configuring handlers for realtime signals, but not
     // actually delivering them. This is to handle the case where handlers are
     // defensively installed, but not used in practice.
-    signal_actions: [sigaction; LINUX_SIGRT_MAX as usize],
+    signal_actions: [SigAction; LINUX_SIGRT_MAX as usize],
 }
 
 // We have several arrays indexed by signal number - 1.
@@ -232,7 +232,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action(&self, signal: Signal) -> &sigaction {
+    pub unsafe fn signal_action(&self, signal: Signal) -> &SigAction {
         &self.signal_actions[signal_idx(signal)]
     }
 
@@ -241,7 +241,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut sigaction {
+    pub unsafe fn signal_action_mut(&mut self, signal: Signal) -> &mut SigAction {
         &mut self.signal_actions[signal_idx(signal)]
     }
 
@@ -629,7 +629,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        sigaction::peel(*unsafe { protected.signal_action(Signal::try_from(sig).unwrap()) })
+        SigAction::peel(*unsafe { protected.signal_action(Signal::try_from(sig).unwrap()) })
     }
 
     /// # Safety
@@ -644,7 +644,7 @@ pub mod export {
     ) {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
-        let action = sigaction::wrap_ref(unsafe { action.as_ref().unwrap() });
+        let action = SigAction::wrap_ref(unsafe { action.as_ref().unwrap() });
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
         unsafe { *protected.signal_action_mut(Signal::try_from(sig).unwrap()) = *action };
     }
