@@ -123,10 +123,11 @@ impl LegacyTcpSocket {
     }
 
     pub fn push_in_packet(&mut self, packet: PacketRc, _cb_queue: &mut CallbackQueue) {
-        let packet = packet.into_inner();
-
         Worker::with_active_host(|host| {
-            unsafe { c::legacysocket_pushInPacket(self.as_legacy_socket(), host, packet) };
+            // the C code should ref the inner `Packet`, so it's fine to drop the `PacketRc`
+            unsafe {
+                c::legacysocket_pushInPacket(self.as_legacy_socket(), host, packet.borrow_inner())
+            };
         })
         .unwrap();
     }
