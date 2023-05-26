@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, SigInfo, LinuxDefaultAction, Signal};
+use linux_api::signal::{defaultaction, LinuxDefaultAction, SigInfo, Signal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;

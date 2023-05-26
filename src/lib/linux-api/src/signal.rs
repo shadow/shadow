@@ -258,11 +258,10 @@ pub type linux_sigset_t = bindings::linux_sigset_t;
 /// This is analagous to, but typically smaller than, libc's sigset_t.
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
-#[allow(non_camel_case_types)]
-pub struct sigset_t(linux_sigset_t);
-unsafe impl TransparentWrapper<linux_sigset_t> for sigset_t {}
+pub struct SigSet(linux_sigset_t);
+unsafe impl TransparentWrapper<linux_sigset_t> for SigSet {}
 
-impl sigset_t {
+impl SigSet {
     pub const EMPTY: Self = Self(0);
     pub const FULL: Self = Self(0);
 
@@ -276,7 +275,7 @@ impl sigset_t {
     }
 
     pub fn has(&self, sig: Signal) -> bool {
-        (*self & sigset_t::from(sig)).0 != 0
+        (*self & SigSet::from(sig)).0 != 0
     }
 
     pub fn lowest(&self) -> Option<Signal> {
@@ -293,19 +292,19 @@ impl sigset_t {
     }
 
     pub fn is_empty(&self) -> bool {
-        *self == sigset_t::EMPTY
+        *self == SigSet::EMPTY
     }
 
     pub fn del(&mut self, sig: Signal) {
-        *self &= !sigset_t::from(sig);
+        *self &= !SigSet::from(sig);
     }
 
     pub fn add(&mut self, sig: Signal) {
-        *self |= sigset_t::from(sig);
+        *self |= SigSet::from(sig);
     }
 }
 
-impl From<Signal> for sigset_t {
+impl From<Signal> for SigSet {
     #[inline]
     fn from(value: Signal) -> Self {
         let value = i32::from(value);
@@ -316,13 +315,13 @@ impl From<Signal> for sigset_t {
 
 #[test]
 fn test_from_signal() {
-    let sigset = sigset_t::from(Signal::SIGABRT);
+    let sigset = SigSet::from(Signal::SIGABRT);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(!sigset.has(Signal::SIGSEGV));
-    assert_ne!(sigset, sigset_t::EMPTY);
+    assert_ne!(sigset, SigSet::EMPTY);
 }
 
-impl core::ops::BitOr for sigset_t {
+impl core::ops::BitOr for SigSet {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -332,13 +331,13 @@ impl core::ops::BitOr for sigset_t {
 
 #[test]
 fn test_bitor() {
-    let sigset = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    let sigset = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitOrAssign for sigset_t {
+impl core::ops::BitOrAssign for SigSet {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0
     }
@@ -346,14 +345,14 @@ impl core::ops::BitOrAssign for sigset_t {
 
 #[test]
 fn test_bitorassign() {
-    let mut sigset = sigset_t::from(Signal::SIGABRT);
-    sigset |= sigset_t::from(Signal::SIGSEGV);
+    let mut sigset = SigSet::from(Signal::SIGABRT);
+    sigset |= SigSet::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitAnd for sigset_t {
+impl core::ops::BitAnd for SigSet {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -363,15 +362,15 @@ impl core::ops::BitAnd for sigset_t {
 
 #[test]
 fn test_bitand() {
-    let lhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
-    let rhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
+    let lhs = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
+    let rhs = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGALRM);
     let and = lhs & rhs;
     assert!(and.has(Signal::SIGABRT));
     assert!(!and.has(Signal::SIGSEGV));
     assert!(!and.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitAndAssign for sigset_t {
+impl core::ops::BitAndAssign for SigSet {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0
     }
@@ -379,14 +378,14 @@ impl core::ops::BitAndAssign for sigset_t {
 
 #[test]
 fn test_bitand_assign() {
-    let mut set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
-    set &= sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
+    let mut set = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
+    set &= SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGALRM);
     assert!(set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
     assert!(!set.has(Signal::SIGALRM));
 }
 
-impl core::ops::Not for sigset_t {
+impl core::ops::Not for SigSet {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -396,7 +395,7 @@ impl core::ops::Not for sigset_t {
 
 #[test]
 fn test_not() {
-    let set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    let set = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
     let set = !set;
     assert!(!set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
@@ -523,37 +522,37 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn linux_sigemptyset() -> linux_sigset_t {
-        sigset_t::EMPTY.0
+        SigSet::EMPTY.0
     }
 
     #[no_mangle]
     pub extern "C" fn linux_sigfullset() -> linux_sigset_t {
-        sigset_t::FULL.0
+        SigSet::FULL.0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
-        let set = sigset_t::deref_mut_c(unsafe { set.as_mut().unwrap() });
+        let set = SigSet::deref_mut_c(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
-        let set = sigset_t::deref_mut_c(unsafe { set.as_mut().unwrap() });
+        let set = SigSet::deref_mut_c(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
-        let set = sigset_t::deref_c(unsafe { set.as_ref().unwrap() });
+        let set = SigSet::deref_c(unsafe { set.as_ref().unwrap() });
         set.has(signo.try_into().unwrap())
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
-        let set = sigset_t::deref_c(unsafe { set.as_ref().unwrap() });
+        let set = SigSet::deref_c(unsafe { set.as_ref().unwrap() });
         set.is_empty()
     }
 
@@ -564,7 +563,7 @@ mod export {
     ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
-        sigset_t(*lhs | *rhs).0
+        SigSet(*lhs | *rhs).0
     }
 
     #[no_mangle]
@@ -574,18 +573,18 @@ mod export {
     ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
-        sigset_t(*lhs & *rhs).0
+        SigSet(*lhs & *rhs).0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
-        sigset_t(!*set).0
+        SigSet(!*set).0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
-        let set = sigset_t::deref_c(unsafe { set.as_ref().unwrap() });
+        let set = SigSet::deref_c(unsafe { set.as_ref().unwrap() });
         match set.lowest() {
             Some(s) => s.into(),
             None => 0,
