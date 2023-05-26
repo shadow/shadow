@@ -9,14 +9,6 @@ use crate::bindings;
 // Copied from linux's include/uapi/linux/signal.h.
 pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
 
-// Bindgen doesn't succesfully bind these constants; maybe because
-// the macros defining them cast them to pointers.
-//
-// Copied from linux's include/uapi/asm-generic/signal-defs.h.
-pub const LINUX_SIG_DFL: usize = 0;
-pub const LINUX_SIG_IGN: usize = 1;
-pub const LINUX_SIG_ERR: usize = (-1_isize) as usize;
-
 // signal names
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]
@@ -429,15 +421,28 @@ unsafe impl Send for SigAction {}
 unsafe impl TransparentWrapper<linux_sigaction> for SigAction {}
 
 impl SigAction {
+    // Bindgen doesn't succesfully bind these constants; maybe because
+    // the macros defining them cast them to pointers.
+    //
+    // Copied from linux's include/uapi/asm-generic/signal-defs.h.
+    const SIG_DFL: usize = 0;
+    const SIG_IGN: usize = 1;
+
+    pub fn flags(&self) -> Option<SigActionFlags> {
+        SigActionFlags::from_bits(self.0.lsa_flags)
+    }
+
+    pub fn flags_retain(&self) -> SigActionFlags {
+        SigActionFlags::from_bits_retain(self.0.lsa_flags)
+    }
+
     pub fn handler(&self) -> SignalHandler {
         let as_usize = self.0.lsa_handler.map(|f| f as usize).unwrap_or(0);
-        if as_usize == LINUX_SIG_IGN {
+        if as_usize == Self::SIG_IGN {
             SignalHandler::SigIgn
-        } else if as_usize == LINUX_SIG_DFL {
+        } else if as_usize == Self::SIG_DFL {
             SignalHandler::SigDfl
-        } else if (self.0.lsa_flags & bindings::LINUX_SA_SIGINFO as u64)
-            == bindings::LINUX_SA_SIGINFO as u64
-        {
+        } else if self.flags_retain().contains(SigActionFlags::SIGINFO) {
             SignalHandler::Action(unsafe { core::mem::transmute(self.0.lsa_handler.unwrap()) })
         } else {
             SignalHandler::Handler(self.0.lsa_handler.unwrap())
