@@ -128,14 +128,13 @@ unsafe impl VirtualAddressSpaceIndependent for SigActionFlags {}
 pub type linux_siginfo_t = bindings::linux_siginfo_t;
 
 #[derive(Copy, Clone)]
-#[allow(non_camel_case_types)]
 #[repr(transparent)]
-pub struct siginfo_t(linux_siginfo_t);
-unsafe impl TransparentWrapper<linux_siginfo_t> for siginfo_t {}
-unsafe impl VirtualAddressSpaceIndependent for siginfo_t {}
-unsafe impl Send for siginfo_t {}
+pub struct SigInfo(linux_siginfo_t);
+unsafe impl TransparentWrapper<linux_siginfo_t> for SigInfo {}
+unsafe impl VirtualAddressSpaceIndependent for SigInfo {}
+unsafe impl Send for SigInfo {}
 
-impl siginfo_t {
+impl SigInfo {
     /// The bindings end up with a couple extra outer layers of unions.
     /// The outermost only has a single member; the next one has a data
     /// field and a padding field.
@@ -245,7 +244,7 @@ impl siginfo_t {
     }
 }
 
-impl Default for siginfo_t {
+impl Default for SigInfo {
     fn default() -> Self {
         unsafe { core::mem::zeroed() }
     }
@@ -405,7 +404,7 @@ fn test_not() {
 }
 
 pub type SignalHandlerFn = unsafe extern "C" fn(i32);
-pub type SignalActionFn = unsafe extern "C" fn(i32, *mut siginfo_t, *mut core::ffi::c_void);
+pub type SignalActionFn = unsafe extern "C" fn(i32, *mut SigInfo, *mut core::ffi::c_void);
 
 pub enum SignalHandler {
     Handler(SignalHandlerFn),
@@ -608,19 +607,19 @@ mod export {
     ) {
         // TODO: Lift errno and code types.
         let signal = Signal::try_from(lsi_signo).unwrap();
-        let si = siginfo_t::wrap_mut(unsafe { si.as_mut().unwrap() });
-        *si = siginfo_t::new(signal, lsi_errno, lsi_code)
+        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
+        *si = SigInfo::new(signal, lsi_errno, lsi_code)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siginfo_set_pid(si: *mut linux_siginfo_t, pid: i32) {
-        let si = siginfo_t::wrap_mut(unsafe { si.as_mut().unwrap() });
+        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
         si.set_pid(pid)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siginfo_set_uid(si: *mut linux_siginfo_t, uid: u32) {
-        let si = siginfo_t::wrap_mut(unsafe { si.as_mut().unwrap() });
+        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
         si.set_uid(uid)
     }
 
