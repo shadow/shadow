@@ -10,7 +10,7 @@ pub const LINUX_STANDARD_SIGNAL_MAX_NO: i32 = 31;
 // We defined as a constant and cross-validate so that it gets exported
 // via cbindgen.
 pub const LINUX_SIGRT_MIN: i32 = 32;
-static_assertions::const_assert_eq!(LINUX_SIGRT_MIN, bindings::SIGRTMIN as i32);
+static_assertions::const_assert_eq!(LINUX_SIGRT_MIN, bindings::LINUX_SIGRTMIN as i32);
 
 /// Highest realtime signal number.
 //
@@ -58,37 +58,37 @@ impl From<LinuxSignal> for i32 {
 }
 
 impl LinuxSignal {
-    pub const SIGHUP: Self = Self(bindings::SIGHUP as i32);
-    pub const SIGINT: Self = Self(bindings::SIGINT as i32);
-    pub const SIGQUIT: Self = Self(bindings::SIGQUIT as i32);
-    pub const SIGILL: Self = Self(bindings::SIGILL as i32);
-    pub const SIGTRAP: Self = Self(bindings::SIGTRAP as i32);
-    pub const SIGABRT: Self = Self(bindings::SIGABRT as i32);
-    pub const SIGBUS: Self = Self(bindings::SIGBUS as i32);
-    pub const SIGFPE: Self = Self(bindings::SIGFPE as i32);
-    pub const SIGKILL: Self = Self(bindings::SIGKILL as i32);
-    pub const SIGUSR1: Self = Self(bindings::SIGUSR1 as i32);
-    pub const SIGSEGV: Self = Self(bindings::SIGSEGV as i32);
-    pub const SIGUSR2: Self = Self(bindings::SIGUSR2 as i32);
-    pub const SIGPIPE: Self = Self(bindings::SIGPIPE as i32);
-    pub const SIGALRM: Self = Self(bindings::SIGALRM as i32);
-    pub const SIGTERM: Self = Self(bindings::SIGTERM as i32);
-    pub const SIGSTKFLT: Self = Self(bindings::SIGSTKFLT as i32);
-    pub const SIGCHLD: Self = Self(bindings::SIGCHLD as i32);
-    pub const SIGCONT: Self = Self(bindings::SIGCONT as i32);
-    pub const SIGSTOP: Self = Self(bindings::SIGSTOP as i32);
-    pub const SIGTSTP: Self = Self(bindings::SIGTSTP as i32);
-    pub const SIGTTIN: Self = Self(bindings::SIGTTIN as i32);
-    pub const SIGTTOU: Self = Self(bindings::SIGTTOU as i32);
-    pub const SIGURG: Self = Self(bindings::SIGURG as i32);
-    pub const SIGXCPU: Self = Self(bindings::SIGXCPU as i32);
-    pub const SIGXFSZ: Self = Self(bindings::SIGXFSZ as i32);
-    pub const SIGVTALRM: Self = Self(bindings::SIGVTALRM as i32);
-    pub const SIGPROF: Self = Self(bindings::SIGPROF as i32);
-    pub const SIGWINCH: Self = Self(bindings::SIGWINCH as i32);
-    pub const SIGIO: Self = Self(bindings::SIGIO as i32);
-    pub const SIGPWR: Self = Self(bindings::SIGPWR as i32);
-    pub const SIGSYS: Self = Self(bindings::SIGSYS as i32);
+    pub const SIGHUP: Self = Self(bindings::LINUX_SIGHUP as i32);
+    pub const SIGINT: Self = Self(bindings::LINUX_SIGINT as i32);
+    pub const SIGQUIT: Self = Self(bindings::LINUX_SIGQUIT as i32);
+    pub const SIGILL: Self = Self(bindings::LINUX_SIGILL as i32);
+    pub const SIGTRAP: Self = Self(bindings::LINUX_SIGTRAP as i32);
+    pub const SIGABRT: Self = Self(bindings::LINUX_SIGABRT as i32);
+    pub const SIGBUS: Self = Self(bindings::LINUX_SIGBUS as i32);
+    pub const SIGFPE: Self = Self(bindings::LINUX_SIGFPE as i32);
+    pub const SIGKILL: Self = Self(bindings::LINUX_SIGKILL as i32);
+    pub const SIGUSR1: Self = Self(bindings::LINUX_SIGUSR1 as i32);
+    pub const SIGSEGV: Self = Self(bindings::LINUX_SIGSEGV as i32);
+    pub const SIGUSR2: Self = Self(bindings::LINUX_SIGUSR2 as i32);
+    pub const SIGPIPE: Self = Self(bindings::LINUX_SIGPIPE as i32);
+    pub const SIGALRM: Self = Self(bindings::LINUX_SIGALRM as i32);
+    pub const SIGTERM: Self = Self(bindings::LINUX_SIGTERM as i32);
+    pub const SIGSTKFLT: Self = Self(bindings::LINUX_SIGSTKFLT as i32);
+    pub const SIGCHLD: Self = Self(bindings::LINUX_SIGCHLD as i32);
+    pub const SIGCONT: Self = Self(bindings::LINUX_SIGCONT as i32);
+    pub const SIGSTOP: Self = Self(bindings::LINUX_SIGSTOP as i32);
+    pub const SIGTSTP: Self = Self(bindings::LINUX_SIGTSTP as i32);
+    pub const SIGTTIN: Self = Self(bindings::LINUX_SIGTTIN as i32);
+    pub const SIGTTOU: Self = Self(bindings::LINUX_SIGTTOU as i32);
+    pub const SIGURG: Self = Self(bindings::LINUX_SIGURG as i32);
+    pub const SIGXCPU: Self = Self(bindings::LINUX_SIGXCPU as i32);
+    pub const SIGXFSZ: Self = Self(bindings::LINUX_SIGXFSZ as i32);
+    pub const SIGVTALRM: Self = Self(bindings::LINUX_SIGVTALRM as i32);
+    pub const SIGPROF: Self = Self(bindings::LINUX_SIGPROF as i32);
+    pub const SIGWINCH: Self = Self(bindings::LINUX_SIGWINCH as i32);
+    pub const SIGIO: Self = Self(bindings::LINUX_SIGIO as i32);
+    pub const SIGPWR: Self = Self(bindings::LINUX_SIGPWR as i32);
+    pub const SIGSYS: Self = Self(bindings::LINUX_SIGSYS as i32);
     pub const SIGRT_MIN: Self = Self(LINUX_SIGRT_MIN);
     pub const SIGRT_MAX: Self = Self(LINUX_SIGRT_MAX);
 
@@ -99,9 +99,9 @@ impl LinuxSignal {
         }
         to
     }
-    pub const SIGIOT: Self = Self::const_alias(bindings::SIGIOT, Self::SIGABRT);
-    pub const SIGPOLL: Self = Self::const_alias(bindings::SIGPOLL, Self::SIGIO);
-    pub const SIGUNUSED: Self = Self::const_alias(bindings::SIGUNUSED, Self::SIGSYS);
+    pub const SIGIOT: Self = Self::const_alias(bindings::LINUX_SIGIOT, Self::SIGABRT);
+    pub const SIGPOLL: Self = Self::const_alias(bindings::LINUX_SIGPOLL, Self::SIGIO);
+    pub const SIGUNUSED: Self = Self::const_alias(bindings::LINUX_SIGUNUSED, Self::SIGSYS);
 
     pub fn is_realtime(&self) -> bool {
         (i32::from(Self::SIGRT_MIN)..=i32::from(Self::SIGRT_MAX)).contains(&self.0)
@@ -112,14 +112,14 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Default)]
     pub struct LinuxSigActionFlags: core::ffi::c_int {
-        const NOCLDSTOP = bindings::SA_NOCLDSTOP as i32;
-        const NOCLDWAIT = bindings::SA_NOCLDWAIT as i32;
-        const NODEFER = bindings::SA_NODEFER as i32;
-        const ONSTACK = bindings::SA_ONSTACK as i32;
-        const RESETHAND = bindings::SA_RESETHAND as i32;
-        const RESTART = bindings::SA_RESTART as i32;
-        const RESTORER = bindings::SA_RESTORER as i32;
-        const SIGINFO = bindings::SA_SIGINFO as i32;
+        const NOCLDSTOP = bindings::LINUX_SA_NOCLDSTOP as i32;
+        const NOCLDWAIT = bindings::LINUX_SA_NOCLDWAIT as i32;
+        const NODEFER = bindings::LINUX_SA_NODEFER as i32;
+        const ONSTACK = bindings::LINUX_SA_ONSTACK as i32;
+        const RESETHAND = bindings::LINUX_SA_RESETHAND as i32;
+        const RESTART = bindings::LINUX_SA_RESTART as i32;
+        const RESTORER = bindings::LINUX_SA_RESTORER as i32;
+        const SIGINFO = bindings::LINUX_SA_SIGINFO as i32;
     }
 }
 // We can't derive this since the bitflags field uses an internal type.
@@ -147,43 +147,52 @@ pub struct linux_siginfo_t {
     // Size validated by static assertion below.
     _padding: MaybeUninit<[u8; 100]>,
 }
-static_assertions::assert_eq_align!(linux_siginfo_t, bindings::siginfo_t);
-static_assertions::assert_eq_size!(linux_siginfo_t, bindings::siginfo_t);
+static_assertions::assert_eq_align!(linux_siginfo_t, bindings::linux_siginfo_t);
+static_assertions::assert_eq_size!(linux_siginfo_t, bindings::linux_siginfo_t);
 
 #[cfg(test)]
 #[test]
 fn test_linux_siginfo_layout() {
     assert_eq!(
         memoffset::offset_of!(linux_siginfo_t, lsi_signo),
-        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
-            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
-            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_signo)
+        memoffset::offset_of!(bindings::linux_siginfo, l__bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::linux_siginfo__bindgen_ty_1, l__bindgen_anon_1)
+            + memoffset::offset_of!(
+                bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1,
+                lsi_signo
+            )
     );
     assert_eq!(
         memoffset::offset_of!(linux_siginfo_t, lsi_errno),
-        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
-            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
-            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_errno)
+        memoffset::offset_of!(bindings::linux_siginfo, l__bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::linux_siginfo__bindgen_ty_1, l__bindgen_anon_1)
+            + memoffset::offset_of!(
+                bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1,
+                lsi_errno
+            )
     );
     assert_eq!(
         memoffset::offset_of!(linux_siginfo_t, lsi_code),
-        memoffset::offset_of!(bindings::siginfo, __bindgen_anon_1)
-            + memoffset::offset_of_union!(bindings::siginfo__bindgen_ty_1, __bindgen_anon_1)
-            + memoffset::offset_of!(bindings::siginfo__bindgen_ty_1__bindgen_ty_1, si_code)
+        memoffset::offset_of!(bindings::linux_siginfo, l__bindgen_anon_1)
+            + memoffset::offset_of_union!(bindings::linux_siginfo__bindgen_ty_1, l__bindgen_anon_1)
+            + memoffset::offset_of!(
+                bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1,
+                lsi_code
+            )
     );
 }
 
 impl linux_siginfo_t {
-    fn as_bound_type(&self) -> &bindings::siginfo_t {
+    fn as_bound_type(&self) -> &bindings::linux_siginfo_t {
         // SAFETY: Same layout. The `MaybeUninit` `_padding` section corresponds
         // to unions in the bound type, which still require `unsafe` to read.
-        unsafe { &*(self as *const _ as *const bindings::siginfo_t) }
+        unsafe { &*(self as *const _ as *const bindings::linux_siginfo_t) }
     }
 
-    fn as_bound_type_mut(&mut self) -> &mut bindings::siginfo_t {
+    fn as_bound_type_mut(&mut self) -> &mut bindings::linux_siginfo_t {
         // SAFETY: Same layout. The `MaybeUninit` `_padding` section corresponds
         // to unions in the bound type, which still require `unsafe` to read.
-        unsafe { &mut *(self as *mut _ as *mut bindings::siginfo_t) }
+        unsafe { &mut *(self as *mut _ as *mut bindings::linux_siginfo_t) }
     }
 
     #[inline]
@@ -220,33 +229,33 @@ impl linux_siginfo_t {
     pub fn set_pid(&mut self, pid: i32) {
         // union fields are always in the same position in the unions where they are defined.
         self.as_bound_type_mut()
-            .__bindgen_anon_1
-            .__bindgen_anon_1
-            ._sifields
-            ._kill
-            ._pid = pid;
+            .l__bindgen_anon_1
+            .l__bindgen_anon_1
+            .l_sifields
+            .l_kill
+            .l_pid = pid;
     }
 
     #[inline]
     pub fn set_uid(&mut self, uid: u32) {
         // union fields are always in the same position in the unions where they are defined.
         self.as_bound_type_mut()
-            .__bindgen_anon_1
-            .__bindgen_anon_1
-            ._sifields
-            ._rt
-            ._uid = uid;
+            .l__bindgen_anon_1
+            .l__bindgen_anon_1
+            .l_sifields
+            .l_rt
+            .l_uid = uid;
     }
 
     #[inline]
     pub fn set_overrun(&mut self, overrun: i32) {
         // union fields are always in the same position in the unions where they are defined.
         self.as_bound_type_mut()
-            .__bindgen_anon_1
-            .__bindgen_anon_1
-            ._sifields
-            ._timer
-            ._overrun = overrun;
+            .l__bindgen_anon_1
+            .l__bindgen_anon_1
+            .l_sifields
+            .l_timer
+            .l_overrun = overrun;
     }
 
     /// # Safety
@@ -257,11 +266,11 @@ impl linux_siginfo_t {
         // union fields are always in the same position in the unions where they are defined.
         unsafe {
             self.as_bound_type()
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                ._sifields
-                ._timer
-                ._overrun
+                .l__bindgen_anon_1
+                .l__bindgen_anon_1
+                .l_sifields
+                .l_timer
+                .l_overrun
         }
     }
 
@@ -281,16 +290,16 @@ impl linux_siginfo_t {
         let mut s = linux_siginfo_t {
             lsi_signo: LinuxSignal::SIGALRM.into(),
             lsi_errno: 0,
-            lsi_code: bindings::SI_TIMER,
+            lsi_code: bindings::LINUX_SI_TIMER,
             _align: Default::default(),
             _padding: MaybeUninit::uninit(),
         };
         s.as_bound_type_mut()
-            .__bindgen_anon_1
-            .__bindgen_anon_1
-            ._sifields
-            ._timer
-            ._overrun = overrun;
+            .l__bindgen_anon_1
+            .l__bindgen_anon_1
+            .l_sifields
+            .l_timer
+            .l_overrun = overrun;
         s
     }
 }
@@ -309,8 +318,8 @@ impl Default for linux_siginfo_t {
 pub struct linux_sigset_t {
     val: u64,
 }
-static_assertions::assert_eq_align!(linux_sigset_t, bindings::sigset_t);
-static_assertions::assert_eq_size!(linux_sigset_t, bindings::sigset_t);
+static_assertions::assert_eq_align!(linux_sigset_t, bindings::linux_sigset_t);
+static_assertions::assert_eq_size!(linux_sigset_t, bindings::linux_sigset_t);
 
 impl linux_sigset_t {
     pub const EMPTY: Self = Self { val: 0 };
@@ -502,8 +511,8 @@ pub struct linux_sigaction {
     pub lsa_restorer: Option<extern "C" fn()>,
     pub lsa_mask: linux_sigset_t,
 }
-static_assertions::assert_eq_align!(linux_sigaction, bindings::sigaction);
-static_assertions::assert_eq_size!(linux_sigaction, bindings::sigaction);
+static_assertions::assert_eq_align!(linux_sigaction, bindings::linux_sigaction);
+static_assertions::assert_eq_size!(linux_sigaction, bindings::linux_sigaction);
 
 #[cfg(test)]
 #[test]
@@ -511,26 +520,26 @@ fn test_linux_sigaction_layout() {
     assert_eq!(
         memoffset::offset_of!(linux_sigaction, u)
             + memoffset::offset_of_union!(LinuxSignalHandler, lsa_handler),
-        memoffset::offset_of!(bindings::sigaction, sa_handler)
+        memoffset::offset_of!(bindings::linux_sigaction, lsa_handler)
     );
     // Bindgen doesn't create an `sa_sigaction` field; both `sa_handler` and
     // `sa_sigaction` are stored directly in `sa_handler`.
     assert_eq!(
         memoffset::offset_of!(linux_sigaction, u)
             + memoffset::offset_of_union!(LinuxSignalHandler, lsa_sigaction),
-        memoffset::offset_of!(bindings::sigaction, sa_handler)
+        memoffset::offset_of!(bindings::linux_sigaction, lsa_handler)
     );
     assert_eq!(
         memoffset::offset_of!(linux_sigaction, lsa_flags),
-        memoffset::offset_of!(bindings::sigaction, sa_flags)
+        memoffset::offset_of!(bindings::linux_sigaction, lsa_flags)
     );
     assert_eq!(
         memoffset::offset_of!(linux_sigaction, lsa_restorer),
-        memoffset::offset_of!(bindings::sigaction, sa_restorer)
+        memoffset::offset_of!(bindings::linux_sigaction, lsa_restorer)
     );
     assert_eq!(
         memoffset::offset_of!(linux_sigaction, lsa_mask),
-        memoffset::offset_of!(bindings::sigaction, sa_mask)
+        memoffset::offset_of!(bindings::linux_sigaction, lsa_mask)
     );
 }
 

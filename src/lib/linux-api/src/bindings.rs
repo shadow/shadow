@@ -3,1038 +3,1044 @@
 /* Build script: ./gen-kernel-bindings.sh */
 /* Kernel tag: v6.2 */
 
-pub const CLONE_VM: u32 = 256;
-pub const CLONE_FS: u32 = 512;
-pub const CLONE_FILES: u32 = 1024;
-pub const CLONE_SIGHAND: u32 = 2048;
-pub const CLONE_PIDFD: u32 = 4096;
-pub const CLONE_PTRACE: u32 = 8192;
-pub const CLONE_VFORK: u32 = 16384;
-pub const CLONE_PARENT: u32 = 32768;
-pub const CLONE_THREAD: u32 = 65536;
-pub const CLONE_NEWNS: u32 = 131072;
-pub const CLONE_SYSVSEM: u32 = 262144;
-pub const CLONE_SETTLS: u32 = 524288;
-pub const CLONE_PARENT_SETTID: u32 = 1048576;
-pub const CLONE_CHILD_CLEARTID: u32 = 2097152;
-pub const CLONE_DETACHED: u32 = 4194304;
-pub const CLONE_UNTRACED: u32 = 8388608;
-pub const CLONE_CHILD_SETTID: u32 = 16777216;
-pub const CLONE_NEWCGROUP: u32 = 33554432;
-pub const CLONE_NEWUTS: u32 = 67108864;
-pub const CLONE_NEWIPC: u32 = 134217728;
-pub const CLONE_NEWUSER: u32 = 268435456;
-pub const CLONE_NEWPID: u32 = 536870912;
-pub const CLONE_NEWNET: u32 = 1073741824;
-pub const CLONE_IO: u32 = 2147483648;
-pub const CLONE_CLEAR_SIGHAND: u64 = 4294967296;
-pub const CLONE_INTO_CGROUP: u64 = 8589934592;
-pub const CLONE_NEWTIME: u32 = 128;
-pub const CLONE_ARGS_SIZE_VER0: u32 = 64;
-pub const CLONE_ARGS_SIZE_VER1: u32 = 80;
-pub const CLONE_ARGS_SIZE_VER2: u32 = 88;
-pub const SIGHUP: u32 = 1;
-pub const SIGINT: u32 = 2;
-pub const SIGQUIT: u32 = 3;
-pub const SIGILL: u32 = 4;
-pub const SIGTRAP: u32 = 5;
-pub const SIGABRT: u32 = 6;
-pub const SIGIOT: u32 = 6;
-pub const SIGBUS: u32 = 7;
-pub const SIGFPE: u32 = 8;
-pub const SIGKILL: u32 = 9;
-pub const SIGUSR1: u32 = 10;
-pub const SIGSEGV: u32 = 11;
-pub const SIGUSR2: u32 = 12;
-pub const SIGPIPE: u32 = 13;
-pub const SIGALRM: u32 = 14;
-pub const SIGTERM: u32 = 15;
-pub const SIGSTKFLT: u32 = 16;
-pub const SIGCHLD: u32 = 17;
-pub const SIGCONT: u32 = 18;
-pub const SIGSTOP: u32 = 19;
-pub const SIGTSTP: u32 = 20;
-pub const SIGTTIN: u32 = 21;
-pub const SIGTTOU: u32 = 22;
-pub const SIGURG: u32 = 23;
-pub const SIGXCPU: u32 = 24;
-pub const SIGXFSZ: u32 = 25;
-pub const SIGVTALRM: u32 = 26;
-pub const SIGPROF: u32 = 27;
-pub const SIGWINCH: u32 = 28;
-pub const SIGIO: u32 = 29;
-pub const SIGPOLL: u32 = 29;
-pub const SIGPWR: u32 = 30;
-pub const SIGSYS: u32 = 31;
-pub const SIGUNUSED: u32 = 31;
-pub const SIGRTMIN: u32 = 32;
-pub const SA_RESTORER: u32 = 67108864;
-pub const SIGSTKSZ: u32 = 8192;
-pub const SA_NOCLDSTOP: u32 = 1;
-pub const SA_NOCLDWAIT: u32 = 2;
-pub const SA_SIGINFO: u32 = 4;
-pub const SA_UNSUPPORTED: u32 = 1024;
-pub const SA_EXPOSE_TAGBITS: u32 = 2048;
-pub const SA_ONSTACK: u32 = 134217728;
-pub const SA_RESTART: u32 = 268435456;
-pub const SA_NODEFER: u32 = 1073741824;
-pub const SA_RESETHAND: u32 = 2147483648;
-pub const SA_NOMASK: u32 = 1073741824;
-pub const SA_ONESHOT: u32 = 2147483648;
-pub const SIG_BLOCK: u32 = 0;
-pub const SIG_UNBLOCK: u32 = 1;
-pub const SIG_SETMASK: u32 = 2;
-pub const SI_MAX_SIZE: u32 = 128;
-pub const SI_USER: u32 = 0;
-pub const SI_KERNEL: u32 = 128;
-pub const SI_QUEUE: i32 = -1;
-pub const SI_TIMER: i32 = -2;
-pub const SI_MESGQ: i32 = -3;
-pub const SI_ASYNCIO: i32 = -4;
-pub const SI_SIGIO: i32 = -5;
-pub const SI_TKILL: i32 = -6;
-pub const SI_DETHREAD: i32 = -7;
-pub const SI_ASYNCNL: i32 = -60;
-pub const SIGEV_SIGNAL: u32 = 0;
-pub const SIGEV_NONE: u32 = 1;
-pub const SIGEV_THREAD: u32 = 2;
-pub const SIGEV_THREAD_ID: u32 = 4;
-pub const SIGEV_MAX_SIZE: u32 = 64;
-pub type __u32 = ::core::ffi::c_uint;
-pub type __kernel_long_t = ::core::ffi::c_long;
-pub type __kernel_pid_t = ::core::ffi::c_int;
-pub type __kernel_uid32_t = ::core::ffi::c_uint;
-pub type __kernel_clock_t = __kernel_long_t;
-pub type __kernel_timer_t = ::core::ffi::c_int;
-pub type sigset_t = ::core::ffi::c_ulong;
-pub type __signalfn_t = ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
-pub type __sighandler_t = __signalfn_t;
-pub type __restorefn_t = ::core::option::Option<unsafe extern "C" fn()>;
-pub type __sigrestore_t = __restorefn_t;
+pub const LINUX_CLONE_VM: u32 = 256;
+pub const LINUX_CLONE_FS: u32 = 512;
+pub const LINUX_CLONE_FILES: u32 = 1024;
+pub const LINUX_CLONE_SIGHAND: u32 = 2048;
+pub const LINUX_CLONE_PIDFD: u32 = 4096;
+pub const LINUX_CLONE_PTRACE: u32 = 8192;
+pub const LINUX_CLONE_VFORK: u32 = 16384;
+pub const LINUX_CLONE_PARENT: u32 = 32768;
+pub const LINUX_CLONE_THREAD: u32 = 65536;
+pub const LINUX_CLONE_NEWNS: u32 = 131072;
+pub const LINUX_CLONE_SYSVSEM: u32 = 262144;
+pub const LINUX_CLONE_SETTLS: u32 = 524288;
+pub const LINUX_CLONE_PARENT_SETTID: u32 = 1048576;
+pub const LINUX_CLONE_CHILD_CLEARTID: u32 = 2097152;
+pub const LINUX_CLONE_DETACHED: u32 = 4194304;
+pub const LINUX_CLONE_UNTRACED: u32 = 8388608;
+pub const LINUX_CLONE_CHILD_SETTID: u32 = 16777216;
+pub const LINUX_CLONE_NEWCGROUP: u32 = 33554432;
+pub const LINUX_CLONE_NEWUTS: u32 = 67108864;
+pub const LINUX_CLONE_NEWIPC: u32 = 134217728;
+pub const LINUX_CLONE_NEWUSER: u32 = 268435456;
+pub const LINUX_CLONE_NEWPID: u32 = 536870912;
+pub const LINUX_CLONE_NEWNET: u32 = 1073741824;
+pub const LINUX_CLONE_IO: u32 = 2147483648;
+pub const LINUX_CLONE_CLEAR_SIGHAND: u64 = 4294967296;
+pub const LINUX_CLONE_INTO_CGROUP: u64 = 8589934592;
+pub const LINUX_CLONE_NEWTIME: u32 = 128;
+pub const LINUX_CLONE_ARGS_SIZE_VER0: u32 = 64;
+pub const LINUX_CLONE_ARGS_SIZE_VER1: u32 = 80;
+pub const LINUX_CLONE_ARGS_SIZE_VER2: u32 = 88;
+pub const LINUX_SIGHUP: u32 = 1;
+pub const LINUX_SIGINT: u32 = 2;
+pub const LINUX_SIGQUIT: u32 = 3;
+pub const LINUX_SIGILL: u32 = 4;
+pub const LINUX_SIGTRAP: u32 = 5;
+pub const LINUX_SIGABRT: u32 = 6;
+pub const LINUX_SIGIOT: u32 = 6;
+pub const LINUX_SIGBUS: u32 = 7;
+pub const LINUX_SIGFPE: u32 = 8;
+pub const LINUX_SIGKILL: u32 = 9;
+pub const LINUX_SIGUSR1: u32 = 10;
+pub const LINUX_SIGSEGV: u32 = 11;
+pub const LINUX_SIGUSR2: u32 = 12;
+pub const LINUX_SIGPIPE: u32 = 13;
+pub const LINUX_SIGALRM: u32 = 14;
+pub const LINUX_SIGTERM: u32 = 15;
+pub const LINUX_SIGSTKFLT: u32 = 16;
+pub const LINUX_SIGCHLD: u32 = 17;
+pub const LINUX_SIGCONT: u32 = 18;
+pub const LINUX_SIGSTOP: u32 = 19;
+pub const LINUX_SIGTSTP: u32 = 20;
+pub const LINUX_SIGTTIN: u32 = 21;
+pub const LINUX_SIGTTOU: u32 = 22;
+pub const LINUX_SIGURG: u32 = 23;
+pub const LINUX_SIGXCPU: u32 = 24;
+pub const LINUX_SIGXFSZ: u32 = 25;
+pub const LINUX_SIGVTALRM: u32 = 26;
+pub const LINUX_SIGPROF: u32 = 27;
+pub const LINUX_SIGWINCH: u32 = 28;
+pub const LINUX_SIGIO: u32 = 29;
+pub const LINUX_SIGPOLL: u32 = 29;
+pub const LINUX_SIGPWR: u32 = 30;
+pub const LINUX_SIGSYS: u32 = 31;
+pub const LINUX_SIGUNUSED: u32 = 31;
+pub const LINUX_SIGRTMIN: u32 = 32;
+pub const LINUX_SA_RESTORER: u32 = 67108864;
+pub const LINUX_SIGSTKSZ: u32 = 8192;
+pub const LINUX_SA_NOCLDSTOP: u32 = 1;
+pub const LINUX_SA_NOCLDWAIT: u32 = 2;
+pub const LINUX_SA_SIGINFO: u32 = 4;
+pub const LINUX_SA_UNSUPPORTED: u32 = 1024;
+pub const LINUX_SA_EXPOSE_TAGBITS: u32 = 2048;
+pub const LINUX_SA_ONSTACK: u32 = 134217728;
+pub const LINUX_SA_RESTART: u32 = 268435456;
+pub const LINUX_SA_NODEFER: u32 = 1073741824;
+pub const LINUX_SA_RESETHAND: u32 = 2147483648;
+pub const LINUX_SA_NOMASK: u32 = 1073741824;
+pub const LINUX_SA_ONESHOT: u32 = 2147483648;
+pub const LINUX_SIG_BLOCK: u32 = 0;
+pub const LINUX_SIG_UNBLOCK: u32 = 1;
+pub const LINUX_SIG_SETMASK: u32 = 2;
+pub const LINUX_SI_MAX_SIZE: u32 = 128;
+pub const LINUX_SI_USER: u32 = 0;
+pub const LINUX_SI_KERNEL: u32 = 128;
+pub const LINUX_SI_QUEUE: i32 = -1;
+pub const LINUX_SI_TIMER: i32 = -2;
+pub const LINUX_SI_MESGQ: i32 = -3;
+pub const LINUX_SI_ASYNCIO: i32 = -4;
+pub const LINUX_SI_SIGIO: i32 = -5;
+pub const LINUX_SI_TKILL: i32 = -6;
+pub const LINUX_SI_DETHREAD: i32 = -7;
+pub const LINUX_SI_ASYNCNL: i32 = -60;
+pub const LINUX_SIGEV_SIGNAL: u32 = 0;
+pub const LINUX_SIGEV_NONE: u32 = 1;
+pub const LINUX_SIGEV_THREAD: u32 = 2;
+pub const LINUX_SIGEV_THREAD_ID: u32 = 4;
+pub const LINUX_SIGEV_MAX_SIZE: u32 = 64;
+pub type linux__u32 = ::core::ffi::c_uint;
+pub type linux__kernel_long_t = ::core::ffi::c_long;
+pub type linux__kernel_pid_t = ::core::ffi::c_int;
+pub type linux__kernel_uid32_t = ::core::ffi::c_uint;
+pub type linux__kernel_clock_t = linux__kernel_long_t;
+pub type linux__kernel_timer_t = ::core::ffi::c_int;
+pub type linux_sigset_t = ::core::ffi::c_ulong;
+pub type linux__signalfn_t = ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
+pub type linux__sighandler_t = linux__signalfn_t;
+pub type linux__restorefn_t = ::core::option::Option<unsafe extern "C" fn()>;
+pub type linux__sigrestore_t = linux__restorefn_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct sigaction {
-    pub sa_handler: __sighandler_t,
-    pub sa_flags: ::core::ffi::c_ulong,
-    pub sa_restorer: __sigrestore_t,
-    pub sa_mask: sigset_t,
+pub struct linux_sigaction {
+    pub lsa_handler: linux__sighandler_t,
+    pub lsa_flags: ::core::ffi::c_ulong,
+    pub lsa_restorer: linux__sigrestore_t,
+    pub lsa_mask: linux_sigset_t,
 }
 #[test]
 fn bindgen_test_layout_sigaction() {
-    const UNINIT: ::core::mem::MaybeUninit<sigaction> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<linux_sigaction> = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<sigaction>(),
+        ::core::mem::size_of::<linux_sigaction>(),
         32usize,
-        concat!("Size of: ", stringify!(sigaction))
+        concat!("Size of: ", stringify!(linux_sigaction))
     );
     assert_eq!(
-        ::core::mem::align_of::<sigaction>(),
+        ::core::mem::align_of::<linux_sigaction>(),
         8usize,
-        concat!("Alignment of ", stringify!(sigaction))
+        concat!("Alignment of ", stringify!(linux_sigaction))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sa_handler) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsa_handler) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigaction),
+            stringify!(linux_sigaction),
             "::",
-            stringify!(sa_handler)
+            stringify!(lsa_handler)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sa_flags) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsa_flags) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigaction),
+            stringify!(linux_sigaction),
             "::",
-            stringify!(sa_flags)
+            stringify!(lsa_flags)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sa_restorer) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsa_restorer) as usize - ptr as usize },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigaction),
+            stringify!(linux_sigaction),
             "::",
-            stringify!(sa_restorer)
+            stringify!(lsa_restorer)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sa_mask) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsa_mask) as usize - ptr as usize },
         24usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigaction),
+            stringify!(linux_sigaction),
             "::",
-            stringify!(sa_mask)
+            stringify!(lsa_mask)
         )
     );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union sigval {
-    pub sival_int: ::core::ffi::c_int,
-    pub sival_ptr: *mut ::core::ffi::c_void,
+pub union linux_sigval {
+    pub lsival_int: ::core::ffi::c_int,
+    pub lsival_ptr: *mut ::core::ffi::c_void,
 }
 #[test]
 fn bindgen_test_layout_sigval() {
-    const UNINIT: ::core::mem::MaybeUninit<sigval> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<linux_sigval> = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<sigval>(),
+        ::core::mem::size_of::<linux_sigval>(),
         8usize,
-        concat!("Size of: ", stringify!(sigval))
+        concat!("Size of: ", stringify!(linux_sigval))
     );
     assert_eq!(
-        ::core::mem::align_of::<sigval>(),
+        ::core::mem::align_of::<linux_sigval>(),
         8usize,
-        concat!("Alignment of ", stringify!(sigval))
+        concat!("Alignment of ", stringify!(linux_sigval))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sival_int) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsival_int) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigval),
+            stringify!(linux_sigval),
             "::",
-            stringify!(sival_int)
+            stringify!(lsival_int)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).sival_ptr) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsival_ptr) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(sigval),
+            stringify!(linux_sigval),
             "::",
-            stringify!(sival_ptr)
+            stringify!(lsival_ptr)
         )
     );
 }
-pub type sigval_t = sigval;
+pub type linux_sigval_t = linux_sigval;
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union __sifields {
-    pub _kill: __sifields__bindgen_ty_1,
-    pub _timer: __sifields__bindgen_ty_2,
-    pub _rt: __sifields__bindgen_ty_3,
-    pub _sigchld: __sifields__bindgen_ty_4,
-    pub _sigfault: __sifields__bindgen_ty_5,
-    pub _sigpoll: __sifields__bindgen_ty_6,
-    pub _sigsys: __sifields__bindgen_ty_7,
+pub union linux__sifields {
+    pub l_kill: linux__sifields__bindgen_ty_1,
+    pub l_timer: linux__sifields__bindgen_ty_2,
+    pub l_rt: linux__sifields__bindgen_ty_3,
+    pub l_sigchld: linux__sifields__bindgen_ty_4,
+    pub l_sigfault: linux__sifields__bindgen_ty_5,
+    pub l_sigpoll: linux__sifields__bindgen_ty_6,
+    pub l_sigsys: linux__sifields__bindgen_ty_7,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_1 {
-    pub _pid: __kernel_pid_t,
-    pub _uid: __kernel_uid32_t,
+pub struct linux__sifields__bindgen_ty_1 {
+    pub l_pid: linux__kernel_pid_t,
+    pub l_uid: linux__kernel_uid32_t,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_1() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_1> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_1> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_1>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_1>(),
         8usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_1))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_1))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_1>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_1>(),
         4usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_1))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_1))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._pid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pid) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_1),
             "::",
-            stringify!(_pid)
+            stringify!(l_pid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._uid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_uid) as usize - ptr as usize },
         4usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_1),
             "::",
-            stringify!(_uid)
+            stringify!(l_uid)
         )
     );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct __sifields__bindgen_ty_2 {
-    pub _tid: __kernel_timer_t,
-    pub _overrun: ::core::ffi::c_int,
-    pub _sigval: sigval_t,
-    pub _sys_private: ::core::ffi::c_int,
+pub struct linux__sifields__bindgen_ty_2 {
+    pub l_tid: linux__kernel_timer_t,
+    pub l_overrun: ::core::ffi::c_int,
+    pub l_sigval: linux_sigval_t,
+    pub l_sys_private: ::core::ffi::c_int,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_2() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_2> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_2> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_2>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_2>(),
         24usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_2))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_2))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_2>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_2>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_2))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_2))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._tid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_tid) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_2),
             "::",
-            stringify!(_tid)
+            stringify!(l_tid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._overrun) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_overrun) as usize - ptr as usize },
         4usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_2),
             "::",
-            stringify!(_overrun)
+            stringify!(l_overrun)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigval) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigval) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_2),
             "::",
-            stringify!(_sigval)
+            stringify!(l_sigval)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sys_private) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sys_private) as usize - ptr as usize },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_2),
             "::",
-            stringify!(_sys_private)
+            stringify!(l_sys_private)
         )
     );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct __sifields__bindgen_ty_3 {
-    pub _pid: __kernel_pid_t,
-    pub _uid: __kernel_uid32_t,
-    pub _sigval: sigval_t,
+pub struct linux__sifields__bindgen_ty_3 {
+    pub l_pid: linux__kernel_pid_t,
+    pub l_uid: linux__kernel_uid32_t,
+    pub l_sigval: linux_sigval_t,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_3() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_3> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_3> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_3>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_3>(),
         16usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_3))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_3))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_3>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_3>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_3))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_3))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._pid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pid) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_3),
             "::",
-            stringify!(_pid)
+            stringify!(l_pid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._uid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_uid) as usize - ptr as usize },
         4usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_3),
             "::",
-            stringify!(_uid)
+            stringify!(l_uid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigval) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigval) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_3),
             "::",
-            stringify!(_sigval)
+            stringify!(l_sigval)
         )
     );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_4 {
-    pub _pid: __kernel_pid_t,
-    pub _uid: __kernel_uid32_t,
-    pub _status: ::core::ffi::c_int,
-    pub _utime: __kernel_clock_t,
-    pub _stime: __kernel_clock_t,
+pub struct linux__sifields__bindgen_ty_4 {
+    pub l_pid: linux__kernel_pid_t,
+    pub l_uid: linux__kernel_uid32_t,
+    pub l_status: ::core::ffi::c_int,
+    pub l_utime: linux__kernel_clock_t,
+    pub l_stime: linux__kernel_clock_t,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_4() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_4> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_4> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_4>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_4>(),
         32usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_4))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_4))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_4>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_4>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_4))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_4))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._pid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pid) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_4),
+            stringify!(linux__sifields__bindgen_ty_4),
             "::",
-            stringify!(_pid)
+            stringify!(l_pid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._uid) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_uid) as usize - ptr as usize },
         4usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_4),
+            stringify!(linux__sifields__bindgen_ty_4),
             "::",
-            stringify!(_uid)
+            stringify!(l_uid)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._status) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_status) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_4),
+            stringify!(linux__sifields__bindgen_ty_4),
             "::",
-            stringify!(_status)
+            stringify!(l_status)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._utime) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_utime) as usize - ptr as usize },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_4),
+            stringify!(linux__sifields__bindgen_ty_4),
             "::",
-            stringify!(_utime)
+            stringify!(l_utime)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._stime) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_stime) as usize - ptr as usize },
         24usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_4),
+            stringify!(linux__sifields__bindgen_ty_4),
             "::",
-            stringify!(_stime)
+            stringify!(l_stime)
         )
     );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct __sifields__bindgen_ty_5 {
-    pub _addr: *mut ::core::ffi::c_void,
-    pub __bindgen_anon_1: __sifields__bindgen_ty_5__bindgen_ty_1,
+pub struct linux__sifields__bindgen_ty_5 {
+    pub l_addr: *mut ::core::ffi::c_void,
+    pub l__bindgen_anon_1: linux__sifields__bindgen_ty_5__bindgen_ty_1,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union __sifields__bindgen_ty_5__bindgen_ty_1 {
-    pub _trapno: ::core::ffi::c_int,
-    pub _addr_lsb: ::core::ffi::c_short,
-    pub _addr_bnd: __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
-    pub _addr_pkey: __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2,
-    pub _perf: __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3,
+pub union linux__sifields__bindgen_ty_5__bindgen_ty_1 {
+    pub l_trapno: ::core::ffi::c_int,
+    pub l_addr_lsb: ::core::ffi::c_short,
+    pub l_addr_bnd: linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+    pub l_addr_pkey: linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2,
+    pub l_perf: linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1 {
-    pub _dummy_bnd: [::core::ffi::c_char; 8usize],
-    pub _lower: *mut ::core::ffi::c_void,
-    pub _upper: *mut ::core::ffi::c_void,
+pub struct linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1 {
+    pub l_dummy_bnd: [::core::ffi::c_char; 8usize],
+    pub l_lower: *mut ::core::ffi::c_void,
+    pub l_upper: *mut ::core::ffi::c_void,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1> =
-        ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<
+        linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1,
+    > = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
         24usize,
         concat!(
             "Size of: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
         )
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1>(),
         8usize,
         concat!(
             "Alignment of ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._dummy_bnd) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_dummy_bnd) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(_dummy_bnd)
+            stringify!(l_dummy_bnd)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._lower) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_lower) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(_lower)
+            stringify!(l_lower)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._upper) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_upper) as usize - ptr as usize },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(_upper)
+            stringify!(l_upper)
         )
     );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2 {
-    pub _dummy_pkey: [::core::ffi::c_char; 8usize],
-    pub _pkey: __u32,
+pub struct linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2 {
+    pub l_dummy_pkey: [::core::ffi::c_char; 8usize],
+    pub l_pkey: linux__u32,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2> =
-        ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<
+        linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2,
+    > = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2>(),
         12usize,
         concat!(
             "Size of: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2)
         )
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2>(),
         4usize,
         concat!(
             "Alignment of ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._dummy_pkey) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_dummy_pkey) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2),
             "::",
-            stringify!(_dummy_pkey)
+            stringify!(l_dummy_pkey)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._pkey) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pkey) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_2),
             "::",
-            stringify!(_pkey)
+            stringify!(l_pkey)
         )
     );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3 {
-    pub _data: ::core::ffi::c_ulong,
-    pub _type: __u32,
-    pub _flags: __u32,
+pub struct linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3 {
+    pub l_data: ::core::ffi::c_ulong,
+    pub l_type: linux__u32,
+    pub l_flags: linux__u32,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3> =
-        ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<
+        linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3,
+    > = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3>(),
         16usize,
         concat!(
             "Size of: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3)
         )
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3>(),
         8usize,
         concat!(
             "Alignment of ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._data) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_data) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
             "::",
-            stringify!(_data)
+            stringify!(l_data)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._type) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_type) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
             "::",
-            stringify!(_type)
+            stringify!(l_type)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._flags) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_flags) as usize - ptr as usize },
         12usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1__bindgen_ty_3),
             "::",
-            stringify!(_flags)
+            stringify!(l_flags)
         )
     );
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_5__bindgen_ty_1() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_5__bindgen_ty_1> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_5__bindgen_ty_1> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_5__bindgen_ty_1>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1>(),
         24usize,
         concat!(
             "Size of: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1)
         )
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_5__bindgen_ty_1>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_5__bindgen_ty_1>(),
         8usize,
         concat!(
             "Alignment of ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1)
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._trapno) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_trapno) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1),
             "::",
-            stringify!(_trapno)
+            stringify!(l_trapno)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._addr_lsb) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_addr_lsb) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1),
             "::",
-            stringify!(_addr_lsb)
+            stringify!(l_addr_lsb)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._addr_bnd) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_addr_bnd) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1),
             "::",
-            stringify!(_addr_bnd)
+            stringify!(l_addr_bnd)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._addr_pkey) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_addr_pkey) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1),
             "::",
-            stringify!(_addr_pkey)
+            stringify!(l_addr_pkey)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._perf) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_perf) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5__bindgen_ty_1),
+            stringify!(linux__sifields__bindgen_ty_5__bindgen_ty_1),
             "::",
-            stringify!(_perf)
+            stringify!(l_perf)
         )
     );
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_5() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_5> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_5> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_5>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_5>(),
         32usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_5))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_5))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_5>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_5>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_5))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_5))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._addr) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_addr) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_5),
+            stringify!(linux__sifields__bindgen_ty_5),
             "::",
-            stringify!(_addr)
+            stringify!(l_addr)
         )
     );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_6 {
-    pub _band: ::core::ffi::c_long,
-    pub _fd: ::core::ffi::c_int,
+pub struct linux__sifields__bindgen_ty_6 {
+    pub l_band: ::core::ffi::c_long,
+    pub l_fd: ::core::ffi::c_int,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_6() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_6> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_6> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_6>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_6>(),
         16usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_6))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_6))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_6>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_6>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_6))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_6))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._band) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_band) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_6),
+            stringify!(linux__sifields__bindgen_ty_6),
             "::",
-            stringify!(_band)
+            stringify!(l_band)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._fd) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_fd) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_6),
+            stringify!(linux__sifields__bindgen_ty_6),
             "::",
-            stringify!(_fd)
+            stringify!(l_fd)
         )
     );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct __sifields__bindgen_ty_7 {
-    pub _call_addr: *mut ::core::ffi::c_void,
-    pub _syscall: ::core::ffi::c_int,
-    pub _arch: ::core::ffi::c_uint,
+pub struct linux__sifields__bindgen_ty_7 {
+    pub l_call_addr: *mut ::core::ffi::c_void,
+    pub l_syscall: ::core::ffi::c_int,
+    pub l_arch: ::core::ffi::c_uint,
 }
 #[test]
 fn bindgen_test_layout___sifields__bindgen_ty_7() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields__bindgen_ty_7> =
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields__bindgen_ty_7> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields__bindgen_ty_7>(),
+        ::core::mem::size_of::<linux__sifields__bindgen_ty_7>(),
         16usize,
-        concat!("Size of: ", stringify!(__sifields__bindgen_ty_7))
+        concat!("Size of: ", stringify!(linux__sifields__bindgen_ty_7))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields__bindgen_ty_7>(),
+        ::core::mem::align_of::<linux__sifields__bindgen_ty_7>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields__bindgen_ty_7))
+        concat!("Alignment of ", stringify!(linux__sifields__bindgen_ty_7))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._call_addr) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_call_addr) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_7),
+            stringify!(linux__sifields__bindgen_ty_7),
             "::",
-            stringify!(_call_addr)
+            stringify!(l_call_addr)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._syscall) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_syscall) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_7),
+            stringify!(linux__sifields__bindgen_ty_7),
             "::",
-            stringify!(_syscall)
+            stringify!(l_syscall)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._arch) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_arch) as usize - ptr as usize },
         12usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields__bindgen_ty_7),
+            stringify!(linux__sifields__bindgen_ty_7),
             "::",
-            stringify!(_arch)
+            stringify!(l_arch)
         )
     );
 }
 #[test]
 fn bindgen_test_layout___sifields() {
-    const UNINIT: ::core::mem::MaybeUninit<__sifields> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<linux__sifields> = ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<__sifields>(),
+        ::core::mem::size_of::<linux__sifields>(),
         32usize,
-        concat!("Size of: ", stringify!(__sifields))
+        concat!("Size of: ", stringify!(linux__sifields))
     );
     assert_eq!(
-        ::core::mem::align_of::<__sifields>(),
+        ::core::mem::align_of::<linux__sifields>(),
         8usize,
-        concat!("Alignment of ", stringify!(__sifields))
+        concat!("Alignment of ", stringify!(linux__sifields))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._kill) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_kill) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_kill)
+            stringify!(l_kill)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._timer) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_timer) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_timer)
+            stringify!(l_timer)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._rt) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_rt) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_rt)
+            stringify!(l_rt)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigchld) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigchld) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_sigchld)
+            stringify!(l_sigchld)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigfault) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigfault) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_sigfault)
+            stringify!(l_sigfault)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigpoll) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigpoll) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_sigpoll)
+            stringify!(l_sigpoll)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sigsys) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sigsys) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(__sifields),
+            stringify!(linux__sifields),
             "::",
-            stringify!(_sigsys)
+            stringify!(l_sigsys)
         )
     );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct siginfo {
-    pub __bindgen_anon_1: siginfo__bindgen_ty_1,
+pub struct linux_siginfo {
+    pub l__bindgen_anon_1: linux_siginfo__bindgen_ty_1,
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union siginfo__bindgen_ty_1 {
-    pub __bindgen_anon_1: siginfo__bindgen_ty_1__bindgen_ty_1,
-    pub _si_pad: [::core::ffi::c_int; 32usize],
+pub union linux_siginfo__bindgen_ty_1 {
+    pub l__bindgen_anon_1: linux_siginfo__bindgen_ty_1__bindgen_ty_1,
+    pub l_si_pad: [::core::ffi::c_int; 32usize],
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct siginfo__bindgen_ty_1__bindgen_ty_1 {
-    pub si_signo: ::core::ffi::c_int,
-    pub si_errno: ::core::ffi::c_int,
-    pub si_code: ::core::ffi::c_int,
-    pub _sifields: __sifields,
+pub struct linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
+    pub lsi_signo: ::core::ffi::c_int,
+    pub lsi_errno: ::core::ffi::c_int,
+    pub lsi_code: ::core::ffi::c_int,
+    pub l_sifields: linux__sifields,
 }
 #[test]
 fn bindgen_test_layout_siginfo__bindgen_ty_1__bindgen_ty_1() {
-    const UNINIT: ::core::mem::MaybeUninit<siginfo__bindgen_ty_1__bindgen_ty_1> =
+    const UNINIT: ::core::mem::MaybeUninit<linux_siginfo__bindgen_ty_1__bindgen_ty_1> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<siginfo__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::size_of::<linux_siginfo__bindgen_ty_1__bindgen_ty_1>(),
         48usize,
-        concat!("Size of: ", stringify!(siginfo__bindgen_ty_1__bindgen_ty_1))
+        concat!(
+            "Size of: ",
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1)
+        )
     );
     assert_eq!(
-        ::core::mem::align_of::<siginfo__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::align_of::<linux_siginfo__bindgen_ty_1__bindgen_ty_1>(),
         8usize,
         concat!(
             "Alignment of ",
-            stringify!(siginfo__bindgen_ty_1__bindgen_ty_1)
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).si_signo) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsi_signo) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(siginfo__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(si_signo)
+            stringify!(lsi_signo)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).si_errno) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsi_errno) as usize - ptr as usize },
         4usize,
         concat!(
             "Offset of field: ",
-            stringify!(siginfo__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(si_errno)
+            stringify!(lsi_errno)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).si_code) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).lsi_code) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
-            stringify!(siginfo__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(si_code)
+            stringify!(lsi_code)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._sifields) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_sifields) as usize - ptr as usize },
         16usize,
         concat!(
             "Offset of field: ",
-            stringify!(siginfo__bindgen_ty_1__bindgen_ty_1),
+            stringify!(linux_siginfo__bindgen_ty_1__bindgen_ty_1),
             "::",
-            stringify!(_sifields)
+            stringify!(l_sifields)
         )
     );
 }
 #[test]
 fn bindgen_test_layout_siginfo__bindgen_ty_1() {
-    const UNINIT: ::core::mem::MaybeUninit<siginfo__bindgen_ty_1> =
+    const UNINIT: ::core::mem::MaybeUninit<linux_siginfo__bindgen_ty_1> =
         ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
-        ::core::mem::size_of::<siginfo__bindgen_ty_1>(),
+        ::core::mem::size_of::<linux_siginfo__bindgen_ty_1>(),
         128usize,
-        concat!("Size of: ", stringify!(siginfo__bindgen_ty_1))
+        concat!("Size of: ", stringify!(linux_siginfo__bindgen_ty_1))
     );
     assert_eq!(
-        ::core::mem::align_of::<siginfo__bindgen_ty_1>(),
+        ::core::mem::align_of::<linux_siginfo__bindgen_ty_1>(),
         8usize,
-        concat!("Alignment of ", stringify!(siginfo__bindgen_ty_1))
+        concat!("Alignment of ", stringify!(linux_siginfo__bindgen_ty_1))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr)._si_pad) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).l_si_pad) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
-            stringify!(siginfo__bindgen_ty_1),
+            stringify!(linux_siginfo__bindgen_ty_1),
             "::",
-            stringify!(_si_pad)
+            stringify!(l_si_pad)
         )
     );
 }
 #[test]
 fn bindgen_test_layout_siginfo() {
     assert_eq!(
-        ::core::mem::size_of::<siginfo>(),
+        ::core::mem::size_of::<linux_siginfo>(),
         128usize,
-        concat!("Size of: ", stringify!(siginfo))
+        concat!("Size of: ", stringify!(linux_siginfo))
     );
     assert_eq!(
-        ::core::mem::align_of::<siginfo>(),
+        ::core::mem::align_of::<linux_siginfo>(),
         8usize,
-        concat!("Alignment of ", stringify!(siginfo))
+        concat!("Alignment of ", stringify!(linux_siginfo))
     );
 }
-pub type siginfo_t = siginfo;
+pub type linux_siginfo_t = linux_siginfo;

@@ -66,7 +66,7 @@ bindgen_flags+=("--allowlist-type=sigaction")
 bindgen_flags+=("--allowlist-var=CLONE_.*")
 
 # Output
-bindgen_flags+=("-o" "src/bindings.rs")
+bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")
 
 # Input
 bindgen_flags+=("./bindings-wrapper.h")
@@ -78,3 +78,4 @@ bindgen_flags+=("--")
 bindgen_flags+=("-I" "$LINUX_INSTALL_DIR/include")
 
 bindgen "${bindgen_flags[@]}"
+./rename.py < "$BUILDDIR/bindings.rs" > src/bindings.rs
