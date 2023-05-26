@@ -509,7 +509,10 @@ pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
         //  realtime
         other => {
             assert!(other.is_realtime());
-            Action::IGN
+            // signal(7):
+            // > The default action for an unhandled real-time signal is to
+            // > terminate the receiving process.
+            Action::TERM
         },
     }
 }
