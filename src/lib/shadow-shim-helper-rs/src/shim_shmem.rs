@@ -1,7 +1,6 @@
 use libc::stack_t;
 use linux_api::signal::{
-    linux_sigaction, linux_siginfo_t, linux_sigset_t, LinuxSignal, LINUX_SIGRT_MAX,
-    LINUX_STANDARD_SIGNAL_MAX_NO,
+    sigaction, siginfo_t, sigset_t, LinuxSignal, LINUX_SIGRT_MAX, LINUX_STANDARD_SIGNAL_MAX_NO,
 };
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
@@ -181,10 +180,10 @@ impl ProcessShmem {
                 host_root,
                 ProcessShmemProtected {
                     host_id,
-                    pending_signals: linux_sigset_t::EMPTY,
-                    pending_standard_siginfos: [linux_siginfo_t::default();
+                    pending_signals: sigset_t::EMPTY,
+                    pending_standard_siginfos: [siginfo_t::default();
                         LINUX_STANDARD_SIGNAL_MAX_NO as usize],
-                    signal_actions: [linux_sigaction::default(); LINUX_SIGRT_MAX as usize],
+                    signal_actions: [sigaction::default(); LINUX_SIGRT_MAX as usize],
                 },
             ),
         }
@@ -197,16 +196,16 @@ pub struct ProcessShmemProtected {
     pub host_id: HostId,
 
     // Process-directed pending signals.
-    pub pending_signals: linux_sigset_t,
+    pub pending_signals: sigset_t,
 
     // siginfo for each of the standard signals.
-    pending_standard_siginfos: [linux_siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // actions for both standard and realtime signals.
     // We currently support configuring handlers for realtime signals, but not
     // actually delivering them. This is to handle the case where handlers are
     // defensively installed, but not used in practice.
-    signal_actions: [linux_sigaction; LINUX_SIGRT_MAX as usize],
+    signal_actions: [sigaction; LINUX_SIGRT_MAX as usize],
 }
 
 // We have several arrays indexed by signal number - 1.
@@ -215,7 +214,7 @@ fn signal_idx(signal: LinuxSignal) -> usize {
 }
 
 impl ProcessShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&linux_siginfo_t> {
+    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
@@ -223,7 +222,7 @@ impl ProcessShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &linux_siginfo_t) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
@@ -233,7 +232,7 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action(&self, signal: LinuxSignal) -> &linux_sigaction {
+    pub unsafe fn signal_action(&self, signal: LinuxSignal) -> &sigaction {
         &self.signal_actions[signal_idx(signal)]
     }
 
@@ -242,14 +241,14 @@ impl ProcessShmemProtected {
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.
-    pub unsafe fn signal_action_mut(&mut self, signal: LinuxSignal) -> &mut linux_sigaction {
+    pub unsafe fn signal_action_mut(&mut self, signal: LinuxSignal) -> &mut sigaction {
         &mut self.signal_actions[signal_idx(signal)]
     }
 
     pub fn take_pending_unblocked_signal(
         &mut self,
         thread: &ThreadShmemProtected,
-    ) -> Option<(LinuxSignal, linux_siginfo_t)> {
+    ) -> Option<(LinuxSignal, siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !thread.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -281,10 +280,10 @@ impl ThreadShmem {
                 &host.root,
                 ThreadShmemProtected {
                     host_id: host.host_id,
-                    pending_signals: linux_sigset_t::EMPTY,
-                    pending_standard_siginfos: [linux_siginfo_t::default();
+                    pending_signals: sigset_t::EMPTY,
+                    pending_standard_siginfos: [siginfo_t::default();
                         LINUX_STANDARD_SIGNAL_MAX_NO as usize],
-                    blocked_signals: linux_sigset_t::EMPTY,
+                    blocked_signals: sigset_t::EMPTY,
                     sigaltstack: StackWrapper(stack_t {
                         ss_sp: std::ptr::null_mut(),
                         ss_flags: libc::SS_DISABLE,
@@ -302,22 +301,22 @@ pub struct ThreadShmemProtected {
     pub host_id: HostId,
 
     // Thread-directed pending signals.
-    pub pending_signals: linux_sigset_t,
+    pub pending_signals: sigset_t,
 
     // siginfo for each of the 32 standard signals.
-    pending_standard_siginfos: [linux_siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
+    pending_standard_siginfos: [siginfo_t; LINUX_STANDARD_SIGNAL_MAX_NO as usize],
 
     // Signal mask, e.g. as set by `sigprocmask`.
     // We don't use sigset_t since glibc uses a much larger bitfield than
     // actually supported by the kernel.
-    pub blocked_signals: linux_sigset_t,
+    pub blocked_signals: sigset_t,
 
     // Configured alternate signal stack for this thread.
     sigaltstack: StackWrapper,
 }
 
 impl ThreadShmemProtected {
-    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&linux_siginfo_t> {
+    pub fn pending_standard_siginfo(&self, signal: LinuxSignal) -> Option<&siginfo_t> {
         if self.pending_signals.has(signal) {
             Some(&self.pending_standard_siginfos[signal_idx(signal)])
         } else {
@@ -325,7 +324,7 @@ impl ThreadShmemProtected {
         }
     }
 
-    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &linux_siginfo_t) {
+    pub fn set_pending_standard_siginfo(&mut self, signal: LinuxSignal, info: &siginfo_t) {
         assert!(self.pending_signals.has(signal));
         self.pending_standard_siginfos[signal_idx(signal)] = *info;
     }
@@ -347,7 +346,7 @@ impl ThreadShmemProtected {
         &mut self.sigaltstack.0
     }
 
-    pub fn take_pending_unblocked_signal(&mut self) -> Option<(LinuxSignal, linux_siginfo_t)> {
+    pub fn take_pending_unblocked_signal(&mut self) -> Option<(LinuxSignal, siginfo_t)> {
         let pending_unblocked_signals = self.pending_signals & !self.blocked_signals;
         if pending_unblocked_signals.is_empty() {
             None
@@ -374,7 +373,8 @@ unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
 pub mod export {
     use std::sync::atomic::Ordering;
 
-    use linux_api::signal::linux_siginfo_t;
+    use bytemuck::TransparentWrapper;
+    use linux_api::signal::{linux_sigaction, linux_siginfo_t, linux_sigset_t, siginfo_t};
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
@@ -429,11 +429,6 @@ pub mod export {
 
         let p_lock = unsafe { lock.as_mut().unwrap() };
         *p_lock = std::ptr::null_mut();
-    }
-
-    #[no_mangle]
-    pub extern "C" fn shimshmemprocess_size() -> usize {
-        std::mem::size_of::<ProcessShmem>()
     }
 
     /// # Safety
@@ -561,7 +556,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        protected.pending_signals
+        sigset_t::peel(protected.pending_signals)
     }
 
     /// Set the process's pending signal set.
@@ -578,7 +573,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        protected.pending_signals = s;
+        protected.pending_signals = sigset_t::wrap(s);
     }
 
     /// Get the siginfo for the given signal number. Only valid when the signal
@@ -596,9 +591,11 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        *protected
-            .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
-            .unwrap()
+        siginfo_t::peel(
+            *protected
+                .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
+                .unwrap(),
+        )
     }
 
     /// Set the siginfo for the given signal number.
@@ -616,7 +613,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        let info = unsafe { info.as_ref().unwrap() };
+        let info = siginfo_t::wrap_ref(unsafe { info.as_ref().unwrap() });
         protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
     }
 
@@ -632,7 +629,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = process_mem.protected.borrow(&lock.root);
-        *unsafe { protected.signal_action(LinuxSignal::try_from(sig).unwrap()) }
+        sigaction::peel(*unsafe { protected.signal_action(LinuxSignal::try_from(sig).unwrap()) })
     }
 
     /// # Safety
@@ -647,6 +644,7 @@ pub mod export {
     ) {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
+        let action = sigaction::wrap_ref(unsafe { action.as_ref().unwrap() });
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
         unsafe { *protected.signal_action_mut(LinuxSignal::try_from(sig).unwrap()) = *action };
     }
@@ -676,7 +674,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
-        protected.pending_signals
+        sigset_t::peel(protected.pending_signals)
     }
 
     /// Set the process's pending signal set.
@@ -693,7 +691,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        protected.pending_signals = s;
+        protected.pending_signals = sigset_t::wrap(s);
     }
 
     /// Get the siginfo for the given signal number. Only valid when the signal
@@ -712,9 +710,11 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
-        *protected
-            .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
-            .unwrap()
+        siginfo_t::peel(
+            *protected
+                .pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap())
+                .unwrap(),
+        )
     }
 
     /// Set the siginfo for the given signal number.
@@ -732,7 +732,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        let info = unsafe { info.as_ref().unwrap() };
+        let info = siginfo_t::wrap_ref(unsafe { info.as_ref().unwrap() });
         protected.set_pending_standard_siginfo(LinuxSignal::try_from(sig).unwrap(), info);
     }
 
@@ -747,7 +747,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
-        protected.blocked_signals
+        sigset_t::peel(protected.blocked_signals)
     }
 
     /// Set the process's pending signal set.
@@ -764,7 +764,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        protected.blocked_signals = s;
+        protected.blocked_signals = sigset_t::wrap(s);
     }
 
     /// Get the signal stack as set by `sigaltstack(2)`.
@@ -826,7 +826,7 @@ pub mod export {
 
         if let Some((signal, info_res)) = res {
             if !info.is_null() {
-                unsafe { info.write(info_res) };
+                unsafe { info.write(siginfo_t::peel(info_res)) };
             }
             signal.into()
         } else {

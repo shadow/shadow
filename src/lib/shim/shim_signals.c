@@ -1,5 +1,6 @@
 #include "lib/shim/shim_signals.h"
 
+#include "lib/linux-api/linux-api.h"
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 
@@ -10,10 +11,15 @@
 static void _call_signal_handler(const struct linux_sigaction* action, int signo,
                                  linux_siginfo_t* siginfo, ucontext_t* ucontext) {
     shim_swapAllowNativeSyscalls(false);
-    if (action->lsa_flags & SA_SIGINFO) {
-        action->u.lsa_sigaction(signo, siginfo, ucontext);
+    LinuxSigActionFn action_fn = linux_sigaction_action(action);
+    LinuxSigHandlerFn handler_fn = linux_sigaction_handler(action);
+    if (action_fn) {
+        action_fn(signo, siginfo, ucontext);
+
+    } else if (handler_fn) {
+        handler_fn(signo);
     } else {
-        action->u.lsa_handler(signo);
+        panic("Unreachable");
     }
     shim_swapAllowNativeSyscalls(true);
 }
@@ -44,11 +50,11 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
         struct linux_sigaction action =
             shimshmem_getSignalAction(host_lock, shim_processSharedMem(), signo);
 
-        if (action.u.lsa_handler == SIG_IGN) {
+        if (linux_sigaction_is_ign(&action)) {
             continue;
         }
 
-        if (action.u.lsa_handler == SIG_DFL) {
+        if (linux_sigaction_is_dfl(&action)) {
             switch (linux_defaultAction(signo)) {
                 case LINUX_DEFAULT_ACTION_IGN:
                     // Ignore
@@ -77,7 +83,7 @@ bool shim_process_signals(ShimShmemHostLock* host_lock, ucontext_t* ucontext) {
 
         if (action.lsa_flags & SA_RESETHAND) {
             shimshmem_setSignalAction(host_lock, shim_processSharedMem(), signo,
-                                      &(struct linux_sigaction){.u.lsa_handler = SIG_DFL});
+                                      &(struct linux_sigaction){.lsa_handler = SIG_DFL});
         }
         if (!(action.lsa_flags & SA_RESTART)) {
             restartable = false;

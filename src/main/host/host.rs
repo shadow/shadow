@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
-use linux_api::signal::{linux_siginfo_t, LinuxSignal};
+use linux_api::signal::{siginfo_t, LinuxSignal};
 use log::{debug, trace};
 use logger::LogLevel;
 use nix::sys::signal::Signal;
@@ -418,7 +418,7 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let siginfo = linux_siginfo_t::new(
+                    let siginfo = siginfo_t::new(
                         LinuxSignal::try_from(shutdown_signal as i32).unwrap(),
                         0,
                         0,

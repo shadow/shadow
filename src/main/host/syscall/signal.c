@@ -48,7 +48,8 @@ static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Pr
         return syscallreturn_makeDoneI64(0);
     }
 
-    linux_siginfo_t siginfo = linux_siginfo_new(sig, 0, SI_USER);
+    linux_siginfo_t siginfo;
+    linux_siginfo_init(&siginfo, sig, 0, SI_USER);
     linux_siginfo_set_pid(&siginfo, sys->processId);
 
     process_signal(process, _syscallhandler_getThread(sys), &siginfo);
@@ -74,8 +75,8 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     const Process* process = thread_getProcess(thread);
     struct linux_sigaction action = shimshmem_getSignalAction(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), process_getSharedMem(process), sig);
-    if (action.u.lsa_handler == SIG_IGN ||
-        (action.u.lsa_handler == SIG_DFL && linux_defaultAction(sig) == LINUX_DEFAULT_ACTION_IGN)) {
+    if (action.lsa_handler == SIG_IGN ||
+        (action.lsa_handler == SIG_DFL && linux_defaultAction(sig) == LINUX_DEFAULT_ACTION_IGN)) {
         // Don't deliver ignored an signal.
         return syscallreturn_makeDoneI64(0);
     }
@@ -93,7 +94,8 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     linux_sigaddset(&pending_signals, sig);
     shimshmem_setThreadPendingSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                       thread_sharedMem(thread), pending_signals);
-    linux_siginfo_t info = linux_siginfo_new(sig, 0, SI_TKILL);
+    linux_siginfo_t info;
+    linux_siginfo_init(&info, sig, 0, SI_TKILL);
     linux_siginfo_set_pid(&info, sys->processId);
     linux_siginfo_set_uid(&info, 0);
     shimshmem_setThreadSiginfo(

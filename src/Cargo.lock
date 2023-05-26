@@ -203,6 +203,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytemuck"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -745,6 +751,7 @@ name = "linux-api"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.3.1",
+ "bytemuck",
  "cbindgen",
  "log",
  "memoffset 0.9.0",
@@ -1434,6 +1441,7 @@ dependencies = [
  "backtrace",
  "bindgen",
  "bitflags 2.3.1",
+ "bytemuck",
  "bytes",
  "cbindgen",
  "cc",
@@ -1479,6 +1487,7 @@ dependencies = [
 name = "shadow-shim-helper-rs"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cbindgen",
  "cc",
  "libc",

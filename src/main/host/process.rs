@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, linux_siginfo_t, LinuxDefaultAction, LinuxSignal};
+use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, LinuxSignal};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -447,7 +447,7 @@ impl RunnableProcess {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &linux_siginfo_t) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &siginfo_t) {
         if *siginfo.signo() == 0 {
             return;
         }
@@ -462,11 +462,15 @@ impl RunnableProcess {
                 .borrow_mut(&host_shmem.root);
             // SAFETY: We don't try to call any of the function pointers.
             let action = unsafe { process_shmem_protected.signal_action(signal) };
-            let handler = action.handler();
-            if handler.is_sig_ign()
-                || (handler.is_sig_dfl() && defaultaction(signal) == LinuxDefaultAction::IGN)
-            {
-                return;
+            match action.handler() {
+                linux_api::signal::SignalHandler::Handler(_) => (),
+                linux_api::signal::SignalHandler::Action(_) => (),
+                linux_api::signal::SignalHandler::SigIgn => return,
+                linux_api::signal::SignalHandler::SigDfl => {
+                    if defaultaction(signal) == LinuxDefaultAction::IGN {
+                        return;
+                    }
+                }
             }
 
             if process_shmem_protected.pending_signals.has(signal) {
@@ -581,7 +585,7 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
-    let siginfo = linux_siginfo_t::new_sigalrm(expiration_count);
+    let siginfo = siginfo_t::new_sigalrm(expiration_count);
     process.signal(host, None, &siginfo);
 }
 
@@ -982,7 +986,7 @@ impl Process {
     /// See `RunnableProcess::signal`.
     ///
     /// No-op if the `self` is a `ZombieProcess`.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &linux_siginfo_t) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &siginfo_t) {
         // Using full-match here to force update if we add more states later.
         match self.state.borrow().as_ref().unwrap() {
             ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo),
@@ -1480,7 +1484,9 @@ mod export {
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
 
+    use bytemuck::TransparentWrapper;
     use libc::size_t;
+    use linux_api::signal::linux_siginfo_t;
     use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
@@ -2038,7 +2044,7 @@ mod export {
     ) {
         let target_proc = unsafe { target_proc.as_ref().unwrap() };
         let current_running_thread = unsafe { current_running_thread.as_ref() };
-        let siginfo = unsafe { siginfo.as_ref().unwrap() };
+        let siginfo = siginfo_t::wrap_ref(unsafe { siginfo.as_ref().unwrap() });
         Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo))
             .unwrap()
     }
