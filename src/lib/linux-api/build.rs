@@ -6,7 +6,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 
     let config = cbindgen::Config {
         include_guard: Some("linux_kernel_types_h".into()),
-        after_includes: Some("typedef int32_t LinuxSigActionFlags;\n".into()),
         export: cbindgen::ExportConfig {
             include: vec!["linux_sigaction".into(), "linux_siginfo_t".into()],
             ..base_config.export.clone()
