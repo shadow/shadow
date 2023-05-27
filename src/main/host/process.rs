@@ -1484,7 +1484,6 @@ mod export {
     use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
 
-    use bytemuck::TransparentWrapper;
     use libc::size_t;
     use linux_api::signal::linux_siginfo_t;
     use log::trace;
@@ -2036,6 +2035,10 @@ mod export {
     /// Send the signal described in `siginfo` to `process`. `currentRunningThread`
     /// should be set if there is one (e.g. if this is being called from a syscall
     /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
+    ///
+    /// # Safety
+    ///
+    /// Mandatory fields of `siginfo` must be initd.
     #[no_mangle]
     pub unsafe extern "C" fn process_signal(
         target_proc: *const Process,
@@ -2044,7 +2047,7 @@ mod export {
     ) {
         let target_proc = unsafe { target_proc.as_ref().unwrap() };
         let current_running_thread = unsafe { current_running_thread.as_ref() };
-        let siginfo = SigInfo::wrap_ref(unsafe { siginfo.as_ref().unwrap() });
+        let siginfo = unsafe { SigInfo::wrap_ref_assume_initd(siginfo.as_ref().unwrap()) };
         Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo))
             .unwrap()
     }

@@ -120,7 +120,8 @@ pub type linux_siginfo_t = bindings::linux_siginfo_t;
 #[derive(Copy, Clone)]
 #[repr(transparent)]
 pub struct SigInfo(linux_siginfo_t);
-unsafe impl TransparentWrapper<linux_siginfo_t> for SigInfo {}
+// Contains pointers, but they are understood to not necessarily be valid in the
+// current address space.
 unsafe impl VirtualAddressSpaceIndependent for SigInfo {}
 unsafe impl Send for SigInfo {}
 
@@ -139,6 +140,38 @@ impl SigInfo {
     /// As for `inner`
     fn inner_mut(&mut self) -> &mut bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
         unsafe { &mut self.0.l__bindgen_anon_1.l__bindgen_anon_1 }
+    }
+
+    /// Analogous to `bytemuck::TransparentWrapper::wrap`, but `unsafe`.
+    ///
+    /// # Safety
+    ///
+    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    pub unsafe fn wrap_assume_initd(si: linux_siginfo_t) -> Self {
+        Self(si)
+    }
+
+    /// Analogous to `bytemuck::TransparentWrapper::wrap_ref`, but `unsafe`.
+    ///
+    /// # Safety
+    ///
+    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    pub unsafe fn wrap_ref_assume_initd(si: &linux_siginfo_t) -> &Self {
+        unsafe { &*(si as *const _ as *const Self) }
+    }
+
+    /// Analogous to `bytemuck::TransparentWrapper::wrap_mut`, but `unsafe`.
+    ///
+    /// # Safety
+    ///
+    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    pub unsafe fn wrap_mut_assume_initd(si: &mut linux_siginfo_t) -> &mut Self {
+        unsafe { &mut *(si as *mut _ as *mut Self) }
+    }
+
+    /// Analogous to `bytemuck::TransparentWrapper::peel`.
+    pub fn peel(si: Self) -> linux_siginfo_t {
+        si.0
     }
 
     #[inline]
@@ -171,31 +204,64 @@ impl SigInfo {
         &mut self.inner_mut().lsi_code
     }
 
+    // TODO: We should replace these individual setters with constructors
+    // that initialize a whole sub-union based on which signal the siginfo is for.
     #[inline]
     pub fn set_pid(&mut self, pid: i32) {
-        // union fields are always in the same position in the unions where they are defined.
-        self.inner_mut().l_sifields.l_kill.l_pid = pid;
+        // We delegate to our linux_siginfo helper, which works on the pointers,
+        // being careful not to create references that may be unsound.
+        // e.g. we don't currently enforce that the rest of the innermost union
+        // containing pid is initialized.
+        unsafe { export::linux_siginfo_set_pid(&mut self.0, pid) }
     }
 
+    // TODO: We should replace these individual setters with constructors
+    // that initialize a whole sub-union based on which signal the siginfo is for.
     #[inline]
     pub fn set_uid(&mut self, uid: u32) {
-        // union fields are always in the same position in the unions where they are defined.
-        self.inner_mut().l_sifields.l_rt.l_uid = uid;
+        // See `set_pid`
+        unsafe { export::linux_siginfo_set_uid(&mut self.0, uid) }
     }
 
+    // TODO: We should replace these individual setters with constructors
+    // that initialize a whole sub-union based on which signal the siginfo is for.
     #[inline]
     pub fn set_overrun(&mut self, overrun: i32) {
-        // union fields are always in the same position in the unions where they are defined.
-        self.inner_mut().l_sifields.l_timer.l_overrun = overrun;
+        // Compiler requires `unsafe` here because of the union access. Is this
+        // a bug?  I think the point of `addr_of_mut` is that the intermediate
+        // fields aren't actually dereferenced.
+        let overrun_ptr = unsafe {
+            core::ptr::addr_of_mut!(
+                self.0
+                    .l__bindgen_anon_1
+                    .l__bindgen_anon_1
+                    .l_sifields
+                    .l_timer
+                    .l_overrun
+            )
+        };
+        unsafe { overrun_ptr.write(overrun) };
     }
 
     /// # Safety
     ///
     /// The overrun field must be known to be initialized.
     #[inline]
-    pub unsafe fn get_overrun(&mut self) -> i32 {
-        // union fields are always in the same position in the unions where they are defined.
-        unsafe { self.inner().l_sifields.l_timer.l_overrun }
+    pub unsafe fn get_overrun(&self) -> i32 {
+        // Compiler requires `unsafe` here because of the union access. Is this
+        // a bug?  I think the point of `addr_of_mut` is that the intermediate
+        // fields aren't actually dereferenced.
+        let overrun_ptr = unsafe {
+            core::ptr::addr_of!(
+                self.0
+                    .l__bindgen_anon_1
+                    .l__bindgen_anon_1
+                    .l_sifields
+                    .l_timer
+                    .l_overrun
+            )
+        };
+        unsafe { *overrun_ptr }
     }
 
     #[inline]
@@ -617,28 +683,40 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_siginfo_init(
-        si: *mut linux_siginfo_t,
+    pub extern "C" fn linux_siginfo_new(
         lsi_signo: i32,
         lsi_errno: i32,
         lsi_code: i32,
-    ) {
+    ) -> linux_siginfo_t {
         // TODO: Lift errno and code types.
         let signal = Signal::try_from(lsi_signo).unwrap();
-        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
-        *si = SigInfo::new(signal, lsi_errno, lsi_code)
+        SigInfo::peel(SigInfo::new(signal, lsi_errno, lsi_code))
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siginfo_set_pid(si: *mut linux_siginfo_t, pid: i32) {
-        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
-        si.set_pid(pid)
+        let pid_ptr = core::ptr::addr_of_mut!(
+            (*si)
+                .l__bindgen_anon_1
+                .l__bindgen_anon_1
+                .l_sifields
+                .l_kill
+                .l_pid
+        );
+        unsafe { pid_ptr.write(pid) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siginfo_set_uid(si: *mut linux_siginfo_t, uid: u32) {
-        let si = SigInfo::wrap_mut(unsafe { si.as_mut().unwrap() });
-        si.set_uid(uid)
+        let uid_ptr = core::ptr::addr_of_mut!(
+            (*si)
+                .l__bindgen_anon_1
+                .l__bindgen_anon_1
+                .l_sifields
+                .l_kill
+                .l_uid
+        );
+        unsafe { uid_ptr.write(uid) };
     }
 
     /// Returns the handler if there is one, else NULL.

@@ -600,7 +600,7 @@ pub mod export {
     ///
     /// # Safety
     ///
-    /// Pointer args must be safely dereferenceable.
+    /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setProcessSiginfo(
         lock: *const ShimShmemHostLock,
@@ -611,7 +611,7 @@ pub mod export {
         let process_mem = unsafe { process.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        let info = SigInfo::wrap_ref(unsafe { info.as_ref().unwrap() });
+        let info = unsafe { SigInfo::wrap_ref_assume_initd(info.as_ref().unwrap()) };
         protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
     }
 
@@ -719,7 +719,7 @@ pub mod export {
     ///
     /// # Safety
     ///
-    /// Pointer args must be safely dereferenceable.
+    /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_setThreadSiginfo(
         lock: *const ShimShmemHostLock,
@@ -730,7 +730,7 @@ pub mod export {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        let info = SigInfo::wrap_ref(unsafe { info.as_ref().unwrap() });
+        let info = unsafe { SigInfo::wrap_ref_assume_initd(info.as_ref().unwrap()) };
         protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
     }
 
