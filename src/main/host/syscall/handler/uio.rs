@@ -471,6 +471,8 @@ impl SyscallHandler {
         flags: libc::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         let mut mem = ctx.objs.process.memory_borrow_mut();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
 
         // if it's a socket, call sendmsg_helper() instead
         if let File::Socket(ref socket) = file {
@@ -490,7 +492,7 @@ impl SyscallHandler {
             let bytes_written =
                 crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
                     CallbackQueue::queue_and_run(|cb_queue| {
-                        Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                        Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
                     })
                 })?;
 

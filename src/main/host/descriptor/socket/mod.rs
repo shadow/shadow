@@ -104,11 +104,17 @@ impl Socket {
         &self,
         args: SendmsgArgs,
         memory_manager: &mut MemoryManager,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<libc::ssize_t, SyscallError> {
         match self {
-            Self::Unix(socket) => UnixSocket::sendmsg(socket, args, memory_manager, cb_queue),
-            Self::Inet(socket) => InetSocket::sendmsg(socket, args, memory_manager, cb_queue),
+            Self::Unix(socket) => {
+                UnixSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
+            }
+            Self::Inet(socket) => {
+                InetSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
+            }
         }
     }
 

@@ -189,6 +189,8 @@ impl SyscallHandler {
         };
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
 
         let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
 
@@ -209,7 +211,7 @@ impl SyscallHandler {
         // call the socket's sendmsg(), and run any resulting events
         let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
             })
         });
 
@@ -265,6 +267,8 @@ impl SyscallHandler {
         };
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
 
         let msg = io::read_msghdr(&mem, msg_ptr)?;
 
@@ -279,7 +283,7 @@ impl SyscallHandler {
         // call the socket's sendmsg(), and run any resulting events
         let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
             })
         });
 

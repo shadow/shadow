@@ -108,11 +108,13 @@ impl InetSocket {
         &self,
         args: SendmsgArgs,
         memory_manager: &mut MemoryManager,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<libc::ssize_t, SyscallError> {
         match self {
             Self::LegacyTcp(socket) => {
-                LegacyTcpSocket::sendmsg(socket, args, memory_manager, cb_queue)
+                LegacyTcpSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
             }
         }
     }

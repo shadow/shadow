@@ -179,6 +179,8 @@ impl UnixSocket {
         socket: &Arc<AtomicRefCell<Self>>,
         args: SendmsgArgs,
         mem: &mut MemoryManager,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<libc::ssize_t, SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
