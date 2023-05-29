@@ -262,7 +262,7 @@ impl UnixSocket {
     }
 
     pub fn setsockopt(
-        &self,
+        &mut self,
         _level: libc::c_int,
         _optname: libc::c_int,
         _optval_ptr: ForeignPtr<()>,

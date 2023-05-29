@@ -200,12 +200,6 @@ impl InetSocketRef<'_> {
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
-
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
-                          optlen: libc::socklen_t, memory_manager: &MemoryManager)
-        -> Result<(), SyscallError>
-    );
 }
 
 // inet socket-specific functions
@@ -288,7 +282,7 @@ impl InetSocketRefMut<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
+        pub fn setsockopt(&mut self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
