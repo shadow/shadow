@@ -1,10 +1,14 @@
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
-use shadow_shim_helper_rs::util::SyncSendPointer;
-
+use crate::core::worker::Worker;
 use crate::cshadow as c;
+use crate::host::memory_manager::MemoryManager;
+use crate::host::syscall::io::IoVec;
 use crate::utility::pcap_writer::PacketDisplay;
+
+use nix::errno::Errno;
+use shadow_shim_helper_rs::util::SyncSendPointer;
 
 #[repr(i32)]
 pub enum PacketStatus {
@@ -50,13 +54,96 @@ impl PartialEq for PacketRc {
 
 impl Eq for PacketRc {}
 
+/// Clone the reference to the packet.
+impl Clone for PacketRc {
+    fn clone(&self) -> Self {
+        let ptr = self.borrow_inner();
+        unsafe { c::packet_ref(ptr) }
+        PacketRc::from_raw(ptr)
+    }
+}
+
 impl PacketRc {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        // creating a new packet shouldn't require the host, so for now we'll get the host from the
+        // worker rather than require it as an argument
+        Self::from_raw(Worker::with_active_host(|host| unsafe { c::packet_new(host) }).unwrap())
+    }
+
     #[cfg(test)]
     /// Creates an empty packet for unit tests.
     pub fn mock_new() -> PacketRc {
         let c_ptr = unsafe { c::packet_new_inner(1, 1) };
         unsafe { c::packet_setMock(c_ptr) };
         PacketRc::from_raw(c_ptr)
+    }
+
+    /// Set UDP headers for this packet. Will panic if the packet already has a header.
+    pub fn set_udp(&mut self, src: SocketAddrV4, dst: SocketAddrV4) {
+        unsafe {
+            c::packet_setUDP(
+                self.c_ptr.ptr(),
+                c::ProtocolUDPFlags_PUDP_NONE,
+                u32::from(*src.ip()).to_be(),
+                src.port().to_be(),
+                u32::from(*dst.ip()).to_be(),
+                dst.port().to_be(),
+            )
+        };
+    }
+
+    /// Set the payload for the packet. Will panic if the packet already has a payload.
+    pub fn set_payload(&mut self, payload: &[u8]) {
+        // setting the packet's payload shouldn't require the host, so for now we'll get the host
+        // from the worker rather than require it as an argument
+        Worker::with_active_host(|host| unsafe {
+            c::packet_setPayloadFromShadow(
+                self.c_ptr.ptr(),
+                host,
+                payload.as_ptr() as *const libc::c_void,
+                payload.len().try_into().unwrap(),
+            )
+        })
+        .unwrap();
+    }
+
+    /// Copy the payload to the managed process. Even if this returns an error, some unspecified
+    /// number of bytes may have already been copied.
+    pub fn copy_payload<'a>(
+        &self,
+        iovs: impl IntoIterator<Item = &'a IoVec>,
+        mem: &mut MemoryManager,
+    ) -> Result<usize, nix::errno::Errno> {
+        let iovs = iovs.into_iter();
+        let mut bytes_copied = 0;
+
+        for iov in iovs {
+            let rv = unsafe {
+                c::packet_copyPayloadWithMemoryManager(
+                    self.c_ptr.ptr(),
+                    bytes_copied,
+                    iov.base.cast::<()>(),
+                    iov.len.try_into().unwrap(),
+                    mem,
+                )
+            };
+
+            if rv < 0 {
+                return Err(Errno::from_i32(i32::try_from(-rv).unwrap()));
+            }
+
+            let rv = rv as u64;
+
+            if rv == 0 && iov.len != 0 {
+                // no more payload bytes to copy
+                break;
+            }
+
+            bytes_copied += rv;
+        }
+
+        Ok(bytes_copied.try_into().unwrap())
     }
 
     pub fn total_size(&self) -> usize {
