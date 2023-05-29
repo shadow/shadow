@@ -247,6 +247,18 @@ impl From<nix::sys::socket::SockaddrIn6> for SockaddrStorage {
     }
 }
 
+impl From<std::net::SocketAddrV4> for SockaddrStorage {
+    fn from(addr: std::net::SocketAddrV4) -> Self {
+        nix::sys::socket::SockaddrIn::from(addr).into()
+    }
+}
+
+impl From<std::net::SocketAddrV6> for SockaddrStorage {
+    fn from(addr: std::net::SocketAddrV6) -> Self {
+        nix::sys::socket::SockaddrIn6::from(addr).into()
+    }
+}
+
 /// A Unix socket address. Typically will be used as an owned address
 /// `SockaddrUnix<libc::sockaddr_un>` or a borrowed address `SockaddrUnix<&libc::sockaddr_un>`, and
 /// you can convert between them using methods such as [`as_ref`](Self::as_ref) or
