@@ -153,7 +153,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/fileat.h")
         .header("host/syscall/ioctl.h")
         .header("host/syscall/mman.h")
-        .header("host/syscall/socket.h")
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
         .header("host/syscall_condition.h")
@@ -367,7 +366,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/select.c",
         "host/syscall/shadow.c",
         "host/syscall/signal.c",
-        "host/syscall/socket.c",
         "host/syscall/time.c",
         "host/syscall/timerfd.c",
         "host/syscall/unistd.c",

@@ -127,13 +127,9 @@ impl SyscallHandler {
             let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
-            let file = match desc.file() {
-                CompatFile::New(file) => file,
-                // if it's a legacy file, use the C syscall handler instead
-                CompatFile::Legacy(_) => {
-                    drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_bind, ctx);
-                }
+            let CompatFile::New(file) = desc.file() else {
+                // we don't have any C socket objects
+                return Err(Errno::ENOTSOCK.into());
             };
 
             file.inner_file().clone()
@@ -181,14 +177,11 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
-                match Self::get_descriptor(&desc_table, fd)?.file() {
-                    CompatFile::New(file) => file.clone(),
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_sendto, ctx).map(Into::into);
-                    }
-                }
+                let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
+                    // we don't have any C socket objects
+                    return Err(Errno::ENOTSOCK.into());
+                };
+                file.clone()
             }
         };
 
@@ -333,15 +326,11 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
-                match Self::get_descriptor(&desc_table, fd)?.file() {
-                    CompatFile::New(file) => file.clone(),
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_recvfrom, ctx)
-                            .map(Into::into);
-                    }
-                }
+                let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
+                    // we don't have any C socket objects
+                    return Err(Errno::ENOTSOCK.into());
+                };
+                file.clone()
             }
         };
 
@@ -490,13 +479,9 @@ impl SyscallHandler {
             let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
-            let file = match desc.file() {
-                CompatFile::New(file) => file,
-                // if it's a legacy file, use the C syscall handler instead
-                CompatFile::Legacy(_) => {
-                    drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_getsockname, ctx);
-                }
+            let CompatFile::New(file) = desc.file() else {
+                // we don't have any C socket objects
+                return Err(Errno::ENOTSOCK.into());
             };
 
             let File::Socket(socket) = file.inner_file() else {
@@ -536,13 +521,9 @@ impl SyscallHandler {
             let desc_table = ctx.objs.process.descriptor_table_borrow();
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
-            let file = match desc.file() {
-                CompatFile::New(file) => file,
-                // if it's a legacy file, use the C syscall handler instead
-                CompatFile::Legacy(_) => {
-                    drop(desc_table);
-                    return Self::legacy_syscall(c::syscallhandler_getpeername, ctx);
-                }
+            let CompatFile::New(file) = desc.file() else {
+                // we don't have any C socket objects
+                return Err(Errno::ENOTSOCK.into());
             };
 
             let File::Socket(socket) = file.inner_file() else {
@@ -581,13 +562,9 @@ impl SyscallHandler {
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
-        let file = match desc.file() {
-            CompatFile::New(file) => file,
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_listen, ctx);
-            }
+        let CompatFile::New(file) = desc.file() else {
+            // we don't have any C socket objects
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let File::Socket(socket) = file.inner_file() else {
@@ -630,14 +607,11 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
-                match Self::get_descriptor(&desc_table, fd)?.file() {
-                    CompatFile::New(file) => file.clone(),
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_accept, ctx);
-                    }
-                }
+                let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
+                    // we don't have any C socket objects
+                    return Err(Errno::ENOTSOCK.into());
+                };
+                file.clone()
             }
         };
 
@@ -677,14 +651,11 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
-                match Self::get_descriptor(&desc_table, fd)?.file() {
-                    CompatFile::New(file) => file.clone(),
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_accept4, ctx);
-                    }
-                }
+                let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
+                    // we don't have any C socket objects
+                    return Err(Errno::ENOTSOCK.into());
+                };
+                file.clone()
             }
         };
 
@@ -802,14 +773,11 @@ impl SyscallHandler {
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
-                match Self::get_descriptor(&desc_table, fd)?.file() {
-                    CompatFile::New(file) => file.clone(),
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_connect, ctx);
-                    }
-                }
+                let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
+                    // we don't have any C socket objects
+                    return Err(Errno::ENOTSOCK.into());
+                };
+                file.clone()
             }
         };
 
@@ -847,13 +815,9 @@ impl SyscallHandler {
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
-        let file = match desc.file() {
-            CompatFile::New(file) => file,
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_shutdown, ctx);
-            }
+        let CompatFile::New(file) = desc.file() else {
+            // we don't have any C socket objects
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let how = match how {
@@ -987,13 +951,9 @@ impl SyscallHandler {
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
-        let file = match desc.file() {
-            CompatFile::New(file) => file,
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_getsockopt, ctx);
-            }
+        let CompatFile::New(file) = desc.file() else {
+            // we don't have any C socket objects
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let File::Socket(socket) = file.inner_file() else {
@@ -1040,13 +1000,9 @@ impl SyscallHandler {
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
-        let file = match desc.file() {
-            CompatFile::New(file) => file,
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                drop(desc_table);
-                return Self::legacy_syscall(c::syscallhandler_setsockopt, ctx);
-            }
+        let CompatFile::New(file) = desc.file() else {
+            // we don't have any C socket objects
+            return Err(Errno::ENOTSOCK.into());
         };
 
         let File::Socket(socket) = file.inner_file() else {

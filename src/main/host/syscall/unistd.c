@@ -17,7 +17,6 @@
 #include "main/host/descriptor/timerfd.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/socket.h"
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 
@@ -50,8 +49,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
 
     /* Divert io on sockets to socket handler to pick up special checks. */
     if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        return _syscallhandler_recvfromHelper(
-            sys, fd, bufPtr, bufSize, 0, (UntypedForeignPtr){0}, (UntypedForeignPtr){0});
+        panic("Should have handled this in the rust syscall handler");
     }
 
     /* Now it's an error if the descriptor is closed. */
@@ -144,7 +142,7 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
 
     /* Divert io on sockets to socket handler to pick up special checks. */
     if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
-        return _syscallhandler_sendtoHelper(sys, fd, bufPtr, bufSize, 0, (UntypedForeignPtr){0}, 0);
+        panic("Should have handled this in the rust syscall handler");
     }
 
     /* Now it's an error if the descriptor is closed. */
