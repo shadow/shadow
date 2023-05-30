@@ -10,7 +10,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
-use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
+use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, ShutdownFlags};
 use crate::host::descriptor::{
     File, FileMode, FileState, FileStatus, OpenFile, Socket, StateEventSource, StateListenerFilter,
     SyscallResult,
@@ -32,6 +32,7 @@ pub struct UdpSocket {
     event_source: StateEventSource,
     status: FileStatus,
     state: FileState,
+    shutdown_status: ShutdownFlags,
     send_buffer: PacketBuffer,
     recv_buffer: PacketBuffer,
     peer_addr: Option<SocketAddrV4>,
@@ -54,6 +55,7 @@ impl UdpSocket {
             event_source: StateEventSource::new(),
             status,
             state: FileState::ACTIVE,
+            shutdown_status: ShutdownFlags::empty(),
             send_buffer: PacketBuffer::new(send_buf_size),
             recv_buffer: PacketBuffer::new(recv_buf_size),
             peer_addr: None,
@@ -268,6 +270,11 @@ impl UdpSocket {
     ) -> Result<libc::ssize_t, SyscallError> {
         let mut socket_ref = socket.borrow_mut();
 
+        // if the file's writing has been shut down, return EPIPE
+        if socket_ref.shutdown_status.contains(ShutdownFlags::WRITE) {
+            return Err(nix::errno::Errno::EPIPE.into());
+        }
+
         let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
             log::debug!("Unrecognized send flags: {:#b}", args.flags);
             return Err(Errno::EINVAL.into());
@@ -423,6 +430,16 @@ impl UdpSocket {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
+            // if the syscall would block but the file's reading has been shut down, return EOF
+            if socket_ref.shutdown_status.contains(ShutdownFlags::READ) {
+                return Ok(RecvmsgReturn {
+                    return_val: 0,
+                    addr: None,
+                    msg_flags: 0,
+                    control_len: 0,
+                });
+            }
+
             return Err(SyscallError::new_blocked(
                 File::Socket(Socket::Inet(InetSocket::Udp(socket.clone()))),
                 FileState::READABLE,
@@ -581,14 +598,22 @@ impl UdpSocket {
 
     pub fn shutdown(
         &mut self,
-        _how: Shutdown,
+        how: Shutdown,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        // TODO: we're missing stuff here, since we have a lot of shutdown() tests that are disabled
-        // for udp
         // TODO: what if we set a peer, then unset the peer, then call shutdown?
         if self.peer_addr.is_none() {
             return Err(Errno::ENOTCONN.into());
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // writing has been shut down
+            self.shutdown_status.insert(ShutdownFlags::WRITE)
+        }
+
+        if how == Shutdown::Read || how == Shutdown::Both {
+            // reading has been shut down
+            self.shutdown_status.insert(ShutdownFlags::READ)
         }
 
         Ok(())

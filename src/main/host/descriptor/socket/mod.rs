@@ -20,6 +20,16 @@ pub mod abstract_unix_ns;
 pub mod inet;
 pub mod unix;
 
+bitflags::bitflags! {
+    /// Flags to represent if a socket has been shut down for reading and/or writing. An empty set
+    /// of flags implies that the socket *has not* been shut down for reading or writing.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    struct ShutdownFlags: u8 {
+        const READ = 0b00000001;
+        const WRITE = 0b00000010;
+    }
+}
+
 #[derive(Clone)]
 pub enum Socket {
     Unix(Arc<AtomicRefCell<UnixSocket>>),

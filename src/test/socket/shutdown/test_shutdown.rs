@@ -90,24 +90,29 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                             set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
-                            &append_args("test_read_after_client_shutdown <libc>"),
+                            &append_args("test_read_after_client_shutdown"),
                             move || {
                                 test_read_after_client_shutdown(
                                     domain, sock_type, flag, how,
                                     /* expect_no_bytes_after_shutrd= */ false,
                                 )
                             },
-                            set![TestEnv::Libc],
+                            if domain != libc::AF_INET || sock_type != libc::SOCK_STREAM {
+                                set![TestEnv::Libc, TestEnv::Shadow]
+                            } else {
+                                set![TestEnv::Libc]
+                            },
                         ),
+                        // shadow's tcp shutdown works slightly different from linux
                         test_utils::ShadowTest::new(
-                            &append_args("test_read_after_client_shutdown <shadow>"),
+                            &append_args("test_read_after_client_shutdown <shadow-tcp>"),
                             move || {
                                 test_read_after_client_shutdown(
                                     domain, sock_type, flag, how,
                                     /* expect_no_bytes_after_shutrd= */ true,
                                 )
                             },
-                            if sock_type == libc::SOCK_STREAM {
+                            if domain == libc::AF_INET && sock_type == libc::SOCK_STREAM {
                                 set![TestEnv::Shadow]
                             } else {
                                 set![]
@@ -116,32 +121,30 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_read_after_peer_shutdown"),
                             move || test_read_after_peer_shutdown(domain, sock_type, flag, how),
-                            // shutdown() doesn't seem to do anything in shadow for SOCK_DGRAM
-                            if sock_type == libc::SOCK_STREAM {
-                                set![TestEnv::Libc, TestEnv::Shadow]
-                            } else {
-                                set![TestEnv::Libc]
-                            },
+                            set![TestEnv::Libc, TestEnv::Shadow],
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_conn_reset"),
                             move || test_conn_reset(domain, sock_type, flag, how),
-                            set![TestEnv::Libc],
-                        ),
-                        test_utils::ShadowTest::new(
-                            &append_args("test_write_after_client_shutdown"),
-                            move || test_write_after_client_shutdown(domain, sock_type, flag, how),
-                            // shutdown() doesn't seem to do anything in shadow for SOCK_DGRAM
-                            if sock_type == libc::SOCK_STREAM {
+                            if domain != libc::AF_INET || sock_type != libc::SOCK_STREAM {
                                 set![TestEnv::Libc, TestEnv::Shadow]
                             } else {
                                 set![TestEnv::Libc]
                             },
                         ),
                         test_utils::ShadowTest::new(
+                            &append_args("test_write_after_client_shutdown"),
+                            move || test_write_after_client_shutdown(domain, sock_type, flag, how),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
                             &append_args("test_write_after_peer_shutdown"),
                             move || test_write_after_peer_shutdown(domain, sock_type, flag, how),
-                            set![TestEnv::Libc],
+                            if domain != libc::AF_INET || sock_type != libc::SOCK_STREAM {
+                                set![TestEnv::Libc, TestEnv::Shadow]
+                            } else {
+                                set![TestEnv::Libc]
+                            },
                         ),
                     ];
 
