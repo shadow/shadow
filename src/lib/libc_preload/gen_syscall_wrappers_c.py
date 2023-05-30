@@ -45,6 +45,9 @@ skip.add('openat')
 # Returns NULL instead of -1 on error
 skip.add('getcwd')
 
+# Nontrivial wrapper
+skip.add('clone')
+
 # syscall wrappers that return errors directly instead of through errno.
 direct_errors = set()
 direct_errors.add('clock_nanosleep')
