@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 
+"""\
+Reads the output of bindgen on `stdin`, and writes a mangled version to `stdout`.
+
+In particular this is meant to be run on the output of running `bindgen` over
+the Linux kernel headers. Types, constant names, and field names are prefixed
+with `linux_`, `LINUX_`, or `l_`. This mangling makes the output safe to be
+exported back out to C via cbindgen without causing conflicts with libc or
+kernel headers.
+"""
+
 import re
 import sys
 
