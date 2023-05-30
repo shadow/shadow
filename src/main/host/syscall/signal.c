@@ -48,8 +48,7 @@ static SyscallReturn _syscallhandler_signalProcess(SysCallHandler* sys, const Pr
         return syscallreturn_makeDoneErrno(ENOSYS);
     }
 
-    linux_siginfo_t siginfo = linux_siginfo_new(sig, 0, SI_USER);
-    linux_siginfo_set_pid(&siginfo, sys->processId);
+    linux_siginfo_t siginfo = linux_siginfo_new_for_kill(sig, sys->processId, 0);
 
     process_signal(process, _syscallhandler_getThread(sys), &siginfo);
 
@@ -93,9 +92,7 @@ static SyscallReturn _syscallhandler_signalThread(SysCallHandler* sys, const Thr
     linux_sigaddset(&pending_signals, sig);
     shimshmem_setThreadPendingSignals(host_getShimShmemLock(_syscallhandler_getHost(sys)),
                                       thread_sharedMem(thread), pending_signals);
-    linux_siginfo_t info = linux_siginfo_new(sig, 0, SI_TKILL);
-    linux_siginfo_set_pid(&info, sys->processId);
-    linux_siginfo_set_uid(&info, 0);
+    linux_siginfo_t info = linux_siginfo_new_for_tkill(sig, sys->processId, 0);
     shimshmem_setThreadSiginfo(
         host_getShimShmemLock(_syscallhandler_getHost(sys)), thread_sharedMem(thread), sig, &info);
 

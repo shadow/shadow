@@ -1,7 +1,8 @@
 use bytemuck::TransparentWrapper;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::bindings;
+use crate::bindings::{self, linux_sigval};
 
 /// Definition is sometimes missing in the userspace headers.
 //
@@ -9,7 +10,8 @@ use crate::bindings;
 // Copied from linux's include/uapi/linux/signal.h.
 pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
 
-// signal names
+// signal names. This is a `struct` instead of an `enum` to support
+// realtime signals.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct Signal(i32);
@@ -99,7 +101,7 @@ impl Signal {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Default)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct SigActionFlags: u64 {
         const NOCLDSTOP = bindings::LINUX_SA_NOCLDSTOP as u64;
         const NOCLDWAIT = bindings::LINUX_SA_NOCLDWAIT as u64;
@@ -114,8 +116,175 @@ bitflags::bitflags! {
 // We can't derive this since the bitflags field uses an internal type.
 unsafe impl VirtualAddressSpaceIndependent for SigActionFlags {}
 
+/// Describes how a signal was sent.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SigInfoCode {
+    Si(SigInfoCodeSi),
+    Ill(SigInfoCodeIll),
+    Fpe(SigInfoCodeFpe),
+    Segv(SigInfoCodeSegv),
+    Bus(SigInfoCodeBus),
+    Trap(SigInfoCodeTrap),
+    Cld(SigInfoCodeCld),
+    Poll(SigInfoCodePoll),
+    Sys(SigInfoCodeSys),
+    Unknown(i32),
+}
+
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeSi {
+    // sigaction(2): kill(2)
+    SI_USER = bindings::LINUX_SI_USER as i32,
+    // sigaction(2): Sent by the kernel.
+    SI_KERNEL = bindings::LINUX_SI_KERNEL as i32,
+    // sigaction(2): sigqueue(3)
+    SI_QUEUE = bindings::LINUX_SI_QUEUE as i32,
+    // sigaction(2): POSIX timer expired.
+    SI_TIMER = bindings::LINUX_SI_TIMER as i32,
+    // sigaction(2): POSIX message queue state changed; see mq_notify(3)
+    SI_MESGQ = bindings::LINUX_SI_MESGQ as i32,
+    // sigaction(2): AIO completed
+    SI_ASYNCIO = bindings::LINUX_SI_ASYNCIO as i32,
+    // sigaction(2): tkill(2) or tgkill(2).
+    SI_TKILL = bindings::LINUX_SI_TKILL as i32,
+}
+
+/// Codes for SIGCHLD
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeCld {
+    // Child has exited.
+    CLD_EXITED = bindings::LINUX_CLD_EXITED as i32,
+    // Child was killed.
+    CLD_KILLED = bindings::LINUX_CLD_KILLED as i32,
+    // Child terminated abnormally.
+    CLD_DUMPED = bindings::LINUX_CLD_DUMPED as i32,
+    // Traced child has trapped.
+    CLD_TRAPPED = bindings::LINUX_CLD_TRAPPED as i32,
+    // Child has stopped.
+    CLD_STOPPED = bindings::LINUX_CLD_STOPPED as i32,
+    // Stopped child has continued.
+    CLD_CONTINUED = bindings::LINUX_CLD_CONTINUED as i32,
+}
+
+/// Codes for SIGILL
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeIll {
+    ILL_ILLOPC = bindings::LINUX_ILL_ILLOPC as i32,
+    ILL_ILLOPN = bindings::LINUX_ILL_ILLOPN as i32,
+    ILL_ILLADR = bindings::LINUX_ILL_ILLADR as i32,
+    ILL_ILLTRP = bindings::LINUX_ILL_ILLTRP as i32,
+    ILL_PRVOPC = bindings::LINUX_ILL_PRVOPC as i32,
+    ILL_PRVREG = bindings::LINUX_ILL_PRVREG as i32,
+    ILL_COPROC = bindings::LINUX_ILL_COPROC as i32,
+    ILL_BADSTK = bindings::LINUX_ILL_BADSTK as i32,
+    ILL_BADIADDR = bindings::LINUX_ILL_BADIADDR as i32,
+}
+
+/// Codes for SIGFPE
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeFpe {
+    FPE_INTDIV = bindings::LINUX_FPE_INTDIV as i32,
+    FPE_INTOVF = bindings::LINUX_FPE_INTOVF as i32,
+    FPE_FLTDIV = bindings::LINUX_FPE_FLTDIV as i32,
+    FPE_FLTOVF = bindings::LINUX_FPE_FLTOVF as i32,
+    FPE_FLTUND = bindings::LINUX_FPE_FLTUND as i32,
+    FPE_FLTRES = bindings::LINUX_FPE_FLTRES as i32,
+    FPE_FLTINV = bindings::LINUX_FPE_FLTINV as i32,
+    FPE_FLTSUB = bindings::LINUX_FPE_FLTSUB as i32,
+    FPE_FLTUNK = bindings::LINUX_FPE_FLTUNK as i32,
+    FPE_CONDTRAP = bindings::LINUX_FPE_CONDTRAP as i32,
+}
+
+/// Codes for SIGSEGV
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeSegv {
+    SEGV_MAPERR = bindings::LINUX_SEGV_MAPERR as i32,
+    SEGV_ACCERR = bindings::LINUX_SEGV_ACCERR as i32,
+    SEGV_BNDERR = bindings::LINUX_SEGV_BNDERR as i32,
+    SEGV_PKUERR = bindings::LINUX_SEGV_PKUERR as i32,
+    SEGV_ACCADI = bindings::LINUX_SEGV_ACCADI as i32,
+    SEGV_ADIDERR = bindings::LINUX_SEGV_ADIDERR as i32,
+    SEGV_ADIPERR = bindings::LINUX_SEGV_ADIPERR as i32,
+    SEGV_MTEAERR = bindings::LINUX_SEGV_MTEAERR as i32,
+    SEGV_MTESERR = bindings::LINUX_SEGV_MTESERR as i32,
+}
+
+/// Codes for SIGBUS
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeBus {
+    BUS_ADRALN = bindings::LINUX_BUS_ADRALN as i32,
+    BUS_ADRERR = bindings::LINUX_BUS_ADRERR as i32,
+    BUS_OBJERR = bindings::LINUX_BUS_OBJERR as i32,
+    BUS_MCEERR_AR = bindings::LINUX_BUS_MCEERR_AR as i32,
+    BUS_MCEERR_AO = bindings::LINUX_BUS_MCEERR_AO as i32,
+}
+
+/// Codes for SIGTRAP
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeTrap {
+    TRAP_BRKPT = bindings::LINUX_TRAP_BRKPT as i32,
+    TRAP_TRACE = bindings::LINUX_TRAP_TRACE as i32,
+    TRAP_BRANCH = bindings::LINUX_TRAP_BRANCH as i32,
+    TRAP_HWBKPT = bindings::LINUX_TRAP_HWBKPT as i32,
+    TRAP_UNK = bindings::LINUX_TRAP_UNK as i32,
+    TRAP_PERF = bindings::LINUX_TRAP_PERF as i32,
+}
+
+/// Codes for SIGIO/SIGPOLL
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodePoll {
+    POLL_IN = bindings::LINUX_POLL_IN as i32,
+    POLL_OUT = bindings::LINUX_POLL_OUT as i32,
+    POLL_MSG = bindings::LINUX_POLL_MSG as i32,
+    POLL_ERR = bindings::LINUX_POLL_ERR as i32,
+    POLL_PRI = bindings::LINUX_POLL_PRI as i32,
+    POLL_HUP = bindings::LINUX_POLL_HUP as i32,
+}
+
+/// Codes for SIGSYS
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigInfoCodeSys {
+    SYS_SECCOMP = bindings::LINUX_SYS_SECCOMP as i32,
+}
+
 #[allow(non_camel_case_types)]
 pub type linux_siginfo_t = bindings::linux_siginfo_t;
+
+pub type SigInfoDetailsKill = bindings::linux__sifields__bindgen_ty_1;
+pub type SigInfoDetailsTimer = bindings::linux__sifields__bindgen_ty_2;
+pub type SigInfoDetailsRt = bindings::linux__sifields__bindgen_ty_3;
+pub type SigInfoDetailsSigChld = bindings::linux__sifields__bindgen_ty_4;
+pub type SigInfoDetailsSigFault = bindings::linux__sifields__bindgen_ty_5;
+pub type SigInfoDetailsSigPoll = bindings::linux__sifields__bindgen_ty_6;
+pub type SigInfoDetailsSigSys = bindings::linux__sifields__bindgen_ty_7;
+
+pub enum SigInfoDetails {
+    Kill(SigInfoDetailsKill),
+    Timer(SigInfoDetailsTimer),
+    Rt(SigInfoDetailsRt),
+    SigChld(SigInfoDetailsSigChld),
+    SigFault(SigInfoDetailsSigFault),
+    SigPoll(SigInfoDetailsSigPoll),
+    SigSys(SigInfoDetailsSigSys),
+}
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
@@ -137,16 +306,11 @@ impl SigInfo {
         unsafe { &self.0.l__bindgen_anon_1.l__bindgen_anon_1 }
     }
 
-    /// As for `inner`
-    fn inner_mut(&mut self) -> &mut bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
-        unsafe { &mut self.0.l__bindgen_anon_1.l__bindgen_anon_1 }
-    }
-
     /// Analogous to `bytemuck::TransparentWrapper::wrap`, but `unsafe`.
     ///
     /// # Safety
     ///
-    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    /// At least the bytes specified by sigaction(2) are initialized.
     pub unsafe fn wrap_assume_initd(si: linux_siginfo_t) -> Self {
         Self(si)
     }
@@ -155,7 +319,7 @@ impl SigInfo {
     ///
     /// # Safety
     ///
-    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    /// At least the bytes specified by sigaction(2) are initialized.
     pub unsafe fn wrap_ref_assume_initd(si: &linux_siginfo_t) -> &Self {
         unsafe { &*(si as *const _ as *const Self) }
     }
@@ -164,7 +328,7 @@ impl SigInfo {
     ///
     /// # Safety
     ///
-    /// `lsi_signo`, `lsi_errno`, and `lsi_code` must be initialized.
+    /// At least the bytes specified by sigaction(2) are initialized.
     pub unsafe fn wrap_mut_assume_initd(si: &mut linux_siginfo_t) -> &mut Self {
         unsafe { &mut *(si as *mut _ as *mut Self) }
     }
@@ -180,115 +344,194 @@ impl SigInfo {
     }
 
     #[inline]
-    pub fn signo_mut(&mut self) -> &mut i32 {
-        &mut self.inner_mut().lsi_signo
+    pub fn signal(&self) -> Signal {
+        Signal(self.inner().lsi_signo)
     }
 
     #[inline]
-    pub fn errno(&self) -> &i32 {
-        &self.inner().lsi_errno
+    pub fn code(&self) -> SigInfoCode {
+        let raw_code = self.inner().lsi_code;
+
+        // These codes always take precedence, e.g. covering the case where
+        // a SIGCHLD is sent via `kill`. The code values are mutually exclusive
+        // from the other sets below.
+        if let Ok(si_code) = SigInfoCodeSi::try_from(raw_code) {
+            return SigInfoCode::Si(si_code);
+        }
+
+        // Remaining sets of codes are *not* mutually exclusive, and depend on the signal.
+        match self.signal() {
+            Signal::SIGCHLD => {
+                if let Ok(cld_code) = SigInfoCodeCld::try_from(raw_code) {
+                    SigInfoCode::Cld(cld_code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGILL => {
+                if let Ok(code) = SigInfoCodeIll::try_from(raw_code) {
+                    SigInfoCode::Ill(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGFPE => {
+                if let Ok(code) = SigInfoCodeFpe::try_from(raw_code) {
+                    SigInfoCode::Fpe(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGSEGV => {
+                if let Ok(code) = SigInfoCodeSegv::try_from(raw_code) {
+                    SigInfoCode::Segv(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGBUS => {
+                if let Ok(code) = SigInfoCodeBus::try_from(raw_code) {
+                    SigInfoCode::Bus(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGTRAP => {
+                if let Ok(code) = SigInfoCodeTrap::try_from(raw_code) {
+                    SigInfoCode::Trap(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGPOLL => {
+                if let Ok(code) = SigInfoCodePoll::try_from(raw_code) {
+                    SigInfoCode::Poll(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            Signal::SIGSYS => {
+                if let Ok(code) = SigInfoCodeSys::try_from(raw_code) {
+                    SigInfoCode::Sys(code)
+                } else {
+                    SigInfoCode::Unknown(raw_code)
+                }
+            }
+            _ => unimplemented!(),
+        }
     }
 
-    #[inline]
-    pub fn errno_mut(&mut self) -> &mut i32 {
-        &mut self.inner_mut().lsi_errno
+    pub fn details(&self) -> Option<SigInfoDetails> {
+        match self.code() {
+            SigInfoCode::Si(SigInfoCodeSi::SI_USER) => Some(SigInfoDetails::Kill(unsafe {
+                self.inner().l_sifields.l_kill
+            })),
+            SigInfoCode::Si(SigInfoCodeSi::SI_KERNEL) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Si(SigInfoCodeSi::SI_QUEUE) => {
+                Some(SigInfoDetails::Rt(unsafe { self.inner().l_sifields.l_rt }))
+            }
+            SigInfoCode::Si(SigInfoCodeSi::SI_TIMER) => Some(SigInfoDetails::Timer(unsafe {
+                self.inner().l_sifields.l_timer
+            })),
+            SigInfoCode::Si(SigInfoCodeSi::SI_MESGQ) => {
+                Some(SigInfoDetails::Rt(unsafe { self.inner().l_sifields.l_rt }))
+            }
+            SigInfoCode::Si(SigInfoCodeSi::SI_ASYNCIO) => Some(SigInfoDetails::SigPoll(unsafe {
+                self.inner().l_sifields.l_sigpoll
+            })),
+            SigInfoCode::Si(SigInfoCodeSi::SI_TKILL) => Some(SigInfoDetails::Kill(unsafe {
+                self.inner().l_sifields.l_kill
+            })),
+            SigInfoCode::Cld(_) => Some(SigInfoDetails::SigChld(unsafe {
+                self.inner().l_sifields.l_sigchld
+            })),
+            // TODO: `l_sigfault` contains another union. Would be nice
+            // to safely pick it apart further here.
+            SigInfoCode::Ill(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Fpe(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Segv(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Bus(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Trap(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Poll(_) => Some(SigInfoDetails::SigFault(unsafe {
+                self.inner().l_sifields.l_sigfault
+            })),
+            SigInfoCode::Sys(_) => Some(SigInfoDetails::SigSys(unsafe {
+                self.inner().l_sifields.l_sigsys
+            })),
+            SigInfoCode::Unknown(_) => None,
+        }
     }
 
-    #[inline]
-    pub fn code(&self) -> &i32 {
-        &self.inner().lsi_code
-    }
-
-    #[inline]
-    pub fn code_mut(&mut self) -> &mut i32 {
-        &mut self.inner_mut().lsi_code
-    }
-
-    // TODO: We should replace these individual setters with constructors
-    // that initialize a whole sub-union based on which signal the siginfo is for.
-    #[inline]
-    pub fn set_pid(&mut self, pid: i32) {
-        // We delegate to our linux_siginfo helper, which works on the pointers,
-        // being careful not to create references that may be unsound.
-        // e.g. we don't currently enforce that the rest of the innermost union
-        // containing pid is initialized.
-        unsafe { export::linux_siginfo_set_pid(&mut self.0, pid) }
-    }
-
-    // TODO: We should replace these individual setters with constructors
-    // that initialize a whole sub-union based on which signal the siginfo is for.
-    #[inline]
-    pub fn set_uid(&mut self, uid: u32) {
-        // See `set_pid`
-        unsafe { export::linux_siginfo_set_uid(&mut self.0, uid) }
-    }
-
-    // TODO: We should replace these individual setters with constructors
-    // that initialize a whole sub-union based on which signal the siginfo is for.
-    #[inline]
-    pub fn set_overrun(&mut self, overrun: i32) {
-        // Compiler requires `unsafe` here because of the union access. Is this
-        // a bug?  I think the point of `addr_of_mut` is that the intermediate
-        // fields aren't actually dereferenced.
-        let overrun_ptr = unsafe {
-            core::ptr::addr_of_mut!(
-                self.0
-                    .l__bindgen_anon_1
-                    .l__bindgen_anon_1
-                    .l_sifields
-                    .l_timer
-                    .l_overrun
-            )
-        };
-        unsafe { overrun_ptr.write(overrun) };
-    }
-
-    /// # Safety
-    ///
-    /// The overrun field must be known to be initialized.
-    #[inline]
-    pub unsafe fn get_overrun(&self) -> i32 {
-        // Compiler requires `unsafe` here because of the union access. Is this
-        // a bug?  I think the point of `addr_of_mut` is that the intermediate
-        // fields aren't actually dereferenced.
-        let overrun_ptr = unsafe {
-            core::ptr::addr_of!(
-                self.0
-                    .l__bindgen_anon_1
-                    .l__bindgen_anon_1
-                    .l_sifields
-                    .l_timer
-                    .l_overrun
-            )
-        };
-        unsafe { *overrun_ptr }
-    }
-
-    #[inline]
-    pub fn new(signal: Signal, errno: i32, code: i32) -> Self {
+    pub fn new_for_kill(signal: Signal, sender_pid: i32, sender_uid: u32) -> Self {
+        // sigaction(2):
+        // > Signals  sent  with  kill(2) and sigqueue(3) fill in si_pid and si_uid.
+        // > In addition, signals sent with sigqueue(3) fill in si_int and si_ptr with
+        // > the values specified by the sender of the signal; see sigqueue(3) for
+        // > more details.
         Self(bindings::linux_siginfo_t {
             l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
                 l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
                     lsi_signo: signal.into(),
-                    lsi_errno: errno,
-                    lsi_code: code,
-                    l_sifields: unsafe { core::mem::zeroed() },
+                    lsi_errno: 0,
+                    lsi_code: SigInfoCodeSi::SI_USER.into(),
+                    l_sifields: bindings::linux__sifields {
+                        l_kill: SigInfoDetailsKill {
+                            l_pid: sender_pid,
+                            l_uid: sender_uid,
+                        },
+                    },
                 },
             },
         })
     }
 
-    #[inline]
-    pub fn new_sigalrm(overrun: i32) -> Self {
+    pub fn new_for_tkill(signal: Signal, sender_pid: i32, sender_uid: u32) -> Self {
         Self(bindings::linux_siginfo_t {
             l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
                 l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
-                    lsi_signo: Signal::SIGALRM.into(),
+                    lsi_signo: signal.into(),
                     lsi_errno: 0,
-                    lsi_code: bindings::LINUX_SI_TIMER,
+                    lsi_code: SigInfoCodeSi::SI_TKILL.into(),
                     l_sifields: bindings::linux__sifields {
-                        l_timer: bindings::linux__sifields__bindgen_ty_2 {
-                            l_tid: 0,
+                        l_kill: SigInfoDetailsKill {
+                            l_pid: sender_pid,
+                            l_uid: sender_uid,
+                        },
+                    },
+                },
+            },
+        })
+    }
+
+    pub fn new_for_timer(signal: Signal, timer_id: i32, overrun: i32) -> Self {
+        // sigaction(2):
+        // > Signals sent by POSIX.1b timers (since Linux 2.6) fill in si_overrun and
+        // > si_timerid.  The si_timerid field is  an  internal ID  used by the kernel
+        // > to identify the timer; it is not the same as the timer ID returned by
+        // > timer_create(2).  The si_overrun field is the timer overrun count; this
+        // > is the same information as is obtained by a call to timer_getoverrun(2).
+        // > These fields are nonstandard Linux extensions.
+        Self(bindings::linux_siginfo_t {
+            l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
+                l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
+                    lsi_signo: signal.into(),
+                    lsi_errno: 0,
+                    lsi_code: SigInfoCodeSi::SI_TIMER.into(),
+                    l_sifields: bindings::linux__sifields {
+                        l_timer: SigInfoDetailsTimer {
+                            l_tid: timer_id,
                             l_overrun: overrun,
                             l_sigval: unsafe { core::mem::zeroed() },
                             l_sys_private: 0,
@@ -298,6 +541,196 @@ impl SigInfo {
             },
         })
     }
+
+    pub fn new_for_mq(
+        signal: Signal,
+        sender_pid: i32,
+        sender_uid: u32,
+        sigval: linux_sigval,
+    ) -> Self {
+        // sigaction(2):
+        // > Signals  sent  for  message queue notification (see the description of
+        // > SIGEV_SIGNAL in mq_notify(3)) fill in si_int/si_ptr, with the sigev_value
+        // > supplied to mq_notify(3); si_pid, with the process ID of the message
+        // > sender; and si_uid, with the real user ID of the message sender.
+        Self(bindings::linux_siginfo_t {
+            l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
+                l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
+                    lsi_signo: signal.into(),
+                    lsi_errno: 0,
+                    lsi_code: SigInfoCodeSi::SI_MESGQ.into(),
+                    l_sifields: bindings::linux__sifields {
+                        l_rt: SigInfoDetailsRt {
+                            l_pid: sender_pid,
+                            l_uid: sender_uid,
+                            l_sigval: sigval,
+                        },
+                    },
+                },
+            },
+        })
+    }
+
+    pub fn new_for_sigchld_exited(
+        child_pid: i32,
+        child_uid: u32,
+        child_exit_status: i32,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        // sigaction(2):
+        // > SIGCHLD  fills  in  si_pid,  si_uid,  si_status, si_utime, and si_stime,
+        // > providing information about the child.  The si_pid field is the process
+        // > ID of the child; si_uid is the child's real user ID.  The si_status field
+        // > contains the exit status  of the  child  (if  si_code  is  CLD_EXITED),
+        // ...
+        // > The si_utime and si_stime contain the user and system CPU time used by the
+        // > child process; these fields do not  include  the  times  used  by
+        // > waited-for  children  (unlike  getrusage(2) and times(2)).
+        Self(bindings::linux_siginfo_t {
+            l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
+                l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
+                    lsi_signo: Signal::SIGCHLD.into(),
+                    lsi_errno: 0,
+                    lsi_code: SigInfoCodeCld::CLD_EXITED.into(),
+                    l_sifields: bindings::linux__sifields {
+                        l_sigchld: SigInfoDetailsSigChld {
+                            l_pid: child_pid,
+                            l_uid: child_uid,
+                            l_status: child_exit_status,
+                            l_utime: child_utime,
+                            l_stime: child_stime,
+                        },
+                    },
+                },
+            },
+        })
+    }
+
+    // sigaction(2):
+    // > SIGCHLD  fills  in  si_pid,  si_uid,  si_status, si_utime, and si_stime,
+    // > providing information about the child.  The si_pid field is the process
+    // > ID of the child; si_uid is the child's real user ID. The si_status field
+    // > contains
+    // ...
+    // > the signal number that caused the process to change state.  The
+    // > si_utime and si_stime contain the user and system CPU time used by the
+    // > child process; these fields do not  include  the  times  used  by
+    // > waited-for  children  (unlike  getrusage(2) and times(2)).
+    fn new_for_sigchld_signaled(
+        code: SigInfoCodeCld,
+        child_pid: i32,
+        child_uid: u32,
+        signal: Signal,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self(bindings::linux_siginfo_t {
+            l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1 {
+                l__bindgen_anon_1: bindings::linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
+                    lsi_signo: Signal::SIGCHLD.into(),
+                    lsi_errno: 0,
+                    lsi_code: code.into(),
+                    l_sifields: bindings::linux__sifields {
+                        l_sigchld: SigInfoDetailsSigChld {
+                            l_pid: child_pid,
+                            l_uid: child_uid,
+                            l_status: signal.into(),
+                            l_utime: child_utime,
+                            l_stime: child_stime,
+                        },
+                    },
+                },
+            },
+        })
+    }
+
+    pub fn new_for_sigchld_killed(
+        child_pid: i32,
+        child_uid: u32,
+        fatal_signal: Signal,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self::new_for_sigchld_signaled(
+            SigInfoCodeCld::CLD_KILLED,
+            child_pid,
+            child_uid,
+            fatal_signal,
+            child_utime,
+            child_stime,
+        )
+    }
+    pub fn new_for_sigchld_dumped(
+        child_pid: i32,
+        child_uid: u32,
+        fatal_signal: Signal,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self::new_for_sigchld_signaled(
+            SigInfoCodeCld::CLD_DUMPED,
+            child_pid,
+            child_uid,
+            fatal_signal,
+            child_utime,
+            child_stime,
+        )
+    }
+    pub fn new_for_sigchld_trapped(
+        child_pid: i32,
+        child_uid: u32,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self::new_for_sigchld_signaled(
+            SigInfoCodeCld::CLD_TRAPPED,
+            child_pid,
+            child_uid,
+            Signal::SIGTRAP,
+            child_utime,
+            child_stime,
+        )
+    }
+    pub fn new_for_sigchld_stopped(
+        child_pid: i32,
+        child_uid: u32,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self::new_for_sigchld_signaled(
+            SigInfoCodeCld::CLD_STOPPED,
+            child_pid,
+            child_uid,
+            Signal::SIGSTOP,
+            child_utime,
+            child_stime,
+        )
+    }
+    pub fn new_for_sigchld_continued(
+        child_pid: i32,
+        child_uid: u32,
+        child_utime: i64,
+        child_stime: i64,
+    ) -> Self {
+        Self::new_for_sigchld_signaled(
+            SigInfoCodeCld::CLD_CONTINUED,
+            child_pid,
+            child_uid,
+            Signal::SIGCONT,
+            child_utime,
+            child_stime,
+        )
+    }
+
+    // TODO: (see sigaction(2))
+    // * new_for_sigill
+    // * new_for_sigfpe
+    // * new_for_sigsegv
+    // * new_for_sigtrap
+    // * new_for_poll
+    // * new_for_seccomp
+    // ...
 }
 
 impl Default for SigInfo {
@@ -683,40 +1116,23 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_siginfo_new(
+    pub extern "C" fn linux_siginfo_new_for_kill(
         lsi_signo: i32,
-        lsi_errno: i32,
-        lsi_code: i32,
+        sender_pid: i32,
+        sender_uid: u32,
     ) -> linux_siginfo_t {
-        // TODO: Lift errno and code types.
         let signal = Signal::try_from(lsi_signo).unwrap();
-        SigInfo::peel(SigInfo::new(signal, lsi_errno, lsi_code))
+        SigInfo::peel(SigInfo::new_for_kill(signal, sender_pid, sender_uid))
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_siginfo_set_pid(si: *mut linux_siginfo_t, pid: i32) {
-        let pid_ptr = core::ptr::addr_of_mut!(
-            (*si)
-                .l__bindgen_anon_1
-                .l__bindgen_anon_1
-                .l_sifields
-                .l_kill
-                .l_pid
-        );
-        unsafe { pid_ptr.write(pid) };
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn linux_siginfo_set_uid(si: *mut linux_siginfo_t, uid: u32) {
-        let uid_ptr = core::ptr::addr_of_mut!(
-            (*si)
-                .l__bindgen_anon_1
-                .l__bindgen_anon_1
-                .l_sifields
-                .l_kill
-                .l_uid
-        );
-        unsafe { uid_ptr.write(uid) };
+    pub extern "C" fn linux_siginfo_new_for_tkill(
+        lsi_signo: i32,
+        sender_pid: i32,
+        sender_uid: u32,
+    ) -> linux_siginfo_t {
+        let signal = Signal::try_from(lsi_signo).unwrap();
+        SigInfo::peel(SigInfo::new_for_tkill(signal, sender_pid, sender_uid))
     }
 
     /// Returns the handler if there is one, else NULL.

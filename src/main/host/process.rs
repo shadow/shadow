@@ -585,7 +585,7 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
-    let siginfo = SigInfo::new_sigalrm(expiration_count);
+    let siginfo = SigInfo::new_for_timer(Signal::SIGALRM, 0, expiration_count);
     process.signal(host, None, &siginfo);
 }
 

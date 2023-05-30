@@ -417,8 +417,11 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let siginfo =
-                        SigInfo::new(Signal::try_from(shutdown_signal as i32).unwrap(), 0, 0);
+                    let siginfo = SigInfo::new_for_kill(
+                        Signal::try_from(shutdown_signal as i32).unwrap(),
+                        1,
+                        0,
+                    );
                     process.signal(host, None, &siginfo);
                 });
                 host.schedule_task_at_emulated_time(
