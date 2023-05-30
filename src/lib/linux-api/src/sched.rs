@@ -1,8 +1,9 @@
 use crate::bindings;
 
 bitflags::bitflags! {
-    // While `clone` is documented as taking an i32 parameter for flags,
-    // in `clone3` its a u64. Promote to u64 throughout.
+    /// The flags passed to the `clone` and `clone3` syscalls.
+    /// While `clone` is documented as taking an i32 parameter for flags,
+    /// in `clone3` its a u64. Promote to u64 throughout.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct CloneFlags: u64 {
         const CLEAR_SIGHAND = bindings::LINUX_CLONE_CLEAR_SIGHAND;
