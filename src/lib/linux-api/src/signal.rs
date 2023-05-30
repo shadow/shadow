@@ -128,7 +128,93 @@ pub enum SigInfoCode {
     Cld(SigInfoCodeCld),
     Poll(SigInfoCodePoll),
     Sys(SigInfoCodeSys),
-    Unknown(i32),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SigInfoCodeFromRawError {
+    pub code: i32,
+    pub signo: i32,
+}
+
+impl SigInfoCode {
+    fn try_from_raw(raw_code: i32, raw_signo: i32) -> Result<Self, SigInfoCodeFromRawError> {
+        // These codes always take precedence, e.g. covering the case where
+        // a SIGCHLD is sent via `kill`. The code values are mutually exclusive
+        // from the other sets below.
+        if let Ok(si_code) = SigInfoCodeSi::try_from(raw_code) {
+            return Ok(SigInfoCode::Si(si_code));
+        }
+
+        let err = SigInfoCodeFromRawError {
+            code: raw_code,
+            signo: raw_signo,
+        };
+
+        let Ok(signal) = Signal::try_from(raw_signo) else {
+            return Err(err);
+        };
+
+        // Remaining sets of codes are *not* mutually exclusive, and depend on the signal.
+        match signal {
+            Signal::SIGCHLD => {
+                if let Ok(cld_code) = SigInfoCodeCld::try_from(raw_code) {
+                    Ok(SigInfoCode::Cld(cld_code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGILL => {
+                if let Ok(code) = SigInfoCodeIll::try_from(raw_code) {
+                    Ok(SigInfoCode::Ill(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGFPE => {
+                if let Ok(code) = SigInfoCodeFpe::try_from(raw_code) {
+                    Ok(SigInfoCode::Fpe(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGSEGV => {
+                if let Ok(code) = SigInfoCodeSegv::try_from(raw_code) {
+                    Ok(SigInfoCode::Segv(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGBUS => {
+                if let Ok(code) = SigInfoCodeBus::try_from(raw_code) {
+                    Ok(SigInfoCode::Bus(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGTRAP => {
+                if let Ok(code) = SigInfoCodeTrap::try_from(raw_code) {
+                    Ok(SigInfoCode::Trap(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGPOLL => {
+                if let Ok(code) = SigInfoCodePoll::try_from(raw_code) {
+                    Ok(SigInfoCode::Poll(code))
+                } else {
+                    Err(err)
+                }
+            }
+            Signal::SIGSYS => {
+                if let Ok(code) = SigInfoCodeSys::try_from(raw_code) {
+                    Ok(SigInfoCode::Sys(code))
+                } else {
+                    Err(err)
+                }
+            }
+            _ => Err(err),
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -339,90 +425,20 @@ impl SigInfo {
     }
 
     #[inline]
-    pub fn signo(&self) -> &i32 {
-        &self.inner().lsi_signo
+    pub fn signal(&self) -> Result<Signal, SignalFromI32Error> {
+        Signal::try_from(self.inner().lsi_signo)
     }
 
     #[inline]
-    pub fn signal(&self) -> Signal {
-        Signal(self.inner().lsi_signo)
-    }
-
-    #[inline]
-    pub fn code(&self) -> SigInfoCode {
-        let raw_code = self.inner().lsi_code;
-
-        // These codes always take precedence, e.g. covering the case where
-        // a SIGCHLD is sent via `kill`. The code values are mutually exclusive
-        // from the other sets below.
-        if let Ok(si_code) = SigInfoCodeSi::try_from(raw_code) {
-            return SigInfoCode::Si(si_code);
-        }
-
-        // Remaining sets of codes are *not* mutually exclusive, and depend on the signal.
-        match self.signal() {
-            Signal::SIGCHLD => {
-                if let Ok(cld_code) = SigInfoCodeCld::try_from(raw_code) {
-                    SigInfoCode::Cld(cld_code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGILL => {
-                if let Ok(code) = SigInfoCodeIll::try_from(raw_code) {
-                    SigInfoCode::Ill(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGFPE => {
-                if let Ok(code) = SigInfoCodeFpe::try_from(raw_code) {
-                    SigInfoCode::Fpe(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGSEGV => {
-                if let Ok(code) = SigInfoCodeSegv::try_from(raw_code) {
-                    SigInfoCode::Segv(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGBUS => {
-                if let Ok(code) = SigInfoCodeBus::try_from(raw_code) {
-                    SigInfoCode::Bus(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGTRAP => {
-                if let Ok(code) = SigInfoCodeTrap::try_from(raw_code) {
-                    SigInfoCode::Trap(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGPOLL => {
-                if let Ok(code) = SigInfoCodePoll::try_from(raw_code) {
-                    SigInfoCode::Poll(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            Signal::SIGSYS => {
-                if let Ok(code) = SigInfoCodeSys::try_from(raw_code) {
-                    SigInfoCode::Sys(code)
-                } else {
-                    SigInfoCode::Unknown(raw_code)
-                }
-            }
-            _ => unimplemented!(),
-        }
+    pub fn code(&self) -> Result<SigInfoCode, SigInfoCodeFromRawError> {
+        SigInfoCode::try_from_raw(self.inner().lsi_code, self.inner().lsi_signo)
     }
 
     pub fn details(&self) -> Option<SigInfoDetails> {
-        match self.code() {
+        let Ok(code) = self.code() else {
+            return None;
+        };
+        match code {
             SigInfoCode::Si(SigInfoCodeSi::SI_USER) => Some(SigInfoDetails::Kill(unsafe {
                 self.inner().l_sifields.l_kill
             })),
@@ -470,7 +486,6 @@ impl SigInfo {
             SigInfoCode::Sys(_) => Some(SigInfoDetails::SigSys(unsafe {
                 self.inner().l_sifields.l_sigsys
             })),
-            SigInfoCode::Unknown(_) => None,
         }
     }
 

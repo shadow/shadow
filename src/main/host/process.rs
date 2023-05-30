@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, LinuxDefaultAction, SigInfo, Signal};
+use linux_api::signal::{defaultaction, LinuxDefaultAction, SigInfo, Signal, SignalFromI32Error};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -448,10 +448,11 @@ impl RunnableProcess {
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
     pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &SigInfo) {
-        if *siginfo.signo() == 0 {
-            return;
-        }
-        let signal = Signal::try_from(*siginfo.signo()).unwrap();
+        let signal = match siginfo.signal() {
+            Ok(s) => s,
+            Err(SignalFromI32Error(0)) => return,
+            Err(SignalFromI32Error(n)) => panic!("Bad signo {n}"),
+        };
 
         // Scope for `process_shmem_protected`
         {
