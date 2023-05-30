@@ -4,7 +4,6 @@ use nix::sys::socket::{Shutdown, SockFlag};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
-use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
@@ -252,11 +251,7 @@ impl SyscallHandler {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
-                    CompatFile::Legacy(file) => {
-                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
-                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
-                            return Err(Errno::ENOSYS.into());
-                        }
+                    CompatFile::Legacy(_file) => {
                         return Err(Errno::ENOTSOCK.into());
                     }
                 }
@@ -406,11 +401,7 @@ impl SyscallHandler {
                 let desc_table = ctx.objs.process.descriptor_table_borrow();
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
-                    CompatFile::Legacy(file) => {
-                        let file_type = unsafe { c::legacyfile_getType(file.ptr()) };
-                        if file_type == c::_LegacyFileType_DT_UDPSOCKET {
-                            return Err(Errno::ENOSYS.into());
-                        }
+                    CompatFile::Legacy(_file) => {
                         return Err(Errno::ENOTSOCK.into());
                     }
                 }

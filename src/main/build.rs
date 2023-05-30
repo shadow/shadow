@@ -347,7 +347,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/descriptor/tcp_cong.c",
         "host/descriptor/tcp_cong_reno.c",
         "host/descriptor/timerfd.c",
-        "host/descriptor/udp.c",
         "host/process.c",
         "host/futex.c",
         "host/futex_table.c",
