@@ -151,6 +151,19 @@ void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, Untype
     packet->priority = host_getNextPacketPriority(host);
 }
 
+void packet_setPayloadFromShadow(Packet* packet, const Host* host, const void* payload,
+                                 gsize payloadLength) {
+    MAGIC_ASSERT(packet);
+    utility_debugAssert(payload);
+    utility_debugAssert(!packet->payload);
+
+    /* the payload starts with 1 ref, which we hold */
+    packet->payload = payload_newFromShadow(payload, payloadLength);
+    utility_alwaysAssert(packet->payload != NULL);
+    /* application data needs a priority ordering for FIFO onto the wire */
+    packet->priority = host_getNextPacketPriority(host);
+}
+
 /* copy everything except the payload.
  * the payload will point to the same payload as the original packet.
  * the payload is protected so it is safe to send the copied packet to a different host. */

@@ -17,6 +17,7 @@ typedef struct _Payload Payload;
 Payload* payload_new(const Thread* thread, UntypedForeignPtr data, gsize dataLength);
 Payload* payload_newWithMemoryManager(UntypedForeignPtr data, gsize dataLength,
                                       const MemoryManager* mem);
+Payload* payload_newFromShadow(const void* data, gsize dataLength);
 
 void payload_ref(Payload* payload);
 void payload_unref(Payload* payload);

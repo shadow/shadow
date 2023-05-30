@@ -73,6 +73,25 @@ Payload* payload_newWithMemoryManager(UntypedForeignPtr data, gsize dataLength,
     return payload;
 }
 
+Payload* payload_newFromShadow(const void* data, gsize dataLength) {
+    Payload* payload = g_new0(Payload, 1);
+    MAGIC_INIT(payload);
+
+    if (data && dataLength > 0) {
+        payload->data = g_malloc0(dataLength);
+        utility_debugAssert(payload->data != NULL);
+        memcpy(payload->data, data, dataLength);
+        payload->length = dataLength;
+    }
+
+    g_mutex_init(&(payload->lock));
+    payload->referenceCount = 1;
+
+    worker_count_allocation(Payload);
+
+    return payload;
+}
+
 static void _payload_free(Payload* payload) {
     MAGIC_ASSERT(payload);
 

@@ -6,6 +6,7 @@ use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
+use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
@@ -32,12 +33,6 @@ impl SyscallHandler {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
-
-        // if it's not a unix socket or tcp socket, use the C syscall handler instead
-        if domain != libc::AF_UNIX && (domain != libc::AF_INET || socket_type != libc::SOCK_STREAM)
-        {
-            return Self::legacy_syscall(c::syscallhandler_socket, ctx);
-        }
 
         let mut file_flags = FileStatus::empty();
         let mut descriptor_flags = DescriptorFlags::empty();
@@ -78,7 +73,7 @@ impl SyscallHandler {
             libc::AF_INET => match socket_type {
                 libc::SOCK_STREAM => {
                     if protocol != 0 && protocol != libc::IPPROTO_TCP {
-                        warn!("Unsupported inet stream socket protocol {protocol}");
+                        log::debug!("Unsupported inet stream socket protocol {protocol}");
                         return Err(Errno::EPROTONOSUPPORT.into());
                     }
                     Socket::Inet(InetSocket::LegacyTcp(LegacyTcpSocket::new(
@@ -86,7 +81,20 @@ impl SyscallHandler {
                         ctx.objs.host,
                     )))
                 }
-                _ => panic!("Should have called the C syscall handler"),
+                libc::SOCK_DGRAM => {
+                    if protocol != 0 && protocol != libc::IPPROTO_UDP {
+                        log::debug!("Unsupported inet dgram socket protocol {protocol}");
+                        return Err(Errno::EPROTONOSUPPORT.into());
+                    }
+                    let send_buf_size = ctx.objs.host.params.init_sock_send_buf_size;
+                    let recv_buf_size = ctx.objs.host.params.init_sock_recv_buf_size;
+                    Socket::Inet(InetSocket::Udp(UdpSocket::new(
+                        file_flags,
+                        send_buf_size.try_into().unwrap(),
+                        recv_buf_size.try_into().unwrap(),
+                    )))
+                }
+                _ => return Err(Errno::ESOCKTNOSUPPORT.into()),
             },
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
@@ -189,6 +197,8 @@ impl SyscallHandler {
         };
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
 
         let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
 
@@ -209,7 +219,7 @@ impl SyscallHandler {
         // call the socket's sendmsg(), and run any resulting events
         let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
             })
         });
 
@@ -265,6 +275,8 @@ impl SyscallHandler {
         };
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
 
         let msg = io::read_msghdr(&mem, msg_ptr)?;
 
@@ -279,7 +291,7 @@ impl SyscallHandler {
         // call the socket's sendmsg(), and run any resulting events
         let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, cb_queue)
+                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
             })
         });
 

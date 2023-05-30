@@ -20,6 +20,16 @@ pub mod abstract_unix_ns;
 pub mod inet;
 pub mod unix;
 
+bitflags::bitflags! {
+    /// Flags to represent if a socket has been shut down for reading and/or writing. An empty set
+    /// of flags implies that the socket *has not* been shut down for reading or writing.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    struct ShutdownFlags: u8 {
+        const READ = 0b00000001;
+        const WRITE = 0b00000010;
+    }
+}
+
 #[derive(Clone)]
 pub enum Socket {
     Unix(Arc<AtomicRefCell<UnixSocket>>),
@@ -104,11 +114,17 @@ impl Socket {
         &self,
         args: SendmsgArgs,
         memory_manager: &mut MemoryManager,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
     ) -> Result<libc::ssize_t, SyscallError> {
         match self {
-            Self::Unix(socket) => UnixSocket::sendmsg(socket, args, memory_manager, cb_queue),
-            Self::Inet(socket) => InetSocket::sendmsg(socket, args, memory_manager, cb_queue),
+            Self::Unix(socket) => {
+                UnixSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
+            }
+            Self::Inet(socket) => {
+                InetSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
+            }
         }
     }
 
@@ -199,12 +215,6 @@ impl SocketRef<'_> {
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
-
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
-                          optlen: libc::socklen_t, memory_manager: &MemoryManager)
-        -> Result<(), SyscallError>
-    );
 }
 
 // file functions
@@ -279,7 +289,7 @@ impl SocketRefMut<'_> {
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn setsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
+        pub fn setsockopt(&mut self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
