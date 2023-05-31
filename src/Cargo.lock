@@ -762,10 +762,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-errno"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583acc33595c32cf8b0702115d4abdafecfabf257d28513499b93140db38a523"
+dependencies = [
+ "posix-errno",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ece97ea872ece730aed82664c424eb4c8291e1ff2480247ccf7409044bc6479f"
+
+[[package]]
+name = "linux-syscall"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1ca924c756acef088aa8d06e6a0b0d47d3ba5587b5bbc8a7255f10c1be10c30"
+dependencies = [
+ "linux-errno",
+]
 
 [[package]]
 name = "log"
@@ -1054,6 +1072,12 @@ checksum = "f9a81d2759aae1dae668f783c308bc5c8ebd191ff4184aaa1b37f65a6ae5a56f"
 dependencies = [
  "plotters-backend",
 ]
+
+[[package]]
+name = "posix-errno"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c3ed686be262618484b930cdbdf0db6e991de9a74aebb0855bfde058600927c"
 
 [[package]]
 name = "ppv-lite86"
@@ -1867,6 +1891,8 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "libc",
+ "linux-errno",
+ "linux-syscall",
  "loom",
  "nix",
  "rand",
