@@ -133,9 +133,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
         }
 
         switch (dType) {
-            case DT_FILE:
-            case DT_TCPSOCKET:
-            case DT_UDPSOCKET: {
+            case DT_FILE: {
                 off_t thisOffset = offset;
 
                 if (doPreadv) {
@@ -267,9 +265,7 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
         }
 
         switch (dType) {
-            case DT_FILE:
-            case DT_TCPSOCKET:
-            case DT_UDPSOCKET: {
+            case DT_FILE: {
                 off_t thisOffset = offset;
 
                 if (doPwritev) {

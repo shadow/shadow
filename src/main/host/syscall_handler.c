@@ -35,7 +35,6 @@
 #include "main/host/syscall/select.h"
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
-#include "main/host/syscall/socket.h"
 #include "main/host/syscall/time.h"
 #include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
