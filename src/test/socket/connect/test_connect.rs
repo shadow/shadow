@@ -69,6 +69,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             test_zero_len,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
+        test_utils::ShadowTest::new(
+            "test_recv_original_bind_port",
+            test_recv_original_bind_port,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     // inet-only tests
@@ -641,6 +646,101 @@ fn test_double_connect(
         assert_eq!(rv, 0);
 
         check_connect_call(&args_2, expected_errno_2)
+    })
+}
+
+/// Test receiving messages on a socket that was originally associated with the wildcard 4-tuple
+/// (client_ip, client_port, *, *), then was connected to another socket and became associated with
+/// the 4-tuple (client_ip, client_port, server_ip, server_port).
+fn test_recv_original_bind_port() -> Result<(), String> {
+    let fd_server =
+        unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    let fd_client =
+        unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    let fd_other =
+        unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd_server >= 0);
+    assert!(fd_client >= 0);
+    assert!(fd_other >= 0);
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server, fd_other], || {
+        // Bind both the client and server to some loopback port. They will both be associated with
+        // the network interface using the wildcard 4-tuple (ip, port, *, *) so that they can
+        // receive packets from any source address.
+        let (_client_addr, _client_addrlen) =
+            socket_utils::autobind_helper(fd_client, libc::AF_INET);
+        let (_server_addr, _server_addrlen) =
+            socket_utils::autobind_helper(fd_server, libc::AF_INET);
+
+        // PART 1: connect other -> client
+
+        // connect other to the client address
+        let rv = socket_utils::connect_to_peername(fd_other, fd_client);
+        assert_eq!(rv, 0);
+
+        // PART 2: send message other -> client and recv (success)
+
+        // send a message from other to the client
+        nix::sys::socket::send(fd_other, &[1, 2, 3], nix::sys::socket::MsgFlags::empty()).unwrap();
+
+        // shadow needs to run events
+        let rv = unsafe { libc::usleep(2000) };
+        assert_eq!(rv, 0);
+
+        // can successfully receive bytes from the other socket
+        let mut buffer = [0u8; 20];
+        let rv =
+            nix::sys::socket::recv(fd_client, &mut buffer, nix::sys::socket::MsgFlags::empty());
+        assert_eq!(rv, Ok(3));
+        assert_eq!(&buffer[..3], &[1, 2, 3]);
+
+        // PART 3: connect client -> server
+
+        // connect client to the server address (this removes the wildcard network interface
+        // association)
+        let rv = socket_utils::connect_to_peername(fd_client, fd_server);
+        assert_eq!(rv, 0);
+
+        // PART 4: send message other -> client and recv (fail)
+
+        // send another message from other to the client
+        nix::sys::socket::send(fd_other, &[4, 5, 6], nix::sys::socket::MsgFlags::empty()).unwrap();
+
+        // shadow needs to run events
+        let rv = unsafe { libc::usleep(2000) };
+        assert_eq!(rv, 0);
+
+        // can no longer receive bytes from the other socket
+        let rv = nix::sys::socket::recv(
+            fd_client,
+            &mut [0u8; 20][..],
+            nix::sys::socket::MsgFlags::empty(),
+        );
+        assert_eq!(rv, Err(nix::errno::Errno::EAGAIN));
+
+        // PART 5: connect server -> client
+
+        // connect server to the client address
+        let rv = socket_utils::connect_to_peername(fd_server, fd_client);
+        assert_eq!(rv, 0);
+
+        // PART 6: send message server -> client (success)
+
+        // send a message from server to the client
+        nix::sys::socket::send(fd_server, &[7, 8, 9], nix::sys::socket::MsgFlags::empty()).unwrap();
+
+        // shadow needs to run events
+        let rv = unsafe { libc::usleep(2000) };
+        assert_eq!(rv, 0);
+
+        // can successfully receive bytes from the server socket
+        let mut buffer = [0u8; 20];
+        let rv =
+            nix::sys::socket::recv(fd_client, &mut buffer, nix::sys::socket::MsgFlags::empty());
+        assert_eq!(rv, Ok(3));
+        assert_eq!(&buffer[..3], &[7, 8, 9]);
+
+        Ok(())
     })
 }
 
