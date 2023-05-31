@@ -81,9 +81,7 @@ INTERPOSE_DIRECT_ERRORS(clock_nanosleep);
 #ifdef SYS_clock_settime // kernel entry: num=227 func=sys_clock_settime
 INTERPOSE(clock_settime);
 #endif
-#ifdef SYS_clone // kernel entry: num=56 func=sys_clone
-INTERPOSE(clone);
-#endif
+// Skipping SYS_clone
 #ifdef SYS_clone3 // kernel entry: num=435 func=sys_clone3
 INTERPOSE(clone3);
 #endif
