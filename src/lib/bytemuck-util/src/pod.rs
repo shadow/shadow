@@ -38,8 +38,10 @@ where
 
 /// Cast as a slice of raw bytes.
 ///
-/// Some bytes may be uninitialized if T has padding.
-pub fn as_u8_slice<T>(x: &T) -> &[MaybeUninit<u8>]
+/// Analogous to `bytemuck::bytes_of`, but only requires `AnyBitPattern` instead
+/// of `Pod`.  Some bytes may be uninitialized if T has padding.
+// TODO: Do we even need to require `T: AnyBitPattern` here?
+pub fn maybeuninit_bytes_of<T>(x: &T) -> &[MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
