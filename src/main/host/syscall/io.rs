@@ -1,12 +1,12 @@
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 
+use bytemuck_util::pod;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::ForeignArrayPtr;
-use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 
 /// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`, and

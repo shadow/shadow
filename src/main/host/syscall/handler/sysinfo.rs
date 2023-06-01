@@ -1,3 +1,4 @@
+use bytemuck_util::pod;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
@@ -5,7 +6,6 @@ use syscall_logger::log_syscall;
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
-use crate::utility::pod;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]

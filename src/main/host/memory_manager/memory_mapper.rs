@@ -10,6 +10,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
+use bytemuck_util::pod::Pod;
 use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
@@ -22,7 +23,6 @@ use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
-use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 

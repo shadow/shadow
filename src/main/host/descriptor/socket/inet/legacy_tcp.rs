@@ -3,6 +3,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use bytemuck_util::pod;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -22,7 +23,6 @@ use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::packet::PacketRc;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
-use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 

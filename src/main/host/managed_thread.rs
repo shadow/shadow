@@ -3,6 +3,7 @@ use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
+use bytemuck_util::pod;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -23,7 +24,7 @@ use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
-use crate::utility::{pod, syscall};
+use crate::utility::syscall;
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]

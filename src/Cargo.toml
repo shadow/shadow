@@ -3,6 +3,7 @@
 members = [
     "main",
     "test",
+    "lib/bytemuck-util",
     "lib/shadow-build-common",
     "lib/gml-parser",
     "lib/linux-api",

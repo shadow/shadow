@@ -20,6 +20,7 @@ use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 
+use bytemuck_util::pod::{self, Pod};
 use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
@@ -29,8 +30,6 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use super::context::ThreadContext;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::host::thread::Thread;
-use crate::utility::pod;
-use crate::utility::pod::Pod;
 
 mod memory_copier;
 mod memory_mapper;

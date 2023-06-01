@@ -175,13 +175,12 @@ where
 /// the original `ShMemBlock`.
 ///
 /// `[main::utility::pod::Pod]` is implemented for type.
-/// TODO: Move the implementation here, after moving the `pod` module
-/// out of `main`.
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
 }
+unsafe impl ::bytemuck_util::pod::Pod for ShMemBlockSerialized {}
 
 // SAFETY: This is a serialized blob, designed to be VASI.
 unsafe impl VirtualAddressSpaceIndependent for c_bindings::ShMemBlockSerialized {}
