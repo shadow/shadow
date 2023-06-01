@@ -91,6 +91,8 @@ foreach(LIBRARY shadow-shim-helper-rs logger shadow-shmem shadow-tsc shadow-rs)
   string(REPLACE "-" "_" LIBRARY_FILE "lib${LIBRARY}.a")
   set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/${LIBRARY_FILE})
   set_target_properties(${LIBRARY} PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${RUST_TARGET}/release/${LIBRARY_FILE})
+  # Rust's std needs -ldl and -lpthread
+  target_link_libraries(${LIBRARY} INTERFACE dl pthread)
 endforeach()
 
 # Unit test executables don't have predictable names: https://github.com/rust-lang/cargo/issues/1924
