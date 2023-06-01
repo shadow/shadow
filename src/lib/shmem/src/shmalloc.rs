@@ -1,158 +1,149 @@
 #![allow(dead_code)]
 
-use crate::raw_syscall::*;
-use std::io::{Cursor, Write};
+use vasi::VirtualAddressSpaceIndependent;
 
-const PATH_MAX_NBYTES: usize = 255;
-const PATH_BUF_NBYTES: usize = PATH_MAX_NBYTES + 1;
-
-#[repr(transparent)]
-#[derive(Clone, Debug)]
-struct PathBufWrapper {
-    buf: [u8; PATH_BUF_NBYTES],
-}
-
-impl PathBufWrapper {
-    pub fn new(mut buf: [u8; PATH_BUF_NBYTES]) -> Self {
-        buf.iter_mut().for_each(|x| *x = 0);
-        PathBufWrapper { buf }
-    }
-
-    pub fn format_shm_name(self: &mut Self, s: &str) {
-        static PREFIX: &'static str = "/dev/shm";
-        self.buf.iter_mut().for_each(|x| *x = 0);
-        let mut csr = Cursor::new(&mut self.buf[..]);
-        csr.write(&PREFIX.as_bytes()[..]).unwrap();
-        csr.write(&s.as_bytes()[..]).unwrap();
-        csr.flush().unwrap();
-    }
-
-    pub fn to_str<'a>(self: &'a Self) -> &'a str {
-        unsafe { std::str::from_utf8_unchecked(&self.buf) }
-    }
-}
-
-const CHUNK_SIZE: usize = 2097152;
-
-fn create_map_shared_memory<'a>(
-    path_buf: &PathBufWrapper,
-    nbytes: usize,
-) -> Result<(&'a mut [u8], i32), i32> {
-    const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC;
-    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
-    const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
-    const MAP_FLAGS: i32 = libc::MAP_SHARED;
-
-    let fd = open(path_buf.to_str(), OPEN_FLAGS, MODE)?;
-    ftruncate(fd, nbytes.try_into().unwrap())?;
-
-    let retval = mmap(
-        std::ptr::null_mut(),
-        nbytes.try_into().unwrap(),
-        PROT,
-        MAP_FLAGS,
-        fd,
-        0,
-    )?;
-
-    Ok((retval, fd))
-}
-
-pub struct MemBlock {
-    data: *mut u8,
-    nbytes: usize,
-}
-
-#[repr(C)]
 #[derive(Debug)]
-struct ChunkMeta {
-    chunk_name: PathBufWrapper,
-    chunk_fd: i32,
-    chunk_size: usize,
-    data_start: *mut u8,
-    next_chunk: *mut ChunkMeta,
+#[repr(transparent)]
+pub struct Block<'alloc, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    block_hdr: *mut crate::shmalloc_impl::BlockHdr,
+    phantom: core::marker::PhantomData<&'alloc T>,
 }
 
-fn allocate_shared_chunk(path_buf: &PathBufWrapper, nbytes: usize) -> Result<*mut ChunkMeta, i32> {
-    let (p, fd) = create_map_shared_memory(&path_buf, nbytes)?;
-    let chunk_meta: *mut ChunkMeta = p.as_mut_ptr() as *mut ChunkMeta;
-
-    unsafe {
-        (*chunk_meta).chunk_name = path_buf.clone();
-        (*chunk_meta).chunk_fd = fd;
-        (*chunk_meta).chunk_size = nbytes;
-        (*chunk_meta).data_start = chunk_meta.add(std::mem::size_of::<ChunkMeta>()) as *mut u8;
-        (*chunk_meta).next_chunk = std::ptr::null_mut();
-
-        println!("{:?}", *chunk_meta);
-    }
-
-    Ok(chunk_meta)
+impl<'allocator, T> Block<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    const T_NBYTES: usize = core::mem::size_of::<T>();
+    const T_ALIGNMENT: usize = core::mem::align_of::<T>();
 }
 
-fn deallocate_shared_chunk(chunk_meta: *const ChunkMeta) -> Result<(), i32> {
-    let path_buf = unsafe { (*chunk_meta).chunk_name.clone() };
+impl<'allocator, T> core::ops::Deref for Block<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    type Target = T;
 
-    munmap(unsafe {
-        std::slice::from_raw_parts_mut(chunk_meta as *mut u8, (*chunk_meta).chunk_size)
-    })
-    .unwrap();
-
-    unlink(path_buf.to_str())?;
-
-    Ok(())
-}
-
-impl ChunkMeta {
-    pub fn new(path_buf: PathBufWrapper) -> Self {
-        todo!()
+    fn deref(&self) -> &Self::Target {
+        let block_hdr = unsafe { &*self.block_hdr };
+        &block_hdr.get_ref::<T>(Self::T_NBYTES, Self::T_ALIGNMENT)[0]
     }
 }
 
-#[repr(C)]
-struct BlockImpl {}
-
-struct UniformFreelistAllocator {
-    first_chunk: ChunkMeta,
-    next_free_block: *mut BlockImpl,
-    alloc_nbytes: usize,
-    alloc_alignment: usize,
+impl<'allocator, T> core::ops::DerefMut for Block<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    fn deref_mut(&mut self) -> &mut T {
+        let block_hdr = unsafe { &mut *self.block_hdr };
+        &mut block_hdr.get_mut_ref::<T>(Self::T_NBYTES, Self::T_ALIGNMENT)[0]
+    }
 }
 
-impl UniformFreelistAllocator {
-    pub fn new(alloc_nbytes: usize, alloc_alignment: usize) -> Self {
-        todo!()
+struct SharedMemAllocator<'alloc, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    internal: crate::shmalloc_impl::UniformFreelistAllocator,
+    nallocs: isize,
+    phantom: core::marker::PhantomData<&'alloc T>,
+}
+
+impl<'alloc, T> SharedMemAllocator<'alloc, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    const T_NBYTES: usize = core::mem::size_of::<T>();
+    const T_ALIGNMENT: usize = core::mem::align_of::<T>();
+
+    fn new() -> Self {
+        Self {
+            internal: crate::shmalloc_impl::UniformFreelistAllocator::new(
+                Self::T_NBYTES,
+                Self::T_ALIGNMENT,
+            ),
+            nallocs: 0,
+            phantom: Default::default(),
+        }
+    }
+
+    fn alloc(&mut self) -> Block<'alloc, T> {
+        self.nallocs += 1;
+        Block::<'alloc, T> {
+            block_hdr: self.internal.alloc(),
+            phantom: Default::default(),
+        }
+    }
+
+    fn free(&mut self, block: Block<'alloc, T>) {
+        self.nallocs -= 1;
+        self.internal.dealloc(block.block_hdr);
+    }
+}
+
+impl<'alloc, T> Drop for SharedMemAllocator<'alloc, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    fn drop(&mut self) {
+        self.internal.destruct();
+
+        if self.nallocs != 0 {
+            // Memory leak! What do we want to do? Blow up?
+            println!("{:?}", self.nallocs);
+            panic!();
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
 
     #[test]
-    fn test_open() {
-        let buf: [u8; PATH_BUF_NBYTES] = [0; PATH_BUF_NBYTES];
-        let mut path_buf: PathBufWrapper = PathBufWrapper::new(buf);
-        path_buf.format_shm_name("/foo");
+    fn test_allocator_random() {
+        const NROUNDS: usize = 10;
+        let mut marked_blocks: Vec<(u32, Block<u32>)> = Default::default();
+        let mut allocator = SharedMemAllocator::<u32>::new();
+        let mut rng = rand::thread_rng();
 
-        let (p, _) = create_map_shared_memory(&path_buf, 100).unwrap();
-        p[0] = 65;
-        p[1] = 66;
-        p[2] = 67;
+        let mut execute_round = || {
+            // Some allocations
+            for i in 0..255 {
+                let mut b = allocator.alloc();
+                *b = i;
+                marked_blocks.push((i, b));
+            }
 
-        println!("p={:?}", p);
-        munmap(p).unwrap();
+            // Generate some number of items to pop
+            let n1: u8 = rng.gen();
 
-        unlink(path_buf.to_str()).unwrap();
+            for _ in 0..n1 {
+                let last_marked_block = marked_blocks.pop().unwrap();
+                assert_eq!(last_marked_block.0, *last_marked_block.1);
+                allocator.free(last_marked_block.1);
+            }
+
+            // Then check all blocks
+            for idx in 0..marked_blocks.len() {
+                assert_eq!(marked_blocks[idx].0, *marked_blocks[idx].1);
+            }
+        };
+
+        for _ in 0..NROUNDS {
+            execute_round();
+        }
+
+        while marked_blocks.len() > 0 {
+            let b = marked_blocks.pop().unwrap();
+            allocator.free(b.1);
+        }
     }
 
     #[test]
-    fn test_chunk() {
-        let buf: [u8; PATH_BUF_NBYTES] = [0; PATH_BUF_NBYTES];
-        let mut path_buf: PathBufWrapper = PathBufWrapper::new(buf);
-        path_buf.format_shm_name("/bar");
-
-        let chunk = allocate_shared_chunk(&path_buf, 1000).unwrap();
-        deallocate_shared_chunk(chunk).unwrap();
+    fn foo() {
     }
 }

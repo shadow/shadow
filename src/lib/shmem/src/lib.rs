@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod allocator;
+mod shmalloc_impl;
 pub mod shmalloc;
 pub mod raw_syscall;
 
