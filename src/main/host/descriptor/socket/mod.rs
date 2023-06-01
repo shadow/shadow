@@ -9,7 +9,7 @@ use unix::UnixSocket;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
-use crate::host::network::net_namespace::NetworkNamespace;
+use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;

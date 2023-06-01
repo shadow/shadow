@@ -1,2 +1,2 @@
-pub mod net_namespace;
-pub mod network_interface;
+pub mod interface;
+pub mod namespace;

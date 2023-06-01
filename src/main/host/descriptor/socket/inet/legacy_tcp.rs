@@ -16,7 +16,7 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
-use crate::host::network::net_namespace::NetworkNamespace;
+use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{write_partial, IoVec};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;

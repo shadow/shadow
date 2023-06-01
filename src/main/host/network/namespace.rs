@@ -12,7 +12,7 @@ use shadow_shim_helper_rs::HostId;
 use crate::core::support::configuration::QDiscMode;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::network::network_interface::{NetworkInterface, PcapOptions};
+use crate::host::network::interface::{NetworkInterface, PcapOptions};
 
 // The start of our random port range in host order, used if application doesn't
 // specify the port it wants to bind to, and for client connections.
