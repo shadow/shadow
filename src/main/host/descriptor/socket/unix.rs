@@ -19,9 +19,9 @@ use crate::host::descriptor::{
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::net_namespace::NetworkNamespace;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::SyscallError;
-use crate::network::net_namespace::NetworkNamespace;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
 use crate::utility::HostTreePointer;
