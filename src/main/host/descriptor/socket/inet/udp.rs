@@ -97,6 +97,27 @@ impl UdpSocket {
     pub fn push_in_packet(&mut self, mut packet: PacketRc, cb_queue: &mut CallbackQueue) {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
+        if let Some(peer_addr) = self.peer_addr {
+            if peer_addr != packet.src_address() {
+                // connect(2): "If the socket sockfd is of type SOCK_DGRAM, then addr is the address
+                // to which datagrams are sent by default, and the only address from which datagrams
+                // are received."
+
+                // we have a peer, but received a packet from a different source address than that
+                // peer
+                packet.add_status(PacketStatus::RcvSocketDropped);
+
+                // TODO: There's a race condition where we check the packet's address only when
+                // receiving the packet from the network interface, but the user could call
+                // `connect()` to set a peer after we've already received and buffered this packet.
+                // My guess is that this race condition exists in Linux as well, but ideally we
+                // should add a test, and do another check when `recvmsg()` is called if we really
+                // need to.
+
+                return;
+            }
+        };
+
         // get another reference to the packet so we can add a status later
         let mut packetrc_clone = packet.clone();
 

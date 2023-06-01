@@ -649,9 +649,8 @@ fn test_double_connect(
     })
 }
 
-/// Test receiving messages on a socket that was originally associated with the wildcard 4-tuple
-/// (client_ip, client_port, *, *), then was connected to another socket and became associated with
-/// the 4-tuple (client_ip, client_port, server_ip, server_port).
+/// Test receiving messages on a UDP socket that was originally bound with no peer, then was given a
+/// peer using `connect()`.
 fn test_recv_original_bind_port() -> Result<(), String> {
     let fd_server =
         unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
@@ -664,9 +663,8 @@ fn test_recv_original_bind_port() -> Result<(), String> {
     assert!(fd_other >= 0);
 
     test_utils::run_and_close_fds(&[fd_client, fd_server, fd_other], || {
-        // Bind both the client and server to some loopback port. They will both be associated with
-        // the network interface using the wildcard 4-tuple (ip, port, *, *) so that they can
-        // receive packets from any source address.
+        // Bind both the client and server to some loopback port. They both have no peer, so should
+        // be able to receive packets from any source address.
         let (_client_addr, _client_addrlen) =
             socket_utils::autobind_helper(fd_client, libc::AF_INET);
         let (_server_addr, _server_addrlen) =
@@ -696,8 +694,8 @@ fn test_recv_original_bind_port() -> Result<(), String> {
 
         // PART 3: connect client -> server
 
-        // connect client to the server address (this removes the wildcard network interface
-        // association)
+        // connect client to the server address (this adds a peer to the client, which means the
+        // client should only be able to receive packets from the server)
         let rv = socket_utils::connect_to_peername(fd_client, fd_server);
         assert_eq!(rv, 0);
 
