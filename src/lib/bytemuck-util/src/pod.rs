@@ -56,7 +56,7 @@ where
 ///
 /// Uninitialized bytes (e.g. [`MaybeUninit::uninit`]) must not be written
 /// into the returned slice, which would invalidate the source `slice`.
-pub unsafe fn to_u8_slice_mut<T>(slice: &mut [T]) -> &mut [MaybeUninit<u8>]
+pub unsafe fn maybeuninit_bytes_of_slice_mut<T>(slice: &mut [T]) -> &mut [MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
@@ -80,7 +80,7 @@ pub unsafe fn as_u8_slice_mut<T>(x: &mut T) -> &mut [MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
-    unsafe { to_u8_slice_mut(std::slice::from_mut(x)) }
+    unsafe { maybeuninit_bytes_of_slice_mut(std::slice::from_mut(x)) }
 }
 
 /// Create a value of type `T`, with contents initialized to 0s.

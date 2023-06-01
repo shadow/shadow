@@ -569,7 +569,7 @@ impl MemoryManager {
         // back to the process without initializing it.
         if cfg!(debug_assertions) {
             // SAFETY: We do not write uninitialized data into `bytes`.
-            let bytes = unsafe { pod::to_u8_slice_mut(&mut mref[..]) };
+            let bytes = unsafe { pod::maybeuninit_bytes_of_slice_mut(&mut mref[..]) };
             for byte in bytes {
                 unsafe { byte.as_mut_ptr().write(0x42) }
             }

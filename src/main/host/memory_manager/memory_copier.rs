@@ -58,7 +58,8 @@ impl MemoryCopier {
     {
         // Convert to u8
         // SAFETY: We do not write uninitialized data into `buf`.
-        let buf: &mut [std::mem::MaybeUninit<u8>] = unsafe { pod::to_u8_slice_mut(dst) };
+        let buf: &mut [std::mem::MaybeUninit<u8>] =
+            unsafe { pod::maybeuninit_bytes_of_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
@@ -104,7 +105,7 @@ impl MemoryCopier {
     ) -> Result<(), Errno> {
         assert_eq!(dst.len(), src.len());
         // SAFETY: We do not write uninitialized data into `buf`.
-        let buf = unsafe { pod::to_u8_slice_mut(dst) };
+        let buf = unsafe { pod::maybeuninit_bytes_of_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
