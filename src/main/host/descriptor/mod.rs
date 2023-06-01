@@ -530,24 +530,8 @@ impl OpenFile {
     pub fn close(self, cb_queue: &mut CallbackQueue) -> Option<Result<(), SyscallError>> {
         let OpenFile { inner } = self;
 
-        // note: There is a race-condition here in a multi-threaded context. Since shadow should
-        // never be accessing host-specific objects from two threads at once, this shouldn't be an
-        // issue, but documenting here anyways:
-        //
-        // If there are two `Arc`s remaining and two threads are running this code at the same, it
-        // is not guaranteed that one will call `Arc::try_unwrap(inner)` and return `Ok(_)`. For
-        // example one thread might run `Arc::try_unwrap(inner)` and return `Err(arc)`, then the
-        // other thread runs `Arc::try_unwrap(inner)` and also returns `Err(arc)` since the `Arc` in
-        // the first thread hasn't been dropped yet (it's contained in the `Err` return value). So
-        // both remaining `Arc`s will be dropped without either `Arc::try_unwrap(inner)` ever
-        // returning `Ok(_)`.
-
         // if this is the last reference, call close() on the file
-        if let Ok(inner) = Arc::try_unwrap(inner) {
-            Some(inner.close(cb_queue))
-        } else {
-            None
-        }
+        Arc::into_inner(inner).map(|inner| inner.close(cb_queue))
     }
 }
 

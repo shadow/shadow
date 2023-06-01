@@ -32,16 +32,6 @@ loom::lazy_static! {
 
 #[cfg(not(loom))]
 unsafe fn futex(futex_word: &AtomicU32, futex_operation: i32, val: u32) -> nix::Result<i64> {
-    type SourceT = AtomicU32;
-    type TargetT = u32;
-    let futex_word: &SourceT = futex_word;
-    static_assertions::assert_eq_size!(SourceT, TargetT);
-    static_assertions::assert_eq_align!(SourceT, TargetT);
-    // TODO: Consider using
-    // [`as_mut_ptr`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html#method.as_mut_ptr)
-    // here once it's stabilized.
-    let futex_word: *const TargetT = futex_word as *const SourceT as *const TargetT;
-
     #[cfg(not(miri))]
     {
         use linux_syscall::Result64;
@@ -51,7 +41,7 @@ unsafe fn futex(futex_word: &AtomicU32, futex_operation: i32, val: u32) -> nix::
         let raw_res = unsafe {
             linux_syscall::syscall!(
                 linux_syscall::SYS_futex,
-                futex_word,
+                futex_word.as_ptr(),
                 futex_operation,
                 val,
                 core::ptr::null() as *const libc::timespec,
@@ -71,7 +61,7 @@ unsafe fn futex(futex_word: &AtomicU32, futex_operation: i32, val: u32) -> nix::
         nix::errno::Errno::result(unsafe {
             libc::syscall(
                 libc::SYS_futex,
-                futex_word,
+                futex_word.as_ptr(),
                 futex_operation,
                 val,
                 core::ptr::null() as *const libc::timespec,

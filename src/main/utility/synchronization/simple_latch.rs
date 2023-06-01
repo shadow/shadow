@@ -79,7 +79,7 @@ impl Latch {
         let rv = unsafe {
             libc::syscall(
                 libc::SYS_futex,
-                futex_word as *const AtomicU32 as *const u32,
+                futex_word.as_ptr(),
                 libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
                 // the man page says to use INT_MAX, even though this is a uint32_t
                 i32::MAX,
@@ -119,7 +119,7 @@ impl LatchWaiter {
                 let rv = Errno::result(unsafe {
                     libc::syscall(
                         libc::SYS_futex,
-                        futex_word as *const AtomicU32 as *const u32,
+                        futex_word.as_ptr(),
                         libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
                         latch_gen,
                         std::ptr::null() as *const libc::timespec,
