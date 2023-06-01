@@ -16,9 +16,9 @@ use crate::host::descriptor::{
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader};
 use crate::host::syscall_types::SyscallError;
-use crate::network::net_namespace::NetworkNamespace;
 use crate::network::packet::{PacketRc, PacketStatus};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
 use crate::utility::sockaddr::SockaddrStorage;

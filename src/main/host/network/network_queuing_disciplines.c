@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/network_queuing_disciplines.h"
+#include "main/host/network/network_queuing_disciplines.h"
 
 #include <glib.h>
 #include <stdbool.h>

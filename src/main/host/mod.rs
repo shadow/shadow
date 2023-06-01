@@ -5,7 +5,7 @@ pub mod descriptor;
 pub mod host;
 pub mod managed_thread;
 pub mod memory_manager;
-pub mod network_interface;
+pub mod network;
 pub mod process;
 pub mod syscall;
 pub mod syscall_condition;
