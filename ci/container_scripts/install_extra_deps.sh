@@ -62,7 +62,7 @@ source "$HOME/.cargo/env"
 if [ "${BUILDTYPE:-}" = coverage ]
 then
   # Add a directory override, which overrides rust-toolchain.toml
-  rustup override set nightly-2023-03-13
+  rustup override set nightly-2023-05-31
 fi
 
 # This forces installation of the toolchain required in Shadow's
