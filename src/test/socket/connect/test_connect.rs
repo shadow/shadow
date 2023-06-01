@@ -10,6 +10,8 @@ use test_utils::socket_utils::SockAddr;
 use test_utils::socket_utils::{self, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
 
+use nix::errno::Errno;
+
 struct ConnectArguments {
     fd: libc::c_int,
     addr: Option<SockAddr>, // if None, a null pointer should be used
@@ -97,6 +99,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     &append_args("test_after_close"),
                     move || test_after_close(sock_type, flag),
                     set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_two_sockets_same_port"),
+                    move || test_two_sockets_same_port(sock_type, flag),
+                    // TODO: this doesn't work in shadow
+                    set![TestEnv::Libc],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_loopback"),
@@ -460,6 +468,58 @@ fn test_after_close(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), Str
     check_connect_call(&args, Some(libc::EBADF))
 }
 
+/// Test associating two sockets with the same local ip/port, but with one socket having a wildcard
+/// peer association.
+fn test_two_sockets_same_port(sock_type: libc::c_int, flags: libc::c_int) -> Result<(), String> {
+    // since we don't explicitly bind the client, the client will be given an ephemeral port and
+    // associated using the specific 4-tuple (local_ip, local_port, peer_ip, peer_port) for TCP and
+    // the specific 2-tuple (local_ip, local_port) for UDP
+    let (fd_client, fd_peer) = socket_utils::socket_init_helper(
+        socket_utils::SocketInitMethod::Inet,
+        sock_type,
+        flags,
+        /* bind_client= */ false,
+    );
+
+    let fd_other = unsafe { libc::socket(libc::AF_INET, sock_type | flags, 0) };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer, fd_other], || {
+        let mut client_addr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+        let mut client_addr_len: libc::socklen_t =
+            std::mem::size_of_val(&client_addr).try_into().unwrap();
+
+        // get the client address
+        {
+            let rv = unsafe {
+                libc::getsockname(
+                    fd_client,
+                    &mut client_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+                    &mut client_addr_len,
+                )
+            };
+            assert_eq!(rv, 0);
+        }
+
+        // try binding a new socket to the same ip/port as the client socket, which would associate
+        // using the wildcard 4-tuple (local_ip, local_port, *, *) for TCP and the 2-tuple (local_ip,
+        // local_port) for UDP
+        {
+            let rv = Errno::result(unsafe {
+                libc::bind(
+                    fd_other,
+                    &client_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                    client_addr_len,
+                )
+            });
+            // even though the TCP association is different, Linux doesn't allow this (although if this
+            // other socket had a specific peer rather than a wildcard peer, it would work)
+            assert_eq!(rv, Err(Errno::EADDRINUSE));
+        }
+
+        Ok(())
+    })
+}
+
 /// Test connect() to a server listening on the given interface (optionally overriding
 /// the interface the client connects on).
 fn test_interface(
@@ -649,9 +709,8 @@ fn test_double_connect(
     })
 }
 
-/// Test receiving messages on a socket that was originally associated with the wildcard 4-tuple
-/// (client_ip, client_port, *, *), then was connected to another socket and became associated with
-/// the 4-tuple (client_ip, client_port, server_ip, server_port).
+/// Test receiving messages on a UDP socket that was originally bound with no peer, then was given a
+/// peer using `connect()`.
 fn test_recv_original_bind_port() -> Result<(), String> {
     let fd_server =
         unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | libc::SOCK_NONBLOCK, 0) };
@@ -664,9 +723,8 @@ fn test_recv_original_bind_port() -> Result<(), String> {
     assert!(fd_other >= 0);
 
     test_utils::run_and_close_fds(&[fd_client, fd_server, fd_other], || {
-        // Bind both the client and server to some loopback port. They will both be associated with
-        // the network interface using the wildcard 4-tuple (ip, port, *, *) so that they can
-        // receive packets from any source address.
+        // Bind both the client and server to some loopback port. They both have no peer, so should
+        // be able to receive packets from any source address.
         let (_client_addr, _client_addrlen) =
             socket_utils::autobind_helper(fd_client, libc::AF_INET);
         let (_server_addr, _server_addrlen) =
@@ -696,8 +754,8 @@ fn test_recv_original_bind_port() -> Result<(), String> {
 
         // PART 3: connect client -> server
 
-        // connect client to the server address (this removes the wildcard network interface
-        // association)
+        // connect client to the server address (this adds a peer to the client, which means the
+        // client should only be able to receive packets from the server)
         let rv = socket_utils::connect_to_peername(fd_client, fd_server);
         assert_eq!(rv, 0);
 
@@ -716,7 +774,7 @@ fn test_recv_original_bind_port() -> Result<(), String> {
             &mut [0u8; 20][..],
             nix::sys::socket::MsgFlags::empty(),
         );
-        assert_eq!(rv, Err(nix::errno::Errno::EAGAIN));
+        assert_eq!(rv, Err(Errno::EAGAIN));
 
         // PART 5: connect server -> client
 
