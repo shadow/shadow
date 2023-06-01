@@ -23,7 +23,7 @@ pub unsafe trait AnyBitPattern: Sized + Copy + 'static {}
 /// Convert to a slice of raw bytes.
 ///
 /// Some bytes may be uninitialized if T has padding.
-pub fn to_u8_slice<T>(slice: &[T]) -> &[MaybeUninit<u8>]
+pub fn maybeuninit_bytes_of_slice<T>(slice: &[T]) -> &[MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
@@ -45,7 +45,7 @@ pub fn maybeuninit_bytes_of<T>(x: &T) -> &[MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
-    to_u8_slice(std::slice::from_ref(x))
+    maybeuninit_bytes_of_slice(std::slice::from_ref(x))
 }
 
 /// Convert to a mut slice of raw bytes.

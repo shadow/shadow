@@ -195,7 +195,7 @@ impl MemoryCopier {
         src: &[T],
     ) -> Result<(), Errno> {
         let dst = dst.cast_u8();
-        let src: &[std::mem::MaybeUninit<u8>] = pod::to_u8_slice(src);
+        let src: &[std::mem::MaybeUninit<u8>] = pod::maybeuninit_bytes_of_slice(src);
         // SAFETY: We *should* never actually read from this buffer in this process;
         // ultimately its pointer will be passed to the process_vm_writev syscall,
         // for which unitialized data is ok.
