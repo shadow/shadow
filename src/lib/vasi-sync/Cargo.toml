@@ -9,6 +9,8 @@ edition = "2021"
 # https://github.com/shadow/shadow/issues/2919
 [dependencies]
 libc = "0.2"
+linux-errno = "1.0.1"
+linux-syscall = "1.0.0"
 nix = "0.26.2"
 rkyv = "0.7.41"
 static_assertions = "1.1.0"

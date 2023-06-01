@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#include "shim_seccomp.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -91,18 +92,6 @@ void shim_seccomp_init() {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         panic("prctl: %s", strerror(errno));
     }
-
-    // These symbols are defined by the linker, and give the bounds of the code
-    // section `shadow_allow_syscalls`. If these become link errors, we may need to add/modify
-    // a linker script to explicitly define such symbols ourselves.
-    // https://stackoverflow.com/questions/4156585/how-to-get-the-length-of-a-function-in-bytes/22047976#comment83965391_22047976
-    //
-    // I wasn't able to find clear documentation from `ld` itself about how and
-    // when these symbols are generated, but [`ld(1)`](https://www.man7.org/linux/man-pages/man1/ld.1.html)
-    // does mention them in passing; e.g. the `start-stop-visibility` option controls
-    // their visibility.
-    extern char __start_shadow_allow_syscalls[];
-    extern char __stop_shadow_allow_syscalls[];
 
     /* A bpf program to be loaded as a `seccomp` filter. Unfortunately the
      * documentation for how to write this is pretty sparse. There's a useful

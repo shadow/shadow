@@ -30,9 +30,10 @@ FLAGS+=("--")
 # We exclude some tests in some configurations.
 FLAGS+=("--exclude-regex" "$EXCLUDE")
 
-# Exclude tgen and tor tests as we test them in a different workflow
-# Exclude examples as we don't have all the required dependencies
-FLAGS+=("--label-exclude" "tgen|tor|example")
+# * Exclude tgen and tor tests as we test them in a different workflow.
+# * Exclude examples as we don't have all the required dependencies.
+# * Exclude flaky tests.
+FLAGS+=("--label-exclude" "tgen|tor|example|flaky")
 
 FLAGS+=("--output-on-failure")
 

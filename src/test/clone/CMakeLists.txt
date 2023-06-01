@@ -4,14 +4,35 @@ target_compile_options(test_clone PUBLIC "-pthread")
 target_link_libraries(test_clone ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 add_linux_tests(BASENAME clone COMMAND test_clone)
 
-# FIXME: This test doesn't implement native thread-local-storage, which the shim needs.
-# https://github.com/shadow/shadow/issues/1559
-# add_shadow_tests(BASENAME clone)
+add_shadow_tests(
+    BASENAME clone
+    # Shim-side logging and strace-logging use libc functions that assume native
+    # thread-local-storage is set up. We disable most logging to try to avoid resulting
+    # segfaults.
+    LOGLEVEL warning
+    ARGS --strace-logging-mode=off
+    PROPERTIES
+        # There are nonetheless stills sometimes segfaults when running in CI,
+        # but I haven't been able to reproduce them locally.
+        # https://github.com/shadow/shadow/issues/1559
+        LABELS flaky
+        CONFIGURATIONS extra
+)
 
 # The clone test exercises some corner cases in memory management, particularly
 # when the thread leader exits before all the threads. Useful to test it without
 # the memory manager (really the MemoryMapper) enabled.
-#
-# FIXME: This test doesn't implement native thread-local-storage, which the shim needs.
-# https://github.com/shadow/shadow/issues/1559
-# add_shadow_tests(BASENAME clone-nomm SKIP_METHODS preload ARGS --use-memory-manager=false)
+add_shadow_tests(
+    BASENAME clone-nomm
+    # Shim-side logging and strace-logging use libc functions that assume native
+    # thread-local-storage is set up. We disable most logging to try to avoid resulting
+    # segfaults.
+    LOGLEVEL warning
+    ARGS --strace-logging-mode=off
+    PROPERTIES
+        # There are nonetheless stills sometimes segfaults when running in CI,
+        # but I haven't been able to reproduce them locally.
+        # https://github.com/shadow/shadow/issues/1559
+        LABELS flaky
+        CONFIGURATIONS extra
+)

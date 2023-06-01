@@ -18,18 +18,36 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <asm/ldt.h>
+
 #include "test/test_common.h"
 #include "test/test_glib_helpers.h"
 
 #define CLONE_TEST_STACK_NBYTES (4*4096)
 
+// Common flags to CLONE used throughout.
 #define CLONE_FLAGS                                                                                \
-    (CLONE_VM         /* Share process memory */                                                   \
-     | CLONE_FS       /* Share file attributes */                                                  \
-     | CLONE_FILES    /* Share open files */                                                       \
-     | CLONE_SIGHAND  /* Share signal dispositions */                                              \
-     | CLONE_THREAD   /* Share thread-group */                                                     \
-     | CLONE_SYSVSEM) /* Share semaphore values */
+    (CLONE_VM        /* Share process memory */                                                    \
+     | CLONE_FS      /* Share file attributes */                                                   \
+     | CLONE_FILES   /* Share open files */                                                        \
+     | CLONE_SIGHAND /* Share signal dispositions */                                               \
+     | CLONE_THREAD  /* Share thread-group */                                                      \
+     | CLONE_SYSVSEM /* Share semaphore values */                                                  \
+     | CLONE_SETTLS) /* Set thread-local-storage */
+
+// The "empty" descriptor. We use this to create threads without TLS set up.
+// See arch/x86/include/asm/desc.h and arch/x86/kernel/ldt.c in Linux source.
+//
+// Using this together wtih CLONE_SETTLS tells the kernel to give us an empty
+// thread-local-storage descriptor. In the shadow shim's
+// thread local storage, we recognize this case and fall back to an "external"
+// implementation.
+//
+// It would be nice if we could set up a proper native TLS descriptor, but I
+// don't think there's a way to do it without interfering with libc's global
+// state. We might be able to do it if this entire test and the shim were
+// completely free of libc dependencies.
+struct user_desc LDT_EMPTY = {.read_exec_only = 1, .seg_not_present = 1};
 
 _Noreturn static void _exit_thread(int code) {
     // Exit only this thread. On some platforms returning would result in a
@@ -72,7 +90,8 @@ static void _make_stack(void** top, void** bottom) {
 static void _clone_minimal() {
     void *stack_top, *stack_bottom;
     _make_stack(&stack_top, &stack_bottom);
-    int child_tid = clone(_clone_minimal_thread, stack_top, CLONE_FLAGS, NULL, NULL, NULL);
+    int child_tid =
+        clone(_clone_minimal_thread, stack_top, CLONE_FLAGS, NULL, NULL, &LDT_EMPTY, NULL);
     g_assert_cmpint(child_tid, >, 0);
 
     // The conventional way to wait for a child is futex, but we don't want this
@@ -110,7 +129,7 @@ static void _testCloneClearTid() {
     *ctid = -1;
 
     pid_t tid = clone(_testCloneClearTidThread, stack_top, CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL,
-                      NULL, NULL, ctid);
+                      NULL, &LDT_EMPTY, ctid);
     assert_nonneg_errno(tid);
 
     long rv;
@@ -162,7 +181,7 @@ static void _clone_child_exits_after_leader() {
         _make_stack(&stack_top, &stack_bottom);
 
         int child_tid = clone(_clone_child_exits_after_leader_waitee_thread, stack_top,
-                              CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL, NULL, NULL, ctid);
+                              CLONE_FLAGS | CLONE_CHILD_CLEARTID, NULL, NULL, &LDT_EMPTY, ctid);
         g_assert_cmpint(child_tid, >, 0);
 
         // Intentionally leak `stack`.
@@ -178,7 +197,7 @@ static void _clone_child_exits_after_leader() {
         _make_stack(&stack_top, &stack_bottom);
 
         int child_tid = clone(_clone_child_exits_after_leader_waiter_thread, stack_top, CLONE_FLAGS,
-                              ctid, NULL, NULL, NULL);
+                              ctid, NULL, &LDT_EMPTY, NULL);
         g_assert_cmpint(child_tid, >, 0);
 
         // Intentionally leak `stack`.
