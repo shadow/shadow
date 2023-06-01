@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use bytemuck_util::pod::{self, Pod};
+use bytemuck_util::pod::{self, AnyBitPattern};
 use log::*;
 use nix::{errno::Errno, unistd::Pid};
 
@@ -22,7 +22,7 @@ impl MemoryCopier {
     /// Copy the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
     #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem<T: Pod + Debug>(
+    pub unsafe fn clone_mem<T: AnyBitPattern + Debug>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<Vec<T>, Errno> {
@@ -35,7 +35,7 @@ impl MemoryCopier {
     /// Copy the readable prefix of the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
     #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem_prefix<T: Pod + Debug>(
+    pub unsafe fn clone_mem_prefix<T: AnyBitPattern + Debug>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<Vec<T>, Errno> {
@@ -54,7 +54,7 @@ impl MemoryCopier {
         src: ForeignArrayPtr<T>,
     ) -> Result<usize, Errno>
     where
-        T: Pod + Debug,
+        T: AnyBitPattern + Debug,
     {
         // Convert to u8
         // SAFETY: We do not write uninitialized data into `buf`.
@@ -97,7 +97,7 @@ impl MemoryCopier {
 
     // Copy `dst` into `src`.
     /// SAFETY: A mutable reference to the process memory must not exist.
-    pub unsafe fn copy_from_ptr<T: Pod + Debug>(
+    pub unsafe fn copy_from_ptr<T: AnyBitPattern + Debug>(
         &self,
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
@@ -189,7 +189,7 @@ impl MemoryCopier {
     // Low level helper for writing directly to `dst`. Panics if the
     // MemoryManager's process isn't currently active.
     /// SAFETY: A reference to the process memory must not exist.
-    pub unsafe fn copy_to_ptr<T: Pod + Debug>(
+    pub unsafe fn copy_to_ptr<T: AnyBitPattern + Debug>(
         &self,
         dst: ForeignArrayPtr<T>,
         src: &[T],

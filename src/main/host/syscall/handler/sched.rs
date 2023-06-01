@@ -1,4 +1,4 @@
-use bytemuck_util::pod::Pod;
+use bytemuck_util::pod::AnyBitPattern;
 use log::warn;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -23,7 +23,7 @@ pub struct rseq {
     flags: u32,
 }
 
-unsafe impl Pod for rseq {}
+unsafe impl AnyBitPattern for rseq {}
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]

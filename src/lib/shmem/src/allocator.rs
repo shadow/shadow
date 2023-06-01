@@ -180,7 +180,7 @@ where
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
 }
-unsafe impl ::bytemuck_util::pod::Pod for ShMemBlockSerialized {}
+unsafe impl ::bytemuck_util::pod::AnyBitPattern for ShMemBlockSerialized {}
 
 // SAFETY: This is a serialized blob, designed to be VASI.
 unsafe impl VirtualAddressSpaceIndependent for c_bindings::ShMemBlockSerialized {}

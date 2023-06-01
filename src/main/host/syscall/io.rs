@@ -140,7 +140,7 @@ pub fn read_sockaddr(
 /// # Ok(())
 /// # }
 /// ```
-pub fn write_partial<T: pod::Pod>(
+pub fn write_partial<T: pod::AnyBitPattern>(
     mem: &mut MemoryManager,
     val: &T,
     val_ptr: ForeignPtr<T>,
