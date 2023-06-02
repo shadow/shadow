@@ -114,7 +114,8 @@ gsize legacysocket_getOutputBufferSize(LegacySocket* socket);
 void legacysocket_setOutputBufferSize(LegacySocket* socket, gsize newSize);
 gsize legacysocket_getOutputBufferLength(LegacySocket* socket);
 gsize legacysocket_getOutputBufferSpace(LegacySocket* socket);
-gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, const Host* host, Packet* packet);
+gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, CompatSocket compatSocket,
+                                        const Host* host, Packet* packet);
 Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* host);
 
 gboolean legacysocket_isBound(LegacySocket* socket);
