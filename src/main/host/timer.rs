@@ -198,50 +198,6 @@ pub mod export {
 
     /// # Safety
     ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getExpirationCount(timer: *const Timer) -> u64 {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        timer.expiration_count()
-    }
-
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_consumeExpirationCount(timer: *mut Timer) -> u64 {
-        let timer = unsafe { timer.as_mut() }.unwrap();
-        timer.consume_expiration_count()
-    }
-
-    /// Returns the remaining time until the next expiration. Returns 0 if the
-    /// timer isn't armed.
-    ///
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getRemainingTime(timer: *const Timer) -> CSimulationTime {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        let remaining = if let Some(t) = timer.remaining_time() {
-            t
-        } else {
-            SimulationTime::ZERO
-        };
-        remaining.into()
-    }
-
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> CSimulationTime {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        timer.expire_interval().into()
-    }
-
-    /// # Safety
-    ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     #[allow(non_snake_case)]

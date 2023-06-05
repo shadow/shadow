@@ -14,7 +14,6 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
-#include "main/host/descriptor/timerfd.h"
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_condition.h"
@@ -83,11 +82,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
             if (doPread) {
                 result = -ESPIPE;
             } else {
-                utility_debugAssert(offset == 0);
-                result = timerfd_read(
-                    (TimerFd*)desc,
-                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
-                    sizeNeeded);
+                panic("Should have handled this in the rust syscall handler");
             }
             break;
         case DT_TCPSOCKET:
