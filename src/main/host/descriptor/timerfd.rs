@@ -1,13 +1,17 @@
 use std::io::Write;
+use std::sync::{Arc, Weak};
 
+use atomic_refcell::AtomicRefCell;
 use nix::errno::Errno;
-use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+use shadow_shim_helper_rs::{
+    emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
+};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
     FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
 };
+use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecWriter};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -18,16 +22,87 @@ use crate::utility::HostTreePointer;
 pub struct TimerFd {
     timer: Timer,
     event_source: StateEventSource,
-    state: FileState,
     status: FileStatus,
+    state: FileState,
     // Should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file,
     has_open_file: bool,
 }
 
 impl TimerFd {
-    pub fn new() -> Self {
-        todo!()
+    /// Creates a new [`TimerFd`] object that internally sets up a [`Timer`] that can be waited on
+    /// with poll, select, and epoll, enabling support for timerfd_create(2).
+    ///
+    /// We wrap the new [`TimerFd`] in an [`Arc<AtomicRefCell>`] because we need to use a weak
+    /// reference to internally support setting up callback functions that reference the [`TimerFd`]
+    /// on timer expiration.
+    pub fn new(status: FileStatus) -> Arc<AtomicRefCell<Self>> {
+        // We need a circular reference here, so that the inner Timer can refer back to the outer
+        // TimerFd when executing a callback that will mutate the TimerFd when the timer expires.
+        Arc::new_cyclic(|weak| {
+            let weak_cloned = weak.clone();
+            AtomicRefCell::new(Self {
+                timer: Timer::new(move |_host| Self::timer_expired(&weak_cloned)),
+                event_source: StateEventSource::new(),
+                state: FileState::ACTIVE,
+                status,
+                has_open_file: false,
+            })
+        })
+    }
+
+    /// Called by the inner [`Timer`] when a timer expiration occurs.
+    fn timer_expired(timerfd_weak: &Weak<AtomicRefCell<TimerFd>>) {
+        let Some(timerfd) = timerfd_weak.upgrade() else {
+            log::trace!("Expired TimerFd no longer exists.");
+            return;
+        };
+
+        // The TimerFd may have become readable now that a timer expired. We use the CallbackQueue
+        // here to make sure that any listeners that need to wake up and handle a readable TimerFd
+        // are not invoked until after we release the borrow.
+        CallbackQueue::queue_and_run(|cb_queue| {
+            timerfd.borrow_mut().update_state(cb_queue);
+        });
+    }
+
+    /// Returns the number of expirations that have occured since the timer was last armed.
+    fn get_timer_count(&self) -> u64 {
+        self.timer.expiration_count()
+    }
+
+    /// Returns the relative duration until the next expiration event occurs if the timer is armed,
+    /// and `None` if the timer is disarmed.
+    pub fn get_timer_remaining(&self) -> Option<SimulationTime> {
+        self.timer.remaining_time()
+    }
+
+    /// Returns the relative duration over which the timer has been configured to periodically
+    /// expire, which may be zero if the timer is only configured to expire once.
+    pub fn get_timer_interval(&self) -> SimulationTime {
+        self.timer.expire_interval()
+    }
+
+    /// Arm the timer by setting its expiration time and interval, enabling support for
+    /// timerfd_settime(2). The readable state of the [`TimerFd`] is updated as appropriate.
+    pub fn arm_timer(
+        &mut self,
+        host: &Host,
+        expire_time: EmulatedTime,
+        interval: SimulationTime,
+        cb_queue: &mut CallbackQueue,
+    ) {
+        // Make sure to update our READABLE status.
+        self.timer.arm(host, expire_time, interval);
+        self.update_state(cb_queue);
+    }
+
+    /// Disarm the timer so that it no longer fires expiration events, enabling support for
+    /// timerfd_settime(2). The readable state of the [`TimerFd`] is updated as appropriate.
+    pub fn disarm_timer(&mut self, cb_queue: &mut CallbackQueue) {
+        // Make sure to update our READABLE status.
+        self.timer.disarm();
+        self.update_state(cb_queue);
     }
 
     pub fn get_status(&self) -> FileStatus {
@@ -76,10 +151,7 @@ impl TimerFd {
         // This check doesn't guarantee that we can write all bytes since the stream length is only
         // a hint.
         if len < NUM_BYTES {
-            log::trace!(
-                "Reading from TimerFd requires a buffer of at least {} bytes",
-                NUM_BYTES
-            );
+            log::trace!("Reading from TimerFd requires a buffer of at least {NUM_BYTES} bytes",);
             return Err(Errno::EINVAL.into());
         }
 
@@ -132,7 +204,8 @@ impl TimerFd {
         // The only timerfd-specific ioctl request is for `TFD_IOC_SET_TICKS`, which is available
         // since Linux 3.17 but only if the kernel was configured with `CONFIG_CHECKPOINT_RESTORE`.
         // See timerfd_create(2) for more details.
-        log::warn!("We do not yet handle ioctl request {} on TimerFds", request);
+        // TODO: Change this to warn_once after we implement that function (so we don't log dups).
+        log::warn!("We do not yet handle ioctl request {request} on TimerFds");
         Err(Errno::EINVAL.into())
     }
 
@@ -166,7 +239,7 @@ impl TimerFd {
         let mut new_state = FileState::empty();
 
         // Set the descriptor as readable if we have a non-zero expiration count.
-        new_state.set(FileState::READABLE, self.get_expiration_count() > 0);
+        new_state.set(FileState::READABLE, self.get_timer_count() > 0);
 
         self.copy_state(FileState::READABLE, new_state, cb_queue);
     }
@@ -191,20 +264,5 @@ impl TimerFd {
 
         self.event_source
             .notify_listeners(self.state, states_changed, cb_queue);
-    }
-
-    fn get_expiration_count(&self) -> u64 {
-        self.timer.expiration_count()
-    }
-
-    pub fn get_time(&self) -> SimulationTime {
-        todo!()
-    }
-
-    pub fn set_time(
-        &self,
-        _new_time: SimulationTime,
-    ) -> Result<Option<SimulationTime>, SyscallError> {
-        todo!()
     }
 }

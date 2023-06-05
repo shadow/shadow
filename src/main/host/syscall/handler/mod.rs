@@ -20,6 +20,7 @@ mod sched;
 mod socket;
 mod sysinfo;
 mod time;
+mod timerfd;
 mod uio;
 mod unistd;
 
@@ -95,6 +96,9 @@ impl SyscallHandler {
             libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
+            libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
+            libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
+            libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
             libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
