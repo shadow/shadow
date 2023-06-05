@@ -86,11 +86,6 @@ impl Timer {
         Some(t.saturating_duration_since(&now))
     }
 
-    pub fn interval(&self) -> SimulationTime {
-        self.magic.debug_check();
-        self.internal.borrow().expire_interval
-    }
-
     pub fn disarm(&mut self) {
         self.magic.debug_check();
         let mut internal = self.internal.borrow_mut();
@@ -242,7 +237,7 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> CSimulationTime {
         let timer = unsafe { timer.as_ref() }.unwrap();
-        timer.interval().into()
+        timer.expire_interval().into()
     }
 
     /// # Safety
