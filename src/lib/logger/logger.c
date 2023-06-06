@@ -37,7 +37,7 @@ static void _init_start_time() {
 int64_t logger_now_micros() {
     linux_timespec res;
     linux_clock_gettime(CLOCK_REALTIME, &res);
-    return (res.ltv_sec * USEC_PER_SEC) + (res.ltv_nsec / 1000);
+    return (res.tv_sec * USEC_PER_SEC) + (res.tv_nsec / 1000);
 }
 
 int64_t logger_get_global_start_time_micros() {

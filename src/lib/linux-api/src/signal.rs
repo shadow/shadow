@@ -395,12 +395,13 @@ pub enum SigInfoDetails {
 /// SigInfo::wrap_assume_initd(core::mem::zeroed()) }` is sound.
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct SigInfo(linux_siginfo_t);
+#[allow(non_camel_case_types)]
+pub struct siginfo_t(linux_siginfo_t);
 // Contains pointers, but they are understood to not necessarily be valid in the
 // current address space.
-unsafe impl Send for SigInfo {}
+unsafe impl Send for siginfo_t {}
 
-impl SigInfo {
+impl siginfo_t {
     /// The bindings end up with a couple extra outer layers of unions.
     /// The outermost only has a single member; the next one has a data
     /// field and a padding field.
@@ -413,7 +414,7 @@ impl SigInfo {
     ///
     /// # Safety
     ///
-    /// See [`SigInfo`] `Invariants`.
+    /// See [`siginfo_t`] `Invariants`.
     pub unsafe fn wrap_assume_initd(si: linux_siginfo_t) -> Self {
         Self(si)
     }
@@ -422,7 +423,7 @@ impl SigInfo {
     ///
     /// # Safety
     ///
-    /// See [`SigInfo`] `Invariants`.
+    /// See [`siginfo_t`] `Invariants`.
     pub unsafe fn wrap_ref_assume_initd(si: &linux_siginfo_t) -> &Self {
         unsafe { &*(si as *const _ as *const Self) }
     }
@@ -431,7 +432,7 @@ impl SigInfo {
     ///
     /// # Safety
     ///
-    /// See [`SigInfo`] `Invariants`.
+    /// See [`siginfo_t`] `Invariants`.
     pub unsafe fn wrap_mut_assume_initd(si: &mut linux_siginfo_t) -> &mut Self {
         unsafe { &mut *(si as *mut _ as *mut Self) }
     }
@@ -776,7 +777,7 @@ impl SigInfo {
     // ...
 }
 
-impl Default for SigInfo {
+impl Default for siginfo_t {
     fn default() -> Self {
         unsafe { core::mem::zeroed() }
     }
@@ -790,15 +791,17 @@ pub type linux_sigset_t = bindings::linux_sigset_t;
 /// This is analagous to, but typically smaller than, libc's sigset_t.
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
-pub struct SigSet(linux_sigset_t);
-unsafe impl TransparentWrapper<linux_sigset_t> for SigSet {}
+#[allow(non_camel_case_types)]
+pub struct sigset_t(linux_sigset_t);
+unsafe impl TransparentWrapper<linux_sigset_t> for sigset_t {}
+unsafe impl shadow_pod::Pod for sigset_t {}
 
-impl SigSet {
+impl sigset_t {
     pub const EMPTY: Self = Self(0);
     pub const FULL: Self = Self(!0);
 
     pub fn has(&self, sig: Signal) -> bool {
-        (*self & SigSet::from(sig)).0 != 0
+        (*self & sigset_t::from(sig)).0 != 0
     }
 
     pub fn lowest(&self) -> Option<Signal> {
@@ -815,19 +818,19 @@ impl SigSet {
     }
 
     pub fn is_empty(&self) -> bool {
-        *self == SigSet::EMPTY
+        *self == sigset_t::EMPTY
     }
 
     pub fn del(&mut self, sig: Signal) {
-        *self &= !SigSet::from(sig);
+        *self &= !sigset_t::from(sig);
     }
 
     pub fn add(&mut self, sig: Signal) {
-        *self |= SigSet::from(sig);
+        *self |= sigset_t::from(sig);
     }
 }
 
-impl From<Signal> for SigSet {
+impl From<Signal> for sigset_t {
     #[inline]
     fn from(value: Signal) -> Self {
         let value = i32::from(value);
@@ -838,13 +841,13 @@ impl From<Signal> for SigSet {
 
 #[test]
 fn test_from_signal() {
-    let sigset = SigSet::from(Signal::SIGABRT);
+    let sigset = sigset_t::from(Signal::SIGABRT);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(!sigset.has(Signal::SIGSEGV));
-    assert_ne!(sigset, SigSet::EMPTY);
+    assert_ne!(sigset, sigset_t::EMPTY);
 }
 
-impl core::ops::BitOr for SigSet {
+impl core::ops::BitOr for sigset_t {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -854,13 +857,13 @@ impl core::ops::BitOr for SigSet {
 
 #[test]
 fn test_bitor() {
-    let sigset = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
+    let sigset = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitOrAssign for SigSet {
+impl core::ops::BitOrAssign for sigset_t {
     fn bitor_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0
     }
@@ -868,14 +871,14 @@ impl core::ops::BitOrAssign for SigSet {
 
 #[test]
 fn test_bitorassign() {
-    let mut sigset = SigSet::from(Signal::SIGABRT);
-    sigset |= SigSet::from(Signal::SIGSEGV);
+    let mut sigset = sigset_t::from(Signal::SIGABRT);
+    sigset |= sigset_t::from(Signal::SIGSEGV);
     assert!(sigset.has(Signal::SIGABRT));
     assert!(sigset.has(Signal::SIGSEGV));
     assert!(!sigset.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitAnd for SigSet {
+impl core::ops::BitAnd for sigset_t {
     type Output = Self;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -885,15 +888,15 @@ impl core::ops::BitAnd for SigSet {
 
 #[test]
 fn test_bitand() {
-    let lhs = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
-    let rhs = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGALRM);
+    let lhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    let rhs = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
     let and = lhs & rhs;
     assert!(and.has(Signal::SIGABRT));
     assert!(!and.has(Signal::SIGSEGV));
     assert!(!and.has(Signal::SIGALRM));
 }
 
-impl core::ops::BitAndAssign for SigSet {
+impl core::ops::BitAndAssign for sigset_t {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 &= rhs.0
     }
@@ -901,14 +904,14 @@ impl core::ops::BitAndAssign for SigSet {
 
 #[test]
 fn test_bitand_assign() {
-    let mut set = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
-    set &= SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGALRM);
+    let mut set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
+    set &= sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGALRM);
     assert!(set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
     assert!(!set.has(Signal::SIGALRM));
 }
 
-impl core::ops::Not for SigSet {
+impl core::ops::Not for sigset_t {
     type Output = Self;
 
     fn not(self) -> Self::Output {
@@ -918,7 +921,7 @@ impl core::ops::Not for SigSet {
 
 #[test]
 fn test_not() {
-    let set = SigSet::from(Signal::SIGABRT) | SigSet::from(Signal::SIGSEGV);
+    let set = sigset_t::from(Signal::SIGABRT) | sigset_t::from(Signal::SIGSEGV);
     let set = !set;
     assert!(!set.has(Signal::SIGABRT));
     assert!(!set.has(Signal::SIGSEGV));
@@ -926,7 +929,7 @@ fn test_not() {
 }
 
 pub type SignalHandlerFn = unsafe extern "C" fn(i32);
-pub type SignalActionFn = unsafe extern "C" fn(i32, *mut SigInfo, *mut core::ffi::c_void);
+pub type SignalActionFn = unsafe extern "C" fn(i32, *mut siginfo_t, *mut core::ffi::c_void);
 
 pub enum SignalHandler {
     Handler(SignalHandlerFn),
@@ -945,10 +948,11 @@ pub type linux_sigaction = bindings::linux_sigaction;
 /// pointer, if any, is safe to call/dereference.
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct SigAction(linux_sigaction);
-unsafe impl Send for SigAction {}
+#[allow(non_camel_case_types)]
+pub struct sigaction(linux_sigaction);
+unsafe impl shadow_pod::Pod for sigaction {}
 
-impl SigAction {
+impl sigaction {
     // Bindgen doesn't succesfully bind these constants; maybe because
     // the macros defining them cast them to pointers.
     //
@@ -1014,7 +1018,7 @@ impl SigAction {
     }
 }
 
-impl Default for SigAction {
+impl Default for sigaction {
     fn default() -> Self {
         unsafe { core::mem::zeroed() }
     }
@@ -1113,37 +1117,37 @@ mod export {
 
     #[no_mangle]
     pub extern "C" fn linux_sigemptyset() -> linux_sigset_t {
-        SigSet::EMPTY.0
+        sigset_t::EMPTY.0
     }
 
     #[no_mangle]
     pub extern "C" fn linux_sigfullset() -> linux_sigset_t {
-        SigSet::FULL.0
+        sigset_t::FULL.0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
-        let set = SigSet::wrap_mut(unsafe { set.as_mut().unwrap() });
+        let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
-        let set = SigSet::wrap_mut(unsafe { set.as_mut().unwrap() });
+        let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
-        let set = SigSet::wrap_ref(unsafe { set.as_ref().unwrap() });
+        let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         set.has(signo.try_into().unwrap())
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
-        let set = SigSet::wrap_ref(unsafe { set.as_ref().unwrap() });
+        let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         set.is_empty()
     }
 
@@ -1154,7 +1158,7 @@ mod export {
     ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
-        SigSet(*lhs | *rhs).0
+        sigset_t(*lhs | *rhs).0
     }
 
     #[no_mangle]
@@ -1164,18 +1168,18 @@ mod export {
     ) -> linux_sigset_t {
         let lhs = unsafe { lhs.as_ref().unwrap() };
         let rhs = unsafe { rhs.as_ref().unwrap() };
-        SigSet(*lhs & *rhs).0
+        sigset_t(*lhs & *rhs).0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
-        SigSet(!*set).0
+        sigset_t(!*set).0
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
-        let set = SigSet::wrap_ref(unsafe { set.as_ref().unwrap() });
+        let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         match set.lowest() {
             Some(s) => s.into(),
             None => 0,
@@ -1195,7 +1199,7 @@ mod export {
         sender_uid: u32,
     ) -> linux_siginfo_t {
         let signal = Signal::try_from(lsi_signo).unwrap();
-        unsafe { SigInfo::peel(SigInfo::new_for_kill(signal, sender_pid, sender_uid)) }
+        unsafe { siginfo_t::peel(siginfo_t::new_for_kill(signal, sender_pid, sender_uid)) }
     }
 
     #[no_mangle]
@@ -1213,7 +1217,7 @@ mod export {
         sender_uid: u32,
     ) -> linux_siginfo_t {
         let signal = Signal::try_from(lsi_signo).unwrap();
-        unsafe { SigInfo::peel(SigInfo::new_for_tkill(signal, sender_pid, sender_uid)) }
+        unsafe { siginfo_t::peel(siginfo_t::new_for_tkill(signal, sender_pid, sender_uid)) }
     }
 
     /// Returns the handler if there is one, or else NULL.
@@ -1221,7 +1225,7 @@ mod export {
     pub unsafe extern "C" fn linux_sigaction_handler(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32)> {
-        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         match unsafe { sa.handler() } {
             SignalHandler::Handler(h) => Some(h),
             _ => None,
@@ -1233,7 +1237,7 @@ mod export {
     pub unsafe extern "C" fn linux_sigaction_action(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)> {
-        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         match unsafe { sa.handler() } {
             SignalHandler::Action(h) =>
             // We transmute the function pointer from one that takes SigAction
@@ -1242,7 +1246,7 @@ mod export {
             {
                 Some(unsafe {
                     core::mem::transmute::<
-                        unsafe extern "C" fn(i32, *mut SigInfo, *mut core::ffi::c_void),
+                        unsafe extern "C" fn(i32, *mut siginfo_t, *mut core::ffi::c_void),
                         unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void),
                     >(h)
                 })
@@ -1253,13 +1257,13 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaction_is_ign(sa: *const linux_sigaction) -> bool {
-        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigIgn)
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn linux_sigaction_is_dfl(sa: *const linux_sigaction) -> bool {
-        let sa = SigAction::wrap_ref(unsafe { sa.as_ref().unwrap() });
+        let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigDfl)
     }
 }

@@ -285,7 +285,9 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
             // in ss.ss_flags and the remaining fields in ss.
             new_ss = (stack_t){.ss_flags = SS_DISABLE};
         }
-        if (new_ss.ss_flags & ~(SS_DISABLE | LINUX_SS_AUTODISARM)) {
+        int unrecognized_flags = new_ss.ss_flags & ~(SS_DISABLE | LINUX_SS_AUTODISARM);
+        if (unrecognized_flags) {
+            debug("Unrecognized signal stack flags %x in %x", unrecognized_flags, new_ss.ss_flags);
             // Unrecognized flag.
             return syscallreturn_makeDoneErrno(EINVAL);
         }

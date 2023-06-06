@@ -5,9 +5,34 @@
 //! libc headers, to work with these kernel types. Normally this can't be done
 //! because the libc and kernel headers contain incompatible definitions.
 //!
-//! To support this use-case, we prefix most names with `Linux` or `linux_`
-//! as appropriate, so that the re-exported types don't conflict with the libc
-//! types that would otherwise have the same names.
+//! # Type names
+//!
+//! We provide 3 styles of types:
+//!
+//! * snake-cased-types prefixed with `linux_`. These are ABI-compatible with
+//!   the corresponding kernel types. These types are re-exported in this crate's
+//!   generated C header, and are the types used in exported C function APIs.
+//!
+//! * snake-cased-types *without* the `linux_` prefix. These are *also* ABI-compatible
+//!   with the corresponding kernel types, and are intended for use in Rust
+//!   code.  They never require or enforce invariants beyond that bytes are
+//!   initialized, so are safe to transmute from initialized bytes, or from the
+//!   corresponding `linux_` type if the required bytes are known to be
+//!   initialized. See [`crate::signal::sigaction`] for an example of a type
+//!   with such invariants.
+//!
+//!   We do *not* expose these types in C interfaces, since they have the same
+//!   name as types in the original Linux headers, and often with the same name
+//!   in C library headers. Exported C APIs should use the `linux_` types in their
+//!   signatures, and convert internally to the non-prefixed types. In cases
+//!   where the 2 types are not simply aliased, they usually implement
+//!   `bytemuck::TransparentWrapper` or similar APIs that allow converting
+//!   values *and references* in both directions.
+//!
+//! * camel-cased types are *not* necessarily bitwise-compatible with kernel types
+//!   with similar names. These primarily include `enum`s and `bitflags` types.
+//!   Kernel constants such as `O_WRONLY` are typically defined as instants of
+//!   such types, and are convertible to and from the original integer types.
 
 #![cfg_attr(not(test), no_std)]
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
@@ -27,8 +52,14 @@
 mod bindings;
 
 pub mod errno;
+pub mod fcntl;
+pub mod inet;
+pub mod ioctls;
+pub mod posix_types;
+pub mod rseq;
 pub mod sched;
 pub mod signal;
+pub mod sysinfo;
 pub mod time;
 
 // Internally we often end up needing to convert from types that bindgen inferred, in const

@@ -48,27 +48,13 @@ bindgen_flags+=("--ctypes-prefix=::core::ffi")
 bindgen_flags+=("--raw-line=/* Build script: $0 */")
 bindgen_flags+=("--raw-line=/* Kernel tag: $LINUX_TAG */")
 
-# Errno values. This is a bit overly broad, but we can't really do
-# better without either enumerating all the values here or splitting
-# into multiple bindgen invocations.
-bindgen_flags+=("--allowlist-var=E.*")
-
-# Signal names
-bindgen_flags+=("--allowlist-var=SIG.*")
-
-# Signal codes
-bindgen_flags+=("--allowlist-var=SI_.*")
-bindgen_flags+=("--allowlist-var=ILL_.*")
-bindgen_flags+=("--allowlist-var=FPE_.*")
-bindgen_flags+=("--allowlist-var=SEGV_.*")
-bindgen_flags+=("--allowlist-var=BUS_.*")
-bindgen_flags+=("--allowlist-var=TRAP_.*")
-bindgen_flags+=("--allowlist-var=CLD_.*")
-bindgen_flags+=("--allowlist-var=POLL_.*")
-bindgen_flags+=("--allowlist-var=SYS_SECCOMP")
-
-# sigaction flags
-bindgen_flags+=("--allowlist-var=SA_.*")
+# Allow variables by default. We end up pulling in most of them anyway,
+# and pulling in some extra ones shouldn't hurt anything.
+bindgen_flags+=("--allowlist-var=.*")
+# SS_AUTODISARM is defined in the kernel headers as a u64,
+# (`(1U << 31)`), but is stuffed into an i32 field in `linux_stack_t`.
+# Avoid pulling it in at all for now.
+bindgen_flags+=("--blocklist-item=SS_AUTODISARM")
 
 # Signal types
 bindgen_flags+=("--allowlist-type=sigset_t")
@@ -78,12 +64,23 @@ bindgen_flags+=("--allowlist-type=sigaction")
 # Time types
 bindgen_flags+=("--allowlist-type=__kernel_clockid_t")
 bindgen_flags+=("--allowlist-type=timespec")
+bindgen_flags+=("--allowlist-type=itimerspec")
 
-# Clock types
-bindgen_flags+=("--allowlist-var=CLOCK_.*")
+# Sched types
+bindgen_flags+=("--allowlist-type=clone_args")
 
-# Clone flags
-bindgen_flags+=("--allowlist-var=CLONE_.*")
+# rseq types
+bindgen_flags+=("--allowlist-type=rseq")
+
+# in.h types
+bindgen_flags+=("--allowlist-type=sockaddr_in")
+
+# fcntl.h
+bindgen_flags+=("--allowlist-type=flock")
+bindgen_flags+=("--allowlist-type=flock64")
+
+# Misc integer-ish types
+bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
 # Output
 bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")

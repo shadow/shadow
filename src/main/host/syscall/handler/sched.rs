@@ -1,6 +1,7 @@
+use linux_api::posix_types::kernel_pid_t;
+use linux_api::rseq::rseq;
 use log::warn;
 use nix::errno::Errno;
-use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -13,31 +14,19 @@ const CURRENT_CPU: u32 = 0;
 
 const RSEQ_FLAG_UNREGISTER: i32 = 1;
 
-#[repr(C, align(32))]
-#[derive(Debug, Copy, Clone)]
-pub struct rseq {
-    cpu_id_start: i32,
-    cpu_id: i32,
-    // Actually a pointer, but guaranteed to be 64 bits even on 32 bit platforms
-    rseq_cs: u64,
-    flags: u32,
-}
-
-unsafe impl Pod for rseq {}
-
 impl SyscallHandler {
-    #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
+    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const std::ffi::c_void)]
     pub fn sched_getaffinity(
         ctx: &mut SyscallContext,
-        tid: libc::pid_t,
+        tid: kernel_pid_t,
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<libc::c_ulong>,
-    ) -> Result<libc::c_int, SyscallError> {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
-        if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
+        if !ctx.objs.host.has_thread(tid) && kernel_pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
         }
 
@@ -59,18 +48,18 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ i32, /* pid */ libc::pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const libc::c_void)]
+    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const std::ffi::c_void)]
     pub fn sched_setaffinity(
         ctx: &mut SyscallContext,
-        tid: libc::pid_t,
+        tid: kernel_pid_t,
         cpusetsize: libc::size_t,
         mask_ptr: ForeignPtr<libc::c_ulong>,
-    ) -> Result<libc::c_int, SyscallError> {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
-        if !ctx.objs.host.has_thread(tid) && libc::pid_t::from(tid) != 0 {
+        if !ctx.objs.host.has_thread(tid) && kernel_pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH.into());
         };
 
@@ -92,21 +81,20 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ i32)]
-    pub fn sched_yield(_ctx: &mut SyscallContext) -> Result<libc::c_int, SyscallError> {
+    pub fn sched_yield(_ctx: &mut SyscallContext) -> Result<std::ffi::c_int, SyscallError> {
         // Do nothing. We already yield and reschedule after some number of
         // unblocked syscalls.
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ i32, /* rseq */ *const libc::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
+    #[log_syscall(/* rv */ i32, /* rseq */ *const std::ffi::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
     pub fn rseq(
         ctx: &mut SyscallContext,
-        rseq_ptr: ForeignPtr<rseq>,
+        rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,
         rseq_len: u32,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
         sig: u32,
-    ) -> Result<libc::c_int, SyscallError> {
-        let rseq_ptr = ForeignArrayPtr::new(rseq_ptr, 1);
+    ) -> Result<std::ffi::c_int, SyscallError> {
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
@@ -123,10 +111,10 @@ impl SyscallHandler {
 
     fn rseq_impl(
         ctx: &mut SyscallContext,
-        rseq_ptr: ForeignArrayPtr<rseq>,
+        rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,
         flags: i32,
         _sig: u32,
-    ) -> Result<libc::c_int, SyscallError> {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         if flags & (!RSEQ_FLAG_UNREGISTER) != 0 {
             warn!("Unrecognized rseq flags: {}", flags);
             return Err(Errno::EINVAL.into());
@@ -140,7 +128,7 @@ impl SyscallHandler {
             return Ok(0);
         }
         let mut mem = ctx.objs.process.memory_borrow_mut();
-        let mut rseq = mem.memory_ref_mut(rseq_ptr)?;
+        let mut rseq = mem.memory_ref_mut(ForeignArrayPtr::new(rseq_ptr, 1))?;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.
         // We'd only need to implement the "real" functionality if we ever implement
@@ -157,8 +145,8 @@ impl SyscallHandler {
         // https://github.com/shadow/shadow/issues/2139
 
         // For now we just update to reflect that the thread is running on CPU 0.
-        rseq[0].cpu_id = CURRENT_CPU as i32;
-        rseq[0].cpu_id_start = CURRENT_CPU as i32;
+        rseq[0].cpu_id = CURRENT_CPU;
+        rseq[0].cpu_id_start = CURRENT_CPU;
         rseq.flush()?;
 
         Ok(0)

@@ -8,13 +8,13 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const libc::c_void, /* count */ libc::size_t,
-                  /* flags */ libc::c_uint)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const std::ffi::c_void, /* count */ libc::size_t,
+                  /* flags */ std::ffi::c_uint)]
     pub fn getrandom(
         ctx: &mut SyscallContext,
         buf_ptr: ForeignPtr<u8>,
         count: libc::size_t,
-        _flags: libc::c_uint,
+        _flags: std::ffi::c_uint,
     ) -> SyscallResult {
         // We ignore the flags arg, because we use the same random source for both
         // random and urandom, and it never blocks anyway.

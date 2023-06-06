@@ -11,13 +11,13 @@ use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int)]
     pub fn readv(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -66,13 +66,13 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
     pub fn preadv(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -132,17 +132,17 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
-                  /* flags */ libc::c_int)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
+                  /* flags */ std::ffi::c_int)]
     pub fn preadv2(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // on Linux x86-64, an `unsigned long` is 64 bits, so we can ignore `offset_h`
         static_assertions::assert_eq_size!(libc::c_ulong, libc::off_t);
@@ -212,7 +212,7 @@ impl SyscallHandler {
         file: &File,
         iovs: &[IoVec],
         offset: Option<libc::off_t>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
@@ -266,13 +266,13 @@ impl SyscallHandler {
         result
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int)]
     pub fn writev(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -321,13 +321,13 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
     pub fn pwritev(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -388,17 +388,17 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ libc::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
-                  /* flags */ libc::c_int)]
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
+                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
+                  /* flags */ std::ffi::c_int)]
     pub fn pwritev2(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         iov_ptr: ForeignPtr<libc::iovec>,
-        iov_count: libc::c_int,
+        iov_count: std::ffi::c_int,
         offset_l: libc::c_ulong,
         _offset_h: libc::c_ulong,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // on Linux x86-64, an `unsigned long` is 64 bits, so we can ignore `offset_h`
         static_assertions::assert_eq_size!(libc::c_ulong, libc::off_t);
@@ -468,7 +468,7 @@ impl SyscallHandler {
         file: &File,
         iovs: &[IoVec],
         offset: Option<libc::off_t>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         let mut mem = ctx.objs.process.memory_borrow_mut();
         let mut rng = ctx.objs.host.random_mut();

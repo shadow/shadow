@@ -35,3 +35,9 @@ bitflags::bitflags! {
         const CLONE_IO = const_conversions::u64_from_u32(bindings::LINUX_CLONE_IO);
     }
 }
+
+pub use bindings::linux_clone_args;
+#[allow(non_camel_case_types)]
+pub type clone_args = linux_clone_args;
+
+unsafe impl shadow_pod::Pod for clone_args {}

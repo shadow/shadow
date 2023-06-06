@@ -164,7 +164,7 @@ pub struct MsgHdr {
     pub iovs: Vec<IoVec>,
     pub control: ForeignPtr<u8>,
     pub control_len: libc::size_t,
-    pub flags: libc::c_int,
+    pub flags: std::ffi::c_int,
 }
 
 /// Analogous to [`libc::iovec`].

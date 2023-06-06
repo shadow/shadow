@@ -25,10 +25,10 @@ fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
 }
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /*curr_value*/ *const libc::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* which */ std::ffi::c_int, /*curr_value*/ *const std::ffi::c_void)]
     pub fn getitimer(
         ctx: &mut SyscallContext,
-        which: libc::c_int,
+        which: std::ffi::c_int,
         curr_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {
         if which != libc::ITIMER_REAL {
@@ -45,10 +45,10 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* which */ libc::c_int, /* new_value */ *const libc::c_void, /* old_value */ *const libc::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* which */ std::ffi::c_int, /* new_value */ *const std::ffi::c_void, /* old_value */ *const std::ffi::c_void)]
     pub fn setitimer(
         ctx: &mut SyscallContext,
-        which: libc::c_int,
+        which: std::ffi::c_int,
         new_value_ptr: ForeignPtr<libc::itimerval>,
         old_value_ptr: ForeignPtr<libc::itimerval>,
     ) -> SyscallResult {

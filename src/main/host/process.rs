@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
-use linux_api::signal::{defaultaction, LinuxDefaultAction, SigInfo, Signal, SignalFromI32Error};
+use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalFromI32Error};
 use log::{debug, trace, warn};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -454,8 +454,8 @@ impl RunnableProcess {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &SigInfo) {
-        let signal = match siginfo.signal() {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo_t: &siginfo_t) {
+        let signal = match siginfo_t.signal() {
             Ok(s) => s,
             Err(SignalFromI32Error(0)) => return,
             Err(SignalFromI32Error(n)) => panic!("Bad signo {n}"),
@@ -489,7 +489,7 @@ impl RunnableProcess {
                 return;
             }
             process_shmem_protected.pending_signals.add(signal);
-            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo);
+            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo_t);
         }
 
         if let Some(thread) = current_thread {
@@ -593,8 +593,8 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
-    let siginfo = SigInfo::new_for_timer(Signal::SIGALRM, 0, expiration_count);
-    process.signal(host, None, &siginfo);
+    let siginfo_t = siginfo_t::new_for_timer(Signal::SIGALRM, 0, expiration_count);
+    process.signal(host, None, &siginfo_t);
 }
 
 impl Process {
@@ -958,10 +958,10 @@ impl Process {
     /// See `RunnableProcess::signal`.
     ///
     /// No-op if the `self` is a `ZombieProcess`.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo: &SigInfo) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo_t: &siginfo_t) {
         // Using full-match here to force update if we add more states later.
         match self.state.borrow().as_ref().unwrap() {
-            ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo),
+            ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo_t),
             ProcessState::Zombie(_) => {
                 // Sending a signal to a zombie process is a no-op.
                 debug!("Process {} no longer running", &*self.name());
@@ -996,7 +996,10 @@ impl Process {
             );
         }
         let desc = unsafe {
-            Descriptor::from_legacy_file(stdfile as *mut cshadow::LegacyFile, OFlag::empty())
+            Descriptor::from_legacy_file(
+                stdfile as *mut cshadow::LegacyFile,
+                linux_api::fcntl::OFlag::empty(),
+            )
         };
         let prev = descriptor_table.register_descriptor_with_fd(desc, fd);
         assert!(prev.is_none());
@@ -2017,12 +2020,12 @@ mod export {
     pub unsafe extern "C" fn process_signal(
         target_proc: *const Process,
         current_running_thread: *const Thread,
-        siginfo: *const linux_siginfo_t,
+        siginfo_t: *const linux_siginfo_t,
     ) {
         let target_proc = unsafe { target_proc.as_ref().unwrap() };
         let current_running_thread = unsafe { current_running_thread.as_ref() };
-        let siginfo = unsafe { SigInfo::wrap_ref_assume_initd(siginfo.as_ref().unwrap()) };
-        Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo))
+        let siginfo_t = unsafe { siginfo_t::wrap_ref_assume_initd(siginfo_t.as_ref().unwrap()) };
+        Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo_t))
             .unwrap()
     }
 }

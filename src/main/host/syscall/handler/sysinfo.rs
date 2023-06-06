@@ -1,3 +1,4 @@
+use linux_api::sysinfo::sysinfo;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
@@ -7,8 +8,11 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
-    pub fn sysinfo(ctx: &mut SyscallContext, info_ptr: ForeignPtr<libc::sysinfo>) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* info */ *const linux_api::sysinfo::sysinfo)]
+    pub fn sysinfo(
+        ctx: &mut SyscallContext,
+        info_ptr: ForeignPtr<linux_api::sysinfo::sysinfo>,
+    ) -> SyscallResult {
         // Seconds are needed for uptime.
         let seconds = Worker::current_time()
             .unwrap()
@@ -16,7 +20,7 @@ impl SyscallHandler {
             .as_secs();
 
         // Get a zeroed struct to make sure we init all fields.
-        let mut info = shadow_pod::zeroed::<libc::sysinfo>();
+        let mut info = shadow_pod::zeroed::<sysinfo>();
 
         // These values are chosen arbitrarily; we don't think it matters too
         // much, except to maintain determinism. For example, Tor make decisions

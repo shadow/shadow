@@ -2,6 +2,7 @@ use std::io::Write;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::{
     emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
@@ -197,7 +198,7 @@ impl TimerFd {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -205,7 +206,9 @@ impl TimerFd {
         // since Linux 3.17 but only if the kernel was configured with `CONFIG_CHECKPOINT_RESTORE`.
         // See timerfd_create(2) for more details.
         // TODO: Change this to warn_once after we implement that function (so we don't log dups).
-        log::warn!("We do not yet handle ioctl request {request} on TimerFds");
+        warn_once_then_debug!(
+            "(LOG_ONCE) We do not yet handle ioctl request {request:?} on TimerFds"
+        );
         Err(Errno::EINVAL.into())
     }
 

@@ -1,3 +1,4 @@
+use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
 use log::{debug, trace, warn};
 use nix::errno::Errno;
@@ -19,10 +20,10 @@ impl SyscallHandler {
         flags: CloneFlags,
         exit_signal: Option<Signal>,
         child_stack: ForeignPtr<()>,
-        ptid: ForeignPtr<libc::pid_t>,
-        ctid: ForeignPtr<libc::pid_t>,
+        ptid: ForeignPtr<kernel_pid_t>,
+        ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
-    ) -> Result<libc::pid_t, SyscallError> {
+    ) -> Result<kernel_pid_t, SyscallError> {
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
         let mut handled_flags = CloneFlags::empty();
@@ -32,8 +33,8 @@ impl SyscallHandler {
 
         // We emulate the flags that would use these, so we always pass NULL to
         // the native call.
-        let native_ctid = ForeignPtr::<libc::pid_t>::null();
-        let native_ptid = ForeignPtr::<libc::pid_t>::null();
+        let native_ctid = ForeignPtr::<kernel_pid_t>::null();
+        let native_ptid = ForeignPtr::<kernel_pid_t>::null();
 
         // We use the managed-code provided stack.
         let native_child_stack = child_stack;
@@ -182,7 +183,7 @@ impl SyscallHandler {
             ctx.objs
                 .process
                 .memory_borrow_mut()
-                .write(ptid, &libc::pid_t::from(child_tid))?;
+                .write(ptid, &kernel_pid_t::from(child_tid))?;
         }
 
         if do_child_settid {
@@ -191,7 +192,7 @@ impl SyscallHandler {
             ctx.objs
                 .process
                 .memory_borrow_mut()
-                .write(ctid, &libc::pid_t::from(child_tid))?;
+                .write(ctid, &kernel_pid_t::from(child_tid))?;
         }
 
         if do_child_cleartid {
@@ -200,26 +201,26 @@ impl SyscallHandler {
             child.set_tid_address(ctid);
         }
 
-        Ok(libc::pid_t::from(child_tid))
+        Ok(kernel_pid_t::from(child_tid))
     }
 
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
     #[log_syscall(
-        /* rv */libc::pid_t,
+        /* rv */kernel_pid_t,
         /* flags */i32,
-        /* child_stack */*const libc::c_void,
-        /* ptid */*const libc::pid_t,
-        /* ctid */*const libc::pid_t,
-        /* newtls */*const libc::c_void)]
+        /* child_stack */*const std::ffi::c_void,
+        /* ptid */*const kernel_pid_t,
+        /* ctid */*const kernel_pid_t,
+        /* newtls */*const std::ffi::c_void)]
     pub fn clone(
         ctx: &mut SyscallContext,
         flags_and_exit_signal: i32,
         child_stack: ForeignPtr<()>,
-        ptid: ForeignPtr<libc::pid_t>,
-        ctid: ForeignPtr<libc::pid_t>,
+        ptid: ForeignPtr<kernel_pid_t>,
+        ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
-    ) -> Result<libc::pid_t, SyscallError> {
+    ) -> Result<kernel_pid_t, SyscallError> {
         let raw_flags = flags_and_exit_signal as u32 & !0xff;
         let raw_exit_signal = (flags_and_exit_signal as u32 & 0xff) as i32;
 
@@ -242,15 +243,15 @@ impl SyscallHandler {
     }
 
     #[log_syscall(
-        /* rv */libc::pid_t,
-        /* args*/*const libc::c_void,
+        /* rv */kernel_pid_t,
+        /* args*/*const std::ffi::c_void,
         /* args_size*/usize)]
     pub fn clone3(
         ctx: &mut SyscallContext,
-        args: ForeignPtr<libc::clone_args>,
+        args: ForeignPtr<linux_api::sched::clone_args>,
         args_size: usize,
-    ) -> Result<libc::pid_t, SyscallError> {
-        if args_size != std::mem::size_of::<libc::clone_args>() {
+    ) -> Result<kernel_pid_t, SyscallError> {
+        if args_size != std::mem::size_of::<linux_api::sched::clone_args>() {
             // TODO: allow smaller size, and be careful to only read
             // as much as the caller specified, and zero-fill the rest.
             return Err(Errno::EINVAL.into());
@@ -275,14 +276,14 @@ impl SyscallHandler {
             flags,
             exit_signal,
             ForeignPtr::<()>::from(args.stack + args.stack_size),
-            ForeignPtr::<libc::pid_t>::from_raw_ptr(args.parent_tid as *mut libc::pid_t),
-            ForeignPtr::<libc::pid_t>::from_raw_ptr(args.child_tid as *mut libc::pid_t),
+            ForeignPtr::<kernel_pid_t>::from_raw_ptr(args.parent_tid as *mut kernel_pid_t),
+            ForeignPtr::<kernel_pid_t>::from_raw_ptr(args.child_tid as *mut kernel_pid_t),
             args.tls,
         )
     }
 
-    #[log_syscall(/* rv */libc::pid_t)]
-    pub fn fork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+    #[log_syscall(/* rv */kernel_pid_t)]
+    pub fn fork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
         Self::clone_internal(
@@ -290,14 +291,14 @@ impl SyscallHandler {
             CloneFlags::empty(),
             Some(Signal::SIGCHLD),
             ForeignPtr::<()>::null(),
-            ForeignPtr::<libc::pid_t>::null(),
-            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<kernel_pid_t>::null(),
+            ForeignPtr::<kernel_pid_t>::null(),
             0,
         )
     }
 
-    #[log_syscall(/* rv */libc::pid_t)]
-    pub fn vfork(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
+    #[log_syscall(/* rv */kernel_pid_t)]
+    pub fn vfork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
         Self::clone_internal(
@@ -305,14 +306,14 @@ impl SyscallHandler {
             CloneFlags::CLONE_VFORK | CloneFlags::CLONE_VM,
             Some(Signal::SIGCHLD),
             ForeignPtr::<()>::null(),
-            ForeignPtr::<libc::pid_t>::null(),
-            ForeignPtr::<libc::pid_t>::null(),
+            ForeignPtr::<kernel_pid_t>::null(),
+            ForeignPtr::<kernel_pid_t>::null(),
             0,
         )
     }
 
-    #[log_syscall(/* rv */libc::pid_t)]
-    pub fn gettid(ctx: &mut SyscallContext) -> Result<libc::pid_t, SyscallError> {
-        Ok(libc::pid_t::from(ctx.objs.thread.id()))
+    #[log_syscall(/* rv */kernel_pid_t)]
+    pub fn gettid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+        Ok(kernel_pid_t::from(ctx.objs.thread.id()))
     }
 }

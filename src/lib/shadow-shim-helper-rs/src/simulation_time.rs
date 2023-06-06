@@ -295,6 +295,30 @@ impl std::convert::TryFrom<SimulationTime> for libc::timespec {
     }
 }
 
+impl std::convert::TryFrom<linux_api::time::timespec> for SimulationTime {
+    type Error = ();
+
+    fn try_from(value: linux_api::time::timespec) -> Result<Self, Self::Error> {
+        if value.tv_sec < 0 || value.tv_nsec < 0 || value.tv_nsec > 999_999_999 {
+            return Err(());
+        }
+        let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
+        let nanos = Duration::from_nanos(value.tv_nsec.try_into().unwrap());
+        Self::try_from(secs + nanos)
+    }
+}
+
+impl std::convert::TryFrom<SimulationTime> for linux_api::time::timespec {
+    type Error = ();
+
+    fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let value = Duration::from(value);
+        let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
+        let tv_nsec = value.subsec_nanos().try_into().map_err(|_| ())?;
+        Ok(linux_api::time::timespec { tv_sec, tv_nsec })
+    }
+}
+
 impl std::convert::TryFrom<libc::timeval> for SimulationTime {
     type Error = ();
 

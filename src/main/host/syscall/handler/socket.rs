@@ -1,3 +1,4 @@
+use linux_api::fcntl::DescriptorFlags;
 use log::*;
 use nix::errno::Errno;
 use nix::sys::socket::{Shutdown, SockFlag};
@@ -9,9 +10,7 @@ use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
-use crate::host::descriptor::{
-    CompatFile, Descriptor, DescriptorFlags, File, FileState, FileStatus, OpenFile,
-};
+use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
@@ -21,13 +20,13 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
-                  /* type */ libc::c_int, /* protocol */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+                  /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int)]
     pub fn socket(
         ctx: &mut SyscallContext,
-        domain: libc::c_int,
-        socket_type: libc::c_int,
-        protocol: libc::c_int,
+        domain: std::ffi::c_int,
+        socket_type: std::ffi::c_int,
+        protocol: std::ffi::c_int,
     ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
@@ -41,7 +40,7 @@ impl SyscallHandler {
         }
 
         if flags & libc::SOCK_CLOEXEC != 0 {
-            descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+            descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
         }
 
         let socket = match domain {
@@ -113,11 +112,11 @@ impl SyscallHandler {
         Ok(fd.val().into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
     pub fn bind(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
@@ -147,17 +146,17 @@ impl SyscallHandler {
         Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int,
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int,
                   /* buf */ SyscallBufferArg</* len */ 2>, /* len */ libc::size_t,
                   /* flags */ nix::sys::socket::MsgFlags,
                   /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
                   /* addrlen */ libc::socklen_t)]
     pub fn sendto(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_len: libc::size_t,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -226,13 +225,13 @@ impl SyscallHandler {
         Ok(bytes_sent)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* msg */ *const libc::msghdr,
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* msg */ *const libc::msghdr,
                   /* flags */ nix::sys::socket::MsgFlags)]
     pub fn sendmsg(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         msg_ptr: ForeignPtr<libc::msghdr>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -294,15 +293,15 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* buf */ *const libc::c_void,
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
                   /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
                   /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
     pub fn recvfrom(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_len: libc::size_t,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -376,13 +375,13 @@ impl SyscallHandler {
         Ok(return_val)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ libc::c_int, /* msg */ *const libc::msghdr,
+    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* msg */ *const libc::msghdr,
                   /* flags */ nix::sys::socket::MsgFlags)]
     pub fn recvmsg(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         msg_ptr: ForeignPtr<libc::msghdr>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> Result<libc::ssize_t, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -457,11 +456,11 @@ impl SyscallHandler {
         Ok(result.return_val)
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
     pub fn getsockname(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
@@ -499,11 +498,11 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
     pub fn getpeername(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
@@ -543,11 +542,11 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* backlog */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* backlog */ std::ffi::c_int)]
     pub fn listen(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        backlog: libc::c_int,
+        fd: std::ffi::c_int,
+        backlog: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
@@ -575,11 +574,11 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
                   /* addrlen */ *const libc::socklen_t)]
     pub fn accept(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
@@ -618,14 +617,14 @@ impl SyscallHandler {
         result
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ *const libc::socklen_t, /* flags */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
+                  /* addrlen */ *const libc::socklen_t, /* flags */ std::ffi::c_int)]
     pub fn accept4(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
@@ -667,7 +666,7 @@ impl SyscallHandler {
         file: &File,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-        flags: libc::c_int,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
@@ -728,7 +727,7 @@ impl SyscallHandler {
         let mut new_desc = Descriptor::new(CompatFile::New(new_socket));
 
         if flags.contains(SockFlag::SOCK_CLOEXEC) {
-            new_desc.set_flags(DescriptorFlags::CLOEXEC);
+            new_desc.set_flags(DescriptorFlags::FD_CLOEXEC);
         }
 
         let new_fd = ctx
@@ -741,11 +740,11 @@ impl SyscallHandler {
         Ok(new_fd.val().into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int,
                   /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
     pub fn connect(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
     ) -> SyscallResult {
@@ -800,8 +799,12 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* how */ libc::c_int)]
-    pub fn shutdown(ctx: &mut SyscallContext, fd: libc::c_int, how: libc::c_int) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* how */ std::ffi::c_int)]
+    pub fn shutdown(
+        ctx: &mut SyscallContext,
+        fd: std::ffi::c_int,
+        how: std::ffi::c_int,
+    ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.process.descriptor_table_borrow();
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -830,14 +833,14 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* domain */ nix::sys::socket::AddressFamily,
-                  /* type */ libc::c_int, /* protocol */ libc::c_int, /* sv */ [libc::c_int; 2])]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+                  /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int, /* sv */ [std::ffi::c_int; 2])]
     pub fn socketpair(
         ctx: &mut SyscallContext,
-        domain: libc::c_int,
-        socket_type: libc::c_int,
-        protocol: libc::c_int,
-        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
+        domain: std::ffi::c_int,
+        socket_type: std::ffi::c_int,
+        protocol: std::ffi::c_int,
+        fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
     ) -> SyscallResult {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
@@ -874,7 +877,7 @@ impl SyscallHandler {
         }
 
         if flags & libc::SOCK_CLOEXEC != 0 {
-            descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+            descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
         }
 
         let (socket_1, socket_2) = CallbackQueue::queue_and_run(|cb_queue| {
@@ -927,14 +930,14 @@ impl SyscallHandler {
         }
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
-                  /* optname */ libc::c_int, /* optval */ *const libc::c_void,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* level */ std::ffi::c_int,
+                  /* optname */ std::ffi::c_int, /* optval */ *const std::ffi::c_void,
                   /* optlen */ *const libc::socklen_t)]
     pub fn getsockopt(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        level: libc::c_int,
-        optname: libc::c_int,
+        fd: std::ffi::c_int,
+        level: std::ffi::c_int,
+        optname: std::ffi::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
@@ -976,14 +979,14 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* sockfd */ libc::c_int, /* level */ libc::c_int,
-                  /* optname */ libc::c_int, /* optval */ *const libc::c_void,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* level */ std::ffi::c_int,
+                  /* optname */ std::ffi::c_int, /* optval */ *const std::ffi::c_void,
                   /* optlen */ libc::socklen_t)]
     pub fn setsockopt(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        level: libc::c_int,
-        optname: libc::c_int,
+        fd: std::ffi::c_int,
+        level: std::ffi::c_int,
+        optname: std::ffi::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
     ) -> SyscallResult {
