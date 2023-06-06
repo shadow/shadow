@@ -14,7 +14,7 @@ nix = "0.26.2"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 logger = { path = "../logger" }
-once_cell = "1.17.1"
+once_cell = "1.18.0"
 rand = "0.8.5"
 shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
