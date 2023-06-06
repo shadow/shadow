@@ -135,109 +135,109 @@ impl core::fmt::Debug for Errno {
 }
 
 impl Errno {
-    pub const EINVAL: Self = Self(bindings::LINUX_EINVAL as u16);
-    pub const EDEADLK: Self = Self(bindings::LINUX_EDEADLK as u16);
-    pub const ENAMETOOLONG: Self = Self(bindings::LINUX_ENAMETOOLONG as u16);
-    pub const ENOLCK: Self = Self(bindings::LINUX_ENOLCK as u16);
-    pub const ENOSYS: Self = Self(bindings::LINUX_ENOSYS as u16);
-    pub const ENOTEMPTY: Self = Self(bindings::LINUX_ENOTEMPTY as u16);
-    pub const ELOOP: Self = Self(bindings::LINUX_ELOOP as u16);
-    pub const EWOULDBLOCK: Self = Self(bindings::LINUX_EWOULDBLOCK as u16);
-    pub const ENOMSG: Self = Self(bindings::LINUX_ENOMSG as u16);
-    pub const EIDRM: Self = Self(bindings::LINUX_EIDRM as u16);
-    pub const ECHRNG: Self = Self(bindings::LINUX_ECHRNG as u16);
-    pub const EL2NSYNC: Self = Self(bindings::LINUX_EL2NSYNC as u16);
-    pub const EL3HLT: Self = Self(bindings::LINUX_EL3HLT as u16);
-    pub const EL3RST: Self = Self(bindings::LINUX_EL3RST as u16);
-    pub const ELNRNG: Self = Self(bindings::LINUX_ELNRNG as u16);
-    pub const EUNATCH: Self = Self(bindings::LINUX_EUNATCH as u16);
-    pub const ENOCSI: Self = Self(bindings::LINUX_ENOCSI as u16);
-    pub const EL2HLT: Self = Self(bindings::LINUX_EL2HLT as u16);
-    pub const EBADE: Self = Self(bindings::LINUX_EBADE as u16);
-    pub const EBADR: Self = Self(bindings::LINUX_EBADR as u16);
-    pub const EXFULL: Self = Self(bindings::LINUX_EXFULL as u16);
-    pub const ENOANO: Self = Self(bindings::LINUX_ENOANO as u16);
-    pub const EBADRQC: Self = Self(bindings::LINUX_EBADRQC as u16);
-    pub const EBADSLT: Self = Self(bindings::LINUX_EBADSLT as u16);
-    pub const EBFONT: Self = Self(bindings::LINUX_EBFONT as u16);
-    pub const ENOSTR: Self = Self(bindings::LINUX_ENOSTR as u16);
-    pub const ENODATA: Self = Self(bindings::LINUX_ENODATA as u16);
-    pub const ETIME: Self = Self(bindings::LINUX_ETIME as u16);
-    pub const ENOSR: Self = Self(bindings::LINUX_ENOSR as u16);
-    pub const ENONET: Self = Self(bindings::LINUX_ENONET as u16);
-    pub const ENOPKG: Self = Self(bindings::LINUX_ENOPKG as u16);
-    pub const EREMOTE: Self = Self(bindings::LINUX_EREMOTE as u16);
-    pub const ENOLINK: Self = Self(bindings::LINUX_ENOLINK as u16);
-    pub const EADV: Self = Self(bindings::LINUX_EADV as u16);
-    pub const ESRMNT: Self = Self(bindings::LINUX_ESRMNT as u16);
-    pub const ECOMM: Self = Self(bindings::LINUX_ECOMM as u16);
-    pub const EPROTO: Self = Self(bindings::LINUX_EPROTO as u16);
-    pub const EMULTIHOP: Self = Self(bindings::LINUX_EMULTIHOP as u16);
-    pub const EDOTDOT: Self = Self(bindings::LINUX_EDOTDOT as u16);
-    pub const EBADMSG: Self = Self(bindings::LINUX_EBADMSG as u16);
-    pub const EOVERFLOW: Self = Self(bindings::LINUX_EOVERFLOW as u16);
-    pub const ENOTUNIQ: Self = Self(bindings::LINUX_ENOTUNIQ as u16);
-    pub const EBADFD: Self = Self(bindings::LINUX_EBADFD as u16);
-    pub const EREMCHG: Self = Self(bindings::LINUX_EREMCHG as u16);
-    pub const ELIBACC: Self = Self(bindings::LINUX_ELIBACC as u16);
-    pub const ELIBBAD: Self = Self(bindings::LINUX_ELIBBAD as u16);
-    pub const ELIBSCN: Self = Self(bindings::LINUX_ELIBSCN as u16);
-    pub const ELIBMAX: Self = Self(bindings::LINUX_ELIBMAX as u16);
-    pub const ELIBEXEC: Self = Self(bindings::LINUX_ELIBEXEC as u16);
-    pub const EILSEQ: Self = Self(bindings::LINUX_EILSEQ as u16);
-    pub const ERESTART: Self = Self(bindings::LINUX_ERESTART as u16);
-    pub const ESTRPIPE: Self = Self(bindings::LINUX_ESTRPIPE as u16);
-    pub const EUSERS: Self = Self(bindings::LINUX_EUSERS as u16);
-    pub const ENOTSOCK: Self = Self(bindings::LINUX_ENOTSOCK as u16);
-    pub const EDESTADDRREQ: Self = Self(bindings::LINUX_EDESTADDRREQ as u16);
-    pub const EMSGSIZE: Self = Self(bindings::LINUX_EMSGSIZE as u16);
-    pub const EPROTOTYPE: Self = Self(bindings::LINUX_EPROTOTYPE as u16);
-    pub const ENOPROTOOPT: Self = Self(bindings::LINUX_ENOPROTOOPT as u16);
-    pub const EPROTONOSUPPORT: Self = Self(bindings::LINUX_EPROTONOSUPPORT as u16);
-    pub const ESOCKTNOSUPPORT: Self = Self(bindings::LINUX_ESOCKTNOSUPPORT as u16);
-    pub const EOPNOTSUPP: Self = Self(bindings::LINUX_EOPNOTSUPP as u16);
-    pub const EPFNOSUPPORT: Self = Self(bindings::LINUX_EPFNOSUPPORT as u16);
-    pub const EAFNOSUPPORT: Self = Self(bindings::LINUX_EAFNOSUPPORT as u16);
-    pub const EADDRINUSE: Self = Self(bindings::LINUX_EADDRINUSE as u16);
-    pub const EADDRNOTAVAIL: Self = Self(bindings::LINUX_EADDRNOTAVAIL as u16);
-    pub const ENETDOWN: Self = Self(bindings::LINUX_ENETDOWN as u16);
-    pub const ENETUNREACH: Self = Self(bindings::LINUX_ENETUNREACH as u16);
-    pub const ENETRESET: Self = Self(bindings::LINUX_ENETRESET as u16);
-    pub const ECONNABORTED: Self = Self(bindings::LINUX_ECONNABORTED as u16);
-    pub const ECONNRESET: Self = Self(bindings::LINUX_ECONNRESET as u16);
-    pub const ENOBUFS: Self = Self(bindings::LINUX_ENOBUFS as u16);
-    pub const EISCONN: Self = Self(bindings::LINUX_EISCONN as u16);
-    pub const ENOTCONN: Self = Self(bindings::LINUX_ENOTCONN as u16);
-    pub const ESHUTDOWN: Self = Self(bindings::LINUX_ESHUTDOWN as u16);
-    pub const ETOOMANYREFS: Self = Self(bindings::LINUX_ETOOMANYREFS as u16);
-    pub const ETIMEDOUT: Self = Self(bindings::LINUX_ETIMEDOUT as u16);
-    pub const ECONNREFUSED: Self = Self(bindings::LINUX_ECONNREFUSED as u16);
-    pub const EHOSTDOWN: Self = Self(bindings::LINUX_EHOSTDOWN as u16);
-    pub const EHOSTUNREACH: Self = Self(bindings::LINUX_EHOSTUNREACH as u16);
-    pub const EALREADY: Self = Self(bindings::LINUX_EALREADY as u16);
-    pub const EINPROGRESS: Self = Self(bindings::LINUX_EINPROGRESS as u16);
-    pub const ESTALE: Self = Self(bindings::LINUX_ESTALE as u16);
-    pub const EUCLEAN: Self = Self(bindings::LINUX_EUCLEAN as u16);
-    pub const ENOTNAM: Self = Self(bindings::LINUX_ENOTNAM as u16);
-    pub const ENAVAIL: Self = Self(bindings::LINUX_ENAVAIL as u16);
-    pub const EISNAM: Self = Self(bindings::LINUX_EISNAM as u16);
-    pub const EREMOTEIO: Self = Self(bindings::LINUX_EREMOTEIO as u16);
-    pub const EDQUOT: Self = Self(bindings::LINUX_EDQUOT as u16);
-    pub const ENOMEDIUM: Self = Self(bindings::LINUX_ENOMEDIUM as u16);
-    pub const EMEDIUMTYPE: Self = Self(bindings::LINUX_EMEDIUMTYPE as u16);
-    pub const ECANCELED: Self = Self(bindings::LINUX_ECANCELED as u16);
-    pub const ENOKEY: Self = Self(bindings::LINUX_ENOKEY as u16);
-    pub const EKEYEXPIRED: Self = Self(bindings::LINUX_EKEYEXPIRED as u16);
-    pub const EKEYREVOKED: Self = Self(bindings::LINUX_EKEYREVOKED as u16);
-    pub const EKEYREJECTED: Self = Self(bindings::LINUX_EKEYREJECTED as u16);
-    pub const EOWNERDEAD: Self = Self(bindings::LINUX_EOWNERDEAD as u16);
-    pub const ENOTRECOVERABLE: Self = Self(bindings::LINUX_ENOTRECOVERABLE as u16);
-    pub const ERFKILL: Self = Self(bindings::LINUX_ERFKILL as u16);
-    pub const EHWPOISON: Self = Self(bindings::LINUX_EHWPOISON as u16);
+    pub const EINVAL: Self = Self::from_u32_const(bindings::LINUX_EINVAL);
+    pub const EDEADLK: Self = Self::from_u32_const(bindings::LINUX_EDEADLK);
+    pub const ENAMETOOLONG: Self = Self::from_u32_const(bindings::LINUX_ENAMETOOLONG);
+    pub const ENOLCK: Self = Self::from_u32_const(bindings::LINUX_ENOLCK);
+    pub const ENOSYS: Self = Self::from_u32_const(bindings::LINUX_ENOSYS);
+    pub const ENOTEMPTY: Self = Self::from_u32_const(bindings::LINUX_ENOTEMPTY);
+    pub const ELOOP: Self = Self::from_u32_const(bindings::LINUX_ELOOP);
+    pub const EWOULDBLOCK: Self = Self::from_u32_const(bindings::LINUX_EWOULDBLOCK);
+    pub const ENOMSG: Self = Self::from_u32_const(bindings::LINUX_ENOMSG);
+    pub const EIDRM: Self = Self::from_u32_const(bindings::LINUX_EIDRM);
+    pub const ECHRNG: Self = Self::from_u32_const(bindings::LINUX_ECHRNG);
+    pub const EL2NSYNC: Self = Self::from_u32_const(bindings::LINUX_EL2NSYNC);
+    pub const EL3HLT: Self = Self::from_u32_const(bindings::LINUX_EL3HLT);
+    pub const EL3RST: Self = Self::from_u32_const(bindings::LINUX_EL3RST);
+    pub const ELNRNG: Self = Self::from_u32_const(bindings::LINUX_ELNRNG);
+    pub const EUNATCH: Self = Self::from_u32_const(bindings::LINUX_EUNATCH);
+    pub const ENOCSI: Self = Self::from_u32_const(bindings::LINUX_ENOCSI);
+    pub const EL2HLT: Self = Self::from_u32_const(bindings::LINUX_EL2HLT);
+    pub const EBADE: Self = Self::from_u32_const(bindings::LINUX_EBADE);
+    pub const EBADR: Self = Self::from_u32_const(bindings::LINUX_EBADR);
+    pub const EXFULL: Self = Self::from_u32_const(bindings::LINUX_EXFULL);
+    pub const ENOANO: Self = Self::from_u32_const(bindings::LINUX_ENOANO);
+    pub const EBADRQC: Self = Self::from_u32_const(bindings::LINUX_EBADRQC);
+    pub const EBADSLT: Self = Self::from_u32_const(bindings::LINUX_EBADSLT);
+    pub const EBFONT: Self = Self::from_u32_const(bindings::LINUX_EBFONT);
+    pub const ENOSTR: Self = Self::from_u32_const(bindings::LINUX_ENOSTR);
+    pub const ENODATA: Self = Self::from_u32_const(bindings::LINUX_ENODATA);
+    pub const ETIME: Self = Self::from_u32_const(bindings::LINUX_ETIME);
+    pub const ENOSR: Self = Self::from_u32_const(bindings::LINUX_ENOSR);
+    pub const ENONET: Self = Self::from_u32_const(bindings::LINUX_ENONET);
+    pub const ENOPKG: Self = Self::from_u32_const(bindings::LINUX_ENOPKG);
+    pub const EREMOTE: Self = Self::from_u32_const(bindings::LINUX_EREMOTE);
+    pub const ENOLINK: Self = Self::from_u32_const(bindings::LINUX_ENOLINK);
+    pub const EADV: Self = Self::from_u32_const(bindings::LINUX_EADV);
+    pub const ESRMNT: Self = Self::from_u32_const(bindings::LINUX_ESRMNT);
+    pub const ECOMM: Self = Self::from_u32_const(bindings::LINUX_ECOMM);
+    pub const EPROTO: Self = Self::from_u32_const(bindings::LINUX_EPROTO);
+    pub const EMULTIHOP: Self = Self::from_u32_const(bindings::LINUX_EMULTIHOP);
+    pub const EDOTDOT: Self = Self::from_u32_const(bindings::LINUX_EDOTDOT);
+    pub const EBADMSG: Self = Self::from_u32_const(bindings::LINUX_EBADMSG);
+    pub const EOVERFLOW: Self = Self::from_u32_const(bindings::LINUX_EOVERFLOW);
+    pub const ENOTUNIQ: Self = Self::from_u32_const(bindings::LINUX_ENOTUNIQ);
+    pub const EBADFD: Self = Self::from_u32_const(bindings::LINUX_EBADFD);
+    pub const EREMCHG: Self = Self::from_u32_const(bindings::LINUX_EREMCHG);
+    pub const ELIBACC: Self = Self::from_u32_const(bindings::LINUX_ELIBACC);
+    pub const ELIBBAD: Self = Self::from_u32_const(bindings::LINUX_ELIBBAD);
+    pub const ELIBSCN: Self = Self::from_u32_const(bindings::LINUX_ELIBSCN);
+    pub const ELIBMAX: Self = Self::from_u32_const(bindings::LINUX_ELIBMAX);
+    pub const ELIBEXEC: Self = Self::from_u32_const(bindings::LINUX_ELIBEXEC);
+    pub const EILSEQ: Self = Self::from_u32_const(bindings::LINUX_EILSEQ);
+    pub const ERESTART: Self = Self::from_u32_const(bindings::LINUX_ERESTART);
+    pub const ESTRPIPE: Self = Self::from_u32_const(bindings::LINUX_ESTRPIPE);
+    pub const EUSERS: Self = Self::from_u32_const(bindings::LINUX_EUSERS);
+    pub const ENOTSOCK: Self = Self::from_u32_const(bindings::LINUX_ENOTSOCK);
+    pub const EDESTADDRREQ: Self = Self::from_u32_const(bindings::LINUX_EDESTADDRREQ);
+    pub const EMSGSIZE: Self = Self::from_u32_const(bindings::LINUX_EMSGSIZE);
+    pub const EPROTOTYPE: Self = Self::from_u32_const(bindings::LINUX_EPROTOTYPE);
+    pub const ENOPROTOOPT: Self = Self::from_u32_const(bindings::LINUX_ENOPROTOOPT);
+    pub const EPROTONOSUPPORT: Self = Self::from_u32_const(bindings::LINUX_EPROTONOSUPPORT);
+    pub const ESOCKTNOSUPPORT: Self = Self::from_u32_const(bindings::LINUX_ESOCKTNOSUPPORT);
+    pub const EOPNOTSUPP: Self = Self::from_u32_const(bindings::LINUX_EOPNOTSUPP);
+    pub const EPFNOSUPPORT: Self = Self::from_u32_const(bindings::LINUX_EPFNOSUPPORT);
+    pub const EAFNOSUPPORT: Self = Self::from_u32_const(bindings::LINUX_EAFNOSUPPORT);
+    pub const EADDRINUSE: Self = Self::from_u32_const(bindings::LINUX_EADDRINUSE);
+    pub const EADDRNOTAVAIL: Self = Self::from_u32_const(bindings::LINUX_EADDRNOTAVAIL);
+    pub const ENETDOWN: Self = Self::from_u32_const(bindings::LINUX_ENETDOWN);
+    pub const ENETUNREACH: Self = Self::from_u32_const(bindings::LINUX_ENETUNREACH);
+    pub const ENETRESET: Self = Self::from_u32_const(bindings::LINUX_ENETRESET);
+    pub const ECONNABORTED: Self = Self::from_u32_const(bindings::LINUX_ECONNABORTED);
+    pub const ECONNRESET: Self = Self::from_u32_const(bindings::LINUX_ECONNRESET);
+    pub const ENOBUFS: Self = Self::from_u32_const(bindings::LINUX_ENOBUFS);
+    pub const EISCONN: Self = Self::from_u32_const(bindings::LINUX_EISCONN);
+    pub const ENOTCONN: Self = Self::from_u32_const(bindings::LINUX_ENOTCONN);
+    pub const ESHUTDOWN: Self = Self::from_u32_const(bindings::LINUX_ESHUTDOWN);
+    pub const ETOOMANYREFS: Self = Self::from_u32_const(bindings::LINUX_ETOOMANYREFS);
+    pub const ETIMEDOUT: Self = Self::from_u32_const(bindings::LINUX_ETIMEDOUT);
+    pub const ECONNREFUSED: Self = Self::from_u32_const(bindings::LINUX_ECONNREFUSED);
+    pub const EHOSTDOWN: Self = Self::from_u32_const(bindings::LINUX_EHOSTDOWN);
+    pub const EHOSTUNREACH: Self = Self::from_u32_const(bindings::LINUX_EHOSTUNREACH);
+    pub const EALREADY: Self = Self::from_u32_const(bindings::LINUX_EALREADY);
+    pub const EINPROGRESS: Self = Self::from_u32_const(bindings::LINUX_EINPROGRESS);
+    pub const ESTALE: Self = Self::from_u32_const(bindings::LINUX_ESTALE);
+    pub const EUCLEAN: Self = Self::from_u32_const(bindings::LINUX_EUCLEAN);
+    pub const ENOTNAM: Self = Self::from_u32_const(bindings::LINUX_ENOTNAM);
+    pub const ENAVAIL: Self = Self::from_u32_const(bindings::LINUX_ENAVAIL);
+    pub const EISNAM: Self = Self::from_u32_const(bindings::LINUX_EISNAM);
+    pub const EREMOTEIO: Self = Self::from_u32_const(bindings::LINUX_EREMOTEIO);
+    pub const EDQUOT: Self = Self::from_u32_const(bindings::LINUX_EDQUOT);
+    pub const ENOMEDIUM: Self = Self::from_u32_const(bindings::LINUX_ENOMEDIUM);
+    pub const EMEDIUMTYPE: Self = Self::from_u32_const(bindings::LINUX_EMEDIUMTYPE);
+    pub const ECANCELED: Self = Self::from_u32_const(bindings::LINUX_ECANCELED);
+    pub const ENOKEY: Self = Self::from_u32_const(bindings::LINUX_ENOKEY);
+    pub const EKEYEXPIRED: Self = Self::from_u32_const(bindings::LINUX_EKEYEXPIRED);
+    pub const EKEYREVOKED: Self = Self::from_u32_const(bindings::LINUX_EKEYREVOKED);
+    pub const EKEYREJECTED: Self = Self::from_u32_const(bindings::LINUX_EKEYREJECTED);
+    pub const EOWNERDEAD: Self = Self::from_u32_const(bindings::LINUX_EOWNERDEAD);
+    pub const ENOTRECOVERABLE: Self = Self::from_u32_const(bindings::LINUX_ENOTRECOVERABLE);
+    pub const ERFKILL: Self = Self::from_u32_const(bindings::LINUX_ERFKILL);
+    pub const EHWPOISON: Self = Self::from_u32_const(bindings::LINUX_EHWPOISON);
 
     // Aliases
-    pub const EDEADLOCK: Self = Self(bindings::LINUX_EDEADLOCK as u16);
-    pub const EAGAIN: Self = Self(bindings::LINUX_EAGAIN as u16);
+    pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
+    pub const EAGAIN: Self = Self::from_u32_const(bindings::LINUX_EAGAIN);
 
     /// From MAX_ERRNO in include/linux/err.h in kernel source. This doesn't
     /// seem to be exposed in the installed kernel headers from which we generate bindings.
@@ -252,6 +252,16 @@ impl Errno {
     /// For C interop.
     pub fn to_negated_i32(self) -> i32 {
         -(u16::from(self) as i32)
+    }
+
+    // Primarily for checked conversion of bindings constants.
+    const fn from_u32_const(val: u32) -> Self {
+        let rv = Self(val as u16);
+        // check for truncation
+        assert!(rv.0 as u32 == val);
+        // Don't allow out-of-range values
+        assert!(rv.0 <= Self::MAX.0);
+        rv
     }
 }
 

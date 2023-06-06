@@ -5,34 +5,31 @@ use linux_syscall::Result as LinuxSyscallResult;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::bindings;
+use crate::const_conversions;
 use crate::errno::Errno;
 
 pub use bindings::linux___kernel_clockid_t;
-
-const fn convert_clockid_const(val: u32) -> linux___kernel_clockid_t {
-    let rv = val as linux___kernel_clockid_t;
-    // check for truncation
-    assert!(rv as u32 == val);
-    rv
-}
 
 // Clocks
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 #[allow(non_camel_case_types)]
 pub enum ClockId {
-    CLOCK_REALTIME = convert_clockid_const(bindings::LINUX_CLOCK_REALTIME),
-    CLOCK_MONOTONIC = convert_clockid_const(bindings::LINUX_CLOCK_MONOTONIC),
-    CLOCK_PROCESS_CPUTIME_ID = convert_clockid_const(bindings::LINUX_CLOCK_PROCESS_CPUTIME_ID),
-    CLOCK_THREAD_CPUTIME_ID = convert_clockid_const(bindings::LINUX_CLOCK_THREAD_CPUTIME_ID),
-    CLOCK_MONOTONIC_RAW = convert_clockid_const(bindings::LINUX_CLOCK_MONOTONIC_RAW),
-    CLOCK_REALTIME_COARSE = convert_clockid_const(bindings::LINUX_CLOCK_REALTIME_COARSE),
-    CLOCK_MONOTONIC_COARSE = convert_clockid_const(bindings::LINUX_CLOCK_MONOTONIC_COARSE),
-    CLOCK_BOOTTIME = convert_clockid_const(bindings::LINUX_CLOCK_BOOTTIME),
-    CLOCK_REALTIME_ALARM = convert_clockid_const(bindings::LINUX_CLOCK_REALTIME_ALARM),
-    CLOCK_BOOTTIME_ALARM = convert_clockid_const(bindings::LINUX_CLOCK_BOOTTIME_ALARM),
-    CLOCK_SGI_CYCLE = convert_clockid_const(bindings::LINUX_CLOCK_SGI_CYCLE),
-    CLOCK_TAI = convert_clockid_const(bindings::LINUX_CLOCK_TAI),
+    CLOCK_REALTIME = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_REALTIME),
+    CLOCK_MONOTONIC = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_MONOTONIC),
+    CLOCK_PROCESS_CPUTIME_ID =
+        const_conversions::i32_from_u32(bindings::LINUX_CLOCK_PROCESS_CPUTIME_ID),
+    CLOCK_THREAD_CPUTIME_ID =
+        const_conversions::i32_from_u32(bindings::LINUX_CLOCK_THREAD_CPUTIME_ID),
+    CLOCK_MONOTONIC_RAW = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_MONOTONIC_RAW),
+    CLOCK_REALTIME_COARSE = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_REALTIME_COARSE),
+    CLOCK_MONOTONIC_COARSE =
+        const_conversions::i32_from_u32(bindings::LINUX_CLOCK_MONOTONIC_COARSE),
+    CLOCK_BOOTTIME = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_BOOTTIME),
+    CLOCK_REALTIME_ALARM = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_REALTIME_ALARM),
+    CLOCK_BOOTTIME_ALARM = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_BOOTTIME_ALARM),
+    CLOCK_SGI_CYCLE = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_SGI_CYCLE),
+    CLOCK_TAI = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_TAI),
 }
 
 pub use bindings::linux_timespec;

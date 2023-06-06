@@ -5,6 +5,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings::{self, linux_sigval};
+use crate::const_conversions;
 use crate::errno::Errno;
 
 /// Definition is sometimes missing in the userspace headers.
@@ -41,59 +42,51 @@ impl From<Signal> for i32 {
 }
 
 impl Signal {
-    pub const SIGHUP: Self = Self(bindings::LINUX_SIGHUP as i32);
-    pub const SIGINT: Self = Self(bindings::LINUX_SIGINT as i32);
-    pub const SIGQUIT: Self = Self(bindings::LINUX_SIGQUIT as i32);
-    pub const SIGILL: Self = Self(bindings::LINUX_SIGILL as i32);
-    pub const SIGTRAP: Self = Self(bindings::LINUX_SIGTRAP as i32);
-    pub const SIGABRT: Self = Self(bindings::LINUX_SIGABRT as i32);
-    pub const SIGBUS: Self = Self(bindings::LINUX_SIGBUS as i32);
-    pub const SIGFPE: Self = Self(bindings::LINUX_SIGFPE as i32);
-    pub const SIGKILL: Self = Self(bindings::LINUX_SIGKILL as i32);
-    pub const SIGUSR1: Self = Self(bindings::LINUX_SIGUSR1 as i32);
-    pub const SIGSEGV: Self = Self(bindings::LINUX_SIGSEGV as i32);
-    pub const SIGUSR2: Self = Self(bindings::LINUX_SIGUSR2 as i32);
-    pub const SIGPIPE: Self = Self(bindings::LINUX_SIGPIPE as i32);
-    pub const SIGALRM: Self = Self(bindings::LINUX_SIGALRM as i32);
-    pub const SIGTERM: Self = Self(bindings::LINUX_SIGTERM as i32);
-    pub const SIGSTKFLT: Self = Self(bindings::LINUX_SIGSTKFLT as i32);
-    pub const SIGCHLD: Self = Self(bindings::LINUX_SIGCHLD as i32);
-    pub const SIGCONT: Self = Self(bindings::LINUX_SIGCONT as i32);
-    pub const SIGSTOP: Self = Self(bindings::LINUX_SIGSTOP as i32);
-    pub const SIGTSTP: Self = Self(bindings::LINUX_SIGTSTP as i32);
-    pub const SIGTTIN: Self = Self(bindings::LINUX_SIGTTIN as i32);
-    pub const SIGTTOU: Self = Self(bindings::LINUX_SIGTTOU as i32);
-    pub const SIGURG: Self = Self(bindings::LINUX_SIGURG as i32);
-    pub const SIGXCPU: Self = Self(bindings::LINUX_SIGXCPU as i32);
-    pub const SIGXFSZ: Self = Self(bindings::LINUX_SIGXFSZ as i32);
-    pub const SIGVTALRM: Self = Self(bindings::LINUX_SIGVTALRM as i32);
-    pub const SIGPROF: Self = Self(bindings::LINUX_SIGPROF as i32);
-    pub const SIGWINCH: Self = Self(bindings::LINUX_SIGWINCH as i32);
-    pub const SIGIO: Self = Self(bindings::LINUX_SIGIO as i32);
-    pub const SIGPWR: Self = Self(bindings::LINUX_SIGPWR as i32);
-    pub const SIGSYS: Self = Self(bindings::LINUX_SIGSYS as i32);
+    pub const SIGHUP: Self = Self::std_from_u32_const(bindings::LINUX_SIGHUP);
+    pub const SIGINT: Self = Self::std_from_u32_const(bindings::LINUX_SIGINT);
+    pub const SIGQUIT: Self = Self::std_from_u32_const(bindings::LINUX_SIGQUIT);
+    pub const SIGILL: Self = Self::std_from_u32_const(bindings::LINUX_SIGILL);
+    pub const SIGTRAP: Self = Self::std_from_u32_const(bindings::LINUX_SIGTRAP);
+    pub const SIGABRT: Self = Self::std_from_u32_const(bindings::LINUX_SIGABRT);
+    pub const SIGBUS: Self = Self::std_from_u32_const(bindings::LINUX_SIGBUS);
+    pub const SIGFPE: Self = Self::std_from_u32_const(bindings::LINUX_SIGFPE);
+    pub const SIGKILL: Self = Self::std_from_u32_const(bindings::LINUX_SIGKILL);
+    pub const SIGUSR1: Self = Self::std_from_u32_const(bindings::LINUX_SIGUSR1);
+    pub const SIGSEGV: Self = Self::std_from_u32_const(bindings::LINUX_SIGSEGV);
+    pub const SIGUSR2: Self = Self::std_from_u32_const(bindings::LINUX_SIGUSR2);
+    pub const SIGPIPE: Self = Self::std_from_u32_const(bindings::LINUX_SIGPIPE);
+    pub const SIGALRM: Self = Self::std_from_u32_const(bindings::LINUX_SIGALRM);
+    pub const SIGTERM: Self = Self::std_from_u32_const(bindings::LINUX_SIGTERM);
+    pub const SIGSTKFLT: Self = Self::std_from_u32_const(bindings::LINUX_SIGSTKFLT);
+    pub const SIGCHLD: Self = Self::std_from_u32_const(bindings::LINUX_SIGCHLD);
+    pub const SIGCONT: Self = Self::std_from_u32_const(bindings::LINUX_SIGCONT);
+    pub const SIGSTOP: Self = Self::std_from_u32_const(bindings::LINUX_SIGSTOP);
+    pub const SIGTSTP: Self = Self::std_from_u32_const(bindings::LINUX_SIGTSTP);
+    pub const SIGTTIN: Self = Self::std_from_u32_const(bindings::LINUX_SIGTTIN);
+    pub const SIGTTOU: Self = Self::std_from_u32_const(bindings::LINUX_SIGTTOU);
+    pub const SIGURG: Self = Self::std_from_u32_const(bindings::LINUX_SIGURG);
+    pub const SIGXCPU: Self = Self::std_from_u32_const(bindings::LINUX_SIGXCPU);
+    pub const SIGXFSZ: Self = Self::std_from_u32_const(bindings::LINUX_SIGXFSZ);
+    pub const SIGVTALRM: Self = Self::std_from_u32_const(bindings::LINUX_SIGVTALRM);
+    pub const SIGPROF: Self = Self::std_from_u32_const(bindings::LINUX_SIGPROF);
+    pub const SIGWINCH: Self = Self::std_from_u32_const(bindings::LINUX_SIGWINCH);
+    pub const SIGIO: Self = Self::std_from_u32_const(bindings::LINUX_SIGIO);
+    pub const SIGPWR: Self = Self::std_from_u32_const(bindings::LINUX_SIGPWR);
+    pub const SIGSYS: Self = Self::std_from_u32_const(bindings::LINUX_SIGSYS);
 
-    pub const STANDARD_MAX: Self = Self::SIGSYS;
+    pub const STANDARD_MAX: Self = Self(31);
 
-    pub const SIGRT_MIN: Self = Self(bindings::LINUX_SIGRTMIN as i32);
+    pub const SIGRT_MIN: Self = Self::rt_from_u32_const(bindings::LINUX_SIGRTMIN);
     // According to signal(7). bindgen fails to bind this one.
-    pub const SIGRT_MAX: Self = Self(64);
+    pub const SIGRT_MAX: Self = Self::rt_from_u32_const(64);
 
     pub const MIN: Self = Self(1);
     pub const MAX: Self = Self::SIGRT_MAX;
 
-    // Helper for declaring aliases below. Validates that `from` and `to` have the
-    // same integer value, and returns that value.
-    const fn const_alias(from: u32, to: Self) -> Self {
-        if from as i32 != to.0 {
-            // Can't use a format string here since this function is `const`
-            panic!("Incorrect alias")
-        }
-        to
-    }
-    pub const SIGIOT: Self = Self::const_alias(bindings::LINUX_SIGIOT, Self::SIGABRT);
-    pub const SIGPOLL: Self = Self::const_alias(bindings::LINUX_SIGPOLL, Self::SIGIO);
-    pub const SIGUNUSED: Self = Self::const_alias(bindings::LINUX_SIGUNUSED, Self::SIGSYS);
+    // Aliases
+    pub const SIGIOT: Self = Self::std_from_u32_const(bindings::LINUX_SIGIOT);
+    pub const SIGPOLL: Self = Self::std_from_u32_const(bindings::LINUX_SIGPOLL);
+    pub const SIGUNUSED: Self = Self::std_from_u32_const(bindings::LINUX_SIGUNUSED);
 
     pub fn is_realtime(&self) -> bool {
         (i32::from(Self::SIGRT_MIN)..=i32::from(Self::SIGRT_MAX)).contains(&self.0)
@@ -102,20 +95,35 @@ impl Signal {
     pub const fn as_i32(&self) -> i32 {
         self.0
     }
+
+    // Checked conversion from bindings
+    const fn std_from_u32_const(val: u32) -> Self {
+        let rv = Self(const_conversions::i32_from_u32(val));
+        assert!(rv.0 as u32 == val);
+        assert!(rv.0 <= Self::STANDARD_MAX.0);
+        rv
+    }
+
+    const fn rt_from_u32_const(val: u32) -> Self {
+        let rv = Self(const_conversions::i32_from_u32(val));
+        assert!(rv.0 as u32 == val);
+        assert!(rv.0 > Self::STANDARD_MAX.0);
+        rv
+    }
 }
 
 bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct SigActionFlags: u64 {
-        const SA_NOCLDSTOP = bindings::LINUX_SA_NOCLDSTOP as u64;
-        const SA_NOCLDWAIT = bindings::LINUX_SA_NOCLDWAIT as u64;
-        const SA_NODEFER = bindings::LINUX_SA_NODEFER as u64;
-        const SA_ONSTACK = bindings::LINUX_SA_ONSTACK as u64;
-        const SA_RESETHAND = bindings::LINUX_SA_RESETHAND as u64;
-        const SA_RESTART = bindings::LINUX_SA_RESTART as u64;
-        const SA_RESTORER = bindings::LINUX_SA_RESTORER as u64;
-        const SA_SIGINFO = bindings::LINUX_SA_SIGINFO as u64;
+        const SA_NOCLDSTOP = const_conversions::u64_from_u32(bindings::LINUX_SA_NOCLDSTOP);
+        const SA_NOCLDWAIT = const_conversions::u64_from_u32(bindings::LINUX_SA_NOCLDWAIT);
+        const SA_NODEFER = const_conversions::u64_from_u32(bindings::LINUX_SA_NODEFER);
+        const SA_ONSTACK = const_conversions::u64_from_u32(bindings::LINUX_SA_ONSTACK);
+        const SA_RESETHAND = const_conversions::u64_from_u32(bindings::LINUX_SA_RESETHAND);
+        const SA_RESTART = const_conversions::u64_from_u32(bindings::LINUX_SA_RESTART);
+        const SA_RESTORER = const_conversions::u64_from_u32(bindings::LINUX_SA_RESTORER);
+        const SA_SIGINFO = const_conversions::u64_from_u32(bindings::LINUX_SA_SIGINFO);
     }
 }
 // SAFETY: bitflags guarantees the internal representation is effectively a u64.
@@ -197,9 +205,9 @@ impl SigInfoCode {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeSi {
     // sigaction(2): kill(2)
-    SI_USER = bindings::LINUX_SI_USER as i32,
+    SI_USER = const_conversions::i32_from_u32(bindings::LINUX_SI_USER),
     // sigaction(2): Sent by the kernel.
-    SI_KERNEL = bindings::LINUX_SI_KERNEL as i32,
+    SI_KERNEL = const_conversions::i32_from_u32(bindings::LINUX_SI_KERNEL),
     // sigaction(2): sigqueue(3)
     SI_QUEUE = bindings::LINUX_SI_QUEUE,
     // sigaction(2): POSIX timer expired.
@@ -218,17 +226,17 @@ pub enum SigInfoCodeSi {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeCld {
     // Child has exited.
-    CLD_EXITED = bindings::LINUX_CLD_EXITED as i32,
+    CLD_EXITED = const_conversions::i32_from_u32(bindings::LINUX_CLD_EXITED),
     // Child was killed.
-    CLD_KILLED = bindings::LINUX_CLD_KILLED as i32,
+    CLD_KILLED = const_conversions::i32_from_u32(bindings::LINUX_CLD_KILLED),
     // Child terminated abnormally.
-    CLD_DUMPED = bindings::LINUX_CLD_DUMPED as i32,
+    CLD_DUMPED = const_conversions::i32_from_u32(bindings::LINUX_CLD_DUMPED),
     // Traced child has trapped.
-    CLD_TRAPPED = bindings::LINUX_CLD_TRAPPED as i32,
+    CLD_TRAPPED = const_conversions::i32_from_u32(bindings::LINUX_CLD_TRAPPED),
     // Child has stopped.
-    CLD_STOPPED = bindings::LINUX_CLD_STOPPED as i32,
+    CLD_STOPPED = const_conversions::i32_from_u32(bindings::LINUX_CLD_STOPPED),
     // Stopped child has continued.
-    CLD_CONTINUED = bindings::LINUX_CLD_CONTINUED as i32,
+    CLD_CONTINUED = const_conversions::i32_from_u32(bindings::LINUX_CLD_CONTINUED),
 }
 
 /// Codes for SIGILL
@@ -236,15 +244,15 @@ pub enum SigInfoCodeCld {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeIll {
-    ILL_ILLOPC = bindings::LINUX_ILL_ILLOPC as i32,
-    ILL_ILLOPN = bindings::LINUX_ILL_ILLOPN as i32,
-    ILL_ILLADR = bindings::LINUX_ILL_ILLADR as i32,
-    ILL_ILLTRP = bindings::LINUX_ILL_ILLTRP as i32,
-    ILL_PRVOPC = bindings::LINUX_ILL_PRVOPC as i32,
-    ILL_PRVREG = bindings::LINUX_ILL_PRVREG as i32,
-    ILL_COPROC = bindings::LINUX_ILL_COPROC as i32,
-    ILL_BADSTK = bindings::LINUX_ILL_BADSTK as i32,
-    ILL_BADIADDR = bindings::LINUX_ILL_BADIADDR as i32,
+    ILL_ILLOPC = const_conversions::i32_from_u32(bindings::LINUX_ILL_ILLOPC),
+    ILL_ILLOPN = const_conversions::i32_from_u32(bindings::LINUX_ILL_ILLOPN),
+    ILL_ILLADR = const_conversions::i32_from_u32(bindings::LINUX_ILL_ILLADR),
+    ILL_ILLTRP = const_conversions::i32_from_u32(bindings::LINUX_ILL_ILLTRP),
+    ILL_PRVOPC = const_conversions::i32_from_u32(bindings::LINUX_ILL_PRVOPC),
+    ILL_PRVREG = const_conversions::i32_from_u32(bindings::LINUX_ILL_PRVREG),
+    ILL_COPROC = const_conversions::i32_from_u32(bindings::LINUX_ILL_COPROC),
+    ILL_BADSTK = const_conversions::i32_from_u32(bindings::LINUX_ILL_BADSTK),
+    ILL_BADIADDR = const_conversions::i32_from_u32(bindings::LINUX_ILL_BADIADDR),
 }
 
 /// Codes for SIGFPE
@@ -252,16 +260,16 @@ pub enum SigInfoCodeIll {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeFpe {
-    FPE_INTDIV = bindings::LINUX_FPE_INTDIV as i32,
-    FPE_INTOVF = bindings::LINUX_FPE_INTOVF as i32,
-    FPE_FLTDIV = bindings::LINUX_FPE_FLTDIV as i32,
-    FPE_FLTOVF = bindings::LINUX_FPE_FLTOVF as i32,
-    FPE_FLTUND = bindings::LINUX_FPE_FLTUND as i32,
-    FPE_FLTRES = bindings::LINUX_FPE_FLTRES as i32,
-    FPE_FLTINV = bindings::LINUX_FPE_FLTINV as i32,
-    FPE_FLTSUB = bindings::LINUX_FPE_FLTSUB as i32,
-    FPE_FLTUNK = bindings::LINUX_FPE_FLTUNK as i32,
-    FPE_CONDTRAP = bindings::LINUX_FPE_CONDTRAP as i32,
+    FPE_INTDIV = const_conversions::i32_from_u32(bindings::LINUX_FPE_INTDIV),
+    FPE_INTOVF = const_conversions::i32_from_u32(bindings::LINUX_FPE_INTOVF),
+    FPE_FLTDIV = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTDIV),
+    FPE_FLTOVF = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTOVF),
+    FPE_FLTUND = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTUND),
+    FPE_FLTRES = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTRES),
+    FPE_FLTINV = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTINV),
+    FPE_FLTSUB = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTSUB),
+    FPE_FLTUNK = const_conversions::i32_from_u32(bindings::LINUX_FPE_FLTUNK),
+    FPE_CONDTRAP = const_conversions::i32_from_u32(bindings::LINUX_FPE_CONDTRAP),
 }
 
 /// Codes for SIGSEGV
@@ -269,15 +277,15 @@ pub enum SigInfoCodeFpe {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeSegv {
-    SEGV_MAPERR = bindings::LINUX_SEGV_MAPERR as i32,
-    SEGV_ACCERR = bindings::LINUX_SEGV_ACCERR as i32,
-    SEGV_BNDERR = bindings::LINUX_SEGV_BNDERR as i32,
-    SEGV_PKUERR = bindings::LINUX_SEGV_PKUERR as i32,
-    SEGV_ACCADI = bindings::LINUX_SEGV_ACCADI as i32,
-    SEGV_ADIDERR = bindings::LINUX_SEGV_ADIDERR as i32,
-    SEGV_ADIPERR = bindings::LINUX_SEGV_ADIPERR as i32,
-    SEGV_MTEAERR = bindings::LINUX_SEGV_MTEAERR as i32,
-    SEGV_MTESERR = bindings::LINUX_SEGV_MTESERR as i32,
+    SEGV_MAPERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_MAPERR),
+    SEGV_ACCERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_ACCERR),
+    SEGV_BNDERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_BNDERR),
+    SEGV_PKUERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_PKUERR),
+    SEGV_ACCADI = const_conversions::i32_from_u32(bindings::LINUX_SEGV_ACCADI),
+    SEGV_ADIDERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_ADIDERR),
+    SEGV_ADIPERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_ADIPERR),
+    SEGV_MTEAERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_MTEAERR),
+    SEGV_MTESERR = const_conversions::i32_from_u32(bindings::LINUX_SEGV_MTESERR),
 }
 
 /// Codes for SIGBUS
@@ -285,11 +293,11 @@ pub enum SigInfoCodeSegv {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeBus {
-    BUS_ADRALN = bindings::LINUX_BUS_ADRALN as i32,
-    BUS_ADRERR = bindings::LINUX_BUS_ADRERR as i32,
-    BUS_OBJERR = bindings::LINUX_BUS_OBJERR as i32,
-    BUS_MCEERR_AR = bindings::LINUX_BUS_MCEERR_AR as i32,
-    BUS_MCEERR_AO = bindings::LINUX_BUS_MCEERR_AO as i32,
+    BUS_ADRALN = const_conversions::i32_from_u32(bindings::LINUX_BUS_ADRALN),
+    BUS_ADRERR = const_conversions::i32_from_u32(bindings::LINUX_BUS_ADRERR),
+    BUS_OBJERR = const_conversions::i32_from_u32(bindings::LINUX_BUS_OBJERR),
+    BUS_MCEERR_AR = const_conversions::i32_from_u32(bindings::LINUX_BUS_MCEERR_AR),
+    BUS_MCEERR_AO = const_conversions::i32_from_u32(bindings::LINUX_BUS_MCEERR_AO),
 }
 
 /// Codes for SIGTRAP
@@ -297,12 +305,12 @@ pub enum SigInfoCodeBus {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeTrap {
-    TRAP_BRKPT = bindings::LINUX_TRAP_BRKPT as i32,
-    TRAP_TRACE = bindings::LINUX_TRAP_TRACE as i32,
-    TRAP_BRANCH = bindings::LINUX_TRAP_BRANCH as i32,
-    TRAP_HWBKPT = bindings::LINUX_TRAP_HWBKPT as i32,
-    TRAP_UNK = bindings::LINUX_TRAP_UNK as i32,
-    TRAP_PERF = bindings::LINUX_TRAP_PERF as i32,
+    TRAP_BRKPT = const_conversions::i32_from_u32(bindings::LINUX_TRAP_BRKPT),
+    TRAP_TRACE = const_conversions::i32_from_u32(bindings::LINUX_TRAP_TRACE),
+    TRAP_BRANCH = const_conversions::i32_from_u32(bindings::LINUX_TRAP_BRANCH),
+    TRAP_HWBKPT = const_conversions::i32_from_u32(bindings::LINUX_TRAP_HWBKPT),
+    TRAP_UNK = const_conversions::i32_from_u32(bindings::LINUX_TRAP_UNK),
+    TRAP_PERF = const_conversions::i32_from_u32(bindings::LINUX_TRAP_PERF),
 }
 
 /// Codes for SIGIO/SIGPOLL
@@ -310,12 +318,12 @@ pub enum SigInfoCodeTrap {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodePoll {
-    POLL_IN = bindings::LINUX_POLL_IN as i32,
-    POLL_OUT = bindings::LINUX_POLL_OUT as i32,
-    POLL_MSG = bindings::LINUX_POLL_MSG as i32,
-    POLL_ERR = bindings::LINUX_POLL_ERR as i32,
-    POLL_PRI = bindings::LINUX_POLL_PRI as i32,
-    POLL_HUP = bindings::LINUX_POLL_HUP as i32,
+    POLL_IN = const_conversions::i32_from_u32(bindings::LINUX_POLL_IN),
+    POLL_OUT = const_conversions::i32_from_u32(bindings::LINUX_POLL_OUT),
+    POLL_MSG = const_conversions::i32_from_u32(bindings::LINUX_POLL_MSG),
+    POLL_ERR = const_conversions::i32_from_u32(bindings::LINUX_POLL_ERR),
+    POLL_PRI = const_conversions::i32_from_u32(bindings::LINUX_POLL_PRI),
+    POLL_HUP = const_conversions::i32_from_u32(bindings::LINUX_POLL_HUP),
 }
 
 /// Codes for SIGSYS
@@ -323,7 +331,7 @@ pub enum SigInfoCodePoll {
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum SigInfoCodeSys {
-    SYS_SECCOMP = bindings::LINUX_SYS_SECCOMP as i32,
+    SYS_SECCOMP = const_conversions::i32_from_u32(bindings::LINUX_SYS_SECCOMP),
 }
 
 #[allow(non_camel_case_types)]
