@@ -22,9 +22,8 @@
 // Helper macro for calculating immediate offsets in asm.
 #define MCTX_REG_OFFSET(i) (offsetof(mcontext_t, gregs) + sizeof(uint64_t) * (i))
 
-__attribute__((SHADOW_ALLOW_NATIVE_SYSCALL_FN_ATTRS)) static long
-_shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid, pid_t* ctid,
-            uint64_t newtls) {
+static long _shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid,
+                        pid_t* ctid, uint64_t newtls) {
     if (!child_stack) {
         panic("clone without a new stack not implemented");
     }
@@ -110,11 +109,7 @@ _shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid
     return rv;
 }
 
-// Never inline, so that the seccomp filter can reliably whitelist a syscall from
-// this function.
-// TODO: Drop if/when we whitelist using /proc/self/maps
-__attribute__((SHADOW_ALLOW_NATIVE_SYSCALL_FN_ATTRS)) static long
-_shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
+static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
