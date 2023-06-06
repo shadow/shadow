@@ -86,11 +86,6 @@ impl Timer {
         Some(t.saturating_duration_since(&now))
     }
 
-    pub fn interval(&self) -> SimulationTime {
-        self.magic.debug_check();
-        self.internal.borrow().expire_interval
-    }
-
     pub fn disarm(&mut self) {
         self.magic.debug_check();
         let mut internal = self.internal.borrow_mut();
@@ -199,50 +194,6 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn timer_drop(timer: *mut Timer) {
         unsafe { Box::from_raw(timer) };
-    }
-
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getExpirationCount(timer: *const Timer) -> u64 {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        timer.expiration_count()
-    }
-
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_consumeExpirationCount(timer: *mut Timer) -> u64 {
-        let timer = unsafe { timer.as_mut() }.unwrap();
-        timer.consume_expiration_count()
-    }
-
-    /// Returns the remaining time until the next expiration. Returns 0 if the
-    /// timer isn't armed.
-    ///
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getRemainingTime(timer: *const Timer) -> CSimulationTime {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        let remaining = if let Some(t) = timer.remaining_time() {
-            t
-        } else {
-            SimulationTime::ZERO
-        };
-        remaining.into()
-    }
-
-    /// # Safety
-    ///
-    /// `timer` must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn timer_getInterval(timer: *const Timer) -> CSimulationTime {
-        let timer = unsafe { timer.as_ref() }.unwrap();
-        timer.interval().into()
     }
 
     /// # Safety

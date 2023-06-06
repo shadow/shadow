@@ -7,15 +7,14 @@
 
 #include <errno.h>
 #include <sys/time.h>
-#include <sys/timerfd.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/descriptor/timerfd.h"
 #include "main/host/syscall_condition.h"
 
 CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {

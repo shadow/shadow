@@ -21,7 +21,6 @@
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
-#include "main/host/descriptor/timerfd.h"
 #include "main/host/process.h"
 #include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
@@ -36,7 +35,6 @@
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/time.h"
-#include "main/host/syscall/timerfd.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
@@ -460,9 +458,9 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(sysinfo);
             HANDLE_C(tgkill);
             SHIM_ONLY(time);
-            HANDLE_C(timerfd_create);
-            HANDLE_C(timerfd_gettime);
-            HANDLE_C(timerfd_settime);
+            HANDLE_RUST(timerfd_create);
+            HANDLE_RUST(timerfd_gettime);
+            HANDLE_RUST(timerfd_settime);
             HANDLE_C(tkill);
             HANDLE_C(uname);
             HANDLE_C(unlinkat);
