@@ -73,6 +73,10 @@ impl SimulationTime {
         self.0 == 0
     }
 
+    pub fn is_positive(&self) -> bool {
+        self.0 > 0
+    }
+
     pub fn as_secs(&self) -> u64 {
         self.0 / SIMTIME_ONE_SECOND
     }

@@ -93,8 +93,12 @@ impl SyscallHandler {
             let remaining = borrowed
                 .get_timer_remaining()
                 .unwrap_or(SimulationTime::ZERO);
-            // We return a zero duration if the timer is non-periodic (set to expire only once).
-            let interval = borrowed.get_timer_interval();
+
+            // We return a zero duration if the timer is not configured with an interval, which
+            // indicates that it is non-periodic (i.e., set to expire only once).
+            let interval = borrowed
+                .get_timer_interval()
+                .unwrap_or(SimulationTime::ZERO);
 
             (remaining, interval)
         };
@@ -172,9 +176,12 @@ impl SyscallHandler {
             };
 
             CallbackQueue::queue_and_run(|cb_queue| {
-                timerfd
-                    .borrow_mut()
-                    .arm_timer(ctx.objs.host, expire_time, interval, cb_queue);
+                timerfd.borrow_mut().arm_timer(
+                    ctx.objs.host,
+                    expire_time,
+                    interval.is_positive().then_some(interval),
+                    cb_queue,
+                );
             });
 
             log::trace!(
