@@ -3,7 +3,6 @@ use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
-use bytemuck_util::pod;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -520,7 +519,7 @@ impl ManagedThread {
             .chain(std::iter::once(std::ptr::null_mut()))
             .collect();
 
-        let mut file_actions: libc::posix_spawn_file_actions_t = pod::zeroed();
+        let mut file_actions: libc::posix_spawn_file_actions_t = bytemuck_util::zeroed();
         Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
 
         // Dup straceFd; the dup'd descriptor won't have O_CLOEXEC set.
@@ -577,7 +576,7 @@ impl ManagedThread {
         })
         .unwrap();
 
-        let mut spawn_attr: libc::posix_spawnattr_t = pod::zeroed();
+        let mut spawn_attr: libc::posix_spawnattr_t = bytemuck_util::zeroed();
         Errno::result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
 
         // In versions of glibc before 2.24, we need this to tell posix_spawn

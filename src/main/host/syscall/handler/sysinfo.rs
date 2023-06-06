@@ -1,4 +1,3 @@
-use bytemuck_util::pod;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
@@ -17,7 +16,7 @@ impl SyscallHandler {
             .as_secs();
 
         // Get a zeroed struct to make sure we init all fields.
-        let mut info = pod::zeroed::<libc::sysinfo>();
+        let mut info = bytemuck_util::zeroed::<libc::sysinfo>();
 
         // These values are chosen arbitrarily; we don't think it matters too
         // much, except to maintain determinism. For example, Tor make decisions

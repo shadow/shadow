@@ -20,7 +20,7 @@ use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 
-use bytemuck_util::pod::{self, AnyBitPattern};
+use bytemuck_util::AnyBitPattern;
 use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
@@ -560,7 +560,7 @@ impl MemoryManager {
             ProcessMemoryRefMut::new_mapped(mref)
         } else {
             let mut v = Vec::with_capacity(ptr.len());
-            v.resize(ptr.len(), pod::zeroed());
+            v.resize(ptr.len(), bytemuck_util::zeroed());
             ProcessMemoryRefMut::new_copied(MemoryCopier::new(pid), ptr, v)
         };
 
@@ -569,7 +569,7 @@ impl MemoryManager {
         // back to the process without initializing it.
         if cfg!(debug_assertions) {
             // SAFETY: We do not write uninitialized data into `bytes`.
-            let bytes = unsafe { pod::maybeuninit_bytes_of_slice_mut(&mut mref[..]) };
+            let bytes = unsafe { bytemuck_util::maybeuninit_bytes_of_slice_mut(&mut mref[..]) };
             for byte in bytes {
                 unsafe { byte.as_mut_ptr().write(0x42) }
             }

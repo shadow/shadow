@@ -1,4 +1,4 @@
-use bytemuck_util::pod::AnyBitPattern;
+use bytemuck_util::AnyBitPattern;
 use log::warn;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;

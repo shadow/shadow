@@ -10,7 +10,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
-use bytemuck_util::pod::AnyBitPattern;
+use bytemuck_util::AnyBitPattern;
 use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;

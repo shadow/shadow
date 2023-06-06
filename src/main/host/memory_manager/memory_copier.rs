@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use bytemuck_util::pod::{self, AnyBitPattern};
+use bytemuck_util::AnyBitPattern;
 use log::*;
 use nix::{errno::Errno, unistd::Pid};
 
@@ -59,7 +59,7 @@ impl MemoryCopier {
         // Convert to u8
         // SAFETY: We do not write uninitialized data into `buf`.
         let buf: &mut [std::mem::MaybeUninit<u8>] =
-            unsafe { pod::maybeuninit_bytes_of_slice_mut(dst) };
+            unsafe { bytemuck_util::maybeuninit_bytes_of_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
@@ -105,7 +105,7 @@ impl MemoryCopier {
     ) -> Result<(), Errno> {
         assert_eq!(dst.len(), src.len());
         // SAFETY: We do not write uninitialized data into `buf`.
-        let buf = unsafe { pod::maybeuninit_bytes_of_slice_mut(dst) };
+        let buf = unsafe { bytemuck_util::maybeuninit_bytes_of_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
@@ -196,7 +196,7 @@ impl MemoryCopier {
         src: &[T],
     ) -> Result<(), Errno> {
         let dst = dst.cast_u8();
-        let src: &[std::mem::MaybeUninit<u8>] = pod::maybeuninit_bytes_of_slice(src);
+        let src: &[std::mem::MaybeUninit<u8>] = bytemuck_util::maybeuninit_bytes_of_slice(src);
         // SAFETY: We *should* never actually read from this buffer in this process;
         // ultimately its pointer will be passed to the process_vm_writev syscall,
         // for which unitialized data is ok.

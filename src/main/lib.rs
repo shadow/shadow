@@ -21,7 +21,7 @@ pub mod cshadow {
     include!(concat!(env!("OUT_DIR"), "/cshadow.rs"));
 }
 // shadow re-exports this definition from /usr/include/linux/tcp.h
-unsafe impl ::bytemuck_util::pod::AnyBitPattern for cshadow::tcp_info {}
+unsafe impl ::bytemuck_util::AnyBitPattern for cshadow::tcp_info {}
 
 // check that the size and alignment of `CompatUntypedForeignPtr` and `ForeignPtr<()>` are the same`
 static_assertions::assert_eq_size!(
