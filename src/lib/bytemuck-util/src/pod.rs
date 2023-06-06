@@ -75,8 +75,8 @@ where
 ///
 /// # Safety
 ///
-/// See [`to_u8_slice_mut`].
-pub unsafe fn as_u8_slice_mut<T>(x: &mut T) -> &mut [MaybeUninit<u8>]
+/// See [`maybeuninit_bytes_of_slice_mut`].
+pub unsafe fn maybeuninit_bytes_of_mut<T>(x: &mut T) -> &mut [MaybeUninit<u8>]
 where
     T: AnyBitPattern,
 {
