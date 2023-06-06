@@ -389,6 +389,10 @@ pub struct SigInfo(linux_siginfo_t);
 // current address space.
 unsafe impl Send for SigInfo {}
 
+unsafe impl bytemuck::Zeroable for SigInfo {}
+unsafe impl bytemuck::AnyBitPattern for SigInfo {}
+unsafe impl bytemuck_util::AnyBitPattern for SigInfo {}
+
 impl SigInfo {
     /// The bindings end up with a couple extra outer layers of unions.
     /// The outermost only has a single member; the next one has a data
@@ -781,6 +785,9 @@ pub type linux_sigset_t = bindings::linux_sigset_t;
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
 pub struct SigSet(linux_sigset_t);
 unsafe impl TransparentWrapper<linux_sigset_t> for SigSet {}
+unsafe impl bytemuck::Zeroable for SigSet {}
+unsafe impl bytemuck::AnyBitPattern for SigSet {}
+unsafe impl bytemuck_util::AnyBitPattern for SigSet {}
 
 impl SigSet {
     pub const EMPTY: Self = Self(0);
@@ -936,6 +943,9 @@ pub type linux_sigaction = bindings::linux_sigaction;
 #[repr(C)]
 pub struct SigAction(linux_sigaction);
 unsafe impl Send for SigAction {}
+unsafe impl bytemuck::Zeroable for SigAction {}
+unsafe impl bytemuck::AnyBitPattern for SigAction {}
+unsafe impl bytemuck_util::AnyBitPattern for SigAction {}
 
 impl SigAction {
     // Bindgen doesn't succesfully bind these constants; maybe because
