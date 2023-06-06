@@ -49,6 +49,43 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
 }
 
+// TODO: dedupe this with `maps` parsing in `patch_vdso.c` and `proc_maps.rs`,
+// ideally into something that doesn't allocate or use libc.
+static void _getSectionContaining(const void* target, void** start, void** end) {
+    assert(start);
+    *start = NULL;
+    assert(end);
+    *end = NULL;
+
+    FILE* maps = fopen("/proc/self/maps", "r");
+
+    size_t n = 100;
+    // `line` has to be `malloc`'d for compatibility with `getline`, below.
+    char* line = malloc(n);
+
+    while (true) {
+        ssize_t rv = getline(&line, &n, maps);
+        if (rv < 0) {
+            break;
+        }
+        if (sscanf(line, "%p-%p", start, end) != 2) {
+            warning("Couldn't parse maps line: %s", line);
+            // Ensure both are still NULL.
+            *start = NULL;
+            *end = NULL;
+            // Might as well keep going and see if another line matches and parses.
+            continue;
+        }
+        if (target >= *start && target < *end) {
+            // Success
+            break;
+        }
+    }
+
+    free(line);
+    fclose(maps);
+}
+
 void shim_seccomp_init() {
     // Install signal sigsys signal handler, which will receive syscalls that
     // get stopped by the seccomp filter. Shadow's emulation of signal-related
@@ -93,6 +130,17 @@ void shim_seccomp_init() {
         panic("prctl: %s", strerror(errno));
     }
 
+    // Find the region of memory containing this function. That should be
+    // the `.text` section of the shim, and contain all of the code in the shim.
+    void *text_start = NULL, *text_end = NULL;
+    _getSectionContaining((void*)shim_seccomp_init, &text_start, &text_end);
+    if (text_start == NULL) {
+        panic("Couldn't find memory region containing `shim_seccomp_init`");
+    }
+    if (text_end == NULL) {
+        panic("bad end");
+    }
+
     /* A bpf program to be loaded as a `seccomp` filter. Unfortunately the
      * documentation for how to write this is pretty sparse. There's a useful
      * example in samples/seccomp/bpf-direct.c of the Linux kernel source tree.
@@ -117,16 +165,15 @@ void shim_seccomp_init() {
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
-        /* If the instruction pointer is in section `shadow_allow_syscalls`,
-         * allow. This lets us define functions that are allowed to make native
-         * syscalls, by placing them in that section using
-         * `__attribute__((noinline, section("shadow_allow_syscalls")))` in C
-         * or (untested) `#[link_section = "shadow_allow_syscalls"]` in Rust.
+        /* Allow syscalls made from the `.text` section.
+         * We allow-list native syscalls made from this region both for correctness
+         * (to avoid recursing in our syscall handling) and performance (avoid the
+         * interception overhead in internal synchronization primitives).
          */
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, (long)__stop_shadow_allow_syscalls,
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, (long)text_end,
                  /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)__start_shadow_allow_syscalls, /*true-skip=*/0,
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)text_start, /*true-skip=*/0,
                  /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
