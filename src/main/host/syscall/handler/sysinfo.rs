@@ -5,7 +5,6 @@ use syscall_logger::log_syscall;
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
-use crate::utility::pod;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ libc::c_int, /* info */ *const libc::sysinfo)]
@@ -17,7 +16,7 @@ impl SyscallHandler {
             .as_secs();
 
         // Get a zeroed struct to make sure we init all fields.
-        let mut info = pod::zeroed::<libc::sysinfo>();
+        let mut info = shadow_pod::zeroed::<libc::sysinfo>();
 
         // These values are chosen arbitrarily; we don't think it matters too
         // much, except to maintain determinism. For example, Tor make decisions

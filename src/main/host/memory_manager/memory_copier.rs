@@ -2,12 +2,11 @@ use std::fmt::Debug;
 
 use log::*;
 use nix::{errno::Errno, unistd::Pid};
+use shadow_pod::Pod;
 
 use crate::core::worker::Worker;
 use crate::host::memory_manager::page_size;
 use crate::host::syscall_types::ForeignArrayPtr;
-use crate::utility::pod;
-use crate::utility::pod::Pod;
 
 /// A utility for copying data to and from a process's memory.
 #[derive(Debug, Clone)]
@@ -59,7 +58,7 @@ impl MemoryCopier {
     {
         // Convert to u8
         // SAFETY: We do not write uninitialized data into `buf`.
-        let buf: &mut [std::mem::MaybeUninit<u8>] = unsafe { pod::to_u8_slice_mut(dst) };
+        let buf: &mut [std::mem::MaybeUninit<u8>] = unsafe { shadow_pod::to_u8_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
@@ -105,7 +104,7 @@ impl MemoryCopier {
     ) -> Result<(), Errno> {
         assert_eq!(dst.len(), src.len());
         // SAFETY: We do not write uninitialized data into `buf`.
-        let buf = unsafe { pod::to_u8_slice_mut(dst) };
+        let buf = unsafe { shadow_pod::to_u8_slice_mut(dst) };
         // SAFETY: this buffer is write-only.
         // TODO: Fix or move away from nix's process_vm_readv wrapper so that we
         // don't need to construct this slice, and can instead only ever operate
@@ -196,7 +195,7 @@ impl MemoryCopier {
         src: &[T],
     ) -> Result<(), Errno> {
         let dst = dst.cast_u8();
-        let src: &[std::mem::MaybeUninit<u8>] = pod::to_u8_slice(src);
+        let src: &[std::mem::MaybeUninit<u8>] = shadow_pod::to_u8_slice(src);
         // SAFETY: We *should* never actually read from this buffer in this process;
         // ultimately its pointer will be passed to the process_vm_writev syscall,
         // for which unitialized data is ok.

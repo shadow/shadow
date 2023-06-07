@@ -14,6 +14,7 @@ use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
 use nix::{fcntl, sys};
+use shadow_pod::Pod;
 use shadow_shim_helper_rs::notnull::*;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -22,7 +23,6 @@ use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
-use crate::utility::pod::Pod;
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 

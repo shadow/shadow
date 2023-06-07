@@ -23,7 +23,7 @@ use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
-use crate::utility::{pod, syscall};
+use crate::utility::syscall;
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -519,7 +519,7 @@ impl ManagedThread {
             .chain(std::iter::once(std::ptr::null_mut()))
             .collect();
 
-        let mut file_actions: libc::posix_spawn_file_actions_t = pod::zeroed();
+        let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
         Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
 
         // Dup straceFd; the dup'd descriptor won't have O_CLOEXEC set.
@@ -576,7 +576,7 @@ impl ManagedThread {
         })
         .unwrap();
 
-        let mut spawn_attr: libc::posix_spawnattr_t = pod::zeroed();
+        let mut spawn_attr: libc::posix_spawnattr_t = shadow_pod::zeroed();
         Errno::result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
 
         // In versions of glibc before 2.24, we need this to tell posix_spawn

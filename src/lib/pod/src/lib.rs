@@ -1,4 +1,8 @@
-use std::mem::MaybeUninit;
+//! Utilities for working with POD (Plain Old Data)
+
+#![no_std]
+
+use core::mem::MaybeUninit;
 
 /// Marker trait that the given type is Plain Old Data; i.e. that it is safe to
 /// interpret any pattern of bits as a value of this type.
@@ -9,6 +13,11 @@ use std::mem::MaybeUninit;
 /// We require `Copy` to also rule out anything that implements `Drop`.
 ///
 /// References are inherently non-Pod, so we can require a 'static lifetime.
+///
+/// This is very *similar* in concept to `bytemuck::AnyBitPattern`. However,
+/// unlike `AnyBitPattern`, this trait does not say anything about how the type
+/// can be safely shared. e.g. while `bytemuck::AnyBitPattern` disallows pointer
+/// types, [`Pod`] does not.
 ///
 /// # Safety
 ///
@@ -24,9 +33,9 @@ where
 {
     // SAFETY: Any value and alignment is safe for u8.
     unsafe {
-        std::slice::from_raw_parts(
+        core::slice::from_raw_parts(
             slice.as_ptr() as *const MaybeUninit<u8>,
-            slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
+            slice.len() * core::mem::size_of::<MaybeUninit<T>>(),
         )
     }
 }
@@ -38,7 +47,7 @@ pub fn as_u8_slice<T>(x: &T) -> &[MaybeUninit<u8>]
 where
     T: Pod,
 {
-    to_u8_slice(std::slice::from_ref(x))
+    to_u8_slice(core::slice::from_ref(x))
 }
 
 /// Convert to a mut slice of raw bytes.
@@ -55,9 +64,9 @@ where
 {
     // SAFETY: Any value and alignment is safe for u8.
     unsafe {
-        std::slice::from_raw_parts_mut(
+        core::slice::from_raw_parts_mut(
             slice.as_mut_ptr() as *mut MaybeUninit<u8>,
-            slice.len() * std::mem::size_of::<MaybeUninit<T>>(),
+            slice.len() * core::mem::size_of::<MaybeUninit<T>>(),
         )
     }
 }
@@ -73,7 +82,7 @@ pub unsafe fn as_u8_slice_mut<T>(x: &mut T) -> &mut [MaybeUninit<u8>]
 where
     T: Pod,
 {
-    unsafe { to_u8_slice_mut(std::slice::from_mut(x)) }
+    unsafe { to_u8_slice_mut(core::slice::from_mut(x)) }
 }
 
 /// Create a value of type `T`, with contents initialized to 0s.
@@ -82,7 +91,7 @@ where
     T: Pod,
 {
     // SAFETY: Any value is legal for Pod.
-    unsafe { std::mem::zeroed() }
+    unsafe { core::mem::zeroed() }
 }
 
 // Integer primitives
@@ -103,7 +112,7 @@ unsafe impl Pod for usize {}
 // No! `char` must be a valid unicode value.
 // impl !Pod for char {}
 
-unsafe impl<T> Pod for std::mem::MaybeUninit<T> where T: Pod {}
+unsafe impl<T> Pod for core::mem::MaybeUninit<T> where T: Pod {}
 unsafe impl<T, const N: usize> Pod for [T; N] where T: Pod {}
 
 // libc types
@@ -275,10 +284,3 @@ unsafe impl Pod for libc::utmpx {}
 unsafe impl Pod for libc::utsname {}
 unsafe impl Pod for libc::winsize {}
 unsafe impl Pod for libc::clone_args {}
-
-// shadow re-exports this definition from /usr/include/linux/tcp.h
-unsafe impl Pod for crate::cshadow::tcp_info {}
-
-// TODO: Move this module out of `main` so that `shadow_shmem` can use it,
-// and put this with the struct definition.
-unsafe impl Pod for shadow_shmem::allocator::ShMemBlockSerialized {}

@@ -24,13 +24,12 @@ use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
 use nix::{errno::Errno, unistd::Pid};
+use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::host::thread::Thread;
-use crate::utility::pod;
-use crate::utility::pod::Pod;
 
 mod memory_copier;
 mod memory_mapper;
@@ -554,7 +553,7 @@ impl MemoryManager {
             ProcessMemoryRefMut::new_mapped(mref)
         } else {
             let mut v = Vec::with_capacity(ptr.len());
-            v.resize(ptr.len(), pod::zeroed());
+            v.resize(ptr.len(), shadow_pod::zeroed());
             ProcessMemoryRefMut::new_copied(MemoryCopier::new(pid), ptr, v)
         };
 
@@ -563,7 +562,7 @@ impl MemoryManager {
         // back to the process without initializing it.
         if cfg!(debug_assertions) {
             // SAFETY: We do not write uninitialized data into `bytes`.
-            let bytes = unsafe { pod::to_u8_slice_mut(&mut mref[..]) };
+            let bytes = unsafe { shadow_pod::to_u8_slice_mut(&mut mref[..]) };
             for byte in bytes {
                 unsafe { byte.as_mut_ptr().write(0x42) }
             }
