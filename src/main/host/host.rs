@@ -1085,34 +1085,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_associateInterface(
-        hostrc: *const Host,
-        socket: *const cshadow::CompatSocket,
-        protocol: cshadow::ProtocolType,
-        bind_ip: in_addr_t,
-        bind_port: in_port_t,
-        peer_ip: in_addr_t,
-        peer_port: in_port_t,
-    ) {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-
-        let bind_ip = Ipv4Addr::from(u32::from_be(bind_ip));
-        let peer_ip = Ipv4Addr::from(u32::from_be(peer_ip));
-        let bind_port = u16::from_be(bind_port);
-        let peer_port = u16::from_be(peer_port);
-
-        let bind_addr = SocketAddrV4::new(bind_ip, bind_port);
-        let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
-
-        // associate the interfaces corresponding to bind_addr with socket
-        unsafe {
-            hostrc
-                .net_ns
-                .associate_interface(socket, protocol, bind_addr, peer_addr)
-        };
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn host_disassociateInterface(
         hostrc: *const Host,
         protocol: cshadow::ProtocolType,
