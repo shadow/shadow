@@ -16,7 +16,7 @@ use crate::host::descriptor::{
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
-use crate::host::network::namespace::NetworkNamespace;
+use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader};
 use crate::host::syscall_types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
@@ -37,8 +37,7 @@ pub struct UdpSocket {
     recv_buffer: PacketBuffer,
     peer_addr: Option<SocketAddrV4>,
     bound_addr: Option<SocketAddrV4>,
-    // the (local addr, remote addr) network interface association
-    association: Option<(SocketAddrV4, SocketAddrV4)>,
+    association: Option<AssociationHandle>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -181,13 +180,8 @@ impl UdpSocket {
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
-        if let Some((local_addr, remote_addr)) = self.association {
-            Worker::with_active_host(|host| {
-                let net_ns = host.network_namespace_borrow();
-                net_ns.disassociate_interface(c::_ProtocolType_PUDP, local_addr, remote_addr);
-            })
-            .unwrap();
-        }
+        // drop the existing association handle to disassociate the socket
+        self.association = None;
 
         self.copy_state(
             /* mask= */ FileState::all(),
@@ -235,7 +229,7 @@ impl UdpSocket {
         let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
         // associate the socket
-        let addr = inet::associate_socket(
+        let (addr, handle) = inet::associate_socket(
             InetSocket::Udp(Arc::clone(socket)),
             addr,
             peer_addr,
@@ -247,7 +241,7 @@ impl UdpSocket {
         {
             let mut socket = socket.borrow_mut();
             socket.bound_addr = Some(addr);
-            socket.association = Some((addr, peer_addr));
+            socket.association = Some(handle);
         }
 
         Ok(0.into())
@@ -346,7 +340,7 @@ impl UdpSocket {
             // this will allow us to receive packets from any peer
             let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
-            let local_addr = super::associate_socket(
+            let (local_addr, handle) = super::associate_socket(
                 InetSocket::Udp(Arc::clone(socket)),
                 local_addr,
                 peer_addr,
@@ -355,7 +349,7 @@ impl UdpSocket {
             )?;
 
             socket_ref.bound_addr = Some(local_addr);
-            socket_ref.association = Some((local_addr, peer_addr));
+            socket_ref.association = Some(handle);
         }
 
         // run in a closure so that an early return doesn't skip checking if we should block
@@ -583,9 +577,7 @@ impl UdpSocket {
         // connect(2):
         // > If the socket sockfd is of type SOCK_DGRAM, then addr is the address to which datagrams
         // > are sent by default, and the only address from which datagrams are received.
-        if let Some((local_addr, remote_addr)) = socket.borrow().association {
-            net_ns.disassociate_interface(c::_ProtocolType_PUDP, local_addr, remote_addr);
-        }
+        socket.borrow_mut().association = None;
 
         // we need to associate with the network interface, but first we need a local ip/port to
         // bind to
@@ -604,7 +596,7 @@ impl UdpSocket {
 
         // associate the socket (we may be sharing a port number with other udp sockets, but they
         // won't have the same peer)
-        let local_addr = super::associate_socket(
+        let (local_addr, handle) = super::associate_socket(
             InetSocket::Udp(Arc::clone(socket)),
             local_addr,
             peer_addr,
@@ -616,7 +608,7 @@ impl UdpSocket {
             let mut socket = socket.borrow_mut();
             socket.peer_addr = Some(peer_addr);
             socket.bound_addr = Some(local_addr);
-            socket.association = Some((local_addr, peer_addr));
+            socket.association = Some(handle);
         }
 
         Ok(())

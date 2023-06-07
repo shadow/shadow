@@ -263,13 +263,17 @@ impl LegacyTcpSocket {
         let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
         // associate the socket
-        let addr = inet::associate_socket(
+        let (addr, handle) = inet::associate_socket(
             InetSocket::LegacyTcp(Arc::clone(socket)),
             addr,
             peer_addr,
             net_ns,
             rng,
         )?;
+
+        // the handle normally disassociates the socket when dropped, but the C TCP code does it's
+        // own manual disassociation, so we'll just let it do its own thing
+        std::mem::forget(handle);
 
         // update the socket's local address
         let socket = socket.borrow_mut();
@@ -629,13 +633,17 @@ impl LegacyTcpSocket {
             let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
             // associate the socket
-            let local_addr = super::associate_socket(
+            let (local_addr, handle) = super::associate_socket(
                 super::InetSocket::LegacyTcp(socket.clone()),
                 local_addr,
                 peer_addr,
                 net_ns,
                 rng,
             )?;
+
+            // the handle normally disassociates the socket when dropped, but the C TCP code does
+            // it's own manual disassociation, so we'll just let it do its own thing
+            std::mem::forget(handle);
 
             unsafe {
                 c::legacysocket_setSocketName(
@@ -728,13 +736,17 @@ impl LegacyTcpSocket {
             };
 
             // associate the socket
-            let local_addr = super::associate_socket(
+            let (local_addr, handle) = super::associate_socket(
                 super::InetSocket::LegacyTcp(socket.clone()),
                 local_addr,
                 peer_addr,
                 net_ns,
                 rng,
             )?;
+
+            // the handle normally disassociates the socket when dropped, but the C TCP code does
+            // it's own manual disassociation, so we'll just let it do its own thing
+            std::mem::forget(handle);
 
             unsafe {
                 c::legacysocket_setSocketName(
