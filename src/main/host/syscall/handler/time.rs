@@ -11,7 +11,11 @@ use crate::host::timer::Timer;
 
 fn itimerval_from_timer(timer: &Timer) -> libc::itimerval {
     libc::itimerval {
-        it_interval: timer.expire_interval().try_into().unwrap(),
+        it_interval: timer
+            .expire_interval()
+            .unwrap_or(SimulationTime::ZERO)
+            .try_into()
+            .unwrap(),
         it_value: timer
             .remaining_time()
             .unwrap_or(SimulationTime::ZERO)
@@ -73,7 +77,9 @@ impl SyscallHandler {
             ctx.objs.process.realtime_timer_borrow_mut().arm(
                 ctx.objs.host,
                 Worker::current_time().unwrap() + new_value_value,
-                new_value_interval,
+                new_value_interval
+                    .is_positive()
+                    .then_some(new_value_interval),
             );
         }
 

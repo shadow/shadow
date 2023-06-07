@@ -78,8 +78,8 @@ impl TimerFd {
     }
 
     /// Returns the relative duration over which the timer has been configured to periodically
-    /// expire, which may be zero if the timer is only configured to expire once.
-    pub fn get_timer_interval(&self) -> SimulationTime {
+    /// expire, or `None` if the timer is configured to expire only once.
+    pub fn get_timer_interval(&self) -> Option<SimulationTime> {
         self.timer.expire_interval()
     }
 
@@ -89,7 +89,7 @@ impl TimerFd {
         &mut self,
         host: &Host,
         expire_time: EmulatedTime,
-        interval: SimulationTime,
+        interval: Option<SimulationTime>,
         cb_queue: &mut CallbackQueue,
     ) {
         // Make sure to update our READABLE status.

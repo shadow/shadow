@@ -23,7 +23,7 @@ pub struct Timer {
 
 struct TimerInternal {
     next_expire_time: Option<EmulatedTime>,
-    expire_interval: SimulationTime,
+    expire_interval: Option<SimulationTime>,
     expiration_count: u64,
     next_expire_id: u64,
     min_valid_expire_id: u64,
@@ -31,7 +31,11 @@ struct TimerInternal {
 }
 
 impl TimerInternal {
-    fn reset(&mut self, next_expire_time: Option<EmulatedTime>, expire_interval: SimulationTime) {
+    fn reset(
+        &mut self,
+        next_expire_time: Option<EmulatedTime>,
+        expire_interval: Option<SimulationTime>,
+    ) {
         self.min_valid_expire_id = self.next_expire_id;
         self.expiration_count = 0;
         self.next_expire_time = next_expire_time;
@@ -50,7 +54,7 @@ impl Timer {
             _counter: ObjectCounter::new("Timer"),
             internal: Arc::new(AtomicRefCell::new(TimerInternal {
                 next_expire_time: None,
-                expire_interval: SimulationTime::ZERO,
+                expire_interval: None,
                 expiration_count: 0,
                 next_expire_id: 0,
                 min_valid_expire_id: 0,
@@ -59,16 +63,22 @@ impl Timer {
         }
     }
 
+    /// Returns the number of timer expirations that have occurred since the last time
+    /// [`Timer::consume_expiration_count()`] was called without resetting the counter.
     pub fn expiration_count(&self) -> u64 {
         self.magic.debug_check();
         self.internal.borrow().expiration_count
     }
 
-    pub fn expire_interval(&self) -> SimulationTime {
+    /// Returns the currently configured timer expiration interval if this timer is configured to
+    /// periodically expire, or None if the timer is configured for a one-shot expiration.
+    pub fn expire_interval(&self) -> Option<SimulationTime> {
         self.magic.debug_check();
         self.internal.borrow().expire_interval
     }
 
+    /// Returns the number of timer expirations that have occurred since the last time
+    /// [`Timer::consume_expiration_count()`] was called and resets the counter to zero.
     pub fn consume_expiration_count(&mut self) -> u64 {
         self.magic.debug_check();
         let mut internal = self.internal.borrow_mut();
@@ -86,10 +96,11 @@ impl Timer {
         Some(t.saturating_duration_since(&now))
     }
 
+    /// Deactivate the timer so that it does not issue `on_expire()` callback notifications.
     pub fn disarm(&mut self) {
         self.magic.debug_check();
         let mut internal = self.internal.borrow_mut();
-        internal.reset(None, SimulationTime::ZERO);
+        internal.reset(None, None);
     }
 
     fn timer_expire(
@@ -103,12 +114,14 @@ impl Timer {
             trace!("Expired Timer no longer exists.");
             return;
         };
+
         let mut internal_brw = internal.borrow_mut();
         trace!(
-            "timer expire check; expireID={} minValidExpireID={}",
-            expire_id,
+            "timer expire check; expireID={expire_id} minValidExpireID={}",
             internal_brw.min_valid_expire_id
         );
+
+        // The timer may have been canceled/disarmed after we scheduled the callback task.
         if expire_id < internal_brw.min_valid_expire_id {
             // Cancelled.
             return;
@@ -121,10 +134,14 @@ impl Timer {
             return;
         }
 
+        // Now we know it's a valid expiration.
         internal_brw.expiration_count += 1;
-        if internal_brw.expire_interval > SimulationTime::ZERO {
-            internal_brw.next_expire_time =
-                Some(internal_brw.next_expire_time.unwrap() + internal_brw.expire_interval);
+
+        // A timer configured with an interval continues to periodically expire.
+        if let Some(interval) = internal_brw.expire_interval {
+            // The interval must be positive.
+            debug_assert!(interval.is_positive());
+            internal_brw.next_expire_time = Some(next_expire_time + interval);
             Self::schedule_new_expire_event(&mut internal_brw, internal_weak.clone(), host);
         }
 
@@ -158,9 +175,28 @@ impl Timer {
         host.schedule_task_at_emulated_time(task, time);
     }
 
-    pub fn arm(&mut self, host: &Host, expire_time: EmulatedTime, expire_interval: SimulationTime) {
+    /// Activate the timer so that it starts issuing `on_expire()` callback notifications.
+    ///
+    /// The `expire_time` instant specifies the next time that the timer will expire and issue an
+    /// `on_expire()` notification callback. The `expire_interval` duration is optional: if `Some`,
+    /// it configures the timer in periodic mode where it issues `on_expire()` notification
+    /// callbacks every interval of time; if `None`, the timer is configured in one-shot mode and
+    /// will become disarmed after the first expiration.
+    ///
+    /// Panics if `expire_time` is in the past or if `expire_interval` is `Some` but not positive.
+    pub fn arm(
+        &mut self,
+        host: &Host,
+        expire_time: EmulatedTime,
+        expire_interval: Option<SimulationTime>,
+    ) {
         self.magic.debug_check();
         debug_assert!(expire_time >= Worker::current_time().unwrap());
+
+        // None is a valid expire interval, but zero is not.
+        if let Some(interval) = expire_interval {
+            debug_assert!(interval.is_positive());
+        }
 
         let mut internal = self.internal.borrow_mut();
         internal.reset(Some(expire_time), expire_interval);
@@ -211,7 +247,11 @@ pub mod export {
         let host = unsafe { host.as_ref().unwrap() };
         let nextExpireTime = EmulatedTime::from_c_emutime(nextExpireTime).unwrap();
         let expireInterval = SimulationTime::from_c_simtime(expireInterval).unwrap();
-        timer.arm(host, nextExpireTime, expireInterval)
+        timer.arm(
+            host,
+            nextExpireTime,
+            expireInterval.is_positive().then_some(expireInterval),
+        )
     }
 
     /// # Safety
