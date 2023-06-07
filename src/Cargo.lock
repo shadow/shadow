@@ -1077,13 +1077,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pod"
-version = "0.1.0"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "posix-errno"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1467,6 +1460,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadow-pod"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "shadow-rs"
 version = "3.0.0"
 dependencies = [
@@ -1492,7 +1492,6 @@ dependencies = [
  "nix",
  "once_cell",
  "petgraph",
- "pod",
  "rand",
  "rand_chacha",
  "rand_core",
@@ -1504,6 +1503,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shadow-build-common",
+ "shadow-pod",
  "shadow-shim-helper-rs",
  "shadow_shmem",
  "shadow_tsc",
@@ -1562,8 +1562,8 @@ dependencies = [
  "logger",
  "nix",
  "once_cell",
- "pod",
  "shadow-build-common",
+ "shadow-pod",
  "static_assertions",
  "vasi",
 ]

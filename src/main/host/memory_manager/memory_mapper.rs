@@ -14,7 +14,7 @@ use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
 use nix::{fcntl, sys};
-use pod::Pod;
+use shadow_pod::Pod;
 use shadow_shim_helper_rs::notnull::*;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 

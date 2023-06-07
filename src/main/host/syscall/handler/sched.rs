@@ -1,6 +1,6 @@
 use log::warn;
 use nix::errno::Errno;
-use pod::Pod;
+use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 

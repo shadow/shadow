@@ -819,7 +819,7 @@ impl LegacyTcpSocket {
             return Err(Errno::EINVAL.into());
         }
 
-        let mut peer_addr: libc::sockaddr_in = pod::zeroed();
+        let mut peer_addr: libc::sockaddr_in = shadow_pod::zeroed();
         peer_addr.sin_family = libc::AF_INET as u16;
         let mut accepted_fd = -1;
 
@@ -924,7 +924,7 @@ impl LegacyTcpSocket {
     ) -> Result<libc::socklen_t, SyscallError> {
         match (level, optname) {
             (libc::SOL_TCP, libc::TCP_INFO) => {
-                let mut info = pod::zeroed();
+                let mut info = shadow_pod::zeroed();
                 unsafe { c::tcp_getInfo(self.as_legacy_tcp(), &mut info) };
 
                 let optval_ptr = optval_ptr.cast::<crate::cshadow::tcp_info>();

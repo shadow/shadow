@@ -23,7 +23,7 @@ pub mod cshadow {
 
 // shadow re-exports this definition from /usr/include/linux/tcp.h
 // TODO: Provide this via the linux-api crate instead.
-unsafe impl pod::Pod for crate::cshadow::tcp_info {}
+unsafe impl shadow_pod::Pod for crate::cshadow::tcp_info {}
 
 // check that the size and alignment of `CompatUntypedForeignPtr` and `ForeignPtr<()>` are the same`
 static_assertions::assert_eq_size!(

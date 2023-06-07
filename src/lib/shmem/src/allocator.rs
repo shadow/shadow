@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use once_cell::sync::OnceCell;
-use pod::Pod;
+use shadow_pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::c_bindings;

@@ -139,7 +139,7 @@ pub fn read_sockaddr(
 /// # Ok(())
 /// # }
 /// ```
-pub fn write_partial<T: pod::Pod>(
+pub fn write_partial<T: shadow_pod::Pod>(
     mem: &mut MemoryManager,
     val: &T,
     val_ptr: ForeignPtr<T>,
@@ -147,7 +147,7 @@ pub fn write_partial<T: pod::Pod>(
 ) -> Result<usize, Errno> {
     let val_len_bytes = std::cmp::min(val_len_bytes, std::mem::size_of_val(val));
 
-    let val = &pod::as_u8_slice(val)[..val_len_bytes];
+    let val = &shadow_pod::as_u8_slice(val)[..val_len_bytes];
 
     let val_ptr = val_ptr.cast::<MaybeUninit<u8>>();
     let val_ptr = ForeignArrayPtr::new(val_ptr, val_len_bytes);
