@@ -265,9 +265,9 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_recv_flag_trunc"),
                             move || test_recv_flag_trunc(sys_method, init_method, sock_type, flag),
-                            match init_method.domain() {
-                                // TODO: enable if shadow supports MSG_TRUNC for inet sockets
-                                libc::AF_INET => set![TestEnv::Libc],
+                            match (init_method.domain(), sock_type) {
+                                // TODO: enable if shadow supports MSG_TRUNC for tcp sockets
+                                (libc::AF_INET, libc::SOCK_STREAM) => set![TestEnv::Libc],
                                 _ => set![TestEnv::Libc, TestEnv::Shadow],
                             },
                         ),

@@ -437,8 +437,14 @@ impl UdpSocket {
             packet.add_status(PacketStatus::RcvSocketDelivered);
             let bytes_read = packet.copy_payload(args.iovs, mem)?;
 
+            let return_val = if flags.contains(MsgFlags::MSG_TRUNC) {
+                packet.payload_size()
+            } else {
+                bytes_read
+            };
+
             Ok(RecvmsgReturn {
-                return_val: bytes_read.try_into().unwrap(),
+                return_val: return_val.try_into().unwrap(),
                 addr: Some(packet.src_address().into()),
                 msg_flags: 0,
                 control_len: 0,
