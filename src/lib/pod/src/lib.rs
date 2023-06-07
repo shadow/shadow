@@ -1,3 +1,5 @@
+//! Utilities for working with POD (Plain Old Data)
+
 #![no_std]
 
 use core::mem::MaybeUninit;
@@ -11,6 +13,11 @@ use core::mem::MaybeUninit;
 /// We require `Copy` to also rule out anything that implements `Drop`.
 ///
 /// References are inherently non-Pod, so we can require a 'static lifetime.
+///
+/// This is very *similar* in concept to `bytemuck::AnyBitPattern`. However,
+/// unlike `AnyBitPattern`, this trait does not say anything about how the type
+/// can be safely shared. e.g. while `bytemuck::AnyBitPattern` disallows pointer
+/// types, [`Pod`] does not.
 ///
 /// # Safety
 ///
