@@ -26,5 +26,29 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod errno;
 pub mod sched;
 pub mod signal;
+pub mod time;
+
+// Internally we often end up needing to convert from types that bindgen inferred, in const
+// contexts.
+//
+// We could use `as`, but it'd be easy to accidentally truncate, especially if
+// the constant we're converting isn't the type we thought it was.
+//
+// Because these are in const contexts, we can't use `try_from`.
+mod const_conversions {
+    pub const fn u64_from_u32(val: u32) -> u64 {
+        // Guaranteed not to truncate
+        val as u64
+    }
+
+    pub const fn i32_from_u32(val: u32) -> i32 {
+        // Maybe not strictly necessary for safety, but probably
+        // a mistake of some kind if this fails.
+        assert!(val <= (i32::MAX as u32));
+
+        val as i32
+    }
+}

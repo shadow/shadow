@@ -753,6 +753,8 @@ dependencies = [
  "bitflags 2.3.1",
  "bytemuck",
  "cbindgen",
+ "linux-errno",
+ "linux-syscall",
  "log",
  "memoffset 0.9.0",
  "num_enum",
@@ -800,6 +802,7 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "cc",
+ "linux-api",
  "shadow-build-common",
 ]
 

@@ -1,4 +1,4 @@
-use crate::bindings;
+use crate::{bindings, const_conversions};
 
 bitflags::bitflags! {
     /// The flags passed to the `clone` and `clone3` syscalls.
@@ -8,30 +8,30 @@ bitflags::bitflags! {
     pub struct CloneFlags: u64 {
         const CLONE_CLEAR_SIGHAND = bindings::LINUX_CLONE_CLEAR_SIGHAND;
         const CLONE_INTO_CGROUP = bindings::LINUX_CLONE_INTO_CGROUP;
-        const CLONE_NEWTIME = bindings::LINUX_CLONE_NEWTIME as u64;
-        const CLONE_VM = bindings::LINUX_CLONE_VM as u64;
-        const CLONE_FS = bindings::LINUX_CLONE_FS as u64;
-        const CLONE_FILES = bindings::LINUX_CLONE_FILES as u64;
-        const CLONE_SIGHAND = bindings::LINUX_CLONE_SIGHAND as u64;
-        const CLONE_PIDFD = bindings::LINUX_CLONE_PIDFD as u64;
-        const CLONE_PTRACE = bindings::LINUX_CLONE_PTRACE as u64;
-        const CLONE_VFORK = bindings::LINUX_CLONE_VFORK as u64;
-        const CLONE_PARENT = bindings::LINUX_CLONE_PARENT as u64;
-        const CLONE_THREAD = bindings::LINUX_CLONE_THREAD as u64;
-        const CLONE_NEWNS = bindings::LINUX_CLONE_NEWNS as u64;
-        const CLONE_SYSVSEM = bindings::LINUX_CLONE_SYSVSEM as u64;
-        const CLONE_SETTLS = bindings::LINUX_CLONE_SETTLS as u64;
-        const CLONE_PARENT_SETTID = bindings::LINUX_CLONE_PARENT_SETTID as u64;
-        const CLONE_CHILD_CLEARTID = bindings::LINUX_CLONE_CHILD_CLEARTID as u64;
-        const CLONE_DETACHED = bindings::LINUX_CLONE_DETACHED as u64;
-        const CLONE_UNTRACED = bindings::LINUX_CLONE_UNTRACED as u64;
-        const CLONE_CHILD_SETTID = bindings::LINUX_CLONE_CHILD_SETTID as u64;
-        const CLONE_NEWCGROUP = bindings::LINUX_CLONE_NEWCGROUP as u64;
-        const CLONE_NEWUTS = bindings::LINUX_CLONE_NEWUTS as u64;
-        const CLONE_NEWIPC = bindings::LINUX_CLONE_NEWIPC as u64;
-        const CLONE_NEWUSER = bindings::LINUX_CLONE_NEWUSER as u64;
-        const CLONE_NEWPID = bindings::LINUX_CLONE_NEWPID as u64;
-        const CLONE_NEWNET = bindings::LINUX_CLONE_NEWNET as u64;
-        const CLONE_IO = bindings::LINUX_CLONE_IO as u64;
+        const CLONE_NEWTIME = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWTIME);
+        const CLONE_VM = const_conversions::u64_from_u32(bindings::LINUX_CLONE_VM);
+        const CLONE_FS = const_conversions::u64_from_u32(bindings::LINUX_CLONE_FS);
+        const CLONE_FILES = const_conversions::u64_from_u32(bindings::LINUX_CLONE_FILES);
+        const CLONE_SIGHAND = const_conversions::u64_from_u32(bindings::LINUX_CLONE_SIGHAND);
+        const CLONE_PIDFD = const_conversions::u64_from_u32(bindings::LINUX_CLONE_PIDFD);
+        const CLONE_PTRACE = const_conversions::u64_from_u32(bindings::LINUX_CLONE_PTRACE);
+        const CLONE_VFORK = const_conversions::u64_from_u32(bindings::LINUX_CLONE_VFORK);
+        const CLONE_PARENT = const_conversions::u64_from_u32(bindings::LINUX_CLONE_PARENT);
+        const CLONE_THREAD = const_conversions::u64_from_u32(bindings::LINUX_CLONE_THREAD);
+        const CLONE_NEWNS = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWNS);
+        const CLONE_SYSVSEM = const_conversions::u64_from_u32(bindings::LINUX_CLONE_SYSVSEM);
+        const CLONE_SETTLS = const_conversions::u64_from_u32(bindings::LINUX_CLONE_SETTLS);
+        const CLONE_PARENT_SETTID = const_conversions::u64_from_u32(bindings::LINUX_CLONE_PARENT_SETTID);
+        const CLONE_CHILD_CLEARTID = const_conversions::u64_from_u32(bindings::LINUX_CLONE_CHILD_CLEARTID);
+        const CLONE_DETACHED = const_conversions::u64_from_u32(bindings::LINUX_CLONE_DETACHED);
+        const CLONE_UNTRACED = const_conversions::u64_from_u32(bindings::LINUX_CLONE_UNTRACED);
+        const CLONE_CHILD_SETTID = const_conversions::u64_from_u32(bindings::LINUX_CLONE_CHILD_SETTID);
+        const CLONE_NEWCGROUP = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWCGROUP);
+        const CLONE_NEWUTS = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWUTS);
+        const CLONE_NEWIPC = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWIPC);
+        const CLONE_NEWUSER = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWUSER);
+        const CLONE_NEWPID = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWPID);
+        const CLONE_NEWNET = const_conversions::u64_from_u32(bindings::LINUX_CLONE_NEWNET);
+        const CLONE_IO = const_conversions::u64_from_u32(bindings::LINUX_CLONE_IO);
     }
 }

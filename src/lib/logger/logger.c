@@ -6,13 +6,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
-#include <sys/time.h>
-#include <time.h>
 #include <unistd.h>
+
+#include "lib/linux-api/linux-api.h"
 
 #define USEC_PER_SEC 1000000ULL
 
-_Noreturn void logger_abort() { abort(); }
+_Noreturn void logger_abort() {
+    linux_kill(0, LINUX_SIGABRT);
+    asm("ud2");
+    // Convince compiler that we really don't return.
+    while (1)
+        ;
+};
 
 // Process start time, initialized explicitly or on first use.
 static pthread_once_t _start_time_once = PTHREAD_ONCE_INIT;
@@ -29,9 +35,9 @@ static void _init_start_time() {
 }
 
 int64_t logger_now_micros() {
-    struct timespec res;
-    clock_gettime(CLOCK_REALTIME, &res);
-    return (res.tv_sec * USEC_PER_SEC) + (res.tv_nsec / 1000);
+    linux_timespec res;
+    linux_clock_gettime(CLOCK_REALTIME, &res);
+    return (res.ltv_sec * USEC_PER_SEC) + (res.ltv_nsec / 1000);
 }
 
 int64_t logger_get_global_start_time_micros() {
@@ -124,7 +130,7 @@ static void _stderrlogger_log(Logger* logger, LogLevel level, const char* fileNa
     buf[offset++] = '\n';
 
     if (write(STDERR_FILENO, buf, offset) < 0) {
-        abort();
+        logger_abort();
     }
 
     in_logger = false;
