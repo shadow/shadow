@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use once_cell::sync::OnceCell;
+use pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::c_bindings;
@@ -173,15 +174,12 @@ where
 /// A serialized descriptor for a `ShMemBlock`, suitable to be transferred
 /// across processes, which can be used to create a `ShMemBlockAlias` referencing
 /// the original `ShMemBlock`.
-///
-/// `[main::utility::pod::Pod]` is implemented for type.
-/// TODO: Move the implementation here, after moving the `pod` module
-/// out of `main`.
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: c_bindings::ShMemBlockSerialized,
 }
+unsafe impl Pod for ShMemBlockSerialized {}
 
 // SAFETY: This is a serialized blob, designed to be VASI.
 unsafe impl VirtualAddressSpaceIndependent for c_bindings::ShMemBlockSerialized {}

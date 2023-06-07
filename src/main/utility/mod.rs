@@ -13,7 +13,6 @@ pub mod interval_map;
 pub mod legacy_callback_queue;
 pub mod pcap_writer;
 pub mod perf_timer;
-pub mod pod;
 pub mod proc_maps;
 pub mod shm_cleanup;
 pub mod sockaddr;

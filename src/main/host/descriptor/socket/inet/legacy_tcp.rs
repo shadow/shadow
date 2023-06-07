@@ -22,7 +22,6 @@ use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::packet::PacketRc;
 use crate::utility::callback_queue::{CallbackQueue, Handle};
-use crate::utility::pod;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 

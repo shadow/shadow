@@ -24,13 +24,12 @@ use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
 use nix::{errno::Errno, unistd::Pid};
+use pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::host::thread::Thread;
-use crate::utility::pod;
-use crate::utility::pod::Pod;
 
 mod memory_copier;
 mod memory_mapper;

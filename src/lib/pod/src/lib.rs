@@ -275,10 +275,3 @@ unsafe impl Pod for libc::utmpx {}
 unsafe impl Pod for libc::utsname {}
 unsafe impl Pod for libc::winsize {}
 unsafe impl Pod for libc::clone_args {}
-
-// shadow re-exports this definition from /usr/include/linux/tcp.h
-unsafe impl Pod for crate::cshadow::tcp_info {}
-
-// TODO: Move this module out of `main` so that `shadow_shmem` can use it,
-// and put this with the struct definition.
-unsafe impl Pod for shadow_shmem::allocator::ShMemBlockSerialized {}

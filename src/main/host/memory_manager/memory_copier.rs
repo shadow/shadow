@@ -2,12 +2,11 @@ use std::fmt::Debug;
 
 use log::*;
 use nix::{errno::Errno, unistd::Pid};
+use pod::Pod;
 
 use crate::core::worker::Worker;
 use crate::host::memory_manager::page_size;
 use crate::host::syscall_types::ForeignArrayPtr;
-use crate::utility::pod;
-use crate::utility::pod::Pod;
 
 /// A utility for copying data to and from a process's memory.
 #[derive(Debug, Clone)]
