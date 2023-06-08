@@ -438,21 +438,21 @@ impl TryFrom<SysCallReg> for nix::sys::stat::Mode {
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::mman::ProtFlags {
+impl TryFrom<SysCallReg> for linux_api::mman::ProtFlags {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::mman::MapFlags {
+impl TryFrom<SysCallReg> for linux_api::mman::MapFlags {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::mman::MRemapFlags {
+impl TryFrom<SysCallReg> for linux_api::mman::MRemapFlags {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
