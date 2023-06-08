@@ -458,3 +458,10 @@ impl TryFrom<SysCallReg> for linux_api::mman::MRemapFlags {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
+
+impl TryFrom<SysCallReg> for linux_api::time::ClockId {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::try_from(i32::from(reg)).map_err(|_| ())
+    }
+}

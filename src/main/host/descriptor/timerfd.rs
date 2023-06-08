@@ -3,6 +3,7 @@ use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
 use linux_api::ioctls::IoctlRequest;
+use linux_api::posix_types::kernel_off_t;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::{
     emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
@@ -133,11 +134,11 @@ impl TimerFd {
     pub fn readv(
         &mut self,
         iovs: &[IoVec],
-        offset: Option<libc::off_t>,
-        _flags: libc::c_int,
+        offset: Option<kernel_off_t>,
+        _flags: std::ffi::c_int,
         mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<libc::ssize_t, SyscallError> {
+    ) -> Result<isize, SyscallError> {
         // TimerFds don't support seeking
         if offset.is_some() {
             return Err(Errno::ESPIPE.into());
@@ -147,7 +148,7 @@ impl TimerFd {
         // expirations that have occurred."
         const NUM_BYTES: usize = 8;
 
-        let len: libc::size_t = iovs.iter().map(|x| x.len).sum();
+        let len: usize = iovs.iter().map(|x| x.len).sum();
 
         // This check doesn't guarantee that we can write all bytes since the stream length is only
         // a hint.
@@ -176,11 +177,11 @@ impl TimerFd {
     pub fn writev(
         &mut self,
         _iovs: &[IoVec],
-        _offset: Option<libc::off_t>,
-        _flags: libc::c_int,
+        _offset: Option<kernel_off_t>,
+        _flags: std::ffi::c_int,
         _mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<libc::ssize_t, SyscallError> {
+    ) -> Result<isize, SyscallError> {
         // TimerFds don't support writing.
         Err(Errno::EINVAL.into())
     }

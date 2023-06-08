@@ -181,6 +181,7 @@ simple_debug_impl!(nix::sys::stat::Mode);
 simple_debug_impl!(linux_api::mman::ProtFlags);
 simple_debug_impl!(linux_api::mman::MapFlags);
 simple_debug_impl!(linux_api::mman::MRemapFlags);
+simple_debug_impl!(linux_api::time::ClockId);
 
 fn fmt_buffer(
     f: &mut std::fmt::Formatter<'_>,
