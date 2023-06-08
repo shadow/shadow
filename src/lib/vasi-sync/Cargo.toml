@@ -5,10 +5,7 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# TODO: drop non-no_std dependencies.
-# https://github.com/shadow/shadow/issues/2919
 [dependencies]
-rkyv = "0.7.41"
 rustix = { version = "0.37.19", default-features = false, features=["thread"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
