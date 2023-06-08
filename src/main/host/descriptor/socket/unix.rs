@@ -1484,7 +1484,7 @@ impl Protocol for ConnOrientedConnected {
             return Err(Errno::EINVAL.into());
         }
 
-        let (rv, num_removed_from_buf) =
+        let (rv, num_removed_from_buf, msg_flags) =
             common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
@@ -1502,7 +1502,7 @@ impl Protocol for ConnOrientedConnected {
         Ok(RecvmsgReturn {
             return_val: rv.try_into().unwrap(),
             addr: self.peer_addr.map(Into::into),
-            msg_flags: 0,
+            msg_flags,
             control_len: 0,
         })
     }
@@ -1690,7 +1690,7 @@ impl Protocol for ConnLessInitial {
             return Err(Errno::EINVAL.into());
         }
 
-        let (rv, num_removed_from_buf) =
+        let (rv, num_removed_from_buf, msg_flags) =
             common.recvmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
         let num_removed_from_buf = u64::try_from(num_removed_from_buf).unwrap();
 
@@ -1710,7 +1710,7 @@ impl Protocol for ConnLessInitial {
         Ok(RecvmsgReturn {
             return_val: rv.try_into().unwrap(),
             addr: byte_data.from_addr.map(Into::into),
-            msg_flags: 0,
+            msg_flags,
             control_len: 0,
         })
     }
@@ -2085,7 +2085,7 @@ impl UnixSocketCommon {
         flags: libc::c_int,
         mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(usize, usize), SyscallError> {
+    ) -> Result<(usize, usize, libc::c_int), SyscallError> {
         let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_TRUNC;
 
         // if there's a flag we don't support, it's probably best to raise an error rather than do
@@ -2124,16 +2124,22 @@ impl UnixSocketCommon {
                 .read(writer, cb_queue)
                 .map_err(|e| e.try_into().unwrap())?;
 
+            let mut msg_flags = 0;
+
             if flags.contains(MsgFlags::MSG_TRUNC)
                 && [UnixSocketType::Dgram, UnixSocketType::SeqPacket].contains(&self.socket_type)
             {
+                if num_copied < num_removed_from_buf {
+                    msg_flags |= libc::MSG_TRUNC;
+                }
+
                 // we're a message-based socket and MSG_TRUNC is set, so return the total size of
                 // the message, not the number of bytes we read
-                Ok((num_removed_from_buf, num_removed_from_buf))
+                Ok((num_removed_from_buf, num_removed_from_buf, msg_flags))
             } else {
                 // We're a stream-based socket. Unlike TCP sockets, unix stream sockets ignore the
                 // MSG_TRUNC flag.
-                Ok((num_copied, num_removed_from_buf))
+                Ok((num_copied, num_removed_from_buf, msg_flags))
             }
         })();
 

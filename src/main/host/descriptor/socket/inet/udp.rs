@@ -443,10 +443,13 @@ impl UdpSocket {
                 bytes_read
             };
 
+            let mut return_flags = MsgFlags::empty();
+            return_flags.set(MsgFlags::MSG_TRUNC, bytes_read < packet.payload_size());
+
             Ok(RecvmsgReturn {
                 return_val: return_val.try_into().unwrap(),
                 addr: Some(packet.src_address().into()),
-                msg_flags: 0,
+                msg_flags: return_flags.bits(),
                 control_len: 0,
             })
         })();
