@@ -1,4 +1,5 @@
 import urllib.request
+import subprocess
 
 '''
 This script is meant to generate our interpose list containing all x86_64
@@ -17,36 +18,158 @@ remap['eventfd'] = 'eventfd2' # libc eventfd() calls SYS_eventfd2
 
 # syscalls we should not generate C wrappers for
 skip = set()
+
 # glibc doesn't have these wrappers
-skip.add('eventfd2')
-skip.add('pselect6')
-skip.add('pread64')
-skip.add('pwrite64')
-skip.add('getdents')
-skip.add('getdents64')
-skip.add('restart_syscall')
-skip.add('kcmp')
-skip.add('kexec_file_load')
-skip.add('rseq')
-# the offset is split into two arguments
-skip.add('preadv')
-skip.add('preadv2')
-skip.add('pwritev')
-skip.add('pwritev2')
-# `exit` has a non-trivial wrapper that calls `atexit` hooks, flushes open
-# `FILE*` objects, etc.
-skip.add('exit')
+skip.update([
+    'close_range',
+    'eventfd2',
+    'fadvise64',
+    'futex_waitv',
+    'memfd_secret',
+    'newfstatat',
+    'getdents',
+    'getdents64',
+    'kcmp',
+    'kexec_file_load',
+    'open_tree',
+    'pread64',
+    'pselect6',
+    'pwrite64',
+    'restart_syscall',
+    'rseq',
+    'rt_sigaction',
+    'rt_sigprocmask',
+    'rt_sigpending',
+    'rt_sigreturn',
+    'rt_sigsuspend',
+    'rt_sigtimedwait',
+])
 
-# These have an optional `mode` argument, which the wrappers should initialize
-# to 0 when not provided by the caller.
-skip.add('open')
-skip.add('openat')
+# Manually implemented in libc_impls.c
+skip.update([
+    'open',
+    'openat',
+])
 
-# Returns NULL instead of -1 on error
-skip.add('getcwd')
+# Confirmed C library/kernel differences
+skip.update([
+    'brk',
+    'chmod',
+    'clone',
+    'clone3',
+    'epoll_pwait',
+    'epoll_pwait2',
+    'faccessat',
+    'faccessat2',
+    'fork',
+    'fstat',
+    'exit',
+    'getcwd',
+    'lstat',
+    'mq_notify',
+    'mq_open',
+    'poll',
+    'ppoll',
+    'preadv',
+    'preadv2',
+    'pwritev',
+    'pwritev2',
+    'sched_getaffinity',
+    'sched_setaffinity',
+    'select',
+    'setuid',
+    'sigaction',
+    'sigprocmask',
+    'signalfd',
+    'signalfd4',
+    'stat',
+    'timer_create',
+    'uname',
+    'wait4',
+    'waitid',
+])
 
-# Nontrivial wrapper
-skip.add('clone')
+# man page has "C library/kernel differences" or was missing. Skip pending review.
+skip.update([
+    'fchmod',
+    'fchmodat',
+    'fsconfig',
+    'fsmount',
+    'fsopen',
+    'fspick',
+    'getgroups',
+    'getpriority',
+    'io_pgetevents',
+    'io_uring_enter',
+    'io_uring_register',
+    'io_uring_setup',
+    'landlock_add_rule',
+    'landlock_create_ruleset',
+    'landlock_restrict_self',
+    'mount_setattr',
+    'move_mount',
+    'process_madvise',
+    'process_mrelease',
+    'ptrace',
+    'quotactl_fd',
+    'set_mempolicy_home_node',
+    'setfsgid',
+    'setfsuid',
+    'setgid',
+    'setgroups',
+    'sethostname',
+    'setpriority',
+    'setregid',
+    'setresgid',
+    'setresuid',
+    'setreuid',
+])
+
+ignore_differences = set([
+    # man page notes that clock_gettime may go through VDSO. That's ok.
+    'clock_gettime',
+    'clock_getres',
+    'clock_settime',
+
+    # man page notes that gettimeofday may go through VDSO. That's ok.
+    'gettimeofday',
+    'settimeofday',
+
+    # man page notes that it may go through VDSO. That's ok.
+    'time',
+
+    # man page notes differences for other syscalls on same page.
+    'creat',
+
+    # eventfd uses eventfd2 syscall. We remap this correctly.
+    'eventfd',
+
+    # man page notes that epoll_pwait has differences. epoll_wait should be ok.
+    'epoll_wait',
+
+    # man page notes that some versions of libc cache the pid. Skipping that
+    # behavior shouldn't break anything.
+    'getpid',
+    'getppid',
+
+    # the glibc wrapper actually uses the mmap2 syscall. Using the mmap
+    # syscall shouldn't hurt anything, though.
+    'mmap',
+    'munmap',
+
+    # man page notes that preadv and pwritev have differences. These ones
+    # are on the same page but don't have documented differences.
+    'readv',
+    'writev',
+
+    # man page notes that faccessat and faccessat2 have differences.
+    'access',
+
+    # man page says to *check for* sections called "C library/kernel differences"
+    # when intercepting syscalls.
+    # Doesn't actually have such a section itself.
+    'seccomp',
+])
 
 # syscall wrappers that return errors directly instead of through errno.
 direct_errors = set()
@@ -96,14 +219,21 @@ with open('syscall_wrappers.c', 'w') as outf:
         num, entry = syscalls[name]
         if name in skip:
             print(f'// Skipping SYS_{name}', file=outf)
+            continue
+        if name not in ignore_differences:
+            try:
+                man = subprocess.check_output(["man", "2", name], encoding="utf8", stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                print(f"Warning: SYS_{name}: couldn't find man page")
+            if "C library/kernel differences" in man:
+                print(f"Warning: SYS_{name}: man page has 'C library/kernel differences'")
+        print(f'#ifdef SYS_{name} // kernel entry: num={num} func={entry}', file=outf)
+        if name in remap:
+            print(f'INTERPOSE_REMAP({name}, {remap[name]});', file=outf)
+        elif name in direct_errors:
+            print(f'INTERPOSE_DIRECT_ERRORS({name});', file=outf)
         else:
-            print(f'#ifdef SYS_{name} // kernel entry: num={num} func={entry}', file=outf)
-            if name in remap:
-                print(f'INTERPOSE_REMAP({name}, {remap[name]});', file=outf)
-            elif name in direct_errors:
-                print(f'INTERPOSE_DIRECT_ERRORS({name});', file=outf)
-            else:
-                print(f'INTERPOSE({name});', file=outf)
-            print('#endif', file=outf)
+            print(f'INTERPOSE({name});', file=outf)
+        print('#endif', file=outf)
 
     print('// clang-format on', file=outf)
