@@ -1035,18 +1035,7 @@ impl LegacyTcpSocket {
                 Ok(bytes_written as libc::socklen_t)
             }
             (libc::SOL_SOCKET, libc::SO_TYPE) => {
-                let protocol = unsafe { c::legacysocket_getProtocol(self.as_legacy_socket()) };
-
-                let sock_type = match protocol {
-                    c::_ProtocolType_PMOCK => {
-                        panic!("mock socket should not appear outside of tests")
-                    }
-                    c::_ProtocolType_PNONE => panic!("socket has no protocol"),
-                    c::_ProtocolType_PLOCAL => panic!("socket is a PLOCAL socket"),
-                    c::_ProtocolType_PTCP => libc::SOCK_STREAM,
-                    c::_ProtocolType_PUDP => libc::SOCK_DGRAM,
-                    _ => unimplemented!(),
-                };
+                let sock_type = libc::SOCK_STREAM;
 
                 let optval_ptr = optval_ptr.cast::<libc::c_int>();
                 let bytes_written =
