@@ -173,7 +173,7 @@ safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
-simple_debug_impl!(nix::fcntl::OFlag);
+simple_debug_impl!(linux_api::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);

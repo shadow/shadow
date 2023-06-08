@@ -403,7 +403,7 @@ impl std::fmt::Debug for SysCallReg {
 
 // implement conversions from `SysCallReg`
 
-impl TryFrom<SysCallReg> for nix::fcntl::OFlag {
+impl TryFrom<SysCallReg> for linux_api::fcntl::OFlag {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
