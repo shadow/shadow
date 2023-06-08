@@ -265,9 +265,9 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         test_utils::ShadowTest::new(
                             &append_args("test_recv_flag_trunc"),
                             move || test_recv_flag_trunc(sys_method, init_method, sock_type, flag),
-                            match init_method.domain() {
-                                // TODO: enable if shadow supports MSG_TRUNC for inet sockets
-                                libc::AF_INET => set![TestEnv::Libc],
+                            match (init_method.domain(), sock_type) {
+                                // TODO: enable if shadow supports MSG_TRUNC for tcp sockets
+                                (libc::AF_INET, libc::SOCK_STREAM) => set![TestEnv::Libc],
                                 _ => set![TestEnv::Libc, TestEnv::Shadow],
                             },
                         ),
@@ -1190,7 +1190,7 @@ fn test_recv_flag_trunc(
             ..Default::default()
         };
 
-        let rv = check_recv_call(&mut args, sys_method, &[], false)?;
+        let (rv, msg_flags) = check_recv_call(&mut args, sys_method, &[], false)?;
 
         if sock_type == libc::SOCK_STREAM {
             test_utils::result_assert_eq(rv, 200, "Expected to read the buffer size")?;
@@ -1206,12 +1206,28 @@ fn test_recv_flag_trunc(
                     "Expected the buffer to be changed",
                 )?;
             }
+
+            if sys_method != SendRecvMethod::ToFrom {
+                // MSG_TRUNC should not be set in msg_flags
+                test_utils::result_assert(
+                    libc::MSG_TRUNC & msg_flags.unwrap() == 0,
+                    "MSG_TRUNC was unexpectedly set",
+                )?;
+            }
         } else {
             test_utils::result_assert_eq(rv, 500, "Expected to read the original msg size")?;
             test_utils::result_assert(
                 buf.iter().all(|&x| x == 1),
                 "Expected the buffer to be changed",
             )?;
+
+            if sys_method != SendRecvMethod::ToFrom {
+                // MSG_TRUNC should be set in msg_flags
+                test_utils::result_assert(
+                    libc::MSG_TRUNC & msg_flags.unwrap() != 0,
+                    "MSG_TRUNC was not set",
+                )?;
+            }
         }
 
         Ok(())
@@ -1960,7 +1976,7 @@ fn simple_recvfrom_helper(
         ..Default::default()
     };
 
-    check_recv_call(&mut args, sys_method, errnos, verify_num_bytes)
+    Ok(check_recv_call(&mut args, sys_method, errnos, verify_num_bytes)?.0)
 }
 
 fn check_send_call(
@@ -2042,12 +2058,13 @@ fn check_send_call(
     Ok(rv)
 }
 
+/// Returns the return value of the recv, and the `msg_flags` if recvmsg or recvmmsg were used.
 fn check_recv_call(
     args: &mut RecvfromArguments,
     sys_method: SendRecvMethod,
     expected_errnos: &[libc::c_int],
     verify_num_bytes: bool,
-) -> Result<libc::ssize_t, String> {
+) -> Result<(libc::ssize_t, Option<libc::c_int>), String> {
     let (addr_ptr, addr_max_len) = match args.addr {
         Some(ref mut x) => (x.as_mut_ptr(), x.ptr_size()),
         None => (std::ptr::null_mut(), 0),
@@ -2067,20 +2084,23 @@ fn check_recv_call(
         None => std::ptr::null_mut(),
     };
 
-    let rv = match sys_method {
-        SendRecvMethod::ToFrom => test_utils::check_system_call!(
-            || unsafe {
-                libc::recvfrom(
-                    args.fd,
-                    buf_ptr as *mut core::ffi::c_void,
-                    args.len,
-                    args.flags,
-                    addr_ptr,
-                    args.addr_len.as_mut_ptr(),
-                )
-            },
-            expected_errnos,
-        )?,
+    let (rv, msg_flags) = match sys_method {
+        SendRecvMethod::ToFrom => {
+            let rv = test_utils::check_system_call!(
+                || unsafe {
+                    libc::recvfrom(
+                        args.fd,
+                        buf_ptr as *mut core::ffi::c_void,
+                        args.len,
+                        args.flags,
+                        addr_ptr,
+                        args.addr_len.as_mut_ptr(),
+                    )
+                },
+                expected_errnos,
+            )?;
+            (rv, None)
+        }
         SendRecvMethod::Msg => {
             let mut iov = libc::iovec {
                 iov_base: buf_ptr as *mut core::ffi::c_void,
@@ -2102,7 +2122,7 @@ fn check_recv_call(
             if let Some(ref mut addr_len) = args.addr_len {
                 *addr_len = msg.msg_namelen;
             }
-            rv
+            (rv, Some(msg.msg_flags))
         }
         SendRecvMethod::Mmsg => {
             todo!();
@@ -2121,5 +2141,5 @@ fn check_recv_call(
         )?;
     }
 
-    Ok(rv)
+    Ok((rv, msg_flags))
 }
