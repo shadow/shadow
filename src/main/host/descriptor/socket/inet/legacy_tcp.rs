@@ -1063,6 +1063,15 @@ impl LegacyTcpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_ACCEPTCONN) => {
+                let is_listener = unsafe { c::tcp_isValidListener(self.as_legacy_tcp()) };
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &is_listener, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             _ => {
                 log::warn!("getsockopt called with unsupported level {level} and opt {optname}");
                 Err(Errno::ENOPROTOOPT.into())
