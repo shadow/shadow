@@ -674,6 +674,14 @@ impl UdpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_DOMAIN) => {
+                let domain = libc::AF_INET;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &domain, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, libc::SO_TYPE) => {
                 let sock_type = libc::SOCK_DGRAM;
 

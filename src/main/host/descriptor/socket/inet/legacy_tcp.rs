@@ -1025,6 +1025,15 @@ impl LegacyTcpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_DOMAIN) => {
+                let domain = libc::AF_INET;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &domain, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, libc::SO_TYPE) => {
                 let protocol = unsafe { c::legacysocket_getProtocol(self.as_legacy_socket()) };
 
