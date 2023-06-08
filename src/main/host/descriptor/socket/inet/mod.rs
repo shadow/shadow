@@ -10,7 +10,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
-use crate::host::network::namespace::NetworkNamespace;
+use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
 use crate::network::packet::PacketRc;
@@ -391,14 +391,15 @@ impl InetSocketWeak {
 /// Associate the socket with a network interface. If the local address is unspecified, the socket
 /// will be associated with every available interface. If the local address has a port of 0, a
 /// non-zero port will be chosen. The final local address will be returned. If the peer address is
-/// unspecified and has a port of 0, the socket will receive packets from every peer address.
+/// unspecified and has a port of 0, the socket will receive packets from every peer address. The
+/// socket will be automatically disassociated when the returned [`AssociationHandle`] is dropped.
 fn associate_socket(
     socket: InetSocket,
     local_addr: SocketAddrV4,
     peer_addr: SocketAddrV4,
     net_ns: &NetworkNamespace,
     rng: impl rand::Rng,
-) -> Result<SocketAddrV4, SyscallError> {
+) -> Result<(SocketAddrV4, AssociationHandle), SyscallError> {
     log::trace!("Trying to associate socket with addresses (local={local_addr}, peer={peer_addr})");
 
     if !local_addr.ip().is_unspecified() && net_ns.interface_borrow(*local_addr.ip()).is_none() {
@@ -440,9 +441,9 @@ fn associate_socket(
     let socket = unsafe { c::compatsocket_fromInetSocket(&socket) };
 
     // associate the interfaces corresponding to addr with socket
-    unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
+    let handle = unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
 
-    Ok(local_addr)
+    Ok((local_addr, handle))
 }
 
 mod export {

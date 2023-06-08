@@ -10,6 +10,7 @@ use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::support::configuration::QDiscMode;
+use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::network::interface::{NetworkInterface, PcapOptions};
@@ -239,6 +240,9 @@ impl NetworkNamespace {
         None
     }
 
+    /// Associate the socket with any applicable network interfaces. The socket will be
+    /// automatically disassociated when the returned handle is dropped.
+    ///
     /// # Safety
     ///
     /// Pointer args must be safely dereferenceable.
@@ -248,7 +252,7 @@ impl NetworkNamespace {
         protocol: cshadow::ProtocolType,
         bind_addr: SocketAddrV4,
         peer_addr: SocketAddrV4,
-    ) {
+    ) -> AssociationHandle {
         if bind_addr.ip().is_unspecified() {
             // need to associate all interfaces
             self.localhost
@@ -263,8 +267,19 @@ impl NetworkNamespace {
                 iface.associate(socket, protocol, bind_addr.port(), peer_addr);
             }
         }
+
+        AssociationHandle {
+            protocol,
+            local_addr: bind_addr,
+            remote_addr: peer_addr,
+        }
     }
 
+    /// Disassociate the socket associated using the local and remote addresses from all network
+    /// interfaces.
+    ///
+    /// Is only public so that it can be called from `host_disassociateInterface`. Normally this
+    /// should only be called from the [`AssociationHandle`].
     pub fn disassociate_interface(
         &self,
         protocol: cshadow::ProtocolType,
@@ -305,4 +320,27 @@ struct InterfaceOptions {
     pub ip: Ipv4Addr,
     pub pcap: Option<PcapOptions>,
     pub qdisc: QDiscMode,
+}
+
+/// A handle for a socket association with a network interface(s). The network association will be
+/// dissolved when this handle is dropped (similar to
+/// [`callback_queue::Handle`](crate::utility::callback_queue::Handle)).
+#[derive(Debug)]
+pub struct AssociationHandle {
+    protocol: cshadow::ProtocolType,
+    local_addr: SocketAddrV4,
+    remote_addr: SocketAddrV4,
+}
+
+impl std::ops::Drop for AssociationHandle {
+    fn drop(&mut self) {
+        Worker::with_active_host(|host| {
+            host.network_namespace_borrow().disassociate_interface(
+                self.protocol,
+                self.local_addr,
+                self.remote_addr,
+            );
+        })
+        .unwrap();
+    }
 }
