@@ -1904,12 +1904,10 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "libc",
- "linux-errno",
- "linux-syscall",
  "loom",
- "nix",
  "rand",
  "rkyv",
+ "rustix",
  "static_assertions",
  "vasi",
 ]

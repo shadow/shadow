@@ -199,8 +199,8 @@ impl<T> SelfContainedMutex<T> {
                     break;
                 }
                 match sync::futex_wait(&self.futex.0, current.into()) {
-                    Ok(_) | Err(nix::errno::Errno::EINTR) => break,
-                    Err(nix::errno::Errno::EAGAIN) => {
+                    Ok(_) | Err(rustix::io::Errno::INTR) => break,
+                    Err(rustix::io::Errno::AGAIN) => {
                         // We may have gotten this because another thread is
                         // also trying to sleep on the futex, and just
                         // incremented the sleeper count. If we naively
