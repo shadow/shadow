@@ -171,6 +171,21 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
+                    &append_args("test_so_domain"),
+                    move || test_so_domain(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_so_protocol"),
+                    move || test_so_protocol(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_so_acceptconn"),
+                    move || test_so_acceptconn(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
                     &append_args("test_tcp_info"),
                     move || test_tcp_info(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
@@ -653,6 +668,109 @@ fn test_so_type(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), Strin
             i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
 
         test_utils::result_assert_eq(returned_optval, sock_type, "Wrong socket type")?;
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the SO_DOMAIN option.
+fn test_so_domain(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_SOCKET;
+    let optname = libc::SO_DOMAIN;
+    let optval = 0i32.to_ne_bytes();
+
+    let mut get_args = GetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+    let mut set_args = SetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_getsockopt_call(&mut get_args, &[])?;
+        check_setsockopt_call(&mut set_args, &[libc::ENOPROTOOPT])?;
+
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+
+        test_utils::result_assert_eq(returned_optval, domain, "Wrong socket domain")?;
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the SO_PROTOCOL option.
+fn test_so_protocol(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_SOCKET;
+    let optname = libc::SO_PROTOCOL;
+    let optval = 0i32.to_ne_bytes();
+
+    let mut get_args = GetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+    let mut set_args = SetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_getsockopt_call(&mut get_args, &[])?;
+        check_setsockopt_call(&mut set_args, &[libc::ENOPROTOOPT])?;
+
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+
+        let expected_optval = match (domain, sock_type) {
+            (libc::AF_INET, libc::SOCK_STREAM) => libc::IPPROTO_TCP,
+            (libc::AF_INET, libc::SOCK_DGRAM) => libc::IPPROTO_UDP,
+            (libc::AF_UNIX, _) => 0,
+            _ => unimplemented!(),
+        };
+
+        test_utils::result_assert_eq(returned_optval, expected_optval, "Wrong socket protocol")?;
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the SO_ACCEPTCONN option.
+fn test_so_acceptconn(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_SOCKET;
+    let optname = libc::SO_ACCEPTCONN;
+    let optval = 0i32.to_ne_bytes();
+
+    let mut get_args = GetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+    let mut set_args = SetsockoptArguments::new(fd, level, optname, Some(optval.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_getsockopt_call(&mut get_args, &[])?;
+        check_setsockopt_call(&mut set_args, &[libc::ENOPROTOOPT])?;
+
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+
+        test_utils::result_assert_eq(
+            returned_optval,
+            0,
+            "Wrong value returned for SO_ACCEPTCONN before listen()",
+        )?;
+
+        let listen_rv = unsafe { libc::listen(fd, 100) };
+
+        check_getsockopt_call(&mut get_args, &[])?;
+        check_setsockopt_call(&mut set_args, &[libc::ENOPROTOOPT])?;
+
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+
+        // if listen() was successful, then expecting the sockopt val to be 1
+        let expected_optval = if listen_rv == 0 { 1 } else { 0 };
+
+        test_utils::result_assert_eq(
+            returned_optval,
+            expected_optval,
+            "Wrong value returned for SO_ACCEPTCONN after listen()",
+        )?;
 
         Ok(())
     })

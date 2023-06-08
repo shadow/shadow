@@ -1025,23 +1025,39 @@ impl LegacyTcpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
-            (libc::SOL_SOCKET, libc::SO_TYPE) => {
-                let protocol = unsafe { c::legacysocket_getProtocol(self.as_legacy_socket()) };
+            (libc::SOL_SOCKET, libc::SO_DOMAIN) => {
+                let domain = libc::AF_INET;
 
-                let sock_type = match protocol {
-                    c::_ProtocolType_PMOCK => {
-                        panic!("mock socket should not appear outside of tests")
-                    }
-                    c::_ProtocolType_PNONE => panic!("socket has no protocol"),
-                    c::_ProtocolType_PLOCAL => panic!("socket is a PLOCAL socket"),
-                    c::_ProtocolType_PTCP => libc::SOCK_STREAM,
-                    c::_ProtocolType_PUDP => libc::SOCK_DGRAM,
-                    _ => unimplemented!(),
-                };
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &domain, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_TYPE) => {
+                let sock_type = libc::SOCK_STREAM;
 
                 let optval_ptr = optval_ptr.cast::<libc::c_int>();
                 let bytes_written =
                     write_partial(memory_manager, &sock_type, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_PROTOCOL) => {
+                let protocol = libc::IPPROTO_TCP;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &protocol, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_ACCEPTCONN) => {
+                let is_listener = unsafe { c::tcp_isValidListener(self.as_legacy_tcp()) };
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written =
+                    write_partial(memory_manager, &is_listener, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }
