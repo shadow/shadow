@@ -465,3 +465,10 @@ impl TryFrom<SysCallReg> for linux_api::time::ClockId {
         Self::try_from(i32::from(reg)).map_err(|_| ())
     }
 }
+
+impl TryFrom<SysCallReg> for linux_api::time::ITimerId {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::try_from(i32::from(reg)).map_err(|_| ())
+    }
+}

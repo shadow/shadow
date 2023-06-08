@@ -9,8 +9,14 @@ use crate::errno::Errno;
 
 pub use bindings::linux___kernel_clockid_t;
 
-// Clocks
+/// Clocks
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+// clock_gettime syscall takes clockid_t, which is i32:
+// ```
+// kernel/time/posix-timers.c:SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
+// include/linux/types.h:typedef __kernel_clockid_t        clockid_t;
+// include/uapi/asm-generic/posix_types.h:typedef int              __kernel_clockid_t;
+// ```
 #[repr(i32)]
 #[allow(non_camel_case_types)]
 pub enum ClockId {
@@ -31,10 +37,28 @@ pub enum ClockId {
     CLOCK_TAI = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_TAI),
 }
 
+/// Interval timers
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+// getitimer takes `int`:
+// ```
+// kernel/time/itimer.c:SYSCALL_DEFINE2(getitimer, int, which, struct __kernel_old_itimerval __user *, value)
+// ```
+#[repr(i32)]
+#[allow(non_camel_case_types)]
+pub enum ITimerId {
+    ITIMER_REAL = const_conversions::i32_from_u32(bindings::LINUX_ITIMER_REAL),
+    ITIMER_VIRTUAL = const_conversions::i32_from_u32(bindings::LINUX_ITIMER_VIRTUAL),
+    ITIMER_PROF = const_conversions::i32_from_u32(bindings::LINUX_ITIMER_PROF),
+}
+
 pub use bindings::linux_timespec;
 #[allow(non_camel_case_types)]
 pub type timespec = linux_timespec;
 unsafe impl shadow_pod::Pod for timespec {}
+
+pub use bindings::linux_timeval;
+#[allow(non_camel_case_types)]
+pub type timeval = linux_timeval;
 
 pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<timespec, Errno> {
     let mut t = shadow_pod::zeroed();
@@ -52,6 +76,11 @@ pub use bindings::linux_itimerspec;
 #[allow(non_camel_case_types)]
 pub type itimerspec = linux_itimerspec;
 unsafe impl shadow_pod::Pod for itimerspec {}
+
+pub use bindings::linux_itimerval;
+#[allow(non_camel_case_types)]
+pub type itimerval = linux_itimerval;
+unsafe impl shadow_pod::Pod for itimerval {}
 
 mod export {
     use super::*;

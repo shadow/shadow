@@ -65,6 +65,7 @@ bindgen_flags+=("--allowlist-type=sigaction")
 bindgen_flags+=("--allowlist-type=__kernel_clockid_t")
 bindgen_flags+=("--allowlist-type=timespec")
 bindgen_flags+=("--allowlist-type=itimerspec")
+bindgen_flags+=("--allowlist-type=itimerval")
 
 # Sched types
 bindgen_flags+=("--allowlist-type=clone_args")

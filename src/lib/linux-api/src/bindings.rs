@@ -1436,6 +1436,47 @@ fn bindgen_test_layout_timespec() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_timeval {
+    pub tv_sec: linux___kernel_old_time_t,
+    pub tv_usec: linux___kernel_suseconds_t,
+}
+#[test]
+fn bindgen_test_layout_timeval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_timeval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_timeval>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_timeval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_usec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_usec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_itimerspec {
     pub it_interval: linux_timespec,
     pub it_value: linux_timespec,
@@ -1470,6 +1511,47 @@ fn bindgen_test_layout_itimerspec() {
         concat!(
             "Offset of field: ",
             stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_value)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_itimerval {
+    pub it_interval: linux_timeval,
+    pub it_value: linux_timeval,
+}
+#[test]
+fn bindgen_test_layout_itimerval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_itimerval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_itimerval>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_itimerval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
             "::",
             stringify!(it_value)
         )
