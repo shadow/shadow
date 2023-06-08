@@ -4,6 +4,7 @@
  */
 
 use test_utils::set;
+use test_utils::socket_utils::{socket_init_helper, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
 
 fn main() -> Result<(), String> {
@@ -38,13 +39,42 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             // add details to the test names to avoid duplicates
             let append_args = |s| format!("{} <domain={},sock_type={}>", s, domain, sock_type);
 
-            let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![test_utils::ShadowTest::new(
+            tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_tty"),
                 move || test_tty(domain, sock_type),
                 set![TestEnv::Libc, TestEnv::Shadow],
-            )];
+            )]);
+        }
+    }
 
-            tests.extend(more_tests);
+    let init_methods = [
+        SocketInitMethod::Inet,
+        SocketInitMethod::Unix,
+        SocketInitMethod::UnixSocketpair,
+    ];
+
+    for &init_method in init_methods.iter() {
+        let sock_types = match init_method.domain() {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types.iter() {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{s} <init_method={init_method:?}, sock_type={sock_type}>");
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_fionread"),
+                move || test_fionread(init_method, sock_type),
+                // TODO: this isn't supported yet in shadow for unix sockets
+                if init_method.domain() == libc::AF_UNIX {
+                    set![TestEnv::Libc]
+                } else {
+                    set![TestEnv::Libc, TestEnv::Shadow]
+                },
+            )]);
         }
     }
 
@@ -91,6 +121,65 @@ fn test_tty(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
         let errno = test_utils::get_errno();
         test_utils::result_assert_eq(rv, 0, "Unexpected return value from isatty()")?;
         test_utils::result_assert_eq(errno, libc::ENOTTY, "Unexpected errno from isatty()")?;
+
+        Ok(())
+    })
+}
+
+/// Test ioctl() using the `FIONREAD` ioctl request.
+fn test_fionread(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) =
+        socket_init_helper(init_method, sock_type, 0, /* bind_client = */ false);
+
+    /// Returns the value if successful, otherwise returns the errno.
+    fn ioctl_fionread(fd: libc::c_int) -> Result<libc::c_int, libc::c_int> {
+        let mut out: libc::c_int = 0;
+        let rv = unsafe { libc::ioctl(fd, libc::FIONREAD, &mut out) };
+        if rv != 0 {
+            return Err(test_utils::get_errno());
+        }
+        Ok(out)
+    }
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
+        // socket should have no data in recv buffer
+        test_utils::result_assert_eq(
+            ioctl_fionread(fd_client).map_err(|e| format!("Failed ioctl with errno {e}"))?,
+            0,
+            "Unexpected FIONREAD result",
+        )?;
+        test_utils::result_assert_eq(
+            ioctl_fionread(fd_peer).map_err(|e| format!("Failed ioctl with errno {e}"))?,
+            0,
+            "Unexpected FIONREAD result",
+        )?;
+
+        // send 9 bytes to the peer, split among multiple send() calls
+        let flags = nix::sys::socket::MsgFlags::empty();
+        nix::sys::socket::send(fd_client, &[1, 2, 3], flags).unwrap();
+        nix::sys::socket::send(fd_client, &[4, 5], flags).unwrap();
+        nix::sys::socket::send(fd_client, &[6, 7, 8, 9], flags).unwrap();
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // stream/seqpacket sockets return the number of bytes in recv buffer, dgram sockets return
+        // number of bytes in next message in recv buffer
+        let peer_expected_result = match sock_type {
+            libc::SOCK_STREAM | libc::SOCK_SEQPACKET => 9,
+            libc::SOCK_DGRAM => 3,
+            _ => unimplemented!(),
+        };
+        test_utils::result_assert_eq(
+            ioctl_fionread(fd_client).map_err(|e| format!("Failed ioctl with errno {e}"))?,
+            0,
+            "Unexpected FIONREAD result",
+        )?;
+        test_utils::result_assert_eq(
+            ioctl_fionread(fd_peer).map_err(|e| format!("Failed ioctl with errno {e}"))?,
+            peer_expected_result,
+            "Unexpected FIONREAD result",
+        )?;
 
         Ok(())
     })
