@@ -690,6 +690,14 @@ impl UdpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_PROTOCOL) => {
+                let protocol = libc::IPPROTO_UDP;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &protocol, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, _) => {
                 log::debug!("getsockopt called with unsupported level {level} and opt {optname}");
                 Err(Errno::ENOPROTOOPT.into())
