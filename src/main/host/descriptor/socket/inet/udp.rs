@@ -483,7 +483,13 @@ impl UdpSocket {
         match request {
             // equivalent to SIOCINQ
             libc::FIONREAD => {
-                let len = self.recv_buffer.len_bytes().try_into().unwrap();
+                let len = self
+                    .recv_buffer
+                    .peek_packet()
+                    .map(|p| p.payload_size())
+                    .unwrap_or(0)
+                    .try_into()
+                    .unwrap();
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
                 mem.write(arg_ptr, &len)?;
