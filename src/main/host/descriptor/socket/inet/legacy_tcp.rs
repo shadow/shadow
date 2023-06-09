@@ -3,6 +3,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -96,7 +97,7 @@ impl LegacyTcpSocket {
     pub fn get_status(&self) -> FileStatus {
         let o_flags = unsafe { c::legacyfile_getFlags(self.as_legacy_file()) };
         let o_flags =
-            nix::fcntl::OFlag::from_bits(o_flags).expect("Not a valid OFlag: {o_flags:?}");
+            linux_api::fcntl::OFlag::from_bits(o_flags).expect("Not a valid OFlag: {o_flags:?}");
         let (status, extra_flags) = FileStatus::from_o_flags(o_flags);
         assert!(
             extra_flags.is_empty(),
@@ -536,13 +537,13 @@ impl LegacyTcpSocket {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
         match request {
             // equivalent to SIOCINQ
-            libc::FIONREAD => {
+            IoctlRequest::FIONREAD => {
                 let len = unsafe { c::tcp_getInputBufferLength(self.as_legacy_tcp()) }
                     .try_into()
                     .unwrap();
@@ -553,7 +554,7 @@ impl LegacyTcpSocket {
                 Ok(0.into())
             }
             // equivalent to SIOCOUTQ
-            libc::TIOCOUTQ => {
+            IoctlRequest::TIOCOUTQ => {
                 let len = unsafe { c::tcp_getOutputBufferLength(self.as_legacy_tcp()) }
                     .try_into()
                     .unwrap();
@@ -563,7 +564,7 @@ impl LegacyTcpSocket {
 
                 Ok(0.into())
             }
-            libc::SIOCOUTQNSD => {
+            IoctlRequest::SIOCOUTQNSD => {
                 let len = unsafe { c::tcp_getNotSentBytes(self.as_legacy_tcp()) }
                     .try_into()
                     .unwrap();
@@ -573,24 +574,26 @@ impl LegacyTcpSocket {
 
                 Ok(0.into())
             }
-            libc::FIONBIO => {
+            IoctlRequest::FIONBIO => {
                 panic!("This should have been handled by the ioctl syscall handler");
             }
-            libc::TCGETS
-            | libc::TCSETS
-            | libc::TCSETSW
-            | libc::TCSETSF
-            | libc::TCGETA
-            | libc::TCSETA
-            | libc::TCSETAW
-            | libc::TCSETAF
-            | libc::TIOCGWINSZ
-            | libc::TIOCSWINSZ => {
+            IoctlRequest::TCGETS
+            | IoctlRequest::TCSETS
+            | IoctlRequest::TCSETSW
+            | IoctlRequest::TCSETSF
+            | IoctlRequest::TCGETA
+            | IoctlRequest::TCSETA
+            | IoctlRequest::TCSETAW
+            | IoctlRequest::TCSETAF
+            | IoctlRequest::TIOCGWINSZ
+            | IoctlRequest::TIOCSWINSZ => {
                 // not a terminal
                 Err(Errno::ENOTTY.into())
             }
-            _ => {
-                log::warn!("We do not yet handle ioctl request {request} on tcp sockets");
+            request => {
+                warn_once_then_debug!(
+                    "(LOG_ONCE) We do not yet handle ioctl request {request:?} on tcp sockets"
+                );
                 Err(Errno::EINVAL.into())
             }
         }

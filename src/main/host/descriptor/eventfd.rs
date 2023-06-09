@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -181,11 +182,11 @@ impl EventFd {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        log::warn!("We do not yet handle ioctl request {} on eventfds", request);
+        log::warn!("We do not yet handle ioctl request {request:?} on eventfds");
         Err(Errno::EINVAL.into())
     }
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -237,11 +238,11 @@ impl Pipe {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        log::warn!("We do not yet handle ioctl request {} on pipes", request);
+        log::warn!("We do not yet handle ioctl request {request:?} on pipes");
         Err(Errno::EINVAL.into())
     }
 

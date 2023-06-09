@@ -1,37 +1,36 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::fcntl::DescriptorFlags;
 use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
 use syscall_logger::log_syscall;
 
 use crate::host::descriptor::eventfd;
-use crate::host::descriptor::{
-    CompatFile, Descriptor, DescriptorFlags, File, FileStatus, OpenFile,
-};
+use crate::host::descriptor::{CompatFile, Descriptor, File, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint)]
-    pub fn eventfd(ctx: &mut SyscallContext, init_val: libc::c_uint) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* initval */ std::ffi::c_uint)]
+    pub fn eventfd(ctx: &mut SyscallContext, init_val: std::ffi::c_uint) -> SyscallResult {
         Self::eventfd_helper(ctx, init_val, 0)
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* initval */ libc::c_uint,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* initval */ std::ffi::c_uint,
                   /* flags */ nix::sys::eventfd::EfdFlags)]
     pub fn eventfd2(
         ctx: &mut SyscallContext,
-        init_val: libc::c_uint,
-        flags: libc::c_int,
+        init_val: std::ffi::c_uint,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         Self::eventfd_helper(ctx, init_val, flags)
     }
 
     fn eventfd_helper(
         ctx: &mut SyscallContext,
-        init_val: libc::c_uint,
-        flags: libc::c_int,
+        init_val: std::ffi::c_uint,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         log::trace!(
             "eventfd() called with initval {} and flags {}",
@@ -57,7 +56,7 @@ impl SyscallHandler {
         }
 
         if flags.contains(EfdFlags::EFD_CLOEXEC) {
-            descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+            descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
         }
 
         if flags.contains(EfdFlags::EFD_SEMAPHORE) {

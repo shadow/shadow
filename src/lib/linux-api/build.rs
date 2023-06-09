@@ -7,7 +7,11 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let config = cbindgen::Config {
         include_guard: Some("linux_kernel_types_h".into()),
         export: cbindgen::ExportConfig {
-            include: vec!["linux_sigaction".into(), "linux_siginfo_t".into()],
+            include: vec![
+                "linux_sigaction".into(),
+                "linux_siginfo_t".into(),
+                "linux___kernel_mode_t".into(),
+            ],
             // Not sure why cbindgen tries to wrap this. The bindings it generates
             // are broken though because the individual Errno values are translated
             // as e.g. `bindings_LINUX_EINVAL` instead of `LINUX_EINVAL`.

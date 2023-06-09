@@ -136,6 +136,233 @@ pub const LINUX_EOWNERDEAD: u32 = 130;
 pub const LINUX_ENOTRECOVERABLE: u32 = 131;
 pub const LINUX_ERFKILL: u32 = 132;
 pub const LINUX_EHWPOISON: u32 = 133;
+pub const LINUX___BITS_PER_LONG: u32 = 64;
+pub const LINUX___FD_SETSIZE: u32 = 1024;
+pub const LINUX_O_ACCMODE: u32 = 3;
+pub const LINUX_O_RDONLY: u32 = 0;
+pub const LINUX_O_WRONLY: u32 = 1;
+pub const LINUX_O_RDWR: u32 = 2;
+pub const LINUX_O_CREAT: u32 = 64;
+pub const LINUX_O_EXCL: u32 = 128;
+pub const LINUX_O_NOCTTY: u32 = 256;
+pub const LINUX_O_TRUNC: u32 = 512;
+pub const LINUX_O_APPEND: u32 = 1024;
+pub const LINUX_O_NONBLOCK: u32 = 2048;
+pub const LINUX_O_DSYNC: u32 = 4096;
+pub const LINUX_FASYNC: u32 = 8192;
+pub const LINUX_O_DIRECT: u32 = 16384;
+pub const LINUX_O_LARGEFILE: u32 = 32768;
+pub const LINUX_O_DIRECTORY: u32 = 65536;
+pub const LINUX_O_NOFOLLOW: u32 = 131072;
+pub const LINUX_O_NOATIME: u32 = 262144;
+pub const LINUX_O_CLOEXEC: u32 = 524288;
+pub const LINUX___O_SYNC: u32 = 1048576;
+pub const LINUX_O_SYNC: u32 = 1052672;
+pub const LINUX_O_PATH: u32 = 2097152;
+pub const LINUX___O_TMPFILE: u32 = 4194304;
+pub const LINUX_O_TMPFILE: u32 = 4259840;
+pub const LINUX_O_TMPFILE_MASK: u32 = 4259904;
+pub const LINUX_O_NDELAY: u32 = 2048;
+pub const LINUX_F_DUPFD: u32 = 0;
+pub const LINUX_F_GETFD: u32 = 1;
+pub const LINUX_F_SETFD: u32 = 2;
+pub const LINUX_F_GETFL: u32 = 3;
+pub const LINUX_F_SETFL: u32 = 4;
+pub const LINUX_F_GETLK: u32 = 5;
+pub const LINUX_F_SETLK: u32 = 6;
+pub const LINUX_F_SETLKW: u32 = 7;
+pub const LINUX_F_SETOWN: u32 = 8;
+pub const LINUX_F_GETOWN: u32 = 9;
+pub const LINUX_F_SETSIG: u32 = 10;
+pub const LINUX_F_GETSIG: u32 = 11;
+pub const LINUX_F_SETOWN_EX: u32 = 15;
+pub const LINUX_F_GETOWN_EX: u32 = 16;
+pub const LINUX_F_GETOWNER_UIDS: u32 = 17;
+pub const LINUX_F_OFD_GETLK: u32 = 36;
+pub const LINUX_F_OFD_SETLK: u32 = 37;
+pub const LINUX_F_OFD_SETLKW: u32 = 38;
+pub const LINUX_F_OWNER_TID: u32 = 0;
+pub const LINUX_F_OWNER_PID: u32 = 1;
+pub const LINUX_F_OWNER_PGRP: u32 = 2;
+pub const LINUX_FD_CLOEXEC: u32 = 1;
+pub const LINUX_F_RDLCK: u32 = 0;
+pub const LINUX_F_WRLCK: u32 = 1;
+pub const LINUX_F_UNLCK: u32 = 2;
+pub const LINUX_F_EXLCK: u32 = 4;
+pub const LINUX_F_SHLCK: u32 = 8;
+pub const LINUX_LOCK_SH: u32 = 1;
+pub const LINUX_LOCK_EX: u32 = 2;
+pub const LINUX_LOCK_NB: u32 = 4;
+pub const LINUX_LOCK_UN: u32 = 8;
+pub const LINUX_LOCK_MAND: u32 = 32;
+pub const LINUX_LOCK_READ: u32 = 64;
+pub const LINUX_LOCK_WRITE: u32 = 128;
+pub const LINUX_LOCK_RW: u32 = 192;
+pub const LINUX_F_LINUX_SPECIFIC_BASE: u32 = 1024;
+pub const LINUX_RESOLVE_NO_XDEV: u32 = 1;
+pub const LINUX_RESOLVE_NO_MAGICLINKS: u32 = 2;
+pub const LINUX_RESOLVE_NO_SYMLINKS: u32 = 4;
+pub const LINUX_RESOLVE_BENEATH: u32 = 8;
+pub const LINUX_RESOLVE_IN_ROOT: u32 = 16;
+pub const LINUX_RESOLVE_CACHED: u32 = 32;
+pub const LINUX_F_SETLEASE: u32 = 1024;
+pub const LINUX_F_GETLEASE: u32 = 1025;
+pub const LINUX_F_CANCELLK: u32 = 1029;
+pub const LINUX_F_DUPFD_CLOEXEC: u32 = 1030;
+pub const LINUX_F_NOTIFY: u32 = 1026;
+pub const LINUX_F_SETPIPE_SZ: u32 = 1031;
+pub const LINUX_F_GETPIPE_SZ: u32 = 1032;
+pub const LINUX_F_ADD_SEALS: u32 = 1033;
+pub const LINUX_F_GET_SEALS: u32 = 1034;
+pub const LINUX_F_SEAL_SEAL: u32 = 1;
+pub const LINUX_F_SEAL_SHRINK: u32 = 2;
+pub const LINUX_F_SEAL_GROW: u32 = 4;
+pub const LINUX_F_SEAL_WRITE: u32 = 8;
+pub const LINUX_F_SEAL_FUTURE_WRITE: u32 = 16;
+pub const LINUX_F_GET_RW_HINT: u32 = 1035;
+pub const LINUX_F_SET_RW_HINT: u32 = 1036;
+pub const LINUX_F_GET_FILE_RW_HINT: u32 = 1037;
+pub const LINUX_F_SET_FILE_RW_HINT: u32 = 1038;
+pub const LINUX_RWH_WRITE_LIFE_NOT_SET: u32 = 0;
+pub const LINUX_RWH_WRITE_LIFE_NONE: u32 = 1;
+pub const LINUX_RWH_WRITE_LIFE_SHORT: u32 = 2;
+pub const LINUX_RWH_WRITE_LIFE_MEDIUM: u32 = 3;
+pub const LINUX_RWH_WRITE_LIFE_LONG: u32 = 4;
+pub const LINUX_RWH_WRITE_LIFE_EXTREME: u32 = 5;
+pub const LINUX_RWF_WRITE_LIFE_NOT_SET: u32 = 0;
+pub const LINUX_DN_ACCESS: u32 = 1;
+pub const LINUX_DN_MODIFY: u32 = 2;
+pub const LINUX_DN_CREATE: u32 = 4;
+pub const LINUX_DN_DELETE: u32 = 8;
+pub const LINUX_DN_RENAME: u32 = 16;
+pub const LINUX_DN_ATTRIB: u32 = 32;
+pub const LINUX_DN_MULTISHOT: u32 = 2147483648;
+pub const LINUX_AT_FDCWD: i32 = -100;
+pub const LINUX_AT_SYMLINK_NOFOLLOW: u32 = 256;
+pub const LINUX_AT_EACCESS: u32 = 512;
+pub const LINUX_AT_REMOVEDIR: u32 = 512;
+pub const LINUX_AT_SYMLINK_FOLLOW: u32 = 1024;
+pub const LINUX_AT_NO_AUTOMOUNT: u32 = 2048;
+pub const LINUX_AT_EMPTY_PATH: u32 = 4096;
+pub const LINUX_AT_STATX_SYNC_TYPE: u32 = 24576;
+pub const LINUX_AT_STATX_SYNC_AS_STAT: u32 = 0;
+pub const LINUX_AT_STATX_FORCE_SYNC: u32 = 8192;
+pub const LINUX_AT_STATX_DONT_SYNC: u32 = 16384;
+pub const LINUX_AT_RECURSIVE: u32 = 32768;
+pub const LINUX___UAPI_DEF_IF_IFCONF: u32 = 1;
+pub const LINUX___UAPI_DEF_IF_IFMAP: u32 = 1;
+pub const LINUX___UAPI_DEF_IF_IFNAMSIZ: u32 = 1;
+pub const LINUX___UAPI_DEF_IF_IFREQ: u32 = 1;
+pub const LINUX___UAPI_DEF_IF_NET_DEVICE_FLAGS: u32 = 1;
+pub const LINUX___UAPI_DEF_IF_NET_DEVICE_FLAGS_LOWER_UP_DORMANT_ECHO: u32 = 1;
+pub const LINUX___UAPI_DEF_IN_ADDR: u32 = 1;
+pub const LINUX___UAPI_DEF_IN_IPPROTO: u32 = 1;
+pub const LINUX___UAPI_DEF_IN_PKTINFO: u32 = 1;
+pub const LINUX___UAPI_DEF_IP_MREQ: u32 = 1;
+pub const LINUX___UAPI_DEF_SOCKADDR_IN: u32 = 1;
+pub const LINUX___UAPI_DEF_IN_CLASS: u32 = 1;
+pub const LINUX___UAPI_DEF_IN6_ADDR: u32 = 1;
+pub const LINUX___UAPI_DEF_IN6_ADDR_ALT: u32 = 1;
+pub const LINUX___UAPI_DEF_SOCKADDR_IN6: u32 = 1;
+pub const LINUX___UAPI_DEF_IPV6_MREQ: u32 = 1;
+pub const LINUX___UAPI_DEF_IPPROTO_V6: u32 = 1;
+pub const LINUX___UAPI_DEF_IPV6_OPTIONS: u32 = 1;
+pub const LINUX___UAPI_DEF_IN6_PKTINFO: u32 = 1;
+pub const LINUX___UAPI_DEF_IP6_MTUINFO: u32 = 1;
+pub const LINUX___UAPI_DEF_SOCKADDR_IPX: u32 = 1;
+pub const LINUX___UAPI_DEF_IPX_ROUTE_DEFINITION: u32 = 1;
+pub const LINUX___UAPI_DEF_IPX_INTERFACE_DEFINITION: u32 = 1;
+pub const LINUX___UAPI_DEF_IPX_CONFIG_DATA: u32 = 1;
+pub const LINUX___UAPI_DEF_IPX_ROUTE_DEF: u32 = 1;
+pub const LINUX___UAPI_DEF_XATTR: u32 = 1;
+pub const LINUX__K_SS_MAXSIZE: u32 = 128;
+pub const LINUX_SOCK_SNDBUF_LOCK: u32 = 1;
+pub const LINUX_SOCK_RCVBUF_LOCK: u32 = 2;
+pub const LINUX_SOCK_BUF_LOCK_MASK: u32 = 3;
+pub const LINUX_SOCK_TXREHASH_DEFAULT: u32 = 255;
+pub const LINUX_SOCK_TXREHASH_DISABLED: u32 = 0;
+pub const LINUX_SOCK_TXREHASH_ENABLED: u32 = 1;
+pub const LINUX_IP_TOS: u32 = 1;
+pub const LINUX_IP_TTL: u32 = 2;
+pub const LINUX_IP_HDRINCL: u32 = 3;
+pub const LINUX_IP_OPTIONS: u32 = 4;
+pub const LINUX_IP_ROUTER_ALERT: u32 = 5;
+pub const LINUX_IP_RECVOPTS: u32 = 6;
+pub const LINUX_IP_RETOPTS: u32 = 7;
+pub const LINUX_IP_PKTINFO: u32 = 8;
+pub const LINUX_IP_PKTOPTIONS: u32 = 9;
+pub const LINUX_IP_MTU_DISCOVER: u32 = 10;
+pub const LINUX_IP_RECVERR: u32 = 11;
+pub const LINUX_IP_RECVTTL: u32 = 12;
+pub const LINUX_IP_RECVTOS: u32 = 13;
+pub const LINUX_IP_MTU: u32 = 14;
+pub const LINUX_IP_FREEBIND: u32 = 15;
+pub const LINUX_IP_IPSEC_POLICY: u32 = 16;
+pub const LINUX_IP_XFRM_POLICY: u32 = 17;
+pub const LINUX_IP_PASSSEC: u32 = 18;
+pub const LINUX_IP_TRANSPARENT: u32 = 19;
+pub const LINUX_IP_RECVRETOPTS: u32 = 7;
+pub const LINUX_IP_ORIGDSTADDR: u32 = 20;
+pub const LINUX_IP_RECVORIGDSTADDR: u32 = 20;
+pub const LINUX_IP_MINTTL: u32 = 21;
+pub const LINUX_IP_NODEFRAG: u32 = 22;
+pub const LINUX_IP_CHECKSUM: u32 = 23;
+pub const LINUX_IP_BIND_ADDRESS_NO_PORT: u32 = 24;
+pub const LINUX_IP_RECVFRAGSIZE: u32 = 25;
+pub const LINUX_IP_RECVERR_RFC4884: u32 = 26;
+pub const LINUX_IP_PMTUDISC_DONT: u32 = 0;
+pub const LINUX_IP_PMTUDISC_WANT: u32 = 1;
+pub const LINUX_IP_PMTUDISC_DO: u32 = 2;
+pub const LINUX_IP_PMTUDISC_PROBE: u32 = 3;
+pub const LINUX_IP_PMTUDISC_INTERFACE: u32 = 4;
+pub const LINUX_IP_PMTUDISC_OMIT: u32 = 5;
+pub const LINUX_IP_MULTICAST_IF: u32 = 32;
+pub const LINUX_IP_MULTICAST_TTL: u32 = 33;
+pub const LINUX_IP_MULTICAST_LOOP: u32 = 34;
+pub const LINUX_IP_ADD_MEMBERSHIP: u32 = 35;
+pub const LINUX_IP_DROP_MEMBERSHIP: u32 = 36;
+pub const LINUX_IP_UNBLOCK_SOURCE: u32 = 37;
+pub const LINUX_IP_BLOCK_SOURCE: u32 = 38;
+pub const LINUX_IP_ADD_SOURCE_MEMBERSHIP: u32 = 39;
+pub const LINUX_IP_DROP_SOURCE_MEMBERSHIP: u32 = 40;
+pub const LINUX_IP_MSFILTER: u32 = 41;
+pub const LINUX_MCAST_JOIN_GROUP: u32 = 42;
+pub const LINUX_MCAST_BLOCK_SOURCE: u32 = 43;
+pub const LINUX_MCAST_UNBLOCK_SOURCE: u32 = 44;
+pub const LINUX_MCAST_LEAVE_GROUP: u32 = 45;
+pub const LINUX_MCAST_JOIN_SOURCE_GROUP: u32 = 46;
+pub const LINUX_MCAST_LEAVE_SOURCE_GROUP: u32 = 47;
+pub const LINUX_MCAST_MSFILTER: u32 = 48;
+pub const LINUX_IP_MULTICAST_ALL: u32 = 49;
+pub const LINUX_IP_UNICAST_IF: u32 = 50;
+pub const LINUX_MCAST_EXCLUDE: u32 = 0;
+pub const LINUX_MCAST_INCLUDE: u32 = 1;
+pub const LINUX_IP_DEFAULT_MULTICAST_TTL: u32 = 1;
+pub const LINUX_IP_DEFAULT_MULTICAST_LOOP: u32 = 1;
+pub const LINUX___SOCK_SIZE__: u32 = 16;
+pub const LINUX_IN_CLASSA_NET: u32 = 4278190080;
+pub const LINUX_IN_CLASSA_NSHIFT: u32 = 24;
+pub const LINUX_IN_CLASSA_HOST: u32 = 16777215;
+pub const LINUX_IN_CLASSA_MAX: u32 = 128;
+pub const LINUX_IN_CLASSB_NET: u32 = 4294901760;
+pub const LINUX_IN_CLASSB_NSHIFT: u32 = 16;
+pub const LINUX_IN_CLASSB_HOST: u32 = 65535;
+pub const LINUX_IN_CLASSB_MAX: u32 = 65536;
+pub const LINUX_IN_CLASSC_NET: u32 = 4294967040;
+pub const LINUX_IN_CLASSC_NSHIFT: u32 = 8;
+pub const LINUX_IN_CLASSC_HOST: u32 = 255;
+pub const LINUX_IN_MULTICAST_NET: u32 = 3758096384;
+pub const LINUX_IN_CLASSE_NET: u32 = 4294967295;
+pub const LINUX_IN_CLASSE_NSHIFT: u32 = 0;
+pub const LINUX_IN_LOOPBACKNET: u32 = 127;
+pub const LINUX_INADDR_LOOPBACK: u32 = 2130706433;
+pub const LINUX_INADDR_UNSPEC_GROUP: u32 = 3758096384;
+pub const LINUX_INADDR_ALLHOSTS_GROUP: u32 = 3758096385;
+pub const LINUX_INADDR_ALLRTRS_GROUP: u32 = 3758096386;
+pub const LINUX_INADDR_ALLSNOOPERS_GROUP: u32 = 3758096490;
+pub const LINUX_INADDR_MAX_LOCAL_GROUP: u32 = 3758096639;
+pub const LINUX___LITTLE_ENDIAN: u32 = 1234;
+pub const LINUX_CSIGNAL: u32 = 255;
 pub const LINUX_CLONE_VM: u32 = 256;
 pub const LINUX_CLONE_FS: u32 = 512;
 pub const LINUX_CLONE_FILES: u32 = 1024;
@@ -166,6 +393,26 @@ pub const LINUX_CLONE_NEWTIME: u32 = 128;
 pub const LINUX_CLONE_ARGS_SIZE_VER0: u32 = 64;
 pub const LINUX_CLONE_ARGS_SIZE_VER1: u32 = 80;
 pub const LINUX_CLONE_ARGS_SIZE_VER2: u32 = 88;
+pub const LINUX_SCHED_NORMAL: u32 = 0;
+pub const LINUX_SCHED_FIFO: u32 = 1;
+pub const LINUX_SCHED_RR: u32 = 2;
+pub const LINUX_SCHED_BATCH: u32 = 3;
+pub const LINUX_SCHED_IDLE: u32 = 5;
+pub const LINUX_SCHED_DEADLINE: u32 = 6;
+pub const LINUX_SCHED_RESET_ON_FORK: u32 = 1073741824;
+pub const LINUX_SCHED_FLAG_RESET_ON_FORK: u32 = 1;
+pub const LINUX_SCHED_FLAG_RECLAIM: u32 = 2;
+pub const LINUX_SCHED_FLAG_DL_OVERRUN: u32 = 4;
+pub const LINUX_SCHED_FLAG_KEEP_POLICY: u32 = 8;
+pub const LINUX_SCHED_FLAG_KEEP_PARAMS: u32 = 16;
+pub const LINUX_SCHED_FLAG_UTIL_CLAMP_MIN: u32 = 32;
+pub const LINUX_SCHED_FLAG_UTIL_CLAMP_MAX: u32 = 64;
+pub const LINUX_SCHED_FLAG_KEEP_ALL: u32 = 24;
+pub const LINUX_SCHED_FLAG_UTIL_CLAMP: u32 = 96;
+pub const LINUX_SCHED_FLAG_ALL: u32 = 127;
+pub const LINUX_ITIMER_REAL: u32 = 0;
+pub const LINUX_ITIMER_VIRTUAL: u32 = 1;
+pub const LINUX_ITIMER_PROF: u32 = 2;
 pub const LINUX_CLOCK_REALTIME: u32 = 0;
 pub const LINUX_CLOCK_MONOTONIC: u32 = 1;
 pub const LINUX_CLOCK_PROCESS_CPUTIME_ID: u32 = 2;
@@ -178,6 +425,11 @@ pub const LINUX_CLOCK_REALTIME_ALARM: u32 = 8;
 pub const LINUX_CLOCK_BOOTTIME_ALARM: u32 = 9;
 pub const LINUX_CLOCK_SGI_CYCLE: u32 = 10;
 pub const LINUX_CLOCK_TAI: u32 = 11;
+pub const LINUX_MAX_CLOCKS: u32 = 16;
+pub const LINUX_CLOCKS_MASK: u32 = 1;
+pub const LINUX_CLOCKS_MONO: u32 = 1;
+pub const LINUX_TIMER_ABSTIME: u32 = 1;
+pub const LINUX_NSIG: u32 = 32;
 pub const LINUX_SIGHUP: u32 = 1;
 pub const LINUX_SIGINT: u32 = 2;
 pub const LINUX_SIGQUIT: u32 = 3;
@@ -214,6 +466,7 @@ pub const LINUX_SIGSYS: u32 = 31;
 pub const LINUX_SIGUNUSED: u32 = 31;
 pub const LINUX_SIGRTMIN: u32 = 32;
 pub const LINUX_SA_RESTORER: u32 = 67108864;
+pub const LINUX_MINSIGSTKSZ: u32 = 2048;
 pub const LINUX_SIGSTKSZ: u32 = 8192;
 pub const LINUX_SA_NOCLDSTOP: u32 = 1;
 pub const LINUX_SA_NOCLDWAIT: u32 = 2;
@@ -249,6 +502,9 @@ pub const LINUX_ILL_PRVREG: u32 = 6;
 pub const LINUX_ILL_COPROC: u32 = 7;
 pub const LINUX_ILL_BADSTK: u32 = 8;
 pub const LINUX_ILL_BADIADDR: u32 = 9;
+pub const LINUX___ILL_BREAK: u32 = 10;
+pub const LINUX___ILL_BNDMOD: u32 = 11;
+pub const LINUX_NSIGILL: u32 = 11;
 pub const LINUX_FPE_INTDIV: u32 = 1;
 pub const LINUX_FPE_INTOVF: u32 = 2;
 pub const LINUX_FPE_FLTDIV: u32 = 3;
@@ -257,8 +513,14 @@ pub const LINUX_FPE_FLTUND: u32 = 5;
 pub const LINUX_FPE_FLTRES: u32 = 6;
 pub const LINUX_FPE_FLTINV: u32 = 7;
 pub const LINUX_FPE_FLTSUB: u32 = 8;
+pub const LINUX___FPE_DECOVF: u32 = 9;
+pub const LINUX___FPE_DECDIV: u32 = 10;
+pub const LINUX___FPE_DECERR: u32 = 11;
+pub const LINUX___FPE_INVASC: u32 = 12;
+pub const LINUX___FPE_INVDEC: u32 = 13;
 pub const LINUX_FPE_FLTUNK: u32 = 14;
 pub const LINUX_FPE_CONDTRAP: u32 = 15;
+pub const LINUX_NSIGFPE: u32 = 15;
 pub const LINUX_SEGV_MAPERR: u32 = 1;
 pub const LINUX_SEGV_ACCERR: u32 = 2;
 pub const LINUX_SEGV_BNDERR: u32 = 3;
@@ -268,17 +530,20 @@ pub const LINUX_SEGV_ADIDERR: u32 = 6;
 pub const LINUX_SEGV_ADIPERR: u32 = 7;
 pub const LINUX_SEGV_MTEAERR: u32 = 8;
 pub const LINUX_SEGV_MTESERR: u32 = 9;
+pub const LINUX_NSIGSEGV: u32 = 9;
 pub const LINUX_BUS_ADRALN: u32 = 1;
 pub const LINUX_BUS_ADRERR: u32 = 2;
 pub const LINUX_BUS_OBJERR: u32 = 3;
 pub const LINUX_BUS_MCEERR_AR: u32 = 4;
 pub const LINUX_BUS_MCEERR_AO: u32 = 5;
+pub const LINUX_NSIGBUS: u32 = 5;
 pub const LINUX_TRAP_BRKPT: u32 = 1;
 pub const LINUX_TRAP_TRACE: u32 = 2;
 pub const LINUX_TRAP_BRANCH: u32 = 3;
 pub const LINUX_TRAP_HWBKPT: u32 = 4;
 pub const LINUX_TRAP_UNK: u32 = 5;
 pub const LINUX_TRAP_PERF: u32 = 6;
+pub const LINUX_NSIGTRAP: u32 = 6;
 pub const LINUX_TRAP_PERF_FLAG_ASYNC: u32 = 1;
 pub const LINUX_CLD_EXITED: u32 = 1;
 pub const LINUX_CLD_KILLED: u32 = 2;
@@ -286,32 +551,755 @@ pub const LINUX_CLD_DUMPED: u32 = 3;
 pub const LINUX_CLD_TRAPPED: u32 = 4;
 pub const LINUX_CLD_STOPPED: u32 = 5;
 pub const LINUX_CLD_CONTINUED: u32 = 6;
+pub const LINUX_NSIGCHLD: u32 = 6;
 pub const LINUX_POLL_IN: u32 = 1;
 pub const LINUX_POLL_OUT: u32 = 2;
 pub const LINUX_POLL_MSG: u32 = 3;
 pub const LINUX_POLL_ERR: u32 = 4;
 pub const LINUX_POLL_PRI: u32 = 5;
 pub const LINUX_POLL_HUP: u32 = 6;
+pub const LINUX_NSIGPOLL: u32 = 6;
 pub const LINUX_SYS_SECCOMP: u32 = 1;
+pub const LINUX_SYS_USER_DISPATCH: u32 = 2;
+pub const LINUX_NSIGSYS: u32 = 2;
 pub const LINUX_EMT_TAGOVF: u32 = 1;
+pub const LINUX_NSIGEMT: u32 = 1;
 pub const LINUX_SIGEV_SIGNAL: u32 = 0;
 pub const LINUX_SIGEV_NONE: u32 = 1;
 pub const LINUX_SIGEV_THREAD: u32 = 2;
 pub const LINUX_SIGEV_THREAD_ID: u32 = 4;
 pub const LINUX_SIGEV_MAX_SIZE: u32 = 64;
+pub const LINUX_SS_ONSTACK: u32 = 1;
+pub const LINUX_SS_DISABLE: u32 = 2;
+pub const LINUX_SS_FLAG_BITS: u32 = 2147483648;
+pub const LINUX_FIOSETOWN: u32 = 35073;
+pub const LINUX_SIOCSPGRP: u32 = 35074;
+pub const LINUX_FIOGETOWN: u32 = 35075;
+pub const LINUX_SIOCGPGRP: u32 = 35076;
+pub const LINUX_SIOCATMARK: u32 = 35077;
+pub const LINUX_SIOCGSTAMP_OLD: u32 = 35078;
+pub const LINUX_SIOCGSTAMPNS_OLD: u32 = 35079;
+pub const LINUX_SOCK_IOC_TYPE: u32 = 137;
+pub const LINUX_SIOCGSTAMP: u32 = 35078;
+pub const LINUX_SIOCGSTAMPNS: u32 = 35079;
+pub const LINUX_SIOCADDRT: u32 = 35083;
+pub const LINUX_SIOCDELRT: u32 = 35084;
+pub const LINUX_SIOCRTMSG: u32 = 35085;
+pub const LINUX_SIOCGIFNAME: u32 = 35088;
+pub const LINUX_SIOCSIFLINK: u32 = 35089;
+pub const LINUX_SIOCGIFCONF: u32 = 35090;
+pub const LINUX_SIOCGIFFLAGS: u32 = 35091;
+pub const LINUX_SIOCSIFFLAGS: u32 = 35092;
+pub const LINUX_SIOCGIFADDR: u32 = 35093;
+pub const LINUX_SIOCSIFADDR: u32 = 35094;
+pub const LINUX_SIOCGIFDSTADDR: u32 = 35095;
+pub const LINUX_SIOCSIFDSTADDR: u32 = 35096;
+pub const LINUX_SIOCGIFBRDADDR: u32 = 35097;
+pub const LINUX_SIOCSIFBRDADDR: u32 = 35098;
+pub const LINUX_SIOCGIFNETMASK: u32 = 35099;
+pub const LINUX_SIOCSIFNETMASK: u32 = 35100;
+pub const LINUX_SIOCGIFMETRIC: u32 = 35101;
+pub const LINUX_SIOCSIFMETRIC: u32 = 35102;
+pub const LINUX_SIOCGIFMEM: u32 = 35103;
+pub const LINUX_SIOCSIFMEM: u32 = 35104;
+pub const LINUX_SIOCGIFMTU: u32 = 35105;
+pub const LINUX_SIOCSIFMTU: u32 = 35106;
+pub const LINUX_SIOCSIFNAME: u32 = 35107;
+pub const LINUX_SIOCSIFHWADDR: u32 = 35108;
+pub const LINUX_SIOCGIFENCAP: u32 = 35109;
+pub const LINUX_SIOCSIFENCAP: u32 = 35110;
+pub const LINUX_SIOCGIFHWADDR: u32 = 35111;
+pub const LINUX_SIOCGIFSLAVE: u32 = 35113;
+pub const LINUX_SIOCSIFSLAVE: u32 = 35120;
+pub const LINUX_SIOCADDMULTI: u32 = 35121;
+pub const LINUX_SIOCDELMULTI: u32 = 35122;
+pub const LINUX_SIOCGIFINDEX: u32 = 35123;
+pub const LINUX_SIOGIFINDEX: u32 = 35123;
+pub const LINUX_SIOCSIFPFLAGS: u32 = 35124;
+pub const LINUX_SIOCGIFPFLAGS: u32 = 35125;
+pub const LINUX_SIOCDIFADDR: u32 = 35126;
+pub const LINUX_SIOCSIFHWBROADCAST: u32 = 35127;
+pub const LINUX_SIOCGIFCOUNT: u32 = 35128;
+pub const LINUX_SIOCGIFBR: u32 = 35136;
+pub const LINUX_SIOCSIFBR: u32 = 35137;
+pub const LINUX_SIOCGIFTXQLEN: u32 = 35138;
+pub const LINUX_SIOCSIFTXQLEN: u32 = 35139;
+pub const LINUX_SIOCETHTOOL: u32 = 35142;
+pub const LINUX_SIOCGMIIPHY: u32 = 35143;
+pub const LINUX_SIOCGMIIREG: u32 = 35144;
+pub const LINUX_SIOCSMIIREG: u32 = 35145;
+pub const LINUX_SIOCWANDEV: u32 = 35146;
+pub const LINUX_SIOCOUTQNSD: u32 = 35147;
+pub const LINUX_SIOCGSKNS: u32 = 35148;
+pub const LINUX_SIOCDARP: u32 = 35155;
+pub const LINUX_SIOCGARP: u32 = 35156;
+pub const LINUX_SIOCSARP: u32 = 35157;
+pub const LINUX_SIOCDRARP: u32 = 35168;
+pub const LINUX_SIOCGRARP: u32 = 35169;
+pub const LINUX_SIOCSRARP: u32 = 35170;
+pub const LINUX_SIOCGIFMAP: u32 = 35184;
+pub const LINUX_SIOCSIFMAP: u32 = 35185;
+pub const LINUX_SIOCADDDLCI: u32 = 35200;
+pub const LINUX_SIOCDELDLCI: u32 = 35201;
+pub const LINUX_SIOCGIFVLAN: u32 = 35202;
+pub const LINUX_SIOCSIFVLAN: u32 = 35203;
+pub const LINUX_SIOCBONDENSLAVE: u32 = 35216;
+pub const LINUX_SIOCBONDRELEASE: u32 = 35217;
+pub const LINUX_SIOCBONDSETHWADDR: u32 = 35218;
+pub const LINUX_SIOCBONDSLAVEINFOQUERY: u32 = 35219;
+pub const LINUX_SIOCBONDINFOQUERY: u32 = 35220;
+pub const LINUX_SIOCBONDCHANGEACTIVE: u32 = 35221;
+pub const LINUX_SIOCBRADDBR: u32 = 35232;
+pub const LINUX_SIOCBRDELBR: u32 = 35233;
+pub const LINUX_SIOCBRADDIF: u32 = 35234;
+pub const LINUX_SIOCBRDELIF: u32 = 35235;
+pub const LINUX_SIOCSHWTSTAMP: u32 = 35248;
+pub const LINUX_SIOCGHWTSTAMP: u32 = 35249;
+pub const LINUX_SIOCDEVPRIVATE: u32 = 35312;
+pub const LINUX_SIOCPROTOPRIVATE: u32 = 35296;
+pub const LINUX__IOC_NRBITS: u32 = 8;
+pub const LINUX__IOC_TYPEBITS: u32 = 8;
+pub const LINUX__IOC_SIZEBITS: u32 = 14;
+pub const LINUX__IOC_DIRBITS: u32 = 2;
+pub const LINUX__IOC_NRMASK: u32 = 255;
+pub const LINUX__IOC_TYPEMASK: u32 = 255;
+pub const LINUX__IOC_SIZEMASK: u32 = 16383;
+pub const LINUX__IOC_DIRMASK: u32 = 3;
+pub const LINUX__IOC_NRSHIFT: u32 = 0;
+pub const LINUX__IOC_TYPESHIFT: u32 = 8;
+pub const LINUX__IOC_SIZESHIFT: u32 = 16;
+pub const LINUX__IOC_DIRSHIFT: u32 = 30;
+pub const LINUX__IOC_NONE: u32 = 0;
+pub const LINUX__IOC_WRITE: u32 = 1;
+pub const LINUX__IOC_READ: u32 = 2;
+pub const LINUX_IOC_IN: u32 = 1073741824;
+pub const LINUX_IOC_OUT: u32 = 2147483648;
+pub const LINUX_IOC_INOUT: u32 = 3221225472;
+pub const LINUX_IOCSIZE_MASK: u32 = 1073676288;
+pub const LINUX_IOCSIZE_SHIFT: u32 = 16;
+pub const LINUX_TCGETS: u32 = 21505;
+pub const LINUX_TCSETS: u32 = 21506;
+pub const LINUX_TCSETSW: u32 = 21507;
+pub const LINUX_TCSETSF: u32 = 21508;
+pub const LINUX_TCGETA: u32 = 21509;
+pub const LINUX_TCSETA: u32 = 21510;
+pub const LINUX_TCSETAW: u32 = 21511;
+pub const LINUX_TCSETAF: u32 = 21512;
+pub const LINUX_TCSBRK: u32 = 21513;
+pub const LINUX_TCXONC: u32 = 21514;
+pub const LINUX_TCFLSH: u32 = 21515;
+pub const LINUX_TIOCEXCL: u32 = 21516;
+pub const LINUX_TIOCNXCL: u32 = 21517;
+pub const LINUX_TIOCSCTTY: u32 = 21518;
+pub const LINUX_TIOCGPGRP: u32 = 21519;
+pub const LINUX_TIOCSPGRP: u32 = 21520;
+pub const LINUX_TIOCOUTQ: u32 = 21521;
+pub const LINUX_TIOCSTI: u32 = 21522;
+pub const LINUX_TIOCGWINSZ: u32 = 21523;
+pub const LINUX_TIOCSWINSZ: u32 = 21524;
+pub const LINUX_TIOCMGET: u32 = 21525;
+pub const LINUX_TIOCMBIS: u32 = 21526;
+pub const LINUX_TIOCMBIC: u32 = 21527;
+pub const LINUX_TIOCMSET: u32 = 21528;
+pub const LINUX_TIOCGSOFTCAR: u32 = 21529;
+pub const LINUX_TIOCSSOFTCAR: u32 = 21530;
+pub const LINUX_FIONREAD: u32 = 21531;
+pub const LINUX_TIOCINQ: u32 = 21531;
+pub const LINUX_TIOCLINUX: u32 = 21532;
+pub const LINUX_TIOCCONS: u32 = 21533;
+pub const LINUX_TIOCGSERIAL: u32 = 21534;
+pub const LINUX_TIOCSSERIAL: u32 = 21535;
+pub const LINUX_TIOCPKT: u32 = 21536;
+pub const LINUX_FIONBIO: u32 = 21537;
+pub const LINUX_TIOCNOTTY: u32 = 21538;
+pub const LINUX_TIOCSETD: u32 = 21539;
+pub const LINUX_TIOCGETD: u32 = 21540;
+pub const LINUX_TCSBRKP: u32 = 21541;
+pub const LINUX_TIOCSBRK: u32 = 21543;
+pub const LINUX_TIOCCBRK: u32 = 21544;
+pub const LINUX_TIOCGSID: u32 = 21545;
+pub const LINUX_TIOCGRS485: u32 = 21550;
+pub const LINUX_TIOCSRS485: u32 = 21551;
+pub const LINUX_TCGETX: u32 = 21554;
+pub const LINUX_TCSETX: u32 = 21555;
+pub const LINUX_TCSETXF: u32 = 21556;
+pub const LINUX_TCSETXW: u32 = 21557;
+pub const LINUX_TIOCVHANGUP: u32 = 21559;
+pub const LINUX_FIONCLEX: u32 = 21584;
+pub const LINUX_FIOCLEX: u32 = 21585;
+pub const LINUX_FIOASYNC: u32 = 21586;
+pub const LINUX_TIOCSERCONFIG: u32 = 21587;
+pub const LINUX_TIOCSERGWILD: u32 = 21588;
+pub const LINUX_TIOCSERSWILD: u32 = 21589;
+pub const LINUX_TIOCGLCKTRMIOS: u32 = 21590;
+pub const LINUX_TIOCSLCKTRMIOS: u32 = 21591;
+pub const LINUX_TIOCSERGSTRUCT: u32 = 21592;
+pub const LINUX_TIOCSERGETLSR: u32 = 21593;
+pub const LINUX_TIOCSERGETMULTI: u32 = 21594;
+pub const LINUX_TIOCSERSETMULTI: u32 = 21595;
+pub const LINUX_TIOCMIWAIT: u32 = 21596;
+pub const LINUX_TIOCGICOUNT: u32 = 21597;
+pub const LINUX_FIOQSIZE: u32 = 21600;
+pub const LINUX_TIOCPKT_DATA: u32 = 0;
+pub const LINUX_TIOCPKT_FLUSHREAD: u32 = 1;
+pub const LINUX_TIOCPKT_FLUSHWRITE: u32 = 2;
+pub const LINUX_TIOCPKT_STOP: u32 = 4;
+pub const LINUX_TIOCPKT_START: u32 = 8;
+pub const LINUX_TIOCPKT_NOSTOP: u32 = 16;
+pub const LINUX_TIOCPKT_DOSTOP: u32 = 32;
+pub const LINUX_TIOCPKT_IOCTL: u32 = 64;
+pub const LINUX_TIOCSER_TEMT: u32 = 1;
+pub type linux___u16 = ::core::ffi::c_ushort;
 pub type linux___u32 = ::core::ffi::c_uint;
+pub type linux___u64 = ::core::ffi::c_ulonglong;
+pub type linux___kernel_sighandler_t =
+    ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
+pub type linux___kernel_key_t = ::core::ffi::c_int;
+pub type linux___kernel_mqd_t = ::core::ffi::c_int;
+pub type linux___kernel_old_uid_t = ::core::ffi::c_ushort;
+pub type linux___kernel_old_gid_t = ::core::ffi::c_ushort;
+pub type linux___kernel_old_dev_t = ::core::ffi::c_ulong;
 pub type linux___kernel_long_t = ::core::ffi::c_long;
+pub type linux___kernel_ulong_t = ::core::ffi::c_ulong;
+pub type linux___kernel_ino_t = linux___kernel_ulong_t;
+pub type linux___kernel_mode_t = ::core::ffi::c_uint;
 pub type linux___kernel_pid_t = ::core::ffi::c_int;
+pub type linux___kernel_ipc_pid_t = ::core::ffi::c_int;
+pub type linux___kernel_uid_t = ::core::ffi::c_uint;
+pub type linux___kernel_gid_t = ::core::ffi::c_uint;
+pub type linux___kernel_suseconds_t = linux___kernel_long_t;
+pub type linux___kernel_daddr_t = ::core::ffi::c_int;
 pub type linux___kernel_uid32_t = ::core::ffi::c_uint;
+pub type linux___kernel_gid32_t = ::core::ffi::c_uint;
+pub type linux___kernel_size_t = linux___kernel_ulong_t;
+pub type linux___kernel_ssize_t = linux___kernel_long_t;
+pub type linux___kernel_ptrdiff_t = linux___kernel_long_t;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux___kernel_fsid_t {
+    pub val: [::core::ffi::c_int; 2usize],
+}
+#[test]
+fn bindgen_test_layout___kernel_fsid_t() {
+    const UNINIT: ::core::mem::MaybeUninit<linux___kernel_fsid_t> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux___kernel_fsid_t>(),
+        8usize,
+        concat!("Size of: ", stringify!(linux___kernel_fsid_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux___kernel_fsid_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux___kernel_fsid_t))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).val) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_fsid_t),
+            "::",
+            stringify!(val)
+        )
+    );
+}
+pub type linux___kernel_off_t = linux___kernel_long_t;
+pub type linux___kernel_loff_t = ::core::ffi::c_longlong;
 pub type linux___kernel_old_time_t = linux___kernel_long_t;
+pub type linux___kernel_time_t = linux___kernel_long_t;
+pub type linux___kernel_time64_t = ::core::ffi::c_longlong;
 pub type linux___kernel_clock_t = linux___kernel_long_t;
 pub type linux___kernel_timer_t = ::core::ffi::c_int;
 pub type linux___kernel_clockid_t = ::core::ffi::c_int;
+pub type linux___kernel_caddr_t = *mut ::core::ffi::c_char;
+pub type linux___kernel_uid16_t = ::core::ffi::c_ushort;
+pub type linux___kernel_gid16_t = ::core::ffi::c_ushort;
+pub type linux___be16 = linux___u16;
+pub type linux___be32 = linux___u32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_flock {
+    pub l_type: ::core::ffi::c_short,
+    pub l_whence: ::core::ffi::c_short,
+    pub l_start: linux___kernel_off_t,
+    pub l_len: linux___kernel_off_t,
+    pub l_pid: linux___kernel_pid_t,
+}
+#[test]
+fn bindgen_test_layout_flock() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_flock> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_flock>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_flock))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_flock>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_flock))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_type) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock),
+            "::",
+            stringify!(l_type)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_whence) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock),
+            "::",
+            stringify!(l_whence)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_start) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock),
+            "::",
+            stringify!(l_start)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_len) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock),
+            "::",
+            stringify!(l_len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pid) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock),
+            "::",
+            stringify!(l_pid)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_flock64 {
+    pub l_type: ::core::ffi::c_short,
+    pub l_whence: ::core::ffi::c_short,
+    pub l_start: linux___kernel_loff_t,
+    pub l_len: linux___kernel_loff_t,
+    pub l_pid: linux___kernel_pid_t,
+}
+#[test]
+fn bindgen_test_layout_flock64() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_flock64> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_flock64>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_flock64))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_flock64>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_flock64))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_type) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock64),
+            "::",
+            stringify!(l_type)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_whence) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock64),
+            "::",
+            stringify!(l_whence)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_start) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock64),
+            "::",
+            stringify!(l_start)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_len) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock64),
+            "::",
+            stringify!(l_len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l_pid) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_flock64),
+            "::",
+            stringify!(l_pid)
+        )
+    );
+}
+pub type linux___kernel_sa_family_t = ::core::ffi::c_ushort;
+pub const LINUX_IPPROTO_IP: linux__bindgen_ty_1 = 0;
+pub const LINUX_IPPROTO_ICMP: linux__bindgen_ty_1 = 1;
+pub const LINUX_IPPROTO_IGMP: linux__bindgen_ty_1 = 2;
+pub const LINUX_IPPROTO_IPIP: linux__bindgen_ty_1 = 4;
+pub const LINUX_IPPROTO_TCP: linux__bindgen_ty_1 = 6;
+pub const LINUX_IPPROTO_EGP: linux__bindgen_ty_1 = 8;
+pub const LINUX_IPPROTO_PUP: linux__bindgen_ty_1 = 12;
+pub const LINUX_IPPROTO_UDP: linux__bindgen_ty_1 = 17;
+pub const LINUX_IPPROTO_IDP: linux__bindgen_ty_1 = 22;
+pub const LINUX_IPPROTO_TP: linux__bindgen_ty_1 = 29;
+pub const LINUX_IPPROTO_DCCP: linux__bindgen_ty_1 = 33;
+pub const LINUX_IPPROTO_IPV6: linux__bindgen_ty_1 = 41;
+pub const LINUX_IPPROTO_RSVP: linux__bindgen_ty_1 = 46;
+pub const LINUX_IPPROTO_GRE: linux__bindgen_ty_1 = 47;
+pub const LINUX_IPPROTO_ESP: linux__bindgen_ty_1 = 50;
+pub const LINUX_IPPROTO_AH: linux__bindgen_ty_1 = 51;
+pub const LINUX_IPPROTO_MTP: linux__bindgen_ty_1 = 92;
+pub const LINUX_IPPROTO_BEETPH: linux__bindgen_ty_1 = 94;
+pub const LINUX_IPPROTO_ENCAP: linux__bindgen_ty_1 = 98;
+pub const LINUX_IPPROTO_PIM: linux__bindgen_ty_1 = 103;
+pub const LINUX_IPPROTO_COMP: linux__bindgen_ty_1 = 108;
+pub const LINUX_IPPROTO_L2TP: linux__bindgen_ty_1 = 115;
+pub const LINUX_IPPROTO_SCTP: linux__bindgen_ty_1 = 132;
+pub const LINUX_IPPROTO_UDPLITE: linux__bindgen_ty_1 = 136;
+pub const LINUX_IPPROTO_MPLS: linux__bindgen_ty_1 = 137;
+pub const LINUX_IPPROTO_ETHERNET: linux__bindgen_ty_1 = 143;
+pub const LINUX_IPPROTO_RAW: linux__bindgen_ty_1 = 255;
+pub const LINUX_IPPROTO_MPTCP: linux__bindgen_ty_1 = 262;
+pub const LINUX_IPPROTO_MAX: linux__bindgen_ty_1 = 263;
+pub type linux__bindgen_ty_1 = ::core::ffi::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_in_addr {
+    pub s_addr: linux___be32,
+}
+#[test]
+fn bindgen_test_layout_in_addr() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_in_addr> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_in_addr>(),
+        4usize,
+        concat!("Size of: ", stringify!(linux_in_addr))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_in_addr>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_in_addr))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).s_addr) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_in_addr),
+            "::",
+            stringify!(s_addr)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_sockaddr_in {
+    pub sin_family: linux___kernel_sa_family_t,
+    pub sin_port: linux___be16,
+    pub sin_addr: linux_in_addr,
+    pub l__pad: [::core::ffi::c_uchar; 8usize],
+}
+#[test]
+fn bindgen_test_layout_sockaddr_in() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_sockaddr_in> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_sockaddr_in>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_sockaddr_in))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_sockaddr_in>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_sockaddr_in))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sin_family) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sockaddr_in),
+            "::",
+            stringify!(sin_family)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sin_port) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sockaddr_in),
+            "::",
+            stringify!(sin_port)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sin_addr) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sockaddr_in),
+            "::",
+            stringify!(sin_addr)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l__pad) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sockaddr_in),
+            "::",
+            stringify!(l__pad)
+        )
+    );
+}
+#[repr(C)]
+#[repr(align(32))]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_rseq {
+    pub cpu_id_start: linux___u32,
+    pub cpu_id: linux___u32,
+    pub rseq_cs: linux___u64,
+    pub flags: linux___u32,
+}
+#[test]
+fn bindgen_test_layout_rseq() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_rseq> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_rseq>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_rseq))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_rseq>(),
+        32usize,
+        concat!("Alignment of ", stringify!(linux_rseq))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cpu_id_start) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rseq),
+            "::",
+            stringify!(cpu_id_start)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cpu_id) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rseq),
+            "::",
+            stringify!(cpu_id)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rseq_cs) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rseq),
+            "::",
+            stringify!(rseq_cs)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).flags) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rseq),
+            "::",
+            stringify!(flags)
+        )
+    );
+}
+#[doc = " struct linux_clone_args - arguments for the clone3 syscall\n @flags:        Flags for the new process as listed above.\n                All flags are valid except for LINUX_CSIGNAL and\n                LINUX_CLONE_DETACHED.\n @pidfd:        If LINUX_CLONE_PIDFD is set, a pidfd will be\n                returned in this argument.\n @child_tid:    If LINUX_CLONE_CHILD_SETTID is set, the TID of the\n                child process will be returned in the child's\n                memory.\n @parent_tid:   If LINUX_CLONE_PARENT_SETTID is set, the TID of\n                the child process will be returned in the\n                parent's memory.\n @exit_signal:  The exit_signal the parent process will be\n                sent when the child exits.\n @stack:        Specify the location of the stack for the\n                child process.\n                Note, @stack is expected to point to the\n                lowest address. The stack direction will be\n                determined by the kernel and set up\n                appropriately based on @stack_size.\n @stack_size:   The size of the stack for the child process.\n @tls:          If LINUX_CLONE_SETTLS is set, the tls descriptor\n                is set to tls.\n @set_tid:      Pointer to an array of type *pid_t. The size\n                of the array is defined using @set_tid_size.\n                This array is used to select PIDs/TIDs for\n                newly created processes. The first element in\n                this defines the PID in the most nested PID\n                namespace. Each additional element in the array\n                defines the PID in the parent PID namespace of\n                the original PID namespace. If the array has\n                less entries than the number of currently\n                nested PID namespaces only the PIDs in the\n                corresponding namespaces are set.\n @set_tid_size: This defines the size of the array referenced\n                in @set_tid. This cannot be larger than the\n                kernel's limit of nested PID namespaces.\n @cgroup:       If LINUX_CLONE_INTO_CGROUP is specified set this to\n                a file descriptor for the cgroup.\n\n The structure is versioned by size and thus extensible.\n New struct members must go at the end of the struct and\n must be properly 64bit aligned."]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_clone_args {
+    pub flags: linux___u64,
+    pub pidfd: linux___u64,
+    pub child_tid: linux___u64,
+    pub parent_tid: linux___u64,
+    pub exit_signal: linux___u64,
+    pub stack: linux___u64,
+    pub stack_size: linux___u64,
+    pub tls: linux___u64,
+    pub set_tid: linux___u64,
+    pub set_tid_size: linux___u64,
+    pub cgroup: linux___u64,
+}
+#[test]
+fn bindgen_test_layout_clone_args() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_clone_args> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_clone_args>(),
+        88usize,
+        concat!("Size of: ", stringify!(linux_clone_args))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_clone_args>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_clone_args))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).flags) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).pidfd) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(pidfd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).child_tid) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(child_tid)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).parent_tid) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(parent_tid)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).exit_signal) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(exit_signal)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).stack) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(stack)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).stack_size) as usize - ptr as usize },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(stack_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tls) as usize - ptr as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(tls)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).set_tid) as usize - ptr as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(set_tid)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).set_tid_size) as usize - ptr as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(set_tid_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cgroup) as usize - ptr as usize },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_clone_args),
+            "::",
+            stringify!(cgroup)
+        )
+    );
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_timespec {
-    pub ltv_sec: linux___kernel_old_time_t,
-    pub ltv_nsec: ::core::ffi::c_long,
+    pub tv_sec: linux___kernel_old_time_t,
+    pub tv_nsec: ::core::ffi::c_long,
 }
 #[test]
 fn bindgen_test_layout_timespec() {
@@ -328,23 +1316,64 @@ fn bindgen_test_layout_timespec() {
         concat!("Alignment of ", stringify!(linux_timespec))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).ltv_sec) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
             stringify!(linux_timespec),
             "::",
-            stringify!(ltv_sec)
+            stringify!(tv_sec)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).ltv_nsec) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_nsec) as usize - ptr as usize },
         8usize,
         concat!(
             "Offset of field: ",
             stringify!(linux_timespec),
             "::",
-            stringify!(ltv_nsec)
+            stringify!(tv_nsec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_itimerspec {
+    pub it_interval: linux_timespec,
+    pub it_value: linux_timespec,
+}
+#[test]
+fn bindgen_test_layout_itimerspec() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_itimerspec> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_itimerspec>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_itimerspec))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_itimerspec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_itimerspec))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_value)
         )
     );
 }
@@ -420,8 +1449,8 @@ fn bindgen_test_layout_sigaction() {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union linux_sigval {
-    pub lsival_int: ::core::ffi::c_int,
-    pub lsival_ptr: *mut ::core::ffi::c_void,
+    pub sival_int: ::core::ffi::c_int,
+    pub sival_ptr: *mut ::core::ffi::c_void,
 }
 #[test]
 fn bindgen_test_layout_sigval() {
@@ -438,23 +1467,23 @@ fn bindgen_test_layout_sigval() {
         concat!("Alignment of ", stringify!(linux_sigval))
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).lsival_int) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).sival_int) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
             stringify!(linux_sigval),
             "::",
-            stringify!(lsival_int)
+            stringify!(sival_int)
         )
     );
     assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).lsival_ptr) as usize - ptr as usize },
+        unsafe { ::core::ptr::addr_of!((*ptr).sival_ptr) as usize - ptr as usize },
         0usize,
         concat!(
             "Offset of field: ",
             stringify!(linux_sigval),
             "::",
-            stringify!(lsival_ptr)
+            stringify!(sival_ptr)
         )
     );
 }

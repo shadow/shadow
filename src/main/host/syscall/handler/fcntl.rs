@@ -1,21 +1,21 @@
-use log::warn;
+use linux_api::fcntl::{DescriptorFlags, FcntlCommand, OFlag};
+use log::debug;
 use nix::errno::Errno;
-use nix::fcntl::OFlag;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use syscall_logger::log_syscall;
 
 use crate::cshadow;
-use crate::host::descriptor::{CompatFile, DescriptorFlags, File, FileStatus};
+use crate::host::descriptor::{CompatFile, File, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* cmd */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /* cmd */ std::ffi::c_int)]
     pub fn fcntl(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        cmd: libc::c_int,
-        arg: libc::c_ulong,
+        fd: std::ffi::c_int,
+        cmd: std::ffi::c_int,
+        arg: std::ffi::c_ulong,
     ) -> SyscallResult {
         // NOTE: this function should *not* run the C syscall handler if the cmd modifies the
         // descriptor
@@ -28,25 +28,33 @@ impl SyscallHandler {
         let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
+        let Ok(cmd) = FcntlCommand::try_from(cmd) else {
+            debug!("Bad fcntl command: {cmd}");
+            return Err(Errno::EINVAL.into());
+        };
+
         Ok(match cmd {
-            libc::F_SETLK
-            | libc::F_SETLKW
-            | libc::F_OFD_SETLKW
-            | libc::F_GETLK
-            | libc::F_OFD_GETLK => {
+            FcntlCommand::F_SETLK
+            | FcntlCommand::F_SETLKW
+            | FcntlCommand::F_OFD_SETLKW
+            | FcntlCommand::F_GETLK
+            | FcntlCommand::F_OFD_GETLK => {
                 match desc.file() {
                     CompatFile::New(_) => {
-                        warn!("fcntl({}) unimplemented for {:?}", cmd, desc.file());
+                        warn_once_then_debug!(
+                            "(LOG_ONCE) fcntl({cmd:?}) unimplemented for {:?}",
+                            desc.file()
+                        );
                         return Err(Errno::ENOSYS.into());
                     }
                     CompatFile::Legacy(_) => {
-                        warn!("Using fcntl({}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258", cmd);
+                        warn_once_then_debug!("(LOG_ONCE) Using fcntl({cmd:?}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258");
                         drop(desc_table);
                         return legacy_syscall_fn(ctx);
                     }
                 };
             }
-            libc::F_GETFL => {
+            FcntlCommand::F_GETFL => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
@@ -61,7 +69,7 @@ impl SyscallHandler {
                 let flags = file.get_status().as_o_flags() | file.mode().as_o_flags();
                 SysCallReg::from(flags.bits())
             }
-            libc::F_SETFL => {
+            FcntlCommand::F_SETFL => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
@@ -124,20 +132,14 @@ impl SyscallHandler {
                 file.set_status(status);
                 SysCallReg::from(0)
             }
-            libc::F_GETFD => {
-                let flags = desc.flags().bits();
-                // the only descriptor flag supported by Linux is FD_CLOEXEC, so let's make sure
-                // we're returning the correct value
-                debug_assert!(flags == 0 || flags == libc::FD_CLOEXEC);
-                SysCallReg::from(flags)
-            }
-            libc::F_SETFD => {
+            FcntlCommand::F_GETFD => SysCallReg::from(desc.flags().bits()),
+            FcntlCommand::F_SETFD => {
                 let flags = i32::try_from(arg).or(Err(Errno::EINVAL))?;
                 let flags = DescriptorFlags::from_bits(flags).ok_or(Errno::EINVAL)?;
                 desc.set_flags(flags);
                 SysCallReg::from(0)
             }
-            libc::F_DUPFD => {
+            FcntlCommand::F_DUPFD => {
                 let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
 
                 let new_desc = desc.dup(DescriptorFlags::empty());
@@ -146,16 +148,16 @@ impl SyscallHandler {
                     .or(Err(Errno::EINVAL))?;
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
-            libc::F_DUPFD_CLOEXEC => {
+            FcntlCommand::F_DUPFD_CLOEXEC => {
                 let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
 
-                let new_desc = desc.dup(DescriptorFlags::CLOEXEC);
+                let new_desc = desc.dup(DescriptorFlags::FD_CLOEXEC);
                 let new_fd = desc_table
                     .register_descriptor_with_min_fd(new_desc, min_fd)
                     .or(Err(Errno::EINVAL))?;
                 SysCallReg::from(i32::try_from(new_fd).unwrap())
             }
-            libc::F_GETPIPE_SZ => {
+            FcntlCommand::F_GETPIPE_SZ => {
                 let file = match desc.file() {
                     CompatFile::New(d) => d,
                     // if it's a legacy file, use the C syscall handler instead
@@ -170,7 +172,10 @@ impl SyscallHandler {
                     return Err(Errno::EINVAL.into());
                 }
             }
-            _ => return Err(Errno::EINVAL.into()),
+            cmd => {
+                warn_once_then_debug!("(LOG_ONCE) Unhandled fcntl command: {cmd:?}");
+                return Err(Errno::EINVAL.into());
+            }
         })
     }
 }

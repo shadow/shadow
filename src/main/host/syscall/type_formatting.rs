@@ -168,9 +168,9 @@ deref_pointer_impl!(u8, u16, u32, u64, usize);
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
 
-safe_pointer_impl!(libc::c_void);
+safe_pointer_impl!(std::ffi::c_void);
 safe_pointer_impl!(libc::sockaddr);
-safe_pointer_impl!(libc::sysinfo);
+safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
 simple_debug_impl!(nix::fcntl::OFlag);

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
-use nix::fcntl::OFlag;
+use linux_api::fcntl::{DescriptorFlags, OFlag};
+use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use socket::{Socket, SocketRef, SocketRefMut};
 
@@ -29,12 +30,12 @@ bitflags::bitflags! {
     /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
     /// same value.
     #[derive(Copy, Clone, Debug)]
-    pub struct FileStatus: libc::c_int {
-        const NONBLOCK = libc::O_NONBLOCK;
-        const APPEND = libc::O_APPEND;
-        const ASYNC = libc::O_ASYNC;
-        const DIRECT = libc::O_DIRECT;
-        const NOATIME = libc::O_NOATIME;
+    pub struct FileStatus: i32 {
+        const NONBLOCK = OFlag::O_NONBLOCK.bits();
+        const APPEND = OFlag::O_APPEND.bits();
+        const ASYNC = OFlag::O_ASYNC.bits();
+        const DIRECT = OFlag::O_DIRECT.bits();
+        const NOATIME = OFlag::O_NOATIME.bits();
     }
 }
 
@@ -432,7 +433,7 @@ impl FileRefMut<'_> {
         pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket, TimerFd;
-        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
+        pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
@@ -571,40 +572,6 @@ impl std::ops::Drop for OpenFileInner {
         let _ = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| self.close_helper(cb_queue))
         });
-    }
-}
-
-bitflags::bitflags! {
-    /// Flags for a file descriptor.
-    ///
-    /// Linux only supports a single descriptor flag:
-    /// https://www.gnu.org/software/libc/manual/html_node/Descriptor-Flags.html
-    #[derive(Copy, Clone, Debug)]
-    pub struct DescriptorFlags: libc::c_int {
-        const CLOEXEC = libc::FD_CLOEXEC;
-    }
-}
-
-impl DescriptorFlags {
-    pub fn as_o_flags(&self) -> OFlag {
-        let mut flags = OFlag::empty();
-        if self.contains(Self::CLOEXEC) {
-            flags.insert(OFlag::O_CLOEXEC);
-        }
-        flags
-    }
-
-    /// Returns a tuple of the `DescriptorFlags` and any remaining flags.
-    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
-        let mut remaining = flags;
-        let mut flags = Self::empty();
-
-        if remaining.contains(OFlag::O_CLOEXEC) {
-            remaining.remove(OFlag::O_CLOEXEC);
-            flags.insert(Self::CLOEXEC);
-        }
-
-        (flags, remaining)
     }
 }
 

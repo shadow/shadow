@@ -723,6 +723,7 @@ dependencies = [
  "memoffset 0.9.0",
  "num_enum",
  "shadow-build-common",
+ "shadow-pod",
  "static_assertions",
  "vasi",
 ]

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
-use linux_api::signal::{SigInfo, Signal};
+use linux_api::signal::{siginfo_t, Signal};
 use log::{debug, trace};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
@@ -417,12 +417,12 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let siginfo = SigInfo::new_for_kill(
+                    let siginfo_t = siginfo_t::new_for_kill(
                         Signal::try_from(shutdown_signal as i32).unwrap(),
                         1,
                         0,
                     );
-                    process.signal(host, None, &siginfo);
+                    process.signal(host, None, &siginfo_t);
                 });
                 host.schedule_task_at_emulated_time(
                     task,

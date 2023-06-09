@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::fcntl::DescriptorFlags;
 use log::*;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -9,9 +10,7 @@ use syscall_logger::log_syscall;
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
-use crate::host::descriptor::{
-    CompatFile, Descriptor, DescriptorFlags, File, FileMode, FileStatus, OpenFile,
-};
+use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::type_formatting::SyscallBufferArg;
@@ -19,8 +18,8 @@ use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int)]
-    pub fn close(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int)]
+    pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         trace!("Trying to close fd {}", fd);
 
         let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
@@ -44,8 +43,8 @@ impl SyscallHandler {
         })
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int)]
-    pub fn dup(ctx: &mut SyscallContext, fd: libc::c_int) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int)]
+    pub fn dup(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -57,14 +56,14 @@ impl SyscallHandler {
             .or(Err(Errno::ENFILE))?;
 
         // return the new fd
-        Ok(libc::c_int::try_from(new_fd).unwrap().into())
+        Ok(std::ffi::c_int::try_from(new_fd).unwrap().into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int)]
     pub fn dup2(
         ctx: &mut SyscallContext,
-        old_fd: libc::c_int,
-        new_fd: libc::c_int,
+        old_fd: std::ffi::c_int,
+        new_fd: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
@@ -90,16 +89,16 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(libc::c_int::from(new_fd).into())
+        Ok(std::ffi::c_int::from(new_fd).into())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* oldfd */ libc::c_int, /* newfd */ libc::c_int,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int,
                   /* flags */ nix::fcntl::OFlag)]
     pub fn dup3(
         ctx: &mut SyscallContext,
-        old_fd: libc::c_int,
-        new_fd: libc::c_int,
-        flags: libc::c_int,
+        old_fd: std::ffi::c_int,
+        new_fd: std::ffi::c_int,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
@@ -114,7 +113,7 @@ impl SyscallHandler {
 
         // dup3 only supports the O_CLOEXEC flag
         let flags = match flags {
-            libc::O_CLOEXEC => DescriptorFlags::CLOEXEC,
+            libc::O_CLOEXEC => DescriptorFlags::FD_CLOEXEC,
             0 => DescriptorFlags::empty(),
             _ => return Err(nix::errno::Errno::EINVAL.into()),
         };
@@ -131,14 +130,14 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(libc::c_int::try_from(new_fd).unwrap().into())
+        Ok(std::ffi::c_int::try_from(new_fd).unwrap().into())
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
                   /* count */ libc::size_t)]
     pub fn read(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -181,11 +180,11 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int, /* buf */ *const libc::c_void,
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
                   /* count */ libc::size_t, /* offset */ libc::off_t)]
     pub fn pread64(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: libc::off_t,
@@ -244,11 +243,11 @@ impl SyscallHandler {
         Self::readv_helper(ctx, file, &[iov], offset, 0)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
     pub fn write(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
     ) -> Result<libc::ssize_t, SyscallError> {
@@ -291,12 +290,12 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ libc::c_int,
+    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int,
                   /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
                   /* offset */ libc::off_t)]
     pub fn pwrite64(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
+        fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
         buf_size: libc::size_t,
         offset: libc::off_t,
@@ -356,24 +355,27 @@ impl SyscallHandler {
         Self::writev_helper(ctx, file, &[iov], offset, 0)
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2])]
-    pub fn pipe(ctx: &mut SyscallContext, fd_ptr: ForeignPtr<[libc::c_int; 2]>) -> SyscallResult {
+    #[log_syscall(/* rv */ std::ffi::c_int, /* pipefd */ [std::ffi::c_int; 2])]
+    pub fn pipe(
+        ctx: &mut SyscallContext,
+        fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
+    ) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* pipefd */ [libc::c_int; 2],
+    #[log_syscall(/* rv */ std::ffi::c_int, /* pipefd */ [std::ffi::c_int; 2],
                   /* flags */ nix::fcntl::OFlag)]
     pub fn pipe2(
         ctx: &mut SyscallContext,
-        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
-        flags: libc::c_int,
+        fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
+        flags: std::ffi::c_int,
     ) -> SyscallResult {
         Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
     fn pipe_helper(
         ctx: &mut SyscallContext,
-        fd_ptr: ForeignPtr<[libc::c_int; 2]>,
+        fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
         flags: i32,
     ) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
@@ -398,7 +400,7 @@ impl SyscallHandler {
         }
 
         if flags & libc::O_CLOEXEC != 0 {
-            descriptor_flags.insert(DescriptorFlags::CLOEXEC);
+            descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
             remaining_flags &= !libc::O_CLOEXEC;
         }
 

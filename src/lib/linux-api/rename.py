@@ -86,7 +86,7 @@ def get_field_names(s):
 
 def prefix_field_names(fields, s):
     """
-    Prefix each field name in `fields` with `LINUX_` in the Rust source `s`.
+    Prefix some field names in `fields` with `l` in the Rust source `s`.
 
     We do this to avoid conflicts with macros that are used to access
     fields. For example, in glibc, there is a macro with the name `si_signo`
@@ -96,8 +96,16 @@ def prefix_field_names(fields, s):
     See module-level section "Caveats"
     """
     for t in fields:
-        # Replace "si_signo" with "lsi_signo"
-        s = re.sub(f'\\b{t}\\b', f'l{t}', s)
+        if (
+            # siginfo fields; sometimes collide with macros in libc
+            t.startswith('si_')
+            # sigaction fields; sometimes collide with macros in libc
+            or t.startswith('sa_')
+            # libc reserves identifiers starting with _ in general.
+            or t.startswith('_')
+            ):
+            # Replace "si_signo" with "lsi_signo"
+            s = re.sub(f'\\b{t}\\b', f'l{t}', s)
     return s
 
 def mangle(s):

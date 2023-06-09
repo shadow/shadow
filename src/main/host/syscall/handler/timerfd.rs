@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::fcntl::DescriptorFlags;
+use linux_api::time::itimerspec;
 use nix::errno::Errno;
 use nix::sys::timerfd::{TimerFlags, TimerSetTimeFlags};
 use shadow_shim_helper_rs::{
@@ -10,7 +12,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::descriptor::{
-    timerfd::TimerFd, CompatFile, Descriptor, DescriptorFlags, File, FileStatus, OpenFile,
+    timerfd::TimerFd, CompatFile, Descriptor, File, FileStatus, OpenFile,
 };
 use crate::host::{
     syscall::handler::{SyscallContext, SyscallHandler},
@@ -19,12 +21,12 @@ use crate::host::{
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::c_int, /* clockid */ libc::c_int, /* flags */ libc::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* clockid */ std::ffi::c_int, /* flags */ std::ffi::c_int)]
     pub fn timerfd_create(
         ctx: &mut SyscallContext,
-        clockid: libc::c_int,
-        flags: libc::c_int,
-    ) -> Result<libc::c_int, SyscallError> {
+        clockid: std::ffi::c_int,
+        flags: std::ffi::c_int,
+    ) -> Result<std::ffi::c_int, SyscallError> {
         // Continue only if we support the clockid.
         check_clockid(clockid)?;
 
@@ -41,7 +43,7 @@ impl SyscallHandler {
         }
 
         if flags.contains(TimerFlags::TFD_CLOEXEC) {
-            desc_flags.insert(DescriptorFlags::CLOEXEC);
+            desc_flags.insert(DescriptorFlags::FD_CLOEXEC);
         }
 
         let file = TimerFd::new(file_flags);
@@ -60,15 +62,12 @@ impl SyscallHandler {
         Ok(i32::try_from(fd.val()).unwrap())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /*curr_value*/ *const libc::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /*curr_value*/ *const std::ffi::c_void)]
     pub fn timerfd_gettime(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        curr_value_ptr: ForeignPtr<libc::itimerspec>,
-    ) -> Result<libc::c_int, SyscallError> {
-        // Note that the kernel syscall takes a `__kernel_itimerspec` type, which we assume is the
-        // same size/layout as libc::itimerspec.
-
+        fd: std::ffi::c_int,
+        curr_value_ptr: ForeignPtr<linux_api::time::itimerspec>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
         // Get the TimerFd object.
         let file = get_cloned_file(ctx, fd)?;
         let File::TimerFd(ref timerfd) = file else {
@@ -83,7 +82,7 @@ impl SyscallHandler {
     fn timerfd_gettime_helper(
         ctx: &mut SyscallContext,
         timerfd: &Arc<AtomicRefCell<TimerFd>>,
-        value_ptr: ForeignPtr<libc::itimerspec>,
+        value_ptr: ForeignPtr<linux_api::time::itimerspec>,
     ) -> Result<(), Errno> {
         // Lookup the timer state.
         let (remaining, interval) = {
@@ -104,7 +103,7 @@ impl SyscallHandler {
         };
 
         // Set up the result values.
-        let result = libc::itimerspec {
+        let result = itimerspec {
             it_value: remaining.try_into().unwrap(),
             it_interval: interval.try_into().unwrap(),
         };
@@ -118,18 +117,15 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ libc::c_int, /* fd */ libc::c_int, /* flags */ libc::c_int,
-                  /* new_value */ *const libc::c_void, /* old_value */ *const libc::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /* flags */ std::ffi::c_int,
+                  /* new_value */ *const std::ffi::c_void, /* old_value */ *const std::ffi::c_void)]
     pub fn timerfd_settime(
         ctx: &mut SyscallContext,
-        fd: libc::c_int,
-        flags: libc::c_int,
-        new_value_ptr: ForeignPtr<libc::itimerspec>,
-        old_value_ptr: ForeignPtr<libc::itimerspec>,
-    ) -> Result<libc::c_int, SyscallError> {
-        // Note that the kernel syscall takes two `__kernel_itimerspec` types, which we assume are
-        // the same size/layout as libc::itimerspec.
-
+        fd: std::ffi::c_int,
+        flags: std::ffi::c_int,
+        new_value_ptr: ForeignPtr<linux_api::time::itimerspec>,
+        old_value_ptr: ForeignPtr<linux_api::time::itimerspec>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
         let Some(flags) = TimerSetTimeFlags::from_bits(flags) else {
             log::debug!("Invalid timerfd_settime flags: {flags}");
             return Err(Errno::EINVAL.into());
@@ -197,7 +193,7 @@ impl SyscallHandler {
 /// Checks the clockid; returns `Ok(())` if the clockid is `CLOCK_REALTIME` or
 /// `CLOCK_MONOTONIC`, or the appropriate errno if the clockid is unknown or
 /// unsupported.
-fn check_clockid(clockid: libc::c_int) -> Result<(), Errno> {
+fn check_clockid(clockid: std::ffi::c_int) -> Result<(), Errno> {
     if clockid == libc::CLOCK_MONOTONIC || clockid == libc::CLOCK_REALTIME {
         return Ok(());
     }
@@ -218,7 +214,7 @@ fn check_clockid(clockid: libc::c_int) -> Result<(), Errno> {
     Err(Errno::EINVAL)
 }
 
-fn get_cloned_file(ctx: &mut SyscallContext, fd: libc::c_int) -> Result<File, Errno> {
+fn get_cloned_file(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> Result<File, Errno> {
     // get the descriptor, or return error if it doesn't exist
     let desc_table = ctx.objs.process.descriptor_table_borrow();
     let desc = SyscallHandler::get_descriptor(&desc_table, fd)?;

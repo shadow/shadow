@@ -3,6 +3,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -476,13 +477,13 @@ impl UdpSocket {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         mem: &mut MemoryManager,
     ) -> SyscallResult {
         match request {
             // equivalent to SIOCINQ
-            libc::FIONREAD => {
+            IoctlRequest::FIONREAD => {
                 let len = self
                     .recv_buffer
                     .peek_packet()
@@ -497,7 +498,7 @@ impl UdpSocket {
                 Ok(0.into())
             }
             // equivalent to SIOCOUTQ
-            libc::TIOCOUTQ => {
+            IoctlRequest::TIOCOUTQ => {
                 let len = self.send_buffer.len_bytes().try_into().unwrap();
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
@@ -505,24 +506,26 @@ impl UdpSocket {
 
                 Ok(0.into())
             }
-            libc::FIONBIO => {
+            IoctlRequest::FIONBIO => {
                 panic!("This should have been handled by the ioctl syscall handler");
             }
-            libc::TCGETS
-            | libc::TCSETS
-            | libc::TCSETSW
-            | libc::TCSETSF
-            | libc::TCGETA
-            | libc::TCSETA
-            | libc::TCSETAW
-            | libc::TCSETAF
-            | libc::TIOCGWINSZ
-            | libc::TIOCSWINSZ => {
+            IoctlRequest::TCGETS
+            | IoctlRequest::TCSETS
+            | IoctlRequest::TCSETSW
+            | IoctlRequest::TCSETSF
+            | IoctlRequest::TCGETA
+            | IoctlRequest::TCSETA
+            | IoctlRequest::TCSETAW
+            | IoctlRequest::TCSETAF
+            | IoctlRequest::TIOCGWINSZ
+            | IoctlRequest::TIOCSWINSZ => {
                 // not a terminal
                 Err(Errno::ENOTTY.into())
             }
-            _ => {
-                log::debug!("We do not yet handle ioctl request {request} on tcp sockets");
+            request => {
+                warn_once_then_debug!(
+                    "(LOG_ONCE) We do not yet handle ioctl request {request:?} on tcp sockets"
+                );
                 Err(Errno::EINVAL.into())
             }
         }

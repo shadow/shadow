@@ -4,6 +4,7 @@ use std::ops::DerefMut;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -203,7 +204,7 @@ impl UnixSocket {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -629,7 +630,7 @@ impl ProtocolState {
     fn ioctl(
         &mut self,
         common: &mut UnixSocketCommon,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -893,7 +894,7 @@ where
     fn ioctl(
         &mut self,
         _common: &mut UnixSocketCommon,
-        _request: u64,
+        _request: IoctlRequest,
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -1044,7 +1045,7 @@ impl Protocol for ConnOrientedInitial {
     fn ioctl(
         &mut self,
         common: &mut UnixSocketCommon,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -1520,7 +1521,7 @@ impl Protocol for ConnOrientedConnected {
     fn ioctl(
         &mut self,
         common: &mut UnixSocketCommon,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -1728,7 +1729,7 @@ impl Protocol for ConnLessInitial {
     fn ioctl(
         &mut self,
         common: &mut UnixSocketCommon,
-        request: u64,
+        request: IoctlRequest,
         arg_ptr: ForeignPtr<()>,
         memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
@@ -2159,14 +2160,11 @@ impl UnixSocketCommon {
 
     pub fn ioctl(
         &mut self,
-        request: u64,
+        request: IoctlRequest,
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        log::warn!(
-            "We do not yet handle ioctl request {} on unix sockets",
-            request
-        );
+        log::warn!("We do not yet handle ioctl request {request:?} on unix sockets");
         Err(Errno::EINVAL.into())
     }
 

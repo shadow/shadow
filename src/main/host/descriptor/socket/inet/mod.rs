@@ -2,6 +2,7 @@ use std::net::SocketAddrV4;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use nix::sys::socket::Shutdown;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -263,7 +264,7 @@ impl InetSocketRefMut<'_> {
         pub fn set_status(&mut self, status: FileStatus)
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp, Udp;
-        pub fn ioctl(&mut self, request: u64, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
+        pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
     enum_passthrough!(self, (ptr), LegacyTcp, Udp;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

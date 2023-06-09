@@ -1,4 +1,3 @@
-use bytemuck::TransparentWrapper;
 use core::result::Result;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
@@ -33,24 +32,26 @@ pub enum ClockId {
 }
 
 pub use bindings::linux_timespec;
+#[allow(non_camel_case_types)]
+pub type timespec = linux_timespec;
+unsafe impl shadow_pod::Pod for timespec {}
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct TimeSpec(linux_timespec);
-unsafe impl TransparentWrapper<linux_timespec> for TimeSpec {}
-
-pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<TimeSpec, Errno> {
-    let mut t: TimeSpec = unsafe { core::mem::zeroed() };
-    let kernel_t: &mut linux_timespec = TimeSpec::peel_mut(&mut t);
-    unsafe { syscall!(linux_syscall::SYS_clock_gettime, clockid, kernel_t) }
+pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<timespec, Errno> {
+    let mut t = shadow_pod::zeroed();
+    unsafe { syscall!(linux_syscall::SYS_clock_gettime, clockid, &mut t) }
         .check()
         .map_err(Errno::from)?;
     Ok(t)
 }
 
-pub fn clock_gettime(clockid: ClockId) -> Result<TimeSpec, Errno> {
+pub fn clock_gettime(clockid: ClockId) -> Result<timespec, Errno> {
     clock_gettime_raw(clockid.into())
 }
+
+pub use bindings::linux_itimerspec;
+#[allow(non_camel_case_types)]
+pub type itimerspec = linux_itimerspec;
+unsafe impl shadow_pod::Pod for itimerspec {}
 
 mod export {
     use super::*;
@@ -62,7 +63,7 @@ mod export {
             Err(e) => return e.to_negated_i64(),
         };
         assert!(!res.is_null());
-        unsafe { res.write(TimeSpec::peel(t)) }
+        unsafe { res.write(t) }
         0
     }
 }
