@@ -1,6 +1,5 @@
-use core::{marker::PhantomData, ops::Deref, pin::Pin};
+use core::{marker::PhantomData, pin::Pin};
 
-use rkyv::{Archive, Serialize};
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::sync;
@@ -199,8 +198,8 @@ impl<T> SelfContainedMutex<T> {
                     break;
                 }
                 match sync::futex_wait(&self.futex.0, current.into()) {
-                    Ok(_) | Err(nix::errno::Errno::EINTR) => break,
-                    Err(nix::errno::Errno::EAGAIN) => {
+                    Ok(_) | Err(rustix::io::Errno::INTR) => break,
+                    Err(rustix::io::Errno::AGAIN) => {
                         // We may have gotten this because another thread is
                         // also trying to sleep on the futex, and just
                         // incremented the sleeper count. If we naively
@@ -365,63 +364,6 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.ptr.as_ref().unwrap().deref() }
-    }
-}
-
-impl<S, T> rkyv::Serialize<S> for SelfContainedMutex<T>
-where
-    S: rkyv::Fallible + ?Sized,
-    T: Archive + Serialize<S>,
-{
-    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
-        let lock = self.lock();
-        let res = lock.deref().serialize(serializer);
-        if res.is_ok() {
-            // We must hold the lock through Archive::resolve to ensure the
-            // data doesn't change. However, we don't have a way to pass the
-            // lock object through to Archive::resolve. We can't bundle it into
-            // the Resolver object, because the associated traits don't support
-            // a Resolver object with a lifetime bound.
-            //
-            // This addresses the soundness problem that rkyv::with::Lock has.
-            // If and when rkyv changes their APIs to allow a nicer solution
-            // there, we may able to apply it here too.
-            // https://github.com/rkyv/rkyv/issues/309
-            //
-            // We solve this by dropping lock object *without releasing the
-            // underlying lock*.
-            lock.disconnect();
-        }
-        res
-    }
-}
-
-impl<T> rkyv::Archive for SelfContainedMutex<T>
-where
-    T: rkyv::Archive,
-{
-    type Archived = SelfContainedMutex<<T as rkyv::Archive>::Archived>;
-    type Resolver = <T as rkyv::Archive>::Resolver;
-
-    unsafe fn resolve(&self, pos: usize, resolver: Self::Resolver, out: *mut Self::Archived) {
-        // `self` should already have been locked in Serialize::Serialize, but the guard disconnected.
-        // We reconstitute the guard here.
-        let lock = SelfContainedMutexGuard::<T>::reconnect(self);
-
-        // We're effectively cloning the original data, so always initialize the futex
-        // into the unlocked state.
-        unsafe {
-            core::ptr::addr_of_mut!((*out).futex).write(AtomicFutexWord::new(FutexWord {
-                lock_state: UNLOCKED,
-                num_sleepers: 0,
-            }))
-        };
-
-        // Resolve the inner value
-        let (val_offset, out_val_ptr_unsafe_cell) = rkyv::out_field!(out.val);
-        // Because UnsafeCell is repr(transparent), we can cast it to the inner type.
-        let out_val_ptr = out_val_ptr_unsafe_cell as *mut <T as Archive>::Archived;
-        unsafe { lock.resolve(pos + val_offset, resolver, out_val_ptr) };
     }
 }
 

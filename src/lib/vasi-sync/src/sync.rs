@@ -30,35 +30,47 @@ loom::lazy_static! {
     pub static ref FUTEXES: Mutex<HashMap<usize, Arc<Condvar>>> = Mutex::new(HashMap::new());
 }
 
+// Rustix doesn't define its `FutexOperation` type under miri, so we can't use it in
+// our interfaces. Use our own type and translate in our futex "backends".
+enum FutexOperation {
+    Wait,
+    Wake,
+}
+
 #[cfg(not(loom))]
-unsafe fn futex(futex_word: &AtomicU32, futex_operation: i32, val: u32) -> nix::Result<i64> {
+unsafe fn futex(
+    futex_word: &AtomicU32,
+    futex_operation: FutexOperation,
+    val: u32,
+) -> rustix::io::Result<usize> {
     #[cfg(not(miri))]
     {
-        use linux_syscall::Result64;
+        let futex_operation = match futex_operation {
+            FutexOperation::Wait => rustix::thread::FutexOperation::Wait,
+            FutexOperation::Wake => rustix::thread::FutexOperation::Wake,
+        };
 
-        // We use linux_syscall here to avoid the libc dependency, and touching
-        // libc's `errno` in particular.
-        let raw_res = unsafe {
-            linux_syscall::syscall!(
-                linux_syscall::SYS_futex,
+        unsafe {
+            rustix::thread::futex(
                 futex_word.as_ptr(),
                 futex_operation,
+                rustix::thread::FutexFlags::empty(),
                 val,
-                core::ptr::null() as *const libc::timespec,
+                core::ptr::null() as *const rustix::fs::Timespec,
                 core::ptr::null_mut() as *mut u32,
                 0u32,
             )
-        };
-        raw_res
-            .try_i64()
-            .map_err(|e| nix::errno::Errno::from_i32(e.into()))
+        }
     }
-    // Miri doesn't understands raw syscall assembly, but does understand
-    // futex syscalls made through the libc syscall wrapper.
-    // It's ok to depend on libc for miri testing.
+    // Rustix doesn't include `futex` at all under miri. miri understands
+    // futex syscalls made through libc.
     #[cfg(miri)]
     {
-        nix::errno::Errno::result(unsafe {
+        let futex_operation = match futex_operation {
+            FutexOperation::Wait => libc::FUTEX_WAIT,
+            FutexOperation::Wake => libc::FUTEX_WAKE,
+        };
+        let rv = unsafe {
             libc::syscall(
                 libc::SYS_futex,
                 futex_word.as_ptr(),
@@ -68,16 +80,23 @@ unsafe fn futex(futex_word: &AtomicU32, futex_operation: i32, val: u32) -> nix::
                 core::ptr::null_mut() as *mut u32,
                 0u32,
             )
-        })
+        };
+        if rv >= 0 {
+            Ok(rv.try_into().unwrap())
+        } else {
+            Err(rustix::io::Errno::from_raw_os_error(unsafe {
+                *libc::__errno_location()
+            }))
+        }
     }
 }
 
-pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
+pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize> {
     // In "production" we use linux_syscall to avoid going through libc, and to
     // avoid touching libc's `errno` in particular.
     #[cfg(not(loom))]
     {
-        unsafe { futex(futex_word, libc::FUTEX_WAIT, val) }
+        unsafe { futex(futex_word, FutexOperation::Wait, val) }
     }
     #[cfg(loom)]
     {
@@ -93,7 +112,7 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
         let mut hashmap = FUTEXES.lock().unwrap();
         let futex_word_val = futex_word.load(Ordering::Relaxed);
         if futex_word_val != val {
-            return Err(nix::errno::Errno::EAGAIN);
+            return Err(rustix::io::Errno::AGAIN);
         }
         let condvar = hashmap
             .entry(futex_word as *const _ as usize)
@@ -106,10 +125,10 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> nix::Result<i64> {
     }
 }
 
-pub fn futex_wake(futex_word: &AtomicU32) -> nix::Result<()> {
+pub fn futex_wake(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     #[cfg(not(loom))]
     {
-        unsafe { futex(futex_word, libc::FUTEX_WAKE, 1) }.map(|_| ())
+        unsafe { futex(futex_word, FutexOperation::Wake, 1) }.map(|_| ())
     }
     // loom doesn't understand syscalls; emulate via loom primitives.
     #[cfg(loom)]
