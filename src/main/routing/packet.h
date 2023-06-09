@@ -59,8 +59,8 @@ void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
 static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(packet); }
 
-void packet_setPriority(Packet *packet, double value);
-gdouble packet_getPriority(const Packet* packet);
+void packet_setPriority(Packet *packet, uint64_t value);
+uint64_t packet_getPriority(const Packet* packet);
 
 // The port must be in network byte order.
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,

@@ -78,7 +78,7 @@ struct _Packet {
      * the default FIFO network interface scheduling discipline.
      * smaller values have greater priority.
      */
-    gdouble priority;
+    uint64_t priority;
 
     PacketDeliveryStatusFlags allStatus;
     GQueue* orderedStatus;
@@ -270,7 +270,7 @@ void packet_unref(Packet* packet) {
     }
 }
 
-void packet_setPriority(Packet *packet, double value) {
+void packet_setPriority(Packet *packet, uint64_t value) {
    packet->priority = value;
 }
 
@@ -405,7 +405,7 @@ gsize packet_getHeaderSize(const Packet* packet) {
     return size;
 }
 
-gdouble packet_getPriority(const Packet* packet) {
+uint64_t packet_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
 }

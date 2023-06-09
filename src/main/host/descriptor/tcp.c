@@ -959,7 +959,7 @@ static void _tcp_sendControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPF
     Packet* control = _tcp_createControlPacket(tcp, host, flags);
 
     /* make sure it gets sent before whatever else is in the queue */
-    packet_setPriority(control, 0.0);
+    packet_setPriority(control, 0);
 
     /* push it in the buffer and to the socket */
     _tcp_bufferPacketOut(tcp, control);

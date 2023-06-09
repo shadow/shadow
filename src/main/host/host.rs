@@ -156,7 +156,7 @@ pub struct Host {
     determinism_sequence_counter: Cell<u64>,
 
     // track the order in which the application sent us application data
-    packet_priority_counter: Cell<f64>,
+    packet_priority_counter: Cell<u64>,
 
     // Owned pointers to processes.
     processes: RefCell<BTreeMap<ProcessId, RootedRc<RootedRefCell<Process>>>>,
@@ -244,8 +244,8 @@ impl Host {
         let event_id_counter = Cell::new(0);
         let packet_id_counter = Cell::new(0);
         let determinism_sequence_counter = Cell::new(0);
-        // Packet priorities start at 1.0. "0.0" is used for control packets.
-        let packet_priority_counter = Cell::new(1.0);
+        // Packet priorities start at 1. "0" is used for control packets.
+        let packet_priority_counter = Cell::new(1);
         let tsc = Tsc::new(params.native_tsc_frequency);
 
         std::fs::create_dir_all(&data_dir_path).unwrap();
@@ -601,9 +601,10 @@ impl Host {
         res
     }
 
-    pub fn get_next_packet_priority(&self) -> f64 {
+    pub fn get_next_packet_priority(&self) -> u64 {
         let res = self.packet_priority_counter.get();
-        self.packet_priority_counter.set(res + 1.0);
+        self.packet_priority_counter
+            .set(res.checked_add(1).unwrap());
         res
     }
 
@@ -980,7 +981,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> f64 {
+    pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.get_next_packet_priority()
     }
