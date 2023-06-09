@@ -103,8 +103,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_two_sockets_same_port"),
                     move || test_two_sockets_same_port(sock_type, flag),
-                    // TODO: this doesn't work in shadow
-                    set![TestEnv::Libc],
+                    if sock_type == libc::SOCK_DGRAM {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    } else {
+                        // TODO: this doesn't work in shadow for TCP
+                        set![TestEnv::Libc]
+                    },
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_loopback"),

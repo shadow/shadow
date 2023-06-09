@@ -227,13 +227,13 @@ impl UdpSocket {
         }
 
         // this will allow us to receive packets from any peer
-        let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+        let unspecified_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
         // associate the socket
         let (addr, handle) = inet::associate_socket(
             InetSocket::Udp(Arc::clone(socket)),
             addr,
-            peer_addr,
+            unspecified_addr,
             net_ns,
             rng,
         )?;
@@ -339,12 +339,12 @@ impl UdpSocket {
             };
 
             // this will allow us to receive packets from any peer
-            let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+            let unspecified_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
 
             let (local_addr, handle) = super::associate_socket(
                 InetSocket::Udp(Arc::clone(socket)),
                 local_addr,
-                peer_addr,
+                unspecified_addr,
                 net_ns,
                 rng,
             )?;
@@ -580,44 +580,42 @@ impl UdpSocket {
             }
         }
 
-        // if we were previously associated with the network interface, we need to disassociate so
-        // that we can re-associate with the correct peer address
-        //
-        // connect(2):
-        // > If the socket sockfd is of type SOCK_DGRAM, then addr is the address to which datagrams
-        // > are sent by default, and the only address from which datagrams are received.
-        socket.borrow_mut().association = None;
+        // make sure that we're bound
+        {
+            let mut socket_ref = socket.borrow_mut();
 
-        // we need to associate with the network interface, but first we need a local ip/port to
-        // bind to
-        let local_addr = match socket.borrow().bound_addr {
-            // keep the same local binding
-            Some(x) => x,
-            // implicit bind (use default interface unless the remote peer is on loopback)
-            None => {
-                if peer_addr.ip() == &std::net::Ipv4Addr::LOCALHOST {
+            if socket_ref.bound_addr.is_some() {
+                // we must have an association since we're bound
+                assert!(socket_ref.association.is_some());
+            } else {
+                // we can't be unbound but have a peer
+                assert!(socket_ref.peer_addr.is_none());
+                assert!(socket_ref.association.is_none());
+
+                // implicit bind (use default interface unless the remote peer is on loopback)
+                let local_addr = if peer_addr.ip() == &std::net::Ipv4Addr::LOCALHOST {
                     SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)
                 } else {
                     SocketAddrV4::new(net_ns.default_ip, 0)
-                }
+                };
+
+                // this will allow us to receive packets from any source address, but
+                // `push_in_packet` should drop any packets that aren't from the peer
+                let unspecified_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
+
+                let (local_addr, handle) = super::associate_socket(
+                    InetSocket::Udp(Arc::clone(socket)),
+                    local_addr,
+                    unspecified_addr,
+                    net_ns,
+                    rng,
+                )?;
+
+                socket_ref.bound_addr = Some(local_addr);
+                socket_ref.association = Some(handle);
             }
-        };
 
-        // associate the socket (we may be sharing a port number with other udp sockets, but they
-        // won't have the same peer)
-        let (local_addr, handle) = super::associate_socket(
-            InetSocket::Udp(Arc::clone(socket)),
-            local_addr,
-            peer_addr,
-            net_ns,
-            rng,
-        )?;
-
-        {
-            let mut socket = socket.borrow_mut();
-            socket.peer_addr = Some(peer_addr);
-            socket.bound_addr = Some(local_addr);
-            socket.association = Some(handle);
+            socket_ref.peer_addr = Some(peer_addr);
         }
 
         Ok(())
