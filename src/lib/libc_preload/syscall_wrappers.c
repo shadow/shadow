@@ -841,7 +841,9 @@ INTERPOSE(umask);
 #ifdef SYS_umount2 // kernel entry: num=166 func=sys_umount
 INTERPOSE(umount2);
 #endif
-// Skipping SYS_uname
+#ifdef SYS_uname // kernel entry: num=63 func=sys_newuname
+INTERPOSE(uname);
+#endif
 #ifdef SYS_unlink // kernel entry: num=87 func=sys_unlink
 INTERPOSE(unlink);
 #endif

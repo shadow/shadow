@@ -81,7 +81,6 @@ skip.update([
     'signalfd',
     'signalfd4',
     'timer_create',
-    'uname',
     'wait4',
     'waitid',
 ])
@@ -181,6 +180,18 @@ ignore_differences = set([
     'stat',
     'lstat',
     'fstat',
+
+    # uname(2):
+    # > Over  time,  increases  in  the size of the utsname structure have led to
+    # > three successive versions of uname(): sys_olduname() (slot
+    # > __NR_oldolduname), sys_uname() (slot __NR_olduname), and sys_newuname()
+    # > (slot __NR_uname).  The first one used length 9 for all fields; the second
+    # > used 65; the third also uses 65 but adds the domainname field.  The glibc
+    # > uname() wrapper function hides these details from applications, invoking
+    # > the most recent version of the system call provided by the kernel.
+    #
+    # We want __NR_uname, so the generated wrapper should be correct.
+    'uname',
 ])
 
 # syscall wrappers that return errors directly instead of through errno.
