@@ -103,8 +103,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_two_sockets_same_port"),
                     move || test_two_sockets_same_port(sock_type, flag),
-                    // TODO: this doesn't work in shadow
-                    set![TestEnv::Libc],
+                    if sock_type == libc::SOCK_DGRAM {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    } else {
+                        // TODO: this doesn't work in shadow for TCP
+                        set![TestEnv::Libc]
+                    },
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("test_interface_loopback"),
@@ -136,14 +140,39 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
-                    &append_args("test_double_connect_same_addr"),
-                    move || test_double_connect(sock_type, flag, /* change_address= */ false),
+                    &append_args("test_double_connect_same_ip_port"),
+                    move || {
+                        test_double_connect(
+                            sock_type, flag, /* change_ip= */ false,
+                            /* change_port= */ false,
+                        )
+                    },
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
-                    &append_args("test_double_connect_different_addr"),
-                    move || test_double_connect(sock_type, flag, /* change_address= */ true),
+                    &append_args("test_double_connect_same_ip_different_port"),
+                    move || {
+                        test_double_connect(
+                            sock_type, flag, /* change_ip= */ false,
+                            /* change_port= */ true,
+                        )
+                    },
                     set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_double_connect_same_port_different_ip"),
+                    move || {
+                        test_double_connect(
+                            sock_type, flag, /* change_ip= */ true,
+                            /* change_port= */ false,
+                        )
+                    },
+                    if sock_type == libc::SOCK_STREAM {
+                        // TODO: this test causes shadow to panic for TCP sockets
+                        set![TestEnv::Libc]
+                    } else {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    },
                 ),
             ]);
         }
@@ -599,11 +628,12 @@ fn test_interface(
     })
 }
 
-/// Test connect() to a server twice, optionally changing the address.
+/// Test connect() to a server twice, optionally changing the IP and/or port.
 fn test_double_connect(
     sock_type: libc::c_int,
     flag: libc::c_int,
-    change_address: bool,
+    change_ip: bool,
+    change_port: bool,
 ) -> Result<(), String> {
     let fd_server = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
     let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
@@ -661,18 +691,6 @@ fn test_double_connect(
         None
     };
 
-    // expected errno for the second connect() call
-    #[allow(clippy::if_same_then_else)]
-    let expected_errno_2 = if sock_type == libc::SOCK_DGRAM {
-        None
-    } else if flag & libc::SOCK_NONBLOCK != 0 {
-        // for some reason connect() doesn't return an error for non-blocking
-        // sockets, even if the address changed
-        None
-    } else {
-        Some(libc::EISCONN)
-    };
-
     let args_1 = ConnectArguments {
         fd: fd_client,
         addr: Some(SockAddr::Inet(server_addr)),
@@ -685,8 +703,8 @@ fn test_double_connect(
         addr_len: std::mem::size_of_val(&server_addr) as u32,
     };
 
-    // if we should use a different address for the second connect() call, change the port
-    if change_address {
+    // if we should use a different address for the second connect() call, change the port and/or ip
+    if change_port {
         // note the endianness of the port
         args_2
             .addr
@@ -696,7 +714,42 @@ fn test_double_connect(
             .unwrap()
             .sin_port += 1;
     }
+    if change_ip {
+        // we use an IP on a different interface from the first connect (first was on loopback,
+        // second will be on eth0)
+        let other_ip: std::net::Ipv4Addr = if test_utils::running_in_shadow() {
+            // this IP is the IP for the host 'othernode' in the shadow config file
+            "26.153.52.74".parse().unwrap()
+        } else {
+            // if running outside of shadow, we use a local network address here so that the tests
+            // running outside of shadow would only be trying to connect to a server on a local
+            // network rather than some random server on the internet
+            "192.168.1.100".parse().unwrap()
+        };
+        args_2
+            .addr
+            .as_mut()
+            .unwrap()
+            .as_inet_mut()
+            .unwrap()
+            .sin_addr
+            .s_addr = u32::from(other_ip).to_be();
+    }
     let args_2 = args_2;
+
+    // expected errno for the second connect() call
+    let is_nonblock = flag & libc::SOCK_NONBLOCK != 0;
+    let expected_errno_2 = match (sock_type, is_nonblock, change_ip) {
+        // dgram sockets with a different peer IP
+        (libc::SOCK_DGRAM, _, true) => Some(libc::EINVAL),
+        // dgram sockets with the same peer IP
+        (libc::SOCK_DGRAM, _, false) => None,
+        // all nonblocking sockets: for some reason connect() doesn't return an error for
+        // non-blocking sockets, even if the address changed
+        (_, true, _) => None,
+        // all other sockets
+        (_, _, _) => Some(libc::EISCONN),
+    };
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         check_connect_call(&args_1, expected_errno_1)?;
