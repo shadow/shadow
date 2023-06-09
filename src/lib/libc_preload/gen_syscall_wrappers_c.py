@@ -62,10 +62,8 @@ skip.update([
     'faccessat',
     'faccessat2',
     'fork',
-    'fstat',
     'exit',
     'getcwd',
-    'lstat',
     'mq_notify',
     'mq_open',
     'poll',
@@ -82,7 +80,6 @@ skip.update([
     'sigprocmask',
     'signalfd',
     'signalfd4',
-    'stat',
     'timer_create',
     'uname',
     'wait4',
@@ -169,6 +166,21 @@ ignore_differences = set([
     # when intercepting syscalls.
     # Doesn't actually have such a section itself.
     'seccomp',
+
+    # stat(2):
+    # > Over  time,  increases  in the size of the stat structure have led to
+    # > three successive versions of stat(): sys_stat() (slot __NR_oldstat),
+    # > sys_newstat() (slot __NR_stat), and sys_stat64() (slot __NR_stat64) on
+    # > 32-bit platforms such as i386.  The first two ver‐ #  sions were already
+    # > present in Linux 1.0 (albeit with different names); the last was added in
+    # > Linux 2.4.  Similar remarks apply for fstat() and lstat().
+    #
+    # Since we only support 64 bit systems and relatively new versions of glibc
+    # we want the stat library call to map to call syscall number __NR_stat;
+    # i.e. the default-generated wrapper should be correct.
+    'stat',
+    'lstat',
+    'fstat',
 ])
 
 # syscall wrappers that return errors directly instead of through errno.

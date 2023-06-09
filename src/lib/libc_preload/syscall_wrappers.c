@@ -184,7 +184,9 @@ INTERPOSE(fsetxattr);
 // Skipping SYS_fsmount
 // Skipping SYS_fsopen
 // Skipping SYS_fspick
-// Skipping SYS_fstat
+#ifdef SYS_fstat // kernel entry: num=5 func=sys_newfstat
+INTERPOSE(fstat);
+#endif
 #ifdef SYS_fstatfs // kernel entry: num=138 func=sys_fstatfs
 INTERPOSE(fstatfs);
 #endif
@@ -374,7 +376,9 @@ INTERPOSE(lseek);
 #ifdef SYS_lsetxattr // kernel entry: num=189 func=sys_lsetxattr
 INTERPOSE(lsetxattr);
 #endif
-// Skipping SYS_lstat
+#ifdef SYS_lstat // kernel entry: num=6 func=sys_newlstat
+INTERPOSE(lstat);
+#endif
 #ifdef SYS_madvise // kernel entry: num=28 func=sys_madvise
 INTERPOSE(madvise);
 #endif
@@ -752,7 +756,9 @@ INTERPOSE(socketpair);
 #ifdef SYS_splice // kernel entry: num=275 func=sys_splice
 INTERPOSE(splice);
 #endif
-// Skipping SYS_stat
+#ifdef SYS_stat // kernel entry: num=4 func=sys_newstat
+INTERPOSE(stat);
+#endif
 #ifdef SYS_statfs // kernel entry: num=137 func=sys_statfs
 INTERPOSE(statfs);
 #endif
