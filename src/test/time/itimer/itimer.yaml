@@ -8,4 +8,5 @@ hosts:
     network_node_id: 0
     processes:
     - path: ../../../target/debug/test_itimer
+      args: --shadow-passing
       start_time: 1
