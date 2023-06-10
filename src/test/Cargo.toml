@@ -23,7 +23,6 @@ path = "sched_affinity/test_sched_affinity.rs"
 [[bin]]
 name = "test_sleep"
 path = "sleep/test_sleep.rs"
-#harness = false
 
 [[bin]]
 name = "test_socket"
@@ -164,6 +163,10 @@ path = "itimer/test_itimer_scheduled_after_exit.rs"
 [[bin]]
 name = "test_stdio"
 path = "stdio/test_stdio.rs"
+
+[[bin]]
+name = "test_time"
+path = "time/time/test_time.rs"
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
