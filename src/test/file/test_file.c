@@ -602,6 +602,23 @@ static void _test_fchmod() {
     assert_nonneg_errno(fclose(file));
 }
 
+static void _test_stat() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+
+    assert_nonneg_errno(chmod(adf.name, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+
+    struct stat filestat = {0};
+    assert_nonneg_errno(stat(adf.name, &filestat));
+
+    g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
+    g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+    g_assert_cmpint(filestat.st_nlink, ==, 1);
+    g_assert_cmpint(filestat.st_size, ==, 0);
+
+    /* success! */
+}
+
 static void _test_fstat() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
     FILE* file;
@@ -618,6 +635,8 @@ static void _test_fstat() {
     g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+    g_assert_cmpint(filestat.st_nlink, ==, 1);
+    g_assert_cmpint(filestat.st_size, ==, 0);
 
     /* success! */
     fclose(file);
@@ -640,6 +659,8 @@ static void _test_fstatat() {
     g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+    g_assert_cmpint(filestat.st_nlink, ==, 1);
+    g_assert_cmpint(filestat.st_size, ==, 0);
 
     memset(&filestat, 0, sizeof(filestat));
 
@@ -648,6 +669,8 @@ static void _test_fstatat() {
     g_assert_cmpint(filestat.st_mode & S_IXOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IWOTH, ==, 0);
     g_assert_cmpint(filestat.st_mode & S_IROTH, ==, 0);
+    g_assert_cmpint(filestat.st_nlink, ==, 1);
+    g_assert_cmpint(filestat.st_size, ==, 0);
 
     /* success! */
     closedir(dir);
@@ -970,6 +993,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/chmod", _test_fchmod);
     g_test_add_func("/file/fstat", _test_fstat);
     g_test_add_func("/file/fstatat", _test_fstatat);
+    g_test_add_func("/file/stat", _test_stat);
 
     g_test_add_func("/file/dir", _test_dir);
     g_test_add_func("/file/tmpfile", _test_tmpfile);

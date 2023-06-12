@@ -40,12 +40,12 @@ impl SyscallHandler {
         let mut mask = mem.memory_ref_mut(mask_ptr)?;
 
         // this assumes little endian
-        mask.fill(0);
+        let bytes_written = 1;
         mask[0] = 1;
 
         mask.flush()?;
 
-        Ok(0)
+        Ok(bytes_written)
     }
 
     #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const std::ffi::c_void)]

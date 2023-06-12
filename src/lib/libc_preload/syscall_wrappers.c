@@ -45,9 +45,7 @@ INTERPOSE(bind);
 #ifdef SYS_bpf // kernel entry: num=321 func=sys_bpf
 INTERPOSE(bpf);
 #endif
-#ifdef SYS_brk // kernel entry: num=12 func=sys_brk
-INTERPOSE(brk);
-#endif
+// Skipping SYS_brk
 #ifdef SYS_capget // kernel entry: num=125 func=sys_capget
 INTERPOSE(capget);
 #endif
@@ -57,9 +55,7 @@ INTERPOSE(capset);
 #ifdef SYS_chdir // kernel entry: num=80 func=sys_chdir
 INTERPOSE(chdir);
 #endif
-#ifdef SYS_chmod // kernel entry: num=90 func=sys_chmod
-INTERPOSE(chmod);
-#endif
+// Skipping SYS_chmod
 #ifdef SYS_chown // kernel entry: num=92 func=sys_chown
 INTERPOSE(chown);
 #endif
@@ -82,15 +78,11 @@ INTERPOSE_DIRECT_ERRORS(clock_nanosleep);
 INTERPOSE(clock_settime);
 #endif
 // Skipping SYS_clone
-#ifdef SYS_clone3 // kernel entry: num=435 func=sys_clone3
-INTERPOSE(clone3);
-#endif
+// Skipping SYS_clone3
 #ifdef SYS_close // kernel entry: num=3 func=sys_close
 INTERPOSE(close);
 #endif
-#ifdef SYS_close_range // kernel entry: num=436 func=sys_close_range
-INTERPOSE(close_range);
-#endif
+// Skipping SYS_close_range
 #ifdef SYS_connect // kernel entry: num=42 func=sys_connect
 INTERPOSE(connect);
 #endif
@@ -121,12 +113,8 @@ INTERPOSE(epoll_create1);
 #ifdef SYS_epoll_ctl // kernel entry: num=233 func=sys_epoll_ctl
 INTERPOSE(epoll_ctl);
 #endif
-#ifdef SYS_epoll_pwait // kernel entry: num=281 func=sys_epoll_pwait
-INTERPOSE(epoll_pwait);
-#endif
-#ifdef SYS_epoll_pwait2 // kernel entry: num=441 func=sys_epoll_pwait2
-INTERPOSE(epoll_pwait2);
-#endif
+// Skipping SYS_epoll_pwait
+// Skipping SYS_epoll_pwait2
 #ifdef SYS_epoll_wait // kernel entry: num=232 func=sys_epoll_wait
 INTERPOSE(epoll_wait);
 #endif
@@ -144,15 +132,9 @@ INTERPOSE(execveat);
 #ifdef SYS_exit_group // kernel entry: num=231 func=sys_exit_group
 INTERPOSE(exit_group);
 #endif
-#ifdef SYS_faccessat // kernel entry: num=269 func=sys_faccessat
-INTERPOSE(faccessat);
-#endif
-#ifdef SYS_faccessat2 // kernel entry: num=439 func=sys_faccessat2
-INTERPOSE(faccessat2);
-#endif
-#ifdef SYS_fadvise64 // kernel entry: num=221 func=sys_fadvise64
-INTERPOSE(fadvise64);
-#endif
+// Skipping SYS_faccessat
+// Skipping SYS_faccessat2
+// Skipping SYS_fadvise64
 #ifdef SYS_fallocate // kernel entry: num=285 func=sys_fallocate
 INTERPOSE(fallocate);
 #endif
@@ -165,12 +147,8 @@ INTERPOSE(fanotify_mark);
 #ifdef SYS_fchdir // kernel entry: num=81 func=sys_fchdir
 INTERPOSE(fchdir);
 #endif
-#ifdef SYS_fchmod // kernel entry: num=91 func=sys_fchmod
-INTERPOSE(fchmod);
-#endif
-#ifdef SYS_fchmodat // kernel entry: num=268 func=sys_fchmodat
-INTERPOSE(fchmodat);
-#endif
+// Skipping SYS_fchmod
+// Skipping SYS_fchmodat
 #ifdef SYS_fchown // kernel entry: num=93 func=sys_fchown
 INTERPOSE(fchown);
 #endif
@@ -195,27 +173,17 @@ INTERPOSE(flistxattr);
 #ifdef SYS_flock // kernel entry: num=73 func=sys_flock
 INTERPOSE(flock);
 #endif
-#ifdef SYS_fork // kernel entry: num=57 func=sys_fork
-INTERPOSE(fork);
-#endif
+// Skipping SYS_fork
 #ifdef SYS_fremovexattr // kernel entry: num=199 func=sys_fremovexattr
 INTERPOSE(fremovexattr);
 #endif
-#ifdef SYS_fsconfig // kernel entry: num=431 func=sys_fsconfig
-INTERPOSE(fsconfig);
-#endif
+// Skipping SYS_fsconfig
 #ifdef SYS_fsetxattr // kernel entry: num=190 func=sys_fsetxattr
 INTERPOSE(fsetxattr);
 #endif
-#ifdef SYS_fsmount // kernel entry: num=432 func=sys_fsmount
-INTERPOSE(fsmount);
-#endif
-#ifdef SYS_fsopen // kernel entry: num=430 func=sys_fsopen
-INTERPOSE(fsopen);
-#endif
-#ifdef SYS_fspick // kernel entry: num=433 func=sys_fspick
-INTERPOSE(fspick);
-#endif
+// Skipping SYS_fsmount
+// Skipping SYS_fsopen
+// Skipping SYS_fspick
 #ifdef SYS_fstat // kernel entry: num=5 func=sys_newfstat
 INTERPOSE(fstat);
 #endif
@@ -231,9 +199,7 @@ INTERPOSE(ftruncate);
 #ifdef SYS_futex // kernel entry: num=202 func=sys_futex
 INTERPOSE(futex);
 #endif
-#ifdef SYS_futex_waitv // kernel entry: num=449 func=sys_futex_waitv
-INTERPOSE(futex_waitv);
-#endif
+// Skipping SYS_futex_waitv
 #ifdef SYS_futimesat // kernel entry: num=261 func=sys_futimesat
 INTERPOSE(futimesat);
 #endif
@@ -258,9 +224,7 @@ INTERPOSE(geteuid);
 #ifdef SYS_getgid // kernel entry: num=104 func=sys_getgid
 INTERPOSE(getgid);
 #endif
-#ifdef SYS_getgroups // kernel entry: num=115 func=sys_getgroups
-INTERPOSE(getgroups);
-#endif
+// Skipping SYS_getgroups
 #ifdef SYS_getitimer // kernel entry: num=36 func=sys_getitimer
 INTERPOSE(getitimer);
 #endif
@@ -279,9 +243,7 @@ INTERPOSE(getpid);
 #ifdef SYS_getppid // kernel entry: num=110 func=sys_getppid
 INTERPOSE(getppid);
 #endif
-#ifdef SYS_getpriority // kernel entry: num=140 func=sys_getpriority
-INTERPOSE(getpriority);
-#endif
+// Skipping SYS_getpriority
 #ifdef SYS_getrandom // kernel entry: num=318 func=sys_getrandom
 INTERPOSE(getrandom);
 #endif
@@ -342,24 +304,16 @@ INTERPOSE(io_destroy);
 #ifdef SYS_io_getevents // kernel entry: num=208 func=sys_io_getevents
 INTERPOSE(io_getevents);
 #endif
-#ifdef SYS_io_pgetevents // kernel entry: num=333 func=sys_io_pgetevents
-INTERPOSE(io_pgetevents);
-#endif
+// Skipping SYS_io_pgetevents
 #ifdef SYS_io_setup // kernel entry: num=206 func=sys_io_setup
 INTERPOSE(io_setup);
 #endif
 #ifdef SYS_io_submit // kernel entry: num=209 func=sys_io_submit
 INTERPOSE(io_submit);
 #endif
-#ifdef SYS_io_uring_enter // kernel entry: num=426 func=sys_io_uring_enter
-INTERPOSE(io_uring_enter);
-#endif
-#ifdef SYS_io_uring_register // kernel entry: num=427 func=sys_io_uring_register
-INTERPOSE(io_uring_register);
-#endif
-#ifdef SYS_io_uring_setup // kernel entry: num=425 func=sys_io_uring_setup
-INTERPOSE(io_uring_setup);
-#endif
+// Skipping SYS_io_uring_enter
+// Skipping SYS_io_uring_register
+// Skipping SYS_io_uring_setup
 #ifdef SYS_ioctl // kernel entry: num=16 func=sys_ioctl
 INTERPOSE(ioctl);
 #endif
@@ -386,15 +340,9 @@ INTERPOSE(keyctl);
 #ifdef SYS_kill // kernel entry: num=62 func=sys_kill
 INTERPOSE(kill);
 #endif
-#ifdef SYS_landlock_add_rule // kernel entry: num=445 func=sys_landlock_add_rule
-INTERPOSE(landlock_add_rule);
-#endif
-#ifdef SYS_landlock_create_ruleset // kernel entry: num=444 func=sys_landlock_create_ruleset
-INTERPOSE(landlock_create_ruleset);
-#endif
-#ifdef SYS_landlock_restrict_self // kernel entry: num=446 func=sys_landlock_restrict_self
-INTERPOSE(landlock_restrict_self);
-#endif
+// Skipping SYS_landlock_add_rule
+// Skipping SYS_landlock_create_ruleset
+// Skipping SYS_landlock_restrict_self
 #ifdef SYS_lchown // kernel entry: num=94 func=sys_lchown
 INTERPOSE(lchown);
 #endif
@@ -443,9 +391,7 @@ INTERPOSE(membarrier);
 #ifdef SYS_memfd_create // kernel entry: num=319 func=sys_memfd_create
 INTERPOSE(memfd_create);
 #endif
-#ifdef SYS_memfd_secret // kernel entry: num=447 func=sys_memfd_secret
-INTERPOSE(memfd_secret);
-#endif
+// Skipping SYS_memfd_secret
 #ifdef SYS_migrate_pages // kernel entry: num=256 func=sys_migrate_pages
 INTERPOSE(migrate_pages);
 #endif
@@ -482,12 +428,8 @@ INTERPOSE(modify_ldt);
 #ifdef SYS_mount // kernel entry: num=165 func=sys_mount
 INTERPOSE(mount);
 #endif
-#ifdef SYS_mount_setattr // kernel entry: num=442 func=sys_mount_setattr
-INTERPOSE(mount_setattr);
-#endif
-#ifdef SYS_move_mount // kernel entry: num=429 func=sys_move_mount
-INTERPOSE(move_mount);
-#endif
+// Skipping SYS_mount_setattr
+// Skipping SYS_move_mount
 #ifdef SYS_move_pages // kernel entry: num=279 func=sys_move_pages
 INTERPOSE(move_pages);
 #endif
@@ -497,12 +439,8 @@ INTERPOSE(mprotect);
 #ifdef SYS_mq_getsetattr // kernel entry: num=245 func=sys_mq_getsetattr
 INTERPOSE(mq_getsetattr);
 #endif
-#ifdef SYS_mq_notify // kernel entry: num=244 func=sys_mq_notify
-INTERPOSE(mq_notify);
-#endif
-#ifdef SYS_mq_open // kernel entry: num=240 func=sys_mq_open
-INTERPOSE(mq_open);
-#endif
+// Skipping SYS_mq_notify
+// Skipping SYS_mq_open
 #ifdef SYS_mq_timedreceive // kernel entry: num=243 func=sys_mq_timedreceive
 INTERPOSE(mq_timedreceive);
 #endif
@@ -545,16 +483,12 @@ INTERPOSE(name_to_handle_at);
 #ifdef SYS_nanosleep // kernel entry: num=35 func=sys_nanosleep
 INTERPOSE(nanosleep);
 #endif
-#ifdef SYS_newfstatat // kernel entry: num=262 func=sys_newfstatat
-INTERPOSE(newfstatat);
-#endif
+// Skipping SYS_newfstatat
 // Skipping SYS_open
 #ifdef SYS_open_by_handle_at // kernel entry: num=304 func=sys_open_by_handle_at
 INTERPOSE(open_by_handle_at);
 #endif
-#ifdef SYS_open_tree // kernel entry: num=428 func=sys_open_tree
-INTERPOSE(open_tree);
-#endif
+// Skipping SYS_open_tree
 // Skipping SYS_openat
 #ifdef SYS_openat2 // kernel entry: num=437 func=sys_openat2
 INTERPOSE(openat2);
@@ -595,12 +529,8 @@ INTERPOSE(pkey_free);
 #ifdef SYS_pkey_mprotect // kernel entry: num=329 func=sys_pkey_mprotect
 INTERPOSE(pkey_mprotect);
 #endif
-#ifdef SYS_poll // kernel entry: num=7 func=sys_poll
-INTERPOSE(poll);
-#endif
-#ifdef SYS_ppoll // kernel entry: num=271 func=sys_ppoll
-INTERPOSE(ppoll);
-#endif
+// Skipping SYS_poll
+// Skipping SYS_ppoll
 #ifdef SYS_prctl // kernel entry: num=157 func=sys_prctl
 INTERPOSE(prctl);
 #endif
@@ -610,12 +540,8 @@ INTERPOSE(prctl);
 #ifdef SYS_prlimit64 // kernel entry: num=302 func=sys_prlimit64
 INTERPOSE(prlimit64);
 #endif
-#ifdef SYS_process_madvise // kernel entry: num=440 func=sys_process_madvise
-INTERPOSE(process_madvise);
-#endif
-#ifdef SYS_process_mrelease // kernel entry: num=448 func=sys_process_mrelease
-INTERPOSE(process_mrelease);
-#endif
+// Skipping SYS_process_madvise
+// Skipping SYS_process_mrelease
 #ifdef SYS_process_vm_readv // kernel entry: num=310 func=sys_process_vm_readv
 INTERPOSE(process_vm_readv);
 #endif
@@ -623,18 +549,14 @@ INTERPOSE(process_vm_readv);
 INTERPOSE(process_vm_writev);
 #endif
 // Skipping SYS_pselect6
-#ifdef SYS_ptrace // kernel entry: num=101 func=sys_ptrace
-INTERPOSE(ptrace);
-#endif
+// Skipping SYS_ptrace
 // Skipping SYS_pwrite64
 // Skipping SYS_pwritev
 // Skipping SYS_pwritev2
 #ifdef SYS_quotactl // kernel entry: num=179 func=sys_quotactl
 INTERPOSE(quotactl);
 #endif
-#ifdef SYS_quotactl_fd // kernel entry: num=443 func=sys_quotactl_fd
-INTERPOSE(quotactl_fd);
-#endif
+// Skipping SYS_quotactl_fd
 #ifdef SYS_read // kernel entry: num=0 func=sys_read
 INTERPOSE(read);
 #endif
@@ -685,27 +607,15 @@ INTERPOSE(request_key);
 INTERPOSE(rmdir);
 #endif
 // Skipping SYS_rseq
-#ifdef SYS_rt_sigaction // kernel entry: num=13 func=sys_rt_sigaction
-INTERPOSE(rt_sigaction);
-#endif
-#ifdef SYS_rt_sigpending // kernel entry: num=127 func=sys_rt_sigpending
-INTERPOSE(rt_sigpending);
-#endif
-#ifdef SYS_rt_sigprocmask // kernel entry: num=14 func=sys_rt_sigprocmask
-INTERPOSE(rt_sigprocmask);
-#endif
+// Skipping SYS_rt_sigaction
+// Skipping SYS_rt_sigpending
+// Skipping SYS_rt_sigprocmask
 #ifdef SYS_rt_sigqueueinfo // kernel entry: num=129 func=sys_rt_sigqueueinfo
 INTERPOSE(rt_sigqueueinfo);
 #endif
-#ifdef SYS_rt_sigreturn // kernel entry: num=15 func=sys_rt_sigreturn
-INTERPOSE(rt_sigreturn);
-#endif
-#ifdef SYS_rt_sigsuspend // kernel entry: num=130 func=sys_rt_sigsuspend
-INTERPOSE(rt_sigsuspend);
-#endif
-#ifdef SYS_rt_sigtimedwait // kernel entry: num=128 func=sys_rt_sigtimedwait
-INTERPOSE(rt_sigtimedwait);
-#endif
+// Skipping SYS_rt_sigreturn
+// Skipping SYS_rt_sigsuspend
+// Skipping SYS_rt_sigtimedwait
 #ifdef SYS_rt_tgsigqueueinfo // kernel entry: num=297 func=sys_rt_tgsigqueueinfo
 INTERPOSE(rt_tgsigqueueinfo);
 #endif
@@ -715,9 +625,7 @@ INTERPOSE(sched_get_priority_max);
 #ifdef SYS_sched_get_priority_min // kernel entry: num=147 func=sys_sched_get_priority_min
 INTERPOSE(sched_get_priority_min);
 #endif
-#ifdef SYS_sched_getaffinity // kernel entry: num=204 func=sys_sched_getaffinity
-INTERPOSE(sched_getaffinity);
-#endif
+// Skipping SYS_sched_getaffinity
 #ifdef SYS_sched_getattr // kernel entry: num=315 func=sys_sched_getattr
 INTERPOSE(sched_getattr);
 #endif
@@ -730,9 +638,7 @@ INTERPOSE(sched_getscheduler);
 #ifdef SYS_sched_rr_get_interval // kernel entry: num=148 func=sys_sched_rr_get_interval
 INTERPOSE(sched_rr_get_interval);
 #endif
-#ifdef SYS_sched_setaffinity // kernel entry: num=203 func=sys_sched_setaffinity
-INTERPOSE(sched_setaffinity);
-#endif
+// Skipping SYS_sched_setaffinity
 #ifdef SYS_sched_setattr // kernel entry: num=314 func=sys_sched_setattr
 INTERPOSE(sched_setattr);
 #endif
@@ -748,9 +654,7 @@ INTERPOSE(sched_yield);
 #ifdef SYS_seccomp // kernel entry: num=317 func=sys_seccomp
 INTERPOSE(seccomp);
 #endif
-#ifdef SYS_select // kernel entry: num=23 func=sys_select
-INTERPOSE(select);
-#endif
+// Skipping SYS_select
 #ifdef SYS_semctl // kernel entry: num=66 func=sys_semctl
 INTERPOSE(semctl);
 #endif
@@ -778,9 +682,7 @@ INTERPOSE(sendto);
 #ifdef SYS_set_mempolicy // kernel entry: num=238 func=sys_set_mempolicy
 INTERPOSE(set_mempolicy);
 #endif
-#ifdef SYS_set_mempolicy_home_node // kernel entry: num=450 func=sys_set_mempolicy_home_node
-INTERPOSE(set_mempolicy_home_node);
-#endif
+// Skipping SYS_set_mempolicy_home_node
 #ifdef SYS_set_robust_list // kernel entry: num=273 func=sys_set_robust_list
 INTERPOSE(set_robust_list);
 #endif
@@ -790,21 +692,11 @@ INTERPOSE(set_tid_address);
 #ifdef SYS_setdomainname // kernel entry: num=171 func=sys_setdomainname
 INTERPOSE(setdomainname);
 #endif
-#ifdef SYS_setfsgid // kernel entry: num=123 func=sys_setfsgid
-INTERPOSE(setfsgid);
-#endif
-#ifdef SYS_setfsuid // kernel entry: num=122 func=sys_setfsuid
-INTERPOSE(setfsuid);
-#endif
-#ifdef SYS_setgid // kernel entry: num=106 func=sys_setgid
-INTERPOSE(setgid);
-#endif
-#ifdef SYS_setgroups // kernel entry: num=116 func=sys_setgroups
-INTERPOSE(setgroups);
-#endif
-#ifdef SYS_sethostname // kernel entry: num=170 func=sys_sethostname
-INTERPOSE(sethostname);
-#endif
+// Skipping SYS_setfsgid
+// Skipping SYS_setfsuid
+// Skipping SYS_setgid
+// Skipping SYS_setgroups
+// Skipping SYS_sethostname
 #ifdef SYS_setitimer // kernel entry: num=38 func=sys_setitimer
 INTERPOSE(setitimer);
 #endif
@@ -814,21 +706,11 @@ INTERPOSE(setns);
 #ifdef SYS_setpgid // kernel entry: num=109 func=sys_setpgid
 INTERPOSE(setpgid);
 #endif
-#ifdef SYS_setpriority // kernel entry: num=141 func=sys_setpriority
-INTERPOSE(setpriority);
-#endif
-#ifdef SYS_setregid // kernel entry: num=114 func=sys_setregid
-INTERPOSE(setregid);
-#endif
-#ifdef SYS_setresgid // kernel entry: num=119 func=sys_setresgid
-INTERPOSE(setresgid);
-#endif
-#ifdef SYS_setresuid // kernel entry: num=117 func=sys_setresuid
-INTERPOSE(setresuid);
-#endif
-#ifdef SYS_setreuid // kernel entry: num=113 func=sys_setreuid
-INTERPOSE(setreuid);
-#endif
+// Skipping SYS_setpriority
+// Skipping SYS_setregid
+// Skipping SYS_setresgid
+// Skipping SYS_setresuid
+// Skipping SYS_setreuid
 #ifdef SYS_setrlimit // kernel entry: num=160 func=sys_setrlimit
 INTERPOSE(setrlimit);
 #endif
@@ -841,9 +723,7 @@ INTERPOSE(setsockopt);
 #ifdef SYS_settimeofday // kernel entry: num=164 func=sys_settimeofday
 INTERPOSE(settimeofday);
 #endif
-#ifdef SYS_setuid // kernel entry: num=105 func=sys_setuid
-INTERPOSE(setuid);
-#endif
+// Skipping SYS_setuid
 #ifdef SYS_setxattr // kernel entry: num=188 func=sys_setxattr
 INTERPOSE(setxattr);
 #endif
@@ -865,12 +745,8 @@ INTERPOSE(shutdown);
 #ifdef SYS_sigaltstack // kernel entry: num=131 func=sys_sigaltstack
 INTERPOSE(sigaltstack);
 #endif
-#ifdef SYS_signalfd // kernel entry: num=282 func=sys_signalfd
-INTERPOSE(signalfd);
-#endif
-#ifdef SYS_signalfd4 // kernel entry: num=289 func=sys_signalfd4
-INTERPOSE(signalfd4);
-#endif
+// Skipping SYS_signalfd
+// Skipping SYS_signalfd4
 #ifdef SYS_socket // kernel entry: num=41 func=sys_socket
 INTERPOSE(socket);
 #endif
@@ -928,9 +804,7 @@ INTERPOSE(tgkill);
 #ifdef SYS_time // kernel entry: num=201 func=sys_time
 INTERPOSE(time);
 #endif
-#ifdef SYS_timer_create // kernel entry: num=222 func=sys_timer_create
-INTERPOSE(timer_create);
-#endif
+// Skipping SYS_timer_create
 #ifdef SYS_timer_delete // kernel entry: num=226 func=sys_timer_delete
 INTERPOSE(timer_delete);
 #endif
@@ -1003,12 +877,8 @@ INTERPOSE(vhangup);
 #ifdef SYS_vmsplice // kernel entry: num=278 func=sys_vmsplice
 INTERPOSE(vmsplice);
 #endif
-#ifdef SYS_wait4 // kernel entry: num=61 func=sys_wait4
-INTERPOSE(wait4);
-#endif
-#ifdef SYS_waitid // kernel entry: num=247 func=sys_waitid
-INTERPOSE(waitid);
-#endif
+// Skipping SYS_wait4
+// Skipping SYS_waitid
 #ifdef SYS_write // kernel entry: num=1 func=sys_write
 INTERPOSE(write);
 #endif
