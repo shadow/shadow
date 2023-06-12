@@ -25,6 +25,7 @@ libc = "0.2"
 linux-api = { path = "../lib/linux-api" }
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
+log-c2rust = { path = "../lib/log-c2rust" }
 logger = { path = "../lib/logger" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
 lzma-rs = "0.3"

@@ -507,7 +507,7 @@ impl Host {
 
     pub fn log_level(&self) -> Option<log::LevelFilter> {
         let level = self.params.log_level;
-        crate::core::logger::log_wrapper::c_to_rust_log_level(level).map(|l| l.to_level_filter())
+        log_c2rust::c_to_rust_log_level(level).map(|l| l.to_level_filter())
     }
 
     #[track_caller]

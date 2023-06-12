@@ -1,3 +1,13 @@
+//! This crate implements a *backend* to the C logger API in crate `logger`.
+//!
+//! This backend delegates to the Rust logging framework in crate `log`.
+//!
+//! The only other backend to `logger` that we currently use is the
+//! `ShimLogger`.  Once that is migrated to Rust and hooks directly into the
+//! Rust `log` framework, this crate will be the *only* back-end for `logger`.
+//! At that point `logger` can be merged into this crate and simplified.
+//!
+//! TODO: This crate should be `no_std`.
 use std::os::raw::{c_char, c_int, c_void};
 
 use log::log_enabled;
