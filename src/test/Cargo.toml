@@ -168,6 +168,10 @@ path = "stdio/test_stdio.rs"
 name = "test_time"
 path = "time/time/test_time.rs"
 
+[[bin]]
+name = "test_clock_nanosleep"
+path = "time/clock_nanosleep/test_clock_nanosleep.rs"
+
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 libc = "0.2"
