@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitflags = "2.2.1"
-log = { version = "0.4.17", default-features = false }
+bitflags = "2.3.1"
+log = { version = "0.4.18", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
@@ -19,4 +19,4 @@ linux-errno = "1.0.1"
 
 [build-dependencies]
 shadow-build-common = { path = "../shadow-build-common" }
-cbindgen = { version = "0.24.3" }
+cbindgen = { version = "0.24.5" }

@@ -140,7 +140,7 @@ jobs:
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
-          key: tgen-build-key-${{ env.CONTAINER }}-77a0d12eb09b89816b8b8141e930a7c759cd3cac
+          key: tgen-build-key-${{ env.CONTAINER }}-30c95bbe723ebe5e4d068adfd975b094e00dbe10
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -148,7 +148,7 @@ jobs:
           path: tgen
           repository: shadow/tgen
           # When updating, change cache key in "Restore cache" step above
-          ref: 77a0d12eb09b89816b8b8141e930a7c759cd3cac
+          ref: 30c95bbe723ebe5e4d068adfd975b094e00dbe10
           persist-credentials: false
       - name: Install dependencies
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
