@@ -584,7 +584,9 @@ impl ManagedThread {
         Errno::result(unsafe {
             libc::posix_spawnattr_setflags(
                 &mut spawn_attr,
-                libc::POSIX_SPAWN_USEVFORK.try_into().unwrap(),
+                // HAX: set a flag *incompatible* with vfork so that
+                // it will use fork.
+                libc::POSIX_SPAWN_RESETIDS.try_into().unwrap(),
             )
         })
         .unwrap();

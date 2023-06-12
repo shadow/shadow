@@ -247,8 +247,11 @@ static void _shim_parent_init_host_shm() {
     assert(shim_hostSharedMem());
 }
 
-static void _shim_parent_init_ipc() {
+static int _shim_parent_init_ipc() {
     const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
+    if (!ipc_blk_buf) {
+        return -1;
+    }
     assert(ipc_blk_buf);
     bool err = false;
     ShMemBlockSerialized ipc_blk_serialized = shmemblockserialized_fromString(ipc_blk_buf, &err);
@@ -256,6 +259,7 @@ static void _shim_parent_init_ipc() {
 
     *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
     assert(shim_thisThreadEventIPC());
+    return 0;
 }
 
 static void _shim_parent_init_memory_manager_internal() {
@@ -380,10 +384,15 @@ static void _shim_parent_set_working_dir() {
     }
 }
 
-static void _shim_parent_init_preload() {
+static int _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
-    _shim_parent_init_ipc();
+    int rv = _shim_parent_init_ipc();
+    if (rv != 0) {
+        // Failed to init. Maybe too early?
+        shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+        return rv;
+    }
     _shim_ipc_wait_for_start_event();
 
     shim_install_hardware_error_handlers();
@@ -399,6 +408,7 @@ static void _shim_parent_init_preload() {
     _shim_parent_init_seccomp();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+    return 0;
 }
 
 static void _shim_child_init_preload() {
@@ -440,7 +450,12 @@ __attribute__((constructor)) void _shim_load() {
 
     static bool did_global_init = false;
     if (!did_global_init) {
-        _shim_parent_init_preload();
+        int rv = _shim_parent_init_preload();
+        if (rv != 0) {
+            // bail and try again later
+            *started_thread_init = false;
+            return;
+        }
         did_global_init = true;
         trace("Finished shim parent init");
     } else {

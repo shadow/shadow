@@ -225,5 +225,6 @@ SyscallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallA
 
     debug("set_robust_list was called but we don't yet support it");
 
-    return syscallreturn_makeDoneErrno(ENOSYS);
+    // asan deadlocks here if we return an error?
+    return syscallreturn_makeDoneI64(0);
 }

@@ -31,7 +31,8 @@ static ShimThreadLocalStorage* _tls_storage() {
     void* fs = NULL;
     __asm__("mov %%fs:0x0, %0" : "=r"(fs)::);
 
-    if (fs != NULL) {
+    // Native TLS results in a recursion loop under asan
+    if (false && fs != NULL) {
         // Native (libc) TLS seems to be set up properly. Use it.
         static __thread ShimThreadLocalStorage _tls = {0};
         return &_tls;

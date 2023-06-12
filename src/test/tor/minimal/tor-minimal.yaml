@@ -1,5 +1,7 @@
 general:
   stop_time: 30 min
+  # asan uses a spin loop in thread creation
+  model_unblocked_syscall_latency: true
 network:
   graph:
     type: gml
@@ -25,9 +27,9 @@ hosts:
     processes:
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: { OPENBLAS_NUM_THREADS: "1" }
+      environment: { OPENBLAS_NUM_THREADS: "1"}
       args: ../../../conf/tgen.server.graphml.xml
-      start_time: 1
+      start_time: 2
       expected_final_state: running
   hiddenserver:
     network_node_id: 0
@@ -36,9 +38,10 @@ hosts:
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.hiddenserver.graphml.xml
-      start_time: 1
+      start_time: 2
       expected_final_state: running
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address hiddenserver --Nickname hiddenserver
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
@@ -48,6 +51,7 @@ hosts:
     ip_addr: 100.0.0.1
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address 4uthority --Nickname 4uthority
             --defaults-torrc torrc-defaults -f torrc
       start_time: 1
@@ -56,6 +60,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address exit1 --Nickname exit1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -64,6 +69,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address exit2 --Nickname exit2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -72,6 +78,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address relay1 --Nickname relay1
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -80,6 +87,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -88,6 +96,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address relay3 --Nickname relay3
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -96,6 +105,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address relay4 --Nickname relay4
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
@@ -112,6 +122,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address torclient --Nickname torclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
@@ -125,6 +136,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address torbridgeclient --Nickname torbridgeclient
             --UseBridges 1 --Bridge 100.0.0.1:9111
             --defaults-torrc torrc-defaults -f torrc
@@ -139,6 +151,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address torhiddenclient --Nickname torhiddenclient
             --defaults-torrc torrc-defaults -f torrc
       start_time: 900
