@@ -43,11 +43,12 @@ const gchar* protocol_toString(ProtocolType type);
 
 Packet* packet_new(const Host* host);
 void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr payload,
-                       gsize payloadLength);
-void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, UntypedForeignPtr payload,
-                                        gsize payloadLength, const MemoryManager* mem);
-void packet_setPayloadFromShadow(Packet* packet, const Host* host, const void* payload,
-                                 gsize payloadLength);
+                       gsize payloadLength, uint64_t packetPriority);
+void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
+                                        gsize payloadLength, const MemoryManager* mem,
+                                        uint64_t packetPriority);
+void packet_setPayloadFromShadow(Packet* packet, const void* payload, gsize payloadLength,
+                                 uint64_t packetPriority);
 Packet* packet_copy(Packet* packet);
 
 // Exposed for unit testing only. Use `packet_new` outside of tests.

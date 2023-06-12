@@ -367,8 +367,10 @@ impl UdpSocket {
                 .map_err(|e| Errno::try_from(e).unwrap())?;
 
             let mut packet = PacketRc::new();
+            let priority =
+                Worker::with_active_host(|host| host.get_next_packet_priority()).unwrap();
             packet.set_udp(socket_ref.bound_addr.unwrap(), dst_addr);
-            packet.set_payload(&bytes);
+            packet.set_payload(&bytes, priority);
             packet.add_status(PacketStatus::SndCreated);
 
             // get another reference to the packet so we can add a status later

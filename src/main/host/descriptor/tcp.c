@@ -938,7 +938,8 @@ static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTC
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
-        packet_setPayloadWithMemoryManager(packet, host, payload, payloadLength, mem);
+        uint64_t priority = host_getNextPacketPriority(host);
+        packet_setPayloadWithMemoryManager(packet, payload, payloadLength, mem, priority);
     }
     return packet;
 }

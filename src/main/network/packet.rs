@@ -94,18 +94,17 @@ impl PacketRc {
     }
 
     /// Set the payload for the packet. Will panic if the packet already has a payload.
-    pub fn set_payload(&mut self, payload: &[u8]) {
+    pub fn set_payload(&mut self, payload: &[u8], priority: u64) {
         // setting the packet's payload shouldn't require the host, so for now we'll get the host
         // from the worker rather than require it as an argument
-        Worker::with_active_host(|host| unsafe {
+        unsafe {
             c::packet_setPayloadFromShadow(
                 self.c_ptr.ptr(),
-                host,
                 payload.as_ptr() as *const libc::c_void,
                 payload.len().try_into().unwrap(),
+                priority,
             )
-        })
-        .unwrap();
+        }
     }
 
     /// Copy the payload to the managed process. Even if this returns an error, some unspecified
