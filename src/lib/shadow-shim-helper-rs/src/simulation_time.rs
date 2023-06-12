@@ -343,6 +343,30 @@ impl std::convert::TryFrom<SimulationTime> for libc::timeval {
     }
 }
 
+impl std::convert::TryFrom<linux_api::time::timeval> for SimulationTime {
+    type Error = ();
+
+    fn try_from(value: linux_api::time::timeval) -> Result<Self, Self::Error> {
+        if value.tv_sec < 0 || value.tv_usec < 0 || value.tv_usec > 999_999 {
+            return Err(());
+        }
+        let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
+        let micros = Duration::from_micros(value.tv_usec.try_into().unwrap());
+        Self::try_from(secs + micros)
+    }
+}
+
+impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
+    type Error = ();
+
+    fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let value = Duration::from(value);
+        let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
+        let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
+        Ok(linux_api::time::timeval { tv_sec, tv_usec })
+    }
+}
+
 /// Invalid simulation time.
 pub const SIMTIME_INVALID: CSimulationTime = u64::MAX;
 

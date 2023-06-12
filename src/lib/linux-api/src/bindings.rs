@@ -362,6 +362,104 @@ pub const LINUX_INADDR_ALLRTRS_GROUP: u32 = 3758096386;
 pub const LINUX_INADDR_ALLSNOOPERS_GROUP: u32 = 3758096490;
 pub const LINUX_INADDR_MAX_LOCAL_GROUP: u32 = 3758096639;
 pub const LINUX___LITTLE_ENDIAN: u32 = 1234;
+pub const LINUX_MAP_32BIT: u32 = 64;
+pub const LINUX_PROT_READ: u32 = 1;
+pub const LINUX_PROT_WRITE: u32 = 2;
+pub const LINUX_PROT_EXEC: u32 = 4;
+pub const LINUX_PROT_SEM: u32 = 8;
+pub const LINUX_PROT_NONE: u32 = 0;
+pub const LINUX_PROT_GROWSDOWN: u32 = 16777216;
+pub const LINUX_PROT_GROWSUP: u32 = 33554432;
+pub const LINUX_MAP_TYPE: u32 = 15;
+pub const LINUX_MAP_FIXED: u32 = 16;
+pub const LINUX_MAP_ANONYMOUS: u32 = 32;
+pub const LINUX_MAP_POPULATE: u32 = 32768;
+pub const LINUX_MAP_NONBLOCK: u32 = 65536;
+pub const LINUX_MAP_STACK: u32 = 131072;
+pub const LINUX_MAP_HUGETLB: u32 = 262144;
+pub const LINUX_MAP_SYNC: u32 = 524288;
+pub const LINUX_MAP_FIXED_NOREPLACE: u32 = 1048576;
+pub const LINUX_MAP_UNINITIALIZED: u32 = 67108864;
+pub const LINUX_MLOCK_ONFAULT: u32 = 1;
+pub const LINUX_MS_ASYNC: u32 = 1;
+pub const LINUX_MS_INVALIDATE: u32 = 2;
+pub const LINUX_MS_SYNC: u32 = 4;
+pub const LINUX_MADV_NORMAL: u32 = 0;
+pub const LINUX_MADV_RANDOM: u32 = 1;
+pub const LINUX_MADV_SEQUENTIAL: u32 = 2;
+pub const LINUX_MADV_WILLNEED: u32 = 3;
+pub const LINUX_MADV_DONTNEED: u32 = 4;
+pub const LINUX_MADV_FREE: u32 = 8;
+pub const LINUX_MADV_REMOVE: u32 = 9;
+pub const LINUX_MADV_DONTFORK: u32 = 10;
+pub const LINUX_MADV_DOFORK: u32 = 11;
+pub const LINUX_MADV_HWPOISON: u32 = 100;
+pub const LINUX_MADV_SOFT_OFFLINE: u32 = 101;
+pub const LINUX_MADV_MERGEABLE: u32 = 12;
+pub const LINUX_MADV_UNMERGEABLE: u32 = 13;
+pub const LINUX_MADV_HUGEPAGE: u32 = 14;
+pub const LINUX_MADV_NOHUGEPAGE: u32 = 15;
+pub const LINUX_MADV_DONTDUMP: u32 = 16;
+pub const LINUX_MADV_DODUMP: u32 = 17;
+pub const LINUX_MADV_WIPEONFORK: u32 = 18;
+pub const LINUX_MADV_KEEPONFORK: u32 = 19;
+pub const LINUX_MADV_COLD: u32 = 20;
+pub const LINUX_MADV_PAGEOUT: u32 = 21;
+pub const LINUX_MADV_POPULATE_READ: u32 = 22;
+pub const LINUX_MADV_POPULATE_WRITE: u32 = 23;
+pub const LINUX_MADV_DONTNEED_LOCKED: u32 = 24;
+pub const LINUX_MADV_COLLAPSE: u32 = 25;
+pub const LINUX_MAP_FILE: u32 = 0;
+pub const LINUX_PKEY_DISABLE_ACCESS: u32 = 1;
+pub const LINUX_PKEY_DISABLE_WRITE: u32 = 2;
+pub const LINUX_PKEY_ACCESS_MASK: u32 = 3;
+pub const LINUX_MAP_GROWSDOWN: u32 = 256;
+pub const LINUX_MAP_DENYWRITE: u32 = 2048;
+pub const LINUX_MAP_EXECUTABLE: u32 = 4096;
+pub const LINUX_MAP_LOCKED: u32 = 8192;
+pub const LINUX_MAP_NORESERVE: u32 = 16384;
+pub const LINUX_MCL_CURRENT: u32 = 1;
+pub const LINUX_MCL_FUTURE: u32 = 2;
+pub const LINUX_MCL_ONFAULT: u32 = 4;
+pub const LINUX_HUGETLB_FLAG_ENCODE_SHIFT: u32 = 26;
+pub const LINUX_HUGETLB_FLAG_ENCODE_MASK: u32 = 63;
+pub const LINUX_HUGETLB_FLAG_ENCODE_16KB: u32 = 939524096;
+pub const LINUX_HUGETLB_FLAG_ENCODE_64KB: u32 = 1073741824;
+pub const LINUX_HUGETLB_FLAG_ENCODE_512KB: u32 = 1275068416;
+pub const LINUX_HUGETLB_FLAG_ENCODE_1MB: u32 = 1342177280;
+pub const LINUX_HUGETLB_FLAG_ENCODE_2MB: u32 = 1409286144;
+pub const LINUX_HUGETLB_FLAG_ENCODE_8MB: u32 = 1543503872;
+pub const LINUX_HUGETLB_FLAG_ENCODE_16MB: u32 = 1610612736;
+pub const LINUX_HUGETLB_FLAG_ENCODE_32MB: u32 = 1677721600;
+pub const LINUX_HUGETLB_FLAG_ENCODE_256MB: u32 = 1879048192;
+pub const LINUX_HUGETLB_FLAG_ENCODE_512MB: u32 = 1946157056;
+pub const LINUX_HUGETLB_FLAG_ENCODE_1GB: u32 = 2013265920;
+pub const LINUX_HUGETLB_FLAG_ENCODE_2GB: u32 = 2080374784;
+pub const LINUX_HUGETLB_FLAG_ENCODE_16GB: u32 = 2281701376;
+pub const LINUX_MREMAP_MAYMOVE: u32 = 1;
+pub const LINUX_MREMAP_FIXED: u32 = 2;
+pub const LINUX_MREMAP_DONTUNMAP: u32 = 4;
+pub const LINUX_OVERCOMMIT_GUESS: u32 = 0;
+pub const LINUX_OVERCOMMIT_ALWAYS: u32 = 1;
+pub const LINUX_OVERCOMMIT_NEVER: u32 = 2;
+pub const LINUX_MAP_SHARED: u32 = 1;
+pub const LINUX_MAP_PRIVATE: u32 = 2;
+pub const LINUX_MAP_SHARED_VALIDATE: u32 = 3;
+pub const LINUX_MAP_HUGE_SHIFT: u32 = 26;
+pub const LINUX_MAP_HUGE_MASK: u32 = 63;
+pub const LINUX_MAP_HUGE_16KB: u32 = 939524096;
+pub const LINUX_MAP_HUGE_64KB: u32 = 1073741824;
+pub const LINUX_MAP_HUGE_512KB: u32 = 1275068416;
+pub const LINUX_MAP_HUGE_1MB: u32 = 1342177280;
+pub const LINUX_MAP_HUGE_2MB: u32 = 1409286144;
+pub const LINUX_MAP_HUGE_8MB: u32 = 1543503872;
+pub const LINUX_MAP_HUGE_16MB: u32 = 1610612736;
+pub const LINUX_MAP_HUGE_32MB: u32 = 1677721600;
+pub const LINUX_MAP_HUGE_256MB: u32 = 1879048192;
+pub const LINUX_MAP_HUGE_512MB: u32 = 1946157056;
+pub const LINUX_MAP_HUGE_1GB: u32 = 2013265920;
+pub const LINUX_MAP_HUGE_2GB: u32 = 2080374784;
+pub const LINUX_MAP_HUGE_16GB: u32 = 2281701376;
 pub const LINUX_CSIGNAL: u32 = 255;
 pub const LINUX_CLONE_VM: u32 = 256;
 pub const LINUX_CLONE_FS: u32 = 512;
@@ -1338,6 +1436,47 @@ fn bindgen_test_layout_timespec() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_timeval {
+    pub tv_sec: linux___kernel_old_time_t,
+    pub tv_usec: linux___kernel_suseconds_t,
+}
+#[test]
+fn bindgen_test_layout_timeval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_timeval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_timeval>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_timeval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_usec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_usec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_itimerspec {
     pub it_interval: linux_timespec,
     pub it_value: linux_timespec,
@@ -1372,6 +1511,47 @@ fn bindgen_test_layout_itimerspec() {
         concat!(
             "Offset of field: ",
             stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_value)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_itimerval {
+    pub it_interval: linux_timeval,
+    pub it_value: linux_timeval,
+}
+#[test]
+fn bindgen_test_layout_itimerval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_itimerval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_itimerval>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_itimerval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
             "::",
             stringify!(it_value)
         )

@@ -173,14 +173,16 @@ safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
-simple_debug_impl!(nix::fcntl::OFlag);
+simple_debug_impl!(linux_api::fcntl::OFlag);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 simple_debug_impl!(nix::sys::stat::Mode);
-simple_debug_impl!(nix::sys::mman::ProtFlags);
-simple_debug_impl!(nix::sys::mman::MapFlags);
-simple_debug_impl!(nix::sys::mman::MRemapFlags);
+simple_debug_impl!(linux_api::mman::ProtFlags);
+simple_debug_impl!(linux_api::mman::MapFlags);
+simple_debug_impl!(linux_api::mman::MRemapFlags);
+simple_debug_impl!(linux_api::time::ClockId);
+simple_debug_impl!(linux_api::time::ITimerId);
 
 fn fmt_buffer(
     f: &mut std::fmt::Formatter<'_>,

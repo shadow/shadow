@@ -8,12 +8,12 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::ssize_t, /* buf */ *const std::ffi::c_void, /* count */ libc::size_t,
+    #[log_syscall(/* rv */ isize, /* buf */ *const std::ffi::c_void, /* count */ usize,
                   /* flags */ std::ffi::c_uint)]
     pub fn getrandom(
         ctx: &mut SyscallContext,
         buf_ptr: ForeignPtr<u8>,
-        count: libc::size_t,
+        count: usize,
         _flags: std::ffi::c_uint,
     ) -> SyscallResult {
         // We ignore the flags arg, because we use the same random source for both
@@ -38,7 +38,7 @@ impl SyscallHandler {
 
         // We must flush the memory reference to write it back.
         match mem_ref.flush() {
-            Ok(()) => Ok(libc::ssize_t::try_from(count).unwrap().into()),
+            Ok(()) => Ok(isize::try_from(count).unwrap().into()),
             Err(e) => {
                 warn!("Failed to flush writes: {:?}", e);
                 Err(Errno::EFAULT.into())

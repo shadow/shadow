@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use linux_api::fcntl::DescriptorFlags;
-use linux_api::time::itimerspec;
+use linux_api::time::{itimerspec, ClockId};
 use nix::errno::Errno;
 use nix::sys::timerfd::{TimerFlags, TimerSetTimeFlags};
 use shadow_shim_helper_rs::{
@@ -21,12 +21,17 @@ use crate::host::{
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* clockid */ std::ffi::c_int, /* flags */ std::ffi::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* clockid */ linux_api::time::ClockId, /* flags */ std::ffi::c_int)]
     pub fn timerfd_create(
         ctx: &mut SyscallContext,
         clockid: std::ffi::c_int,
         flags: std::ffi::c_int,
     ) -> Result<std::ffi::c_int, SyscallError> {
+        let Ok(clockid) = ClockId::try_from(clockid) else {
+            log::debug!("Invalid clockid: {clockid}");
+            return Err(Errno::EINVAL.into());
+        };
+
         // Continue only if we support the clockid.
         check_clockid(clockid)?;
 
@@ -193,24 +198,12 @@ impl SyscallHandler {
 /// Checks the clockid; returns `Ok(())` if the clockid is `CLOCK_REALTIME` or
 /// `CLOCK_MONOTONIC`, or the appropriate errno if the clockid is unknown or
 /// unsupported.
-fn check_clockid(clockid: std::ffi::c_int) -> Result<(), Errno> {
-    if clockid == libc::CLOCK_MONOTONIC || clockid == libc::CLOCK_REALTIME {
+fn check_clockid(clockid: ClockId) -> Result<(), Errno> {
+    if clockid == ClockId::CLOCK_MONOTONIC || clockid == ClockId::CLOCK_REALTIME {
         return Ok(());
     }
 
-    if [
-        libc::CLOCK_BOOTTIME,
-        libc::CLOCK_BOOTTIME_ALARM,
-        libc::CLOCK_REALTIME_ALARM,
-    ]
-    .contains(&clockid)
-    {
-        log::debug!(
-            "Unsupported clockid {clockid}, we support CLOCK_REALTIME and CLOCK_MONOTONIC.",
-        );
-    } else {
-        log::debug!("Unknown clockid {clockid}.");
-    }
+    warn_once_then_debug!("(LOG_ONCE) Unsupported clockid {clockid:?}");
     Err(Errno::EINVAL)
 }
 

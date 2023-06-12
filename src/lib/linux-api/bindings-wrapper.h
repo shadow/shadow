@@ -5,6 +5,7 @@
 #include <linux/errno.h>
 #include <linux/fcntl.h>
 #include <linux/in.h>
+#include <linux/mman.h>
 #include <linux/rseq.h>
 #include <linux/sched.h>
 #include <linux/signal.h>

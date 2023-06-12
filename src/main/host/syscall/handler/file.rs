@@ -9,7 +9,7 @@ use crate::host::syscall_types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* pathname */ SyscallStringArg,
-                  /* flags */ nix::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
+                  /* flags */ linux_api::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
     pub fn open(
         ctx: &mut SyscallContext,
         _path: ForeignPtr<()>,
@@ -20,7 +20,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* dirfd */ std::ffi::c_int, /* pathname */ SyscallStringArg,
-                  /* flags */ nix::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
+                  /* flags */ linux_api::fcntl::OFlag, /* mode */ nix::sys::stat::Mode)]
     pub fn openat(
         ctx: &mut SyscallContext,
         _dir_fd: std::ffi::c_int,

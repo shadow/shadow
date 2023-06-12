@@ -55,6 +55,7 @@ pub mod errno;
 pub mod fcntl;
 pub mod inet;
 pub mod ioctls;
+pub mod mman;
 pub mod posix_types;
 pub mod rseq;
 pub mod sched;

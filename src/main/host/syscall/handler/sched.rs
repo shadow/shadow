@@ -15,12 +15,16 @@ const CURRENT_CPU: u32 = 0;
 const RSEQ_FLAG_UNREGISTER: i32 = 1;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const std::ffi::c_void)]
+    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ usize, /* mask */ *const std::ffi::c_void)]
     pub fn sched_getaffinity(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
-        cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr<libc::c_ulong>,
+        cpusetsize: usize,
+        // sched_getaffinity(2):
+        // > The underlying system calls (which represent CPU masks as bit masks
+        // > of type unsigned long *) impose no restriction on the size of the CPU
+        // > mask
+        mask_ptr: ForeignPtr<std::ffi::c_ulong>,
     ) -> Result<std::ffi::c_int, SyscallError> {
         let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
@@ -48,12 +52,16 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ libc::size_t, /* mask */ *const std::ffi::c_void)]
+    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ usize, /* mask */ *const std::ffi::c_void)]
     pub fn sched_setaffinity(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
-        cpusetsize: libc::size_t,
-        mask_ptr: ForeignPtr<libc::c_ulong>,
+        cpusetsize: usize,
+        // sched_getaffinity(2):
+        // > The underlying system calls (which represent CPU masks as bit masks
+        // > of type unsigned long *) impose no restriction on the size of the CPU
+        // > mask
+        mask_ptr: ForeignPtr<std::ffi::c_ulong>,
     ) -> Result<std::ffi::c_int, SyscallError> {
         let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
-use linux_api::fcntl::DescriptorFlags;
+use linux_api::fcntl::{DescriptorFlags, OFlag};
+use linux_api::posix_types::kernel_off_t;
 use log::*;
 use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -93,7 +94,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int,
-                  /* flags */ nix::fcntl::OFlag)]
+                  /* flags */ linux_api::fcntl::OFlag)]
     pub fn dup3(
         ctx: &mut SyscallContext,
         old_fd: std::ffi::c_int,
@@ -111,15 +112,29 @@ impl SyscallHandler {
 
         let new_fd = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
 
-        // dup3 only supports the O_CLOEXEC flag
-        let flags = match flags {
-            libc::O_CLOEXEC => DescriptorFlags::FD_CLOEXEC,
-            0 => DescriptorFlags::empty(),
-            _ => return Err(nix::errno::Errno::EINVAL.into()),
+        let Some(flags) = OFlag::from_bits(flags) else {
+            debug!("Invalid flags: {flags}");
+            return Err(nix::errno::Errno::EINVAL.into());
         };
 
+        let mut descriptor_flags = DescriptorFlags::empty();
+
+        // dup3 only supports the O_CLOEXEC flag
+        for flag in flags {
+            match flag {
+                OFlag::O_CLOEXEC => descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC),
+                x if x == OFlag::empty() => {
+                    // The "empty" flag is always present. Ignore.
+                }
+                _ => {
+                    debug!("Invalid flags for dup3: {flags:?}");
+                    return Err(nix::errno::Errno::EINVAL.into());
+                }
+            }
+        }
+
         // duplicate the descriptor
-        let new_desc = desc.dup(flags);
+        let new_desc = desc.dup(descriptor_flags);
         let replaced_desc = desc_table.register_descriptor_with_fd(new_desc, new_fd);
 
         // close the replaced descriptor
@@ -133,14 +148,14 @@ impl SyscallHandler {
         Ok(std::ffi::c_int::try_from(new_fd).unwrap().into())
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
-                  /* count */ libc::size_t)]
+    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
+                  /* count */ usize)]
     pub fn read(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+    ) -> Result<isize, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -180,15 +195,15 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
-                  /* count */ libc::size_t, /* offset */ libc::off_t)]
+    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
+                  /* count */ usize, /* offset */ kernel_off_t)]
     pub fn pread64(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-        offset: libc::off_t,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+        offset: kernel_off_t,
+    ) -> Result<isize, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -233,9 +248,9 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         file: &File,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-        offset: Option<libc::off_t>,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+        offset: Option<kernel_off_t>,
+    ) -> Result<isize, SyscallError> {
         let iov = IoVec {
             base: buf_ptr,
             len: buf_size,
@@ -243,14 +258,14 @@ impl SyscallHandler {
         Self::readv_helper(ctx, file, &[iov], offset, 0)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int,
-                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t)]
+    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int,
+                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ usize)]
     pub fn write(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+    ) -> Result<isize, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -290,16 +305,16 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int,
-                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ libc::size_t,
-                  /* offset */ libc::off_t)]
+    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int,
+                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ usize,
+                  /* offset */ kernel_off_t)]
     pub fn pwrite64(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-        offset: libc::off_t,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+        offset: kernel_off_t,
+    ) -> Result<isize, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -345,9 +360,9 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         file: &File,
         buf_ptr: ForeignPtr<u8>,
-        buf_size: libc::size_t,
-        offset: Option<libc::off_t>,
-    ) -> Result<libc::ssize_t, SyscallError> {
+        buf_size: usize,
+        offset: Option<kernel_off_t>,
+    ) -> Result<isize, SyscallError> {
         let iov = IoVec {
             base: buf_ptr,
             len: buf_size,
@@ -364,7 +379,7 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* pipefd */ [std::ffi::c_int; 2],
-                  /* flags */ nix::fcntl::OFlag)]
+                  /* flags */ linux_api::fcntl::OFlag)]
     pub fn pipe2(
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
@@ -383,30 +398,27 @@ impl SyscallHandler {
             return Err(nix::errno::Errno::EFAULT.into());
         }
 
+        let Some(flags) = OFlag::from_bits(flags) else {
+            debug!("Invalid flags: {flags}");
+            return Err(Errno::EINVAL.into());
+        };
+
         let mut file_flags = FileStatus::empty();
         let mut descriptor_flags = DescriptorFlags::empty();
 
-        // keep track of which flags we use
-        let mut remaining_flags = flags;
-
-        if flags & libc::O_NONBLOCK != 0 {
-            file_flags.insert(FileStatus::NONBLOCK);
-            remaining_flags &= !libc::O_NONBLOCK;
-        }
-
-        if flags & libc::O_DIRECT != 0 {
-            file_flags.insert(FileStatus::DIRECT);
-            remaining_flags &= !libc::O_DIRECT;
-        }
-
-        if flags & libc::O_CLOEXEC != 0 {
-            descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
-            remaining_flags &= !libc::O_CLOEXEC;
-        }
-
-        // the user requested flags that we don't support
-        if remaining_flags != 0 {
-            warn!("Ignoring pipe flags");
+        for flag in flags.iter() {
+            match flag {
+                OFlag::O_NONBLOCK => file_flags.insert(FileStatus::NONBLOCK),
+                OFlag::O_DIRECT => file_flags.insert(FileStatus::DIRECT),
+                OFlag::O_CLOEXEC => descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC),
+                x if x == OFlag::empty() => {
+                    // The "empty" flag is always present. Ignore.
+                }
+                unhandled => {
+                    // TODO: return an error and change this to `warn_once_then_debug`?
+                    warn!("Ignoring pipe flag {unhandled:?}");
+                }
+            }
         }
 
         // reference-counted buffer for the pipe
