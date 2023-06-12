@@ -148,8 +148,12 @@ impl UdpSocket {
         packet
     }
 
-    pub fn peek_next_out_packet(&self) -> Option<PacketRc> {
-        self.send_buffer.peek_packet().cloned()
+    pub fn peek_next_packet_priority(&self) -> Option<u64> {
+        self.send_buffer.peek_packet().map(|p| p.priority())
+    }
+
+    pub fn has_data_to_send(&self) -> bool {
+        self.send_buffer.peek_packet().is_some()
     }
 
     pub fn update_packet_header(&self, _packet: &mut PacketRc) {

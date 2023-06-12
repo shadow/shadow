@@ -151,7 +151,7 @@ impl LegacyTcpSocket {
         Some(PacketRc::from_raw(packet))
     }
 
-    pub fn peek_next_out_packet(&self) -> Option<PacketRc> {
+    fn peek_packet(&self) -> Option<PacketRc> {
         let packet = unsafe { c::legacysocket_peekNextOutPacket(self.as_legacy_socket()) };
 
         if packet.is_null() {
@@ -161,6 +161,14 @@ impl LegacyTcpSocket {
         let packet = PacketRc::from_raw(packet);
         unsafe { c::packet_ref(packet.borrow_inner()) }
         Some(packet)
+    }
+
+    pub fn peek_next_packet_priority(&self) -> Option<u64> {
+        self.peek_packet().map(|p| p.priority())
+    }
+
+    pub fn has_data_to_send(&self) -> bool {
+        self.peek_packet().is_some()
     }
 
     pub fn update_packet_header(&self, packet: &mut PacketRc) {

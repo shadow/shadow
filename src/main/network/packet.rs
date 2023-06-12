@@ -188,6 +188,10 @@ impl PacketRc {
         SocketAddrV4::new(ip, port)
     }
 
+    pub fn priority(&self) -> u64 {
+        unsafe { c::packet_getPriority(self.c_ptr.ptr()) }
+    }
+
     /// Transfers ownership of the given c_ptr reference into a new rust packet
     /// object.
     pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
