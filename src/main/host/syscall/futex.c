@@ -116,7 +116,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
         CEmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
                                                 ? timeoutSimTime + worker_getCurrentEmulatedTime()
                                                 : timeoutSimTime;
-        syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys), timeoutEmulatedTime);
+        syscallcondition_setTimeout(cond, timeoutEmulatedTime);
     }
     return syscallreturn_makeBlocked(cond, true);
 }

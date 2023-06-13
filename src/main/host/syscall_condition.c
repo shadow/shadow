@@ -87,7 +87,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     return cond;
 }
 
-void syscallcondition_setTimeout(SysCallCondition* cond, const Host* host, CEmulatedTime t) {
+void syscallcondition_setTimeout(SysCallCondition* cond, CEmulatedTime t) {
     MAGIC_ASSERT(cond);
 
     cond->timeoutExpiration = t;

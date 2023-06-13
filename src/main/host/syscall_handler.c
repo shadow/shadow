@@ -645,7 +645,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
                 sys->havePendingResult = true;
                 sys->pendingResult = scr;
                 SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-                syscallcondition_setTimeout(cond, host, newTime);
+                syscallcondition_setTimeout(cond, newTime);
                 scr = syscallreturn_makeBlocked(cond, false);
             }
         }
