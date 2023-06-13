@@ -59,8 +59,7 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
     if (!wasBlocked) {
-        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(cond, reqEmuTime);
+        SysCallCondition* cond = syscallcondition_newWithAbsTimeout(reqEmuTime);
 
         /* Block the thread, unblock when the timer expires. */
         return syscallreturn_makeBlocked(cond, false);

@@ -126,6 +126,20 @@ impl SysCallCondition {
         }
     }
 
+    /// Create a new syscall condition that triggers a wakeup on the calling thread only after the
+    /// `abs_wakeup_time` has been reached.
+    ///
+    /// Panics if `abs_wakeup_time` is before the current emulated time.
+    pub fn new_from_time(abs_wakeup_time: EmulatedTime) -> Self {
+        SysCallCondition {
+            condition: Some(unsafe {
+                SysCallConditionRefMut::borrow_from_c(cshadow::syscallcondition_newWithAbsTimeout(
+                    EmulatedTime::to_c_emutime(Some(abs_wakeup_time)),
+                ))
+            }),
+        }
+    }
+
     /// "Steal" the inner pointer without unref'ing it.
     pub fn into_inner(mut self) -> *mut cshadow::SysCallCondition {
         let condition = self.condition.take().unwrap();
