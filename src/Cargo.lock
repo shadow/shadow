@@ -1448,6 +1448,7 @@ version = "3.0.0"
 dependencies = [
  "anyhow",
  "libc",
+ "linux-api",
  "nix",
  "once_cell",
  "rand",

@@ -23,6 +23,9 @@ path" for intercepting syscalls at the library level instead of via seccomp. The
 * Fixed a bug in `sched_getaffinity`. This bug was previously mostly latent due to an incorrectly generated libc syscall wrapper, though would have affected managed programs that
 made the syscall without going through libc.
 
+* Fixed [#2681](https://github.com/shadow/shadow/issues/2681): shadow can now escape spin loops
+that use an inlined syscall instruction to make `sched_yield` syscalls.
+
 Full changelog since v3.0.0:
 
 - [Merged PRs v3.0.0..HEAD](https://github.com/shadow/shadow/pulls?q=is%3Apr+merged%3A2023-05-18T18%3A00-0400..2033-05-18T18%3A00-0400)

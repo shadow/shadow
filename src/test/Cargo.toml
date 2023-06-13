@@ -168,6 +168,7 @@ path = "stdio/test_stdio.rs"
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 libc = "0.2"
+linux-api = { path = "../lib/linux-api" }
 nix = "0.26.2"
 rand = { version="0.8.5", features=["small_rng"] }
 signal-hook = "0.3.15"
