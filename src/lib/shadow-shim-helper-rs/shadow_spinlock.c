@@ -25,16 +25,8 @@ int shadow_spin_lock(shadow_spinlock_t* lock) {
         // to avoid going through the normal syscall logic, which *could* end up
         // inadvertently recursing.
         //
-        // The shim's seccomp policy allows sched_yield, so using a raw syscall
-        // instruction works.
-        //
-        // TODO: create a (public?) helper for making native syscalls in
-        // general, perhaps by setting a high-bit in the syscall number when
-        // running under Shadow, which could be recognized by the shim's seccomp
-        // filter and allowed to pass (after removing the extra bit).
-        // Previously we called the shim's `shim_native_syscall` here, but that
-        // requires to link against the shim library, which would be a circular
-        // dependency.
+        // The shim's seccomp policy allows syscalls directly from its statically
+        // linked libraries.
         __asm__ __volatile__("syscall"
                             :
                             : "a"(SYS_sched_yield)
