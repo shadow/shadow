@@ -130,7 +130,7 @@ impl SysCallCondition {
     /// `abs_wakeup_time` has been reached.
     ///
     /// Panics if `abs_wakeup_time` is before the current emulated time.
-    pub fn new_from_time(abs_wakeup_time: EmulatedTime) -> Self {
+    pub fn new_from_wakeup_time(abs_wakeup_time: EmulatedTime) -> Self {
         SysCallCondition {
             condition: Some(unsafe {
                 SysCallConditionRefMut::borrow_from_c(cshadow::syscallcondition_newWithAbsTimeout(

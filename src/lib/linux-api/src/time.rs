@@ -37,6 +37,14 @@ pub enum ClockId {
     CLOCK_TAI = const_conversions::i32_from_u32(bindings::LINUX_CLOCK_TAI),
 }
 
+bitflags::bitflags! {
+    /// Valid flags passed to `clock_nanosleep(2)`.
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct ClockNanosleepFlags: i32 {
+        const TIMER_ABSTIME = const_conversions::i32_from_u32(bindings::LINUX_TIMER_ABSTIME);
+    }
+}
+
 /// Interval timers
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 // getitimer takes `int`:

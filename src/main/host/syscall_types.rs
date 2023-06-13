@@ -5,6 +5,7 @@ use std::mem::size_of;
 use linux_api::errno::Errno;
 use log::Level::Debug;
 use log::*;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 
 use crate::cshadow as c;
@@ -227,6 +228,20 @@ impl SyscallError {
     pub fn new_blocked(file: File, state: FileState, restartable: bool) -> Self {
         Self::Blocked(Blocked {
             condition: SysCallCondition::new(Trigger::from_file(file, state)),
+            restartable,
+        })
+    }
+
+    pub fn new_blocked_until(unblock_time: EmulatedTime, restartable: bool) -> Self {
+        Self::Blocked(Blocked {
+            condition: SysCallCondition::new_from_wakeup_time(unblock_time),
+            restartable,
+        })
+    }
+
+    pub fn new_interrupted(restartable: bool) -> Self {
+        Self::Failed(Failed {
+            errno: Errno::EINTR,
             restartable,
         })
     }
