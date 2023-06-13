@@ -80,7 +80,12 @@ impl SharedBuf {
         bytes: W,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(usize, usize), std::io::Error> {
-        let (num_copied, num_removed_from_buf, _chunk_type) = self.queue.pop(bytes)?;
+        let (num_copied, num_removed_from_buf) = match self.queue.pop(bytes)? {
+            Some((num_copied, num_removed_from_buf, _chunk_type)) => {
+                (num_copied, num_removed_from_buf)
+            }
+            None => (0, 0),
+        };
         self.refresh_state(cb_queue);
 
         Ok((num_copied, num_removed_from_buf))
