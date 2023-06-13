@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use linux_api::signal::Signal;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 use super::host::Host;
 use crate::cshadow;
@@ -39,6 +40,11 @@ impl<'a> SysCallConditionRef<'a> {
 
         Some(unsafe { file_ptr.as_ref() }.unwrap())
     }
+
+    pub fn timeout(&self) -> Option<EmulatedTime> {
+        let timeout = unsafe { cshadow::syscallcondition_getTimeout(self.c_ptr) };
+        EmulatedTime::from_c_emutime(timeout)
+    }
 }
 
 /// A mutable reference to a syscall condition.
@@ -72,6 +78,11 @@ impl<'a> SysCallConditionRefMut<'a> {
         unsafe {
             cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal.into())
         }
+    }
+
+    pub fn set_timeout(&mut self, timeout: Option<EmulatedTime>) {
+        let timeout = EmulatedTime::to_c_emutime(timeout);
+        unsafe { cshadow::syscallcondition_setTimeout(self.c_ptr, timeout) };
     }
 }
 
