@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
 
@@ -105,9 +106,6 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
-    // TODO add `TestEnvironment::Shadow` here when clock_nanosleep is migrated to Rust.
-    let all_envs = set![TestEnvironment::Libc];
-
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![];
 
     // Encodes how Linux checks for invalid args, which we found experimentally.
@@ -205,22 +203,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                             s, clockid.value, flag.value, request.value, remain.value
                         )
                     };
+
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("return_values"),
                         move || test_return_values(clockid, flag, request, remain),
-                        all_envs.clone(),
+                        get_passing_test_envs(clockid.value),
                     )]);
                 }
             }
         }
     }
 
-    // Test valid syscall behavior.
-    // Skip testing CLOCK_PROCESS_CPUTIME_ID, it advances too slowly and causes timeouts.
-    for &clockid in clockids
-        .iter()
-        .filter(|c| c.validity == Validity::Valid && c.value != libc::CLOCK_PROCESS_CPUTIME_ID)
-    {
+    // Test only valid syscall behavior.
+    for &clockid in clockids.iter().filter(|c| c.validity == Validity::Valid) {
         for &flag in flags.iter().filter(|f| f.validity == Validity::Valid) {
             let append_args =
                 |s| format!("{} <clockid={:?},flags={:?}", s, clockid.value, flag.value);
@@ -229,12 +224,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 test_utils::ShadowTest::new(
                     &append_args("sleep_duration"),
                     move || test_sleep_duration(clockid.value, flag.value),
-                    all_envs.clone(),
+                    get_passing_test_envs(clockid.value),
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("interrupted_sleep"),
                     move || test_interrupted_sleep(clockid.value, flag.value),
-                    all_envs.clone(),
+                    get_passing_test_envs(clockid.value),
                 ),
             ]);
 
@@ -242,13 +237,34 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("abstime_in_past"),
                     move || test_abstime_in_past(clockid.value),
-                    all_envs.clone(),
+                    get_passing_test_envs(clockid.value),
                 )]);
             }
         }
     }
 
     tests
+}
+
+fn get_passing_test_envs(clockid: libc::clockid_t) -> HashSet<TestEnvironment> {
+    // Skip testing CLOCK_PROCESS_CPUTIME_ID, it advances too slowly and causes timeouts.
+    let skip_linux = [libc::CLOCK_PROCESS_CPUTIME_ID];
+
+    // The *_ALARM variants cause EPERM on Linux, which Shadow doesn't emulate.
+    let skip_shadow = [
+        libc::CLOCK_PROCESS_CPUTIME_ID,
+        libc::CLOCK_REALTIME_ALARM,
+        libc::CLOCK_BOOTTIME_ALARM,
+    ];
+
+    let mut test_envs = set![];
+    if !skip_linux.contains(&clockid) {
+        test_envs.insert(TestEnvironment::Libc);
+    }
+    if !skip_shadow.contains(&clockid) {
+        test_envs.insert(TestEnvironment::Shadow);
+    }
+    test_envs
 }
 
 fn test_return_values(
