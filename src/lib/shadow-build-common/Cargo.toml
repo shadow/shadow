@@ -12,4 +12,5 @@ cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.1"
 
 [package.metadata.system-deps]
-glib = { name = "glib-2.0", version = "2.32" }
+# Keep consistent with the minimum version number in /CMakeLists.txt
+glib = { name = "glib-2.0", version = "2.58" }

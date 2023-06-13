@@ -9,7 +9,14 @@
 #include "lib/shmem/shmem_allocator.h"
 #include "main/core/support/definitions.h"
 
-// Should be called by all syscall wrappers to ensure the shim is initialized.
+// Ensures that the shim is initialized for the current thread. Ok and cheap to
+// call again. Any syscalls made by a process before this is called will not be
+// intercepted.
+//
+// This currently gets called from "public" entry points (`shim_api.h`),
+// which themselves are called from:
+// * `libshadow_injector`'s global constructor.
+// * `libshadow_libc`'s syscall wrappers.
 void shim_ensure_init();
 
 // Sets the flag determining whether syscalls are passed through natively, and

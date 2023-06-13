@@ -64,7 +64,7 @@ ExternalProject_Add(
     BUILD_COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
-        --workspace --exclude shadow-tests \
+        --workspace --exclude shadow-tests --exclude shadow-shim \
         ${RUST_TARGET_FLAG} \
         ${RUST_BUILD_FLAG} \
         ${RUST_TARGETS} \
@@ -81,7 +81,7 @@ ExternalProject_Add(
         --target-dir \"${TARGETDIR}\" \
         "
     BUILD_BYPRODUCTS
-      ${TARGETDIR}/debug/${RUST_TARGET}/libshadow_shim_helper_rs.a ${TARGETDIR}/release/${RUST_TARGET}/libshadow_shim_helper_rs.a
+      ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim_helper_rs.a ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim_helper_rs.a
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
@@ -120,6 +120,63 @@ add_test(NAME rust-unit-tests
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
 set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE)
+
+# We need a separate project to build the shim, for several reasons:
+# * We need to pass extra RUSTFLAGS that only make sense for this target
+# * When we make the shim no_std, it probably can't be a member of the
+#   top-level workspace, unless we change everything to abort on panic.
+# * When we make the shim no_std, we'll want all dependencies built with
+#   only the features that the shim asks for, so that another crate
+#   doesn't end up enabling a feature that brings in `std`.
+
+# We need to set the soname of the shim for the injector lib to link to it correctly.
+# See https://github.com/rust-lang/rust/pull/31170.
+# We can't just set it in the shim's [build].rustflags, because that gets ignored
+# completely if the RUSTFLAGS env variable is set.
+# https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags
+set(RUSTFLAGS "$RUSTFLAGS -C link_args=-Wl,-soname,libshadow_shim.so")
+set(CARGO_ENV_VARS "")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CFLAGS=\"${RUST_CFLAGS}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXXFLAGS=\"${RUST_CXXFLAGS}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CC=\"${CMAKE_C_COMPILER}\"")
+set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXX=\"${CMAKE_CXX_COMPILER}\"")
+# Use a separate targetdir so that this and "main" rust build
+# don't invalidate eachother's build caches.
+# TODO: I'm not sure *why* they invalidate each-other's build caches.
+# Theoretically cargo is supposed to avoid that sort of issue by mangling
+# the compiler artifacts with the appropriate metadata to be able to keep
+# multiple configurations around at once.
+set(TARGETDIR "${CMAKE_CURRENT_BINARY_DIR}/shim/target")
+ExternalProject_Add(
+    rust-shadow-shim-project
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+    BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
+    BUILD_ALWAYS 1
+    DOWNLOAD_COMMAND ""
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND bash -c " \
+        ${CARGO_ENV_VARS} \
+        cargo build \
+        --package shadow-shim \
+        ${RUST_TARGET_FLAG} \
+        ${RUST_BUILD_FLAG} \
+        --target-dir \"${TARGETDIR}\" \
+        --features \"${RUST_FEATURES}\" \
+        "
+    BUILD_BYPRODUCTS
+      ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim.so
+    INSTALL_COMMAND ""
+    LOG_BUILD OFF
+)
+add_library(shadow-shim SHARED IMPORTED GLOBAL)
+add_dependencies(shadow-shim rust-shadow-shim-project)
+set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so)
+set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim.so)
+# Use this instead when we're able to bump the cmake min version to >= 3.21:
+# > install(IMPORTED_RUNTIME_ARTIFACTS shadow-shim LIBRARY DESTINATION lib)
+install(FILES ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so DESTINATION lib CONFIGURATIONS Debug)
+install(FILES ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim.so DESTINATION lib CONFIGURATIONS Release)
 
 # Outside of external, inclusion of headers within the project should be
 # relative to this directory.

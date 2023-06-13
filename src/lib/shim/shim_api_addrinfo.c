@@ -2,6 +2,8 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#include "lib/shim/shim_api_c.h"
+
 #include <arpa/inet.h>
 #include <assert.h>
 #include <dlfcn.h>
@@ -257,7 +259,7 @@ static bool _shim_api_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     }
 }
 
-int shim_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
+int shimc_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
                          struct addrinfo** res) {
     // Quoted text is from the man page.
 
@@ -438,7 +440,7 @@ int shim_api_getaddrinfo(const char* node, const char* service, const struct add
     return 0;
 }
 
-void shim_api_freeaddrinfo(struct addrinfo* res) {
+void shimc_api_freeaddrinfo(struct addrinfo* res) {
     while (res != NULL) {
         struct addrinfo* next = res->ai_next;
         assert(res->ai_addr != NULL);

@@ -11,6 +11,7 @@ members = [
     "lib/shadow-build-common",
     "lib/shadow-shim-helper-rs",
     "lib/shmem",
+    "lib/shim",
     "lib/std-util",
     "lib/syscall-logger",
     "lib/tsc",

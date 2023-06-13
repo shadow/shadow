@@ -2,6 +2,7 @@
  * The Shadow Simulator
  * See LICENSE for licensing information
  */
+#include "lib/shim/shim_api_c.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -17,9 +18,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-void shim_api_freeifaddrs(struct ifaddrs* ifa);
+void shimc_api_freeifaddrs(struct ifaddrs* ifa);
 
-int shim_api_getifaddrs(struct ifaddrs** ifap) {
+int shimc_api_getifaddrs(struct ifaddrs** ifap) {
     if (!ifap) {
         errno = EFAULT;
         return -1;
@@ -37,7 +38,7 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
 
     struct in_addr addr_buf;
     if (inet_pton(AF_INET, "127.0.0.1", &addr_buf) != 1) {
-        shim_api_freeifaddrs(i);
+        shimc_api_freeifaddrs(i);
         errno = EADDRNOTAVAIL;
         return -1;
     }
@@ -45,7 +46,7 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
     ((struct sockaddr_in*)i->ifa_addr)->sin_addr = addr_buf;
 
     if (inet_pton(AF_INET, "255.0.0.0", &addr_buf) != 1) {
-        shim_api_freeifaddrs(i);
+        shimc_api_freeifaddrs(i);
         errno = EADDRNOTAVAIL;
         return -1;
     }
@@ -55,7 +56,7 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
     /* a /24 netmask */
     struct in_addr netmask_24;
     if (inet_pton(AF_INET, "255.255.255.0", &netmask_24) != 1) {
-        shim_api_freeifaddrs(i);
+        shimc_api_freeifaddrs(i);
         errno = EADDRNOTAVAIL;
         return -1;
     }
@@ -91,7 +92,7 @@ int shim_api_getifaddrs(struct ifaddrs** ifap) {
     return 0;
 }
 
-void shim_api_freeifaddrs(struct ifaddrs* ifa) {
+void shimc_api_freeifaddrs(struct ifaddrs* ifa) {
     struct ifaddrs* iter = ifa;
     while (iter != NULL) {
         struct ifaddrs* next = iter->ifa_next;
