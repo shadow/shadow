@@ -738,6 +738,13 @@ gchar* packet_toString(Packet* packet) {
             break;
         }
 
+        case PMOCK: {
+            // TODO: We should panic here if this isn't a test.  We don't have a
+            // good way to check whether this is being run inside a test in C.
+            g_string_append_printf(packetString, "<PMOCK>");
+            break;
+        }
+
         default: {
             utility_panic("unrecognized protocol");
             break;
@@ -773,7 +780,7 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     packet->allStatus |= status;
 
-    if(rustlogger_isEnabled(LOGLEVEL_TRACE)) {
+    if (logger_isEnabled(logger_getDefault(), LOGLEVEL_TRACE)) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
         gchar* packetStr = packet_toString(packet);
         trace("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);

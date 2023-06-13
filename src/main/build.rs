@@ -134,7 +134,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
         .header("core/affinity.h")
-        .header("core/logger/log_wrapper.h")
         .header("core/main.h")
         .header("core/support/config_handlers.h")
         .header("core/support/definitions.h")
@@ -288,7 +287,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
-        .raw_line("use logger::Logger;")
         .raw_line("use shadow_shim_helper_rs::HostId;")
         .raw_line("use shadow_shim_helper_rs::syscall_types::{ManagedPhysicalMemoryAddr, SysCallArgs, UntypedForeignPtr};")
         .raw_line("#[allow(unused)]")
@@ -333,7 +331,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
 
     build.files(&[
         "core/affinity.c",
-        "core/logger/log_wrapper.c",
         "core/support/config_handlers.c",
         "core/main.c",
         "host/descriptor/descriptor.c",
