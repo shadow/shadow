@@ -1,3 +1,6 @@
+use linux_syscall::Result as LinuxSyscallResult;
+
+use crate::errno::Errno;
 use crate::{bindings, const_conversions};
 
 bitflags::bitflags! {
@@ -41,3 +44,9 @@ pub use bindings::linux_clone_args;
 pub type clone_args = linux_clone_args;
 
 unsafe impl shadow_pod::Pod for clone_args {}
+
+pub fn sched_yield() -> Result<(), Errno> {
+    unsafe { linux_syscall::syscall!(linux_syscall::SYS_sched_yield) }
+        .check()
+        .map_err(Errno::from)
+}
