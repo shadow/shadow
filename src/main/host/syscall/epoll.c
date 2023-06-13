@@ -95,7 +95,7 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
 
             /* Set timeout, if provided. */
             if (timeout_emutime != EMUTIME_INVALID) {
-                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys), timeout_emutime);
+                syscallcondition_setTimeout(cond, timeout_emutime);
             }
 
             return syscallreturn_makeBlocked(cond, false);

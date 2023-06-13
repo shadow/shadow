@@ -154,10 +154,9 @@ SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
                                         .status = STATUS_FILE_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
-                syscallcondition_setTimeout(cond, _syscallhandler_getHost(sys),
-                                            worker_getCurrentEmulatedTime() +
-                                                timeout->tv_sec * SIMTIME_ONE_SECOND +
-                                                timeout->tv_nsec * SIMTIME_ONE_NANOSECOND);
+                syscallcondition_setTimeout(cond, worker_getCurrentEmulatedTime() +
+                                                      timeout->tv_sec * SIMTIME_ONE_SECOND +
+                                                      timeout->tv_nsec * SIMTIME_ONE_NANOSECOND);
             }
 
             // We either use our timer as a timeout, or no timeout
