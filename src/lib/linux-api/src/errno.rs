@@ -152,6 +152,7 @@ fn errno_to_str(e: Errno) -> Option<&'static str> {
         bindings::LINUX_ENOTRECOVERABLE => Some("ENOTRECOVERABLE"),
         bindings::LINUX_ERFKILL => Some("ERFKILL"),
         bindings::LINUX_EHWPOISON => Some("EHWPOISON"),
+        bindings::LINUX_EINTR => Some("EINTR"),
         _ => None,
     }
 }
@@ -277,10 +278,12 @@ impl Errno {
     pub const ENOTRECOVERABLE: Self = Self::from_u32_const(bindings::LINUX_ENOTRECOVERABLE);
     pub const ERFKILL: Self = Self::from_u32_const(bindings::LINUX_ERFKILL);
     pub const EHWPOISON: Self = Self::from_u32_const(bindings::LINUX_EHWPOISON);
+    pub const EINTR: Self = Self::from_u32_const(bindings::LINUX_EINTR);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
     pub const EAGAIN: Self = Self::from_u32_const(bindings::LINUX_EAGAIN);
+    pub const ENOTSUP: Self = Self::EOPNOTSUPP;
 
     /// From MAX_ERRNO in include/linux/err.h in kernel source. This doesn't
     /// seem to be exposed in the installed kernel headers from which we generate bindings.
