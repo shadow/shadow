@@ -1,6 +1,6 @@
 use crate::bindings;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 // Defined in libc as an `int`, but u16 is sufficient
 // to represent all values, and is what is used in `linux_errno`.
 //
@@ -24,6 +24,30 @@ impl TryFrom<u16> for Errno {
 impl From<Errno> for u16 {
     fn from(val: Errno) -> u16 {
         val.0
+    }
+}
+
+impl From<Errno> for u32 {
+    fn from(val: Errno) -> u32 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for u64 {
+    fn from(val: Errno) -> u64 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for i32 {
+    fn from(val: Errno) -> i32 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for i64 {
+    fn from(val: Errno) -> i64 {
+        val.0.into()
     }
 }
 
