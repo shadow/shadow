@@ -174,20 +174,20 @@ impl ByteQueue {
     /// enough space, the remaining bytes in the packet will be dropped. Returns a tuple containing
     /// the number of bytes copied, the number of bytes removed from the queue (including dropped
     /// bytes), and the chunk type.
-    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<(usize, usize, Option<ChunkType>)> {
+    pub fn pop<W: Write>(&mut self, dst: W) -> std::io::Result<Option<(usize, usize, ChunkType)>> {
         // peek the front to see what kind of data is next
         match self.bytes.front() {
             Some(x) => match x.chunk_type {
                 ChunkType::Stream => {
                     let num_copied = self.pop_stream(dst)?;
-                    Ok((num_copied, num_copied, Some(ChunkType::Stream)))
+                    Ok(Some((num_copied, num_copied, ChunkType::Stream)))
                 }
                 ChunkType::Packet => {
                     let (num_copied, num_removed_from_buf) = self.pop_packet(dst)?;
-                    Ok((num_copied, num_removed_from_buf, Some(ChunkType::Packet)))
+                    Ok(Some((num_copied, num_removed_from_buf, ChunkType::Packet)))
                 }
             },
-            None => Ok((0, 0, None)),
+            None => Ok(None),
         }
     }
 
@@ -306,6 +306,110 @@ impl ByteQueue {
 
         Some((bytes.into(), chunk_type))
     }
+
+    /// Peek data from the queue. Only a single type of data will be peeked per invocation.
+    /// Zero-length packets may be returned. If packet data is returned but `dst` did not have
+    /// enough space, the packet written to `dst` will be truncated. Returns a tuple containing the
+    /// number of bytes copied, the number of bytes that would have been copied if `dst` had enough
+    /// space (for packet chunks, the size of the packet), and the chunk type.
+    pub fn peek<W: Write>(&self, dst: W) -> std::io::Result<Option<(usize, usize, ChunkType)>> {
+        // peek the front to see what kind of data is next
+        match self.bytes.front() {
+            Some(x) => match x.chunk_type {
+                ChunkType::Stream => {
+                    let num_copied = self.peek_stream(dst)?;
+                    Ok(Some((num_copied, num_copied, ChunkType::Stream)))
+                }
+                ChunkType::Packet => {
+                    let (num_copied, size_of_packet) = self.peek_packet(dst)?;
+                    Ok(Some((num_copied, size_of_packet, ChunkType::Packet)))
+                }
+            },
+            None => Ok(None),
+        }
+    }
+
+    fn peek_stream<W: Write>(&self, mut dst: W) -> std::io::Result<usize> {
+        let mut total_copied = 0;
+        assert_ne!(
+            self.bytes.len(),
+            0,
+            "This function assumes there is a chunk"
+        );
+
+        for bytes in self.bytes.iter() {
+            let mut bytes = match bytes {
+                x if x.chunk_type != ChunkType::Stream => break,
+                x => x.data.as_ref(),
+            };
+
+            loop {
+                let copied = match dst.write(bytes) {
+                    Ok(x) => x,
+                    // may have been interrupted due to a signal, so try again
+                    Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                    Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                        // only return an error if no bytes have been copied yet
+                        if total_copied == 0 {
+                            return Err(e);
+                        }
+                        // no bytes could be written this iteration
+                        0
+                    }
+                    // a partial write may have occurred in previous iterations
+                    Err(e) => return Err(e),
+                };
+
+                bytes = &bytes[copied..];
+
+                if copied == 0 {
+                    break;
+                }
+
+                total_copied += copied;
+            }
+        }
+
+        Ok(total_copied)
+    }
+
+    fn peek_packet<W: Write>(&self, mut dst: W) -> std::io::Result<(usize, usize)> {
+        let chunk = self
+            .bytes
+            .front()
+            .expect("This function assumes there is a chunk");
+
+        assert_eq!(chunk.chunk_type, ChunkType::Packet);
+        let mut bytes = chunk.data.as_ref();
+        let packet_len = bytes.len();
+        let mut total_copied = 0;
+
+        loop {
+            let copied = match dst.write(bytes) {
+                Ok(x) => x,
+                // may have been interrupted due to a signal, so try again
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                // `WouldBlock` typically means "try again later", but we don't support that
+                // behaviour since a packet may have been partially copied already
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    panic!("Non-blocking writers aren't supported for packets")
+                }
+                // a partial write may have occurred in previous iterations, and the remainder of
+                // the packet will be dropped
+                Err(e) => return Err(e),
+            };
+
+            bytes = &bytes[copied..];
+
+            if copied == 0 {
+                break;
+            }
+
+            total_copied += copied;
+        }
+
+        Ok((total_copied, packet_len))
+    }
 }
 
 // a sanity check only when using debug mode
@@ -393,81 +497,12 @@ impl ByteChunk {
     }
 }
 
-mod export {
-    use std::slice;
-
-    use super::*;
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_new(default_chunk_size: usize) -> *mut ByteQueue {
-        Box::into_raw(Box::new(ByteQueue::new(default_chunk_size)))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_free(bq_ptr: *mut ByteQueue) {
-        if bq_ptr.is_null() {
-            return;
-        }
-        unsafe { Box::from_raw(bq_ptr) };
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_numBytes(bq: *mut ByteQueue) -> usize {
-        assert!(!bq.is_null());
-        let bq = unsafe { &mut *bq };
-        bq.num_bytes()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_hasBytes(bq: *mut ByteQueue) -> bool {
-        assert!(!bq.is_null());
-        let bq = unsafe { &mut *bq };
-        bq.has_bytes()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_pushStream(
-        bq: *mut ByteQueue,
-        src: *const std::os::raw::c_uchar,
-        len: libc::size_t,
-    ) {
-        assert!(!bq.is_null());
-        assert!(!src.is_null());
-        let bq = unsafe { &mut *bq };
-        let src = unsafe { slice::from_raw_parts(src, len) };
-        bq.push_stream(src).unwrap();
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_pushPacket(
-        bq: *mut ByteQueue,
-        src: *const std::os::raw::c_uchar,
-        len: libc::size_t,
-    ) {
-        assert!(!bq.is_null());
-        assert!(!src.is_null());
-        let bq = unsafe { &mut *bq };
-        let src = unsafe { slice::from_raw_parts(src, len) };
-        bq.push_packet(src, src.len()).unwrap();
-    }
-
-    #[no_mangle]
-    pub extern "C" fn bytequeue_pop(
-        bq: *mut ByteQueue,
-        dst: *mut std::os::raw::c_uchar,
-        len: libc::size_t,
-    ) -> libc::size_t {
-        assert!(!bq.is_null());
-        assert!(!dst.is_null());
-        let bq = unsafe { &mut *bq };
-        let dst = unsafe { slice::from_raw_parts_mut(dst, len) };
-        let (count, _, _chunk_type) = bq.pop(dst).unwrap();
-        count
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use rand::{Rng, RngCore};
+    use rand_chacha::ChaCha20Rng;
+    use rand_core::SeedableRng;
+
     use super::*;
 
     #[test]
@@ -484,6 +519,8 @@ mod tests {
         bq.push_stream(&[][..]).unwrap();
         bq.push_stream(&src2[..]).unwrap();
 
+        // test size and allocation count
+
         assert_eq!(bq.num_bytes(), src1.len() + src2.len());
         // ceiling division
         assert_eq!(
@@ -492,8 +529,22 @@ mod tests {
         );
         assert_eq!(bq.total_allocations as usize, bq.bytes.len());
 
-        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().0);
-        assert_eq!(8, bq.pop(&mut dst2[..]).unwrap().0);
+        // test peek()
+
+        assert_eq!(8, bq.peek(&mut dst1[..]).unwrap().unwrap().0);
+        assert_eq!(10, bq.peek(&mut dst2[..]).unwrap().unwrap().0);
+
+        assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(dst2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(bq.num_bytes(), src1.len() + src2.len());
+
+        // test pop()
+
+        dst1.fill(0);
+        dst2.fill(0);
+
+        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().unwrap().0);
+        assert_eq!(8, bq.pop(&mut dst2[..]).unwrap().unwrap().0);
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [9, 10, 11, 12, 13, 51, 52, 53, 0, 0]);
@@ -513,13 +564,30 @@ mod tests {
         bq.push_packet(&[][..], 0).unwrap();
         bq.push_packet(&src2[..], src2.len()).unwrap();
 
+        // test size and allocation count
+
         assert_eq!(bq.num_bytes(), src1.len() + src2.len());
         assert_eq!(bq.bytes.len(), 3);
         assert_eq!(bq.total_allocations, 3);
 
-        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().0);
-        assert_eq!(0, bq.pop(&mut dst2[..]).unwrap().0);
-        assert_eq!(3, bq.pop(&mut dst2[..]).unwrap().0);
+        // test peek()
+
+        assert_eq!(8, bq.peek(&mut dst1[..]).unwrap().unwrap().0);
+        assert_eq!(10, bq.peek(&mut dst2[..]).unwrap().unwrap().0);
+        assert_eq!(10, bq.peek(&mut dst2[..]).unwrap().unwrap().0);
+
+        assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(dst2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(bq.num_bytes(), src1.len() + src2.len());
+
+        // test pop()
+
+        dst1.fill(0);
+        dst2.fill(0);
+
+        assert_eq!(8, bq.pop(&mut dst1[..]).unwrap().unwrap().0);
+        assert_eq!(0, bq.pop(&mut dst2[..]).unwrap().unwrap().0);
+        assert_eq!(3, bq.pop(&mut dst2[..]).unwrap().unwrap().0);
 
         assert_eq!(dst1, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(dst2, [51, 52, 53, 0, 0, 0, 0, 0, 0, 0]);
@@ -542,19 +610,19 @@ mod tests {
 
         assert_eq!(
             bq.pop(&mut buf[..]).unwrap(),
-            (3, 3, Some(ChunkType::Stream))
+            Some((3, 3, ChunkType::Stream))
         );
         assert_eq!(buf[..3], [1, 2, 3]);
 
         assert_eq!(
             bq.pop(&mut buf[..]).unwrap(),
-            (3, 3, Some(ChunkType::Packet))
+            Some((3, 3, ChunkType::Packet))
         );
         assert_eq!(buf[..3], [4, 5, 6]);
 
         assert_eq!(
             bq.pop(&mut buf[..]).unwrap(),
-            (3, 3, Some(ChunkType::Stream))
+            Some((3, 3, ChunkType::Stream))
         );
         assert_eq!(buf[..3], [7, 8, 9]);
 
@@ -584,37 +652,37 @@ mod tests {
 
         assert_eq!(
             bq.pop(&mut buf[..3]).unwrap(),
-            (3, 3, Some(ChunkType::Stream))
+            Some((3, 3, ChunkType::Stream))
         );
         assert_eq!(buf[..3], [1, 2, 3]);
 
         assert_eq!(
             bq.pop(&mut buf[..5]).unwrap(),
-            (3, 3, Some(ChunkType::Stream))
+            Some((3, 3, ChunkType::Stream))
         );
         assert_eq!(buf[..3], [4, 5, 6]);
 
         assert_eq!(
             bq.pop(&mut buf[..4]).unwrap(),
-            (4, 8, Some(ChunkType::Packet))
+            Some((4, 8, ChunkType::Packet))
         );
         assert_eq!(buf[..4], [7, 8, 9, 10]);
 
         assert_eq!(
             bq.pop(&mut buf[..4]).unwrap(),
-            (3, 3, Some(ChunkType::Stream))
+            Some((3, 3, ChunkType::Stream))
         );
         assert_eq!(buf[..3], [15, 16, 17]);
 
         assert_eq!(
             bq.pop(&mut buf[..4]).unwrap(),
-            (4, 6, Some(ChunkType::Packet))
+            Some((4, 6, ChunkType::Packet))
         );
         assert_eq!(buf[..4], [100, 101, 102, 103]);
 
         assert_eq!(
             bq.pop(&mut buf[..4]).unwrap(),
-            (0, 0, Some(ChunkType::Packet))
+            Some((0, 0, ChunkType::Packet))
         );
 
         assert_eq!(bq.pop_chunk(4), Some(([18][..].into(), ChunkType::Stream)));
@@ -625,7 +693,7 @@ mod tests {
         );
 
         assert_eq!(bq.pop_chunk(8), None);
-        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), (0, 0, None));
+        assert_eq!(bq.pop(&mut buf[..4]).unwrap(), None);
         assert!(!bq.has_bytes());
     }
 
@@ -655,5 +723,58 @@ mod tests {
         bq.pop(&mut writer).unwrap_err();
 
         assert_eq!(bq.num_bytes(), 3);
+    }
+
+    /// Test that the peek output always matches the pop output.
+    #[test]
+    fn test_bytequeue_peek() {
+        let mut rng = ChaCha20Rng::seed_from_u64(1234);
+
+        const PROB_PUSH: f64 = 0.8;
+        const PROB_POP: f64 = 0.9;
+        const PROB_STREAM: f64 = 0.5;
+        const MAX_PUSH: usize = 20;
+        const MAX_POP: usize = 30;
+
+        // the bytequeue doesn't use any unsafe code, so we don't really need to worry about UB
+        #[cfg(not(miri))]
+        const NUM_ITER: usize = 5000;
+        #[cfg(miri)]
+        const NUM_ITER: usize = 10;
+
+        // pop more bytes and chunks than we push so that we generally stay near an empty queue
+        assert!(PROB_POP > PROB_PUSH);
+        assert!(MAX_POP > MAX_PUSH);
+
+        let mut bq = ByteQueue::new(10);
+
+        for _ in 0..NUM_ITER {
+            // push
+            if rng.gen_bool(PROB_PUSH) {
+                let mut bytes = vec![0u8; rng.gen_range(0..MAX_PUSH)];
+                rng.fill_bytes(&mut bytes);
+
+                if rng.gen_bool(PROB_STREAM) {
+                    bq.push_stream(&bytes[..]).unwrap();
+                } else {
+                    bq.push_packet(&bytes[..], bytes.len()).unwrap();
+                }
+            }
+
+            let pop_size = rng.gen_range(0..MAX_POP);
+
+            // peek
+            let mut peeked_bytes = vec![0u8; pop_size];
+            let peek_rv = bq.peek(&mut peeked_bytes[..]).unwrap();
+
+            // pop
+            if rng.gen_bool(PROB_POP) {
+                let mut popped_bytes = vec![0u8; pop_size];
+                let pop_rv = bq.pop(&mut popped_bytes[..]).unwrap();
+
+                assert_eq!(peek_rv, pop_rv);
+                assert_eq!(popped_bytes, peeked_bytes);
+            }
+        }
     }
 }
