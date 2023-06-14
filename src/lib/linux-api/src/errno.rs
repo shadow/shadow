@@ -153,6 +153,7 @@ fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::ERFKILL => Some("ERFKILL"),
         Errno::EHWPOISON => Some("EHWPOISON"),
         Errno::EINTR => Some("EINTR"),
+        Errno::ENFILE => Some("ENFILE"),
         _ => None,
     }
 }
@@ -279,6 +280,7 @@ impl Errno {
     pub const ERFKILL: Self = Self::from_u32_const(bindings::LINUX_ERFKILL);
     pub const EHWPOISON: Self = Self::from_u32_const(bindings::LINUX_EHWPOISON);
     pub const EINTR: Self = Self::from_u32_const(bindings::LINUX_EINTR);
+    pub const ENFILE: Self = Self::from_u32_const(bindings::LINUX_ENFILE);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
