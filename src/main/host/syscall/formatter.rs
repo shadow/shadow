@@ -2,7 +2,6 @@ use std::any::TypeId;
 use std::fmt::Display;
 use std::marker::PhantomData;
 
-use nix::errno::Errno;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
@@ -236,8 +235,8 @@ where
                 write!(f, "{rv}")
             }
             SyscallResult::Err(SyscallError::Failed(failed)) => {
-                let errno: Errno = failed.errno;
-                let rv = SysCallReg::from(-(errno as i64));
+                let errno = failed.errno;
+                let rv = SysCallReg::from(errno.to_negated_i64());
                 let rv = SyscallVal::<'_, RV>::new(rv, self.args, self.options, self.mem);
                 write!(f, "{rv} ({errno})")
             }

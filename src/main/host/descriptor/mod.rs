@@ -1095,11 +1095,11 @@ mod tests {
             Ok(1.into()),
             Err(nix::errno::Errno::EPERM.into()),
             Err(SyscallError::Failed(Failed {
-                errno: nix::errno::Errno::EINTR,
+                errno: linux_api::errno::Errno::EINTR,
                 restartable: true,
             })),
             Err(SyscallError::Failed(Failed {
-                errno: nix::errno::Errno::EINTR,
+                errno: linux_api::errno::Errno::EINTR,
                 restartable: false,
             })),
             Err(SyscallError::Blocked(Blocked {

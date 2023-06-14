@@ -2,9 +2,9 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
 
+use linux_api::errno::Errno;
 use log::Level::Debug;
 use log::*;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 
 use crate::cshadow as c;
@@ -135,7 +135,7 @@ pub struct Blocked {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Failed {
-    pub errno: nix::errno::Errno,
+    pub errno: linux_api::errno::Errno,
     pub restartable: bool,
 }
 
@@ -172,7 +172,7 @@ impl From<SyscallResult> for SyscallReturn {
                 restartable: false,
             }),
             Err(SyscallError::Failed(failed)) => SyscallReturn::Done(SyscallReturnDone {
-                retval: (-(failed.errno as i64)).into(),
+                retval: (-(i64::from(failed.errno))).into(),
                 restartable: failed.restartable,
             }),
             Err(SyscallError::Blocked(blocked)) => SyscallReturn::Block(SyscallReturnBlocked {
@@ -187,6 +187,18 @@ impl From<SyscallResult> for SyscallReturn {
 impl From<nix::errno::Errno> for SyscallError {
     fn from(e: nix::errno::Errno) -> Self {
         SyscallError::Failed(Failed {
+            // the nix Errno is an enum that only contains valid errno values and 0, so this
+            // should only panic for 0 values (Errno::UnknownErrno) which we wouldn't want to use
+            // anyway
+            errno: Errno::try_from(u16::try_from(e as i32).unwrap()).unwrap(),
+            restartable: false,
+        })
+    }
+}
+
+impl From<linux_api::errno::Errno> for SyscallError {
+    fn from(e: linux_api::errno::Errno) -> Self {
+        SyscallError::Failed(Failed {
             errno: e,
             restartable: false,
         })
@@ -197,7 +209,9 @@ impl From<std::io::Error> for SyscallError {
     fn from(e: std::io::Error) -> Self {
         match std::io::Error::raw_os_error(&e) {
             Some(e) => SyscallError::Failed(Failed {
-                errno: nix::errno::from_i32(e),
+                // this probably won't panic if rust's io::Error does only return "raw os" error
+                // values
+                errno: Errno::try_from(u16::try_from(e).unwrap()).unwrap(),
                 restartable: false,
             }),
             None => {

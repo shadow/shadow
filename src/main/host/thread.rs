@@ -75,7 +75,7 @@ impl Thread {
         n: i64,
         args: &[SysCallReg],
     ) -> nix::Result<SysCallReg> {
-        syscall::raw_return_value_to_result(self.native_syscall_raw(ctx, n, args))
+        syscall::raw_return_value_to_nix_result(self.native_syscall_raw(ctx, n, args))
     }
 
     pub fn process_id(&self) -> ProcessId {
