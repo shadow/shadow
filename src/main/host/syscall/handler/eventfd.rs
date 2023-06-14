@@ -1,19 +1,22 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
-use nix::errno::Errno;
 use nix::sys::eventfd::EfdFlags;
 use syscall_logger::log_syscall;
 
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallResult;
+use crate::host::syscall_types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* initval */ std::ffi::c_uint)]
-    pub fn eventfd(ctx: &mut SyscallContext, init_val: std::ffi::c_uint) -> SyscallResult {
+    pub fn eventfd(
+        ctx: &mut SyscallContext,
+        init_val: std::ffi::c_uint,
+    ) -> Result<std::ffi::c_int, SyscallError> {
         Self::eventfd_helper(ctx, init_val, 0)
     }
 
@@ -23,7 +26,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         Self::eventfd_helper(ctx, init_val, flags)
     }
 
@@ -31,7 +34,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         log::trace!(
             "eventfd() called with initval {} and flags {}",
             init_val,
@@ -78,6 +81,6 @@ impl SyscallHandler {
 
         log::trace!("eventfd() returning fd {}", fd);
 
-        Ok(fd.val().into())
+        Ok(fd.val().try_into().unwrap())
     }
 }

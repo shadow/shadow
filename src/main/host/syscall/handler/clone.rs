@@ -1,7 +1,7 @@
+use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
 use log::{debug, trace, warn};
-use nix::errno::Errno;
 use nix::sys::signal::Signal;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
