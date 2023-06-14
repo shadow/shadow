@@ -168,6 +168,15 @@ impl core::fmt::Debug for Errno {
     }
 }
 
+impl core::fmt::Display for Errno {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match errno_to_str(*self) {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "(unknown errno {})", u16::from(*self)),
+        }
+    }
+}
+
 impl Errno {
     pub const EINVAL: Self = Self::from_u32_const(bindings::LINUX_EINVAL);
     pub const EDEADLK: Self = Self::from_u32_const(bindings::LINUX_EDEADLK);
