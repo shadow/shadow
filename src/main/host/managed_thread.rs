@@ -299,7 +299,7 @@ impl ManagedThread {
         ptid: ForeignPtr<libc::pid_t>,
         ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
-    ) -> Result<ManagedThread, Errno> {
+    ) -> Result<ManagedThread, linux_api::errno::Errno> {
         let child_ipc_shmem =
             Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
         {

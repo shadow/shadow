@@ -1,6 +1,6 @@
 use crate::bindings;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 // Defined in libc as an `int`, but u16 is sufficient
 // to represent all values, and is what is used in `linux_errno`.
 //
@@ -27,109 +27,153 @@ impl From<Errno> for u16 {
     }
 }
 
+impl From<Errno> for u32 {
+    fn from(val: Errno) -> u32 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for u64 {
+    fn from(val: Errno) -> u64 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for i32 {
+    fn from(val: Errno) -> i32 {
+        val.0.into()
+    }
+}
+
+impl From<Errno> for i64 {
+    fn from(val: Errno) -> i64 {
+        val.0.into()
+    }
+}
+
+fn errno_to_str(e: Errno) -> Option<&'static str> {
+    match e {
+        Errno::EINVAL => Some("EINVAL"),
+        Errno::EDEADLK => Some("EDEADLK"),
+        Errno::ENAMETOOLONG => Some("ENAMETOOLONG"),
+        Errno::ENOLCK => Some("ENOLCK"),
+        Errno::ENOSYS => Some("ENOSYS"),
+        Errno::ENOTEMPTY => Some("ENOTEMPTY"),
+        Errno::ELOOP => Some("ELOOP"),
+        Errno::EWOULDBLOCK => Some("EWOULDBLOCK"),
+        Errno::ENOMSG => Some("ENOMSG"),
+        Errno::EIDRM => Some("EIDRM"),
+        Errno::ECHRNG => Some("ECHRNG"),
+        Errno::EL2NSYNC => Some("EL2NSYNC"),
+        Errno::EL3HLT => Some("EL3HLT"),
+        Errno::EL3RST => Some("EL3RST"),
+        Errno::ELNRNG => Some("ELNRNG"),
+        Errno::EUNATCH => Some("EUNATCH"),
+        Errno::ENOCSI => Some("ENOCSI"),
+        Errno::EL2HLT => Some("EL2HLT"),
+        Errno::EBADE => Some("EBADE"),
+        Errno::EBADR => Some("EBADR"),
+        Errno::EXFULL => Some("EXFULL"),
+        Errno::ENOANO => Some("ENOANO"),
+        Errno::EBADRQC => Some("EBADRQC"),
+        Errno::EBADSLT => Some("EBADSLT"),
+        Errno::EBFONT => Some("EBFONT"),
+        Errno::ENOSTR => Some("ENOSTR"),
+        Errno::ENODATA => Some("ENODATA"),
+        Errno::ETIME => Some("ETIME"),
+        Errno::ENOSR => Some("ENOSR"),
+        Errno::ENONET => Some("ENONET"),
+        Errno::ENOPKG => Some("ENOPKG"),
+        Errno::EREMOTE => Some("EREMOTE"),
+        Errno::ENOLINK => Some("ENOLINK"),
+        Errno::EADV => Some("EADV"),
+        Errno::ESRMNT => Some("ESRMNT"),
+        Errno::ECOMM => Some("ECOMM"),
+        Errno::EPROTO => Some("EPROTO"),
+        Errno::EMULTIHOP => Some("EMULTIHOP"),
+        Errno::EDOTDOT => Some("EDOTDOT"),
+        Errno::EBADMSG => Some("EBADMSG"),
+        Errno::EOVERFLOW => Some("EOVERFLOW"),
+        Errno::ENOTUNIQ => Some("ENOTUNIQ"),
+        Errno::EBADFD => Some("EBADFD"),
+        Errno::EREMCHG => Some("EREMCHG"),
+        Errno::ELIBACC => Some("ELIBACC"),
+        Errno::ELIBBAD => Some("ELIBBAD"),
+        Errno::ELIBSCN => Some("ELIBSCN"),
+        Errno::ELIBMAX => Some("ELIBMAX"),
+        Errno::ELIBEXEC => Some("ELIBEXEC"),
+        Errno::EILSEQ => Some("EILSEQ"),
+        Errno::ERESTART => Some("ERESTART"),
+        Errno::ESTRPIPE => Some("ESTRPIPE"),
+        Errno::EUSERS => Some("EUSERS"),
+        Errno::ENOTSOCK => Some("ENOTSOCK"),
+        Errno::EDESTADDRREQ => Some("EDESTADDRREQ"),
+        Errno::EMSGSIZE => Some("EMSGSIZE"),
+        Errno::EPROTOTYPE => Some("EPROTOTYPE"),
+        Errno::ENOPROTOOPT => Some("ENOPROTOOPT"),
+        Errno::EPROTONOSUPPORT => Some("EPROTONOSUPPORT"),
+        Errno::ESOCKTNOSUPPORT => Some("ESOCKTNOSUPPORT"),
+        Errno::EOPNOTSUPP => Some("EOPNOTSUPP"),
+        Errno::EPFNOSUPPORT => Some("EPFNOSUPPORT"),
+        Errno::EAFNOSUPPORT => Some("EAFNOSUPPORT"),
+        Errno::EADDRINUSE => Some("EADDRINUSE"),
+        Errno::EADDRNOTAVAIL => Some("EADDRNOTAVAIL"),
+        Errno::ENETDOWN => Some("ENETDOWN"),
+        Errno::ENETUNREACH => Some("ENETUNREACH"),
+        Errno::ENETRESET => Some("ENETRESET"),
+        Errno::ECONNABORTED => Some("ECONNABORTED"),
+        Errno::ECONNRESET => Some("ECONNRESET"),
+        Errno::ENOBUFS => Some("ENOBUFS"),
+        Errno::EISCONN => Some("EISCONN"),
+        Errno::ENOTCONN => Some("ENOTCONN"),
+        Errno::ESHUTDOWN => Some("ESHUTDOWN"),
+        Errno::ETOOMANYREFS => Some("ETOOMANYREFS"),
+        Errno::ETIMEDOUT => Some("ETIMEDOUT"),
+        Errno::ECONNREFUSED => Some("ECONNREFUSED"),
+        Errno::EHOSTDOWN => Some("EHOSTDOWN"),
+        Errno::EHOSTUNREACH => Some("EHOSTUNREACH"),
+        Errno::EALREADY => Some("EALREADY"),
+        Errno::EINPROGRESS => Some("EINPROGRESS"),
+        Errno::ESTALE => Some("ESTALE"),
+        Errno::EUCLEAN => Some("EUCLEAN"),
+        Errno::ENOTNAM => Some("ENOTNAM"),
+        Errno::ENAVAIL => Some("ENAVAIL"),
+        Errno::EISNAM => Some("EISNAM"),
+        Errno::EREMOTEIO => Some("EREMOTEIO"),
+        Errno::EDQUOT => Some("EDQUOT"),
+        Errno::ENOMEDIUM => Some("ENOMEDIUM"),
+        Errno::EMEDIUMTYPE => Some("EMEDIUMTYPE"),
+        Errno::ECANCELED => Some("ECANCELED"),
+        Errno::ENOKEY => Some("ENOKEY"),
+        Errno::EKEYEXPIRED => Some("EKEYEXPIRED"),
+        Errno::EKEYREVOKED => Some("EKEYREVOKED"),
+        Errno::EKEYREJECTED => Some("EKEYREJECTED"),
+        Errno::EOWNERDEAD => Some("EOWNERDEAD"),
+        Errno::ENOTRECOVERABLE => Some("ENOTRECOVERABLE"),
+        Errno::ERFKILL => Some("ERFKILL"),
+        Errno::EHWPOISON => Some("EHWPOISON"),
+        Errno::EINTR => Some("EINTR"),
+        _ => None,
+    }
+}
+
 impl core::fmt::Debug for Errno {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match u32::from(self.0) {
-            bindings::LINUX_EINVAL => formatter.write_str("Errno::EINVAL"),
-            bindings::LINUX_EDEADLK => formatter.write_str("Errno::EDEADLK"),
-            bindings::LINUX_ENAMETOOLONG => formatter.write_str("Errno::ENAMETOOLONG"),
-            bindings::LINUX_ENOLCK => formatter.write_str("Errno::ENOLCK"),
-            bindings::LINUX_ENOSYS => formatter.write_str("Errno::ENOSYS"),
-            bindings::LINUX_ENOTEMPTY => formatter.write_str("Errno::ENOTEMPTY"),
-            bindings::LINUX_ELOOP => formatter.write_str("Errno::ELOOP"),
-            bindings::LINUX_EWOULDBLOCK => formatter.write_str("Errno::EWOULDBLOCK"),
-            bindings::LINUX_ENOMSG => formatter.write_str("Errno::ENOMSG"),
-            bindings::LINUX_EIDRM => formatter.write_str("Errno::EIDRM"),
-            bindings::LINUX_ECHRNG => formatter.write_str("Errno::ECHRNG"),
-            bindings::LINUX_EL2NSYNC => formatter.write_str("Errno::EL2NSYNC"),
-            bindings::LINUX_EL3HLT => formatter.write_str("Errno::EL3HLT"),
-            bindings::LINUX_EL3RST => formatter.write_str("Errno::EL3RST"),
-            bindings::LINUX_ELNRNG => formatter.write_str("Errno::ELNRNG"),
-            bindings::LINUX_EUNATCH => formatter.write_str("Errno::EUNATCH"),
-            bindings::LINUX_ENOCSI => formatter.write_str("Errno::ENOCSI"),
-            bindings::LINUX_EL2HLT => formatter.write_str("Errno::EL2HLT"),
-            bindings::LINUX_EBADE => formatter.write_str("Errno::EBADE"),
-            bindings::LINUX_EBADR => formatter.write_str("Errno::EBADR"),
-            bindings::LINUX_EXFULL => formatter.write_str("Errno::EXFULL"),
-            bindings::LINUX_ENOANO => formatter.write_str("Errno::ENOANO"),
-            bindings::LINUX_EBADRQC => formatter.write_str("Errno::EBADRQC"),
-            bindings::LINUX_EBADSLT => formatter.write_str("Errno::EBADSLT"),
-            bindings::LINUX_EBFONT => formatter.write_str("Errno::EBFONT"),
-            bindings::LINUX_ENOSTR => formatter.write_str("Errno::ENOSTR"),
-            bindings::LINUX_ENODATA => formatter.write_str("Errno::ENODATA"),
-            bindings::LINUX_ETIME => formatter.write_str("Errno::ETIME"),
-            bindings::LINUX_ENOSR => formatter.write_str("Errno::ENOSR"),
-            bindings::LINUX_ENONET => formatter.write_str("Errno::ENONET"),
-            bindings::LINUX_ENOPKG => formatter.write_str("Errno::ENOPKG"),
-            bindings::LINUX_EREMOTE => formatter.write_str("Errno::EREMOTE"),
-            bindings::LINUX_ENOLINK => formatter.write_str("Errno::ENOLINK"),
-            bindings::LINUX_EADV => formatter.write_str("Errno::EADV"),
-            bindings::LINUX_ESRMNT => formatter.write_str("Errno::ESRMNT"),
-            bindings::LINUX_ECOMM => formatter.write_str("Errno::ECOMM"),
-            bindings::LINUX_EPROTO => formatter.write_str("Errno::EPROTO"),
-            bindings::LINUX_EMULTIHOP => formatter.write_str("Errno::EMULTIHOP"),
-            bindings::LINUX_EDOTDOT => formatter.write_str("Errno::EDOTDOT"),
-            bindings::LINUX_EBADMSG => formatter.write_str("Errno::EBADMSG"),
-            bindings::LINUX_EOVERFLOW => formatter.write_str("Errno::EOVERFLOW"),
-            bindings::LINUX_ENOTUNIQ => formatter.write_str("Errno::ENOTUNIQ"),
-            bindings::LINUX_EBADFD => formatter.write_str("Errno::EBADFD"),
-            bindings::LINUX_EREMCHG => formatter.write_str("Errno::EREMCHG"),
-            bindings::LINUX_ELIBACC => formatter.write_str("Errno::ELIBACC"),
-            bindings::LINUX_ELIBBAD => formatter.write_str("Errno::ELIBBAD"),
-            bindings::LINUX_ELIBSCN => formatter.write_str("Errno::ELIBSCN"),
-            bindings::LINUX_ELIBMAX => formatter.write_str("Errno::ELIBMAX"),
-            bindings::LINUX_ELIBEXEC => formatter.write_str("Errno::ELIBEXEC"),
-            bindings::LINUX_EILSEQ => formatter.write_str("Errno::EILSEQ"),
-            bindings::LINUX_ERESTART => formatter.write_str("Errno::ERESTART"),
-            bindings::LINUX_ESTRPIPE => formatter.write_str("Errno::ESTRPIPE"),
-            bindings::LINUX_EUSERS => formatter.write_str("Errno::EUSERS"),
-            bindings::LINUX_ENOTSOCK => formatter.write_str("Errno::ENOTSOCK"),
-            bindings::LINUX_EDESTADDRREQ => formatter.write_str("Errno::EDESTADDRREQ"),
-            bindings::LINUX_EMSGSIZE => formatter.write_str("Errno::EMSGSIZE"),
-            bindings::LINUX_EPROTOTYPE => formatter.write_str("Errno::EPROTOTYPE"),
-            bindings::LINUX_ENOPROTOOPT => formatter.write_str("Errno::ENOPROTOOPT"),
-            bindings::LINUX_EPROTONOSUPPORT => formatter.write_str("Errno::EPROTONOSUPPORT"),
-            bindings::LINUX_ESOCKTNOSUPPORT => formatter.write_str("Errno::ESOCKTNOSUPPORT"),
-            bindings::LINUX_EOPNOTSUPP => formatter.write_str("Errno::EOPNOTSUPP"),
-            bindings::LINUX_EPFNOSUPPORT => formatter.write_str("Errno::EPFNOSUPPORT"),
-            bindings::LINUX_EAFNOSUPPORT => formatter.write_str("Errno::EAFNOSUPPORT"),
-            bindings::LINUX_EADDRINUSE => formatter.write_str("Errno::EADDRINUSE"),
-            bindings::LINUX_EADDRNOTAVAIL => formatter.write_str("Errno::EADDRNOTAVAIL"),
-            bindings::LINUX_ENETDOWN => formatter.write_str("Errno::ENETDOWN"),
-            bindings::LINUX_ENETUNREACH => formatter.write_str("Errno::ENETUNREACH"),
-            bindings::LINUX_ENETRESET => formatter.write_str("Errno::ENETRESET"),
-            bindings::LINUX_ECONNABORTED => formatter.write_str("Errno::ECONNABORTED"),
-            bindings::LINUX_ECONNRESET => formatter.write_str("Errno::ECONNRESET"),
-            bindings::LINUX_ENOBUFS => formatter.write_str("Errno::ENOBUFS"),
-            bindings::LINUX_EISCONN => formatter.write_str("Errno::EISCONN"),
-            bindings::LINUX_ENOTCONN => formatter.write_str("Errno::ENOTCONN"),
-            bindings::LINUX_ESHUTDOWN => formatter.write_str("Errno::ESHUTDOWN"),
-            bindings::LINUX_ETOOMANYREFS => formatter.write_str("Errno::ETOOMANYREFS"),
-            bindings::LINUX_ETIMEDOUT => formatter.write_str("Errno::ETIMEDOUT"),
-            bindings::LINUX_ECONNREFUSED => formatter.write_str("Errno::ECONNREFUSED"),
-            bindings::LINUX_EHOSTDOWN => formatter.write_str("Errno::EHOSTDOWN"),
-            bindings::LINUX_EHOSTUNREACH => formatter.write_str("Errno::EHOSTUNREACH"),
-            bindings::LINUX_EALREADY => formatter.write_str("Errno::EALREADY"),
-            bindings::LINUX_EINPROGRESS => formatter.write_str("Errno::EINPROGRESS"),
-            bindings::LINUX_ESTALE => formatter.write_str("Errno::ESTALE"),
-            bindings::LINUX_EUCLEAN => formatter.write_str("Errno::EUCLEAN"),
-            bindings::LINUX_ENOTNAM => formatter.write_str("Errno::ENOTNAM"),
-            bindings::LINUX_ENAVAIL => formatter.write_str("Errno::ENAVAIL"),
-            bindings::LINUX_EISNAM => formatter.write_str("Errno::EISNAM"),
-            bindings::LINUX_EREMOTEIO => formatter.write_str("Errno::EREMOTEIO"),
-            bindings::LINUX_EDQUOT => formatter.write_str("Errno::EDQUOT"),
-            bindings::LINUX_ENOMEDIUM => formatter.write_str("Errno::ENOMEDIUM"),
-            bindings::LINUX_EMEDIUMTYPE => formatter.write_str("Errno::EMEDIUMTYPE"),
-            bindings::LINUX_ECANCELED => formatter.write_str("Errno::ECANCELED"),
-            bindings::LINUX_ENOKEY => formatter.write_str("Errno::ENOKEY"),
-            bindings::LINUX_EKEYEXPIRED => formatter.write_str("Errno::EKEYEXPIRED"),
-            bindings::LINUX_EKEYREVOKED => formatter.write_str("Errno::EKEYREVOKED"),
-            bindings::LINUX_EKEYREJECTED => formatter.write_str("Errno::EKEYREJECTED"),
-            bindings::LINUX_EOWNERDEAD => formatter.write_str("Errno::EOWNERDEAD"),
-            bindings::LINUX_ENOTRECOVERABLE => formatter.write_str("Errno::ENOTRECOVERABLE"),
-            bindings::LINUX_ERFKILL => formatter.write_str("Errno::ERFKILL"),
-            bindings::LINUX_EHWPOISON => formatter.write_str("Errno::EHWPOISON"),
-            x => formatter.write_fmt(format_args!("Errno::<{x}>")),
+        match errno_to_str(*self) {
+            Some(s) => {
+                formatter.write_str("Errno::")?;
+                formatter.write_str(s)
+            }
+            None => write!(formatter, "Errno::<{}>", u16::from(*self)),
+        }
+    }
+}
+
+impl core::fmt::Display for Errno {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match errno_to_str(*self) {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "(unknown errno {})", u16::from(*self)),
         }
     }
 }
@@ -234,10 +278,12 @@ impl Errno {
     pub const ENOTRECOVERABLE: Self = Self::from_u32_const(bindings::LINUX_ENOTRECOVERABLE);
     pub const ERFKILL: Self = Self::from_u32_const(bindings::LINUX_ERFKILL);
     pub const EHWPOISON: Self = Self::from_u32_const(bindings::LINUX_EHWPOISON);
+    pub const EINTR: Self = Self::from_u32_const(bindings::LINUX_EINTR);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
     pub const EAGAIN: Self = Self::from_u32_const(bindings::LINUX_EAGAIN);
+    pub const ENOTSUP: Self = Self::EOPNOTSUPP;
 
     /// From MAX_ERRNO in include/linux/err.h in kernel source. This doesn't
     /// seem to be exposed in the installed kernel headers from which we generate bindings.
