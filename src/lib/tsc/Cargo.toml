@@ -18,5 +18,5 @@ cbindgen = { version = "0.24.5" }
 crate-type = ["staticlib", "rlib"]
 
 [package.metadata.system-deps]
-# Keep consistent with the minimum version number in src/CMakeLists.txt
-glib = { name = "glib-2.0", version = "2.32" }
+# Keep consistent with the minimum version number in /CMakeLists.txt
+glib = { name = "glib-2.0", version = "2.58" }

@@ -412,9 +412,7 @@ static void _shim_child_init_preload() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-// This function should be called before any wrapped syscall. We also use the
-// constructor attribute to be completely sure that it's called before main.
-__attribute__((constructor)) void _shim_load() {
+void _shim_load() {
     static bool did_global_pre_init = false;
     if (!did_global_pre_init) {
         // Early init; must not make any syscalls.

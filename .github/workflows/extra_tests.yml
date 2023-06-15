@@ -118,6 +118,11 @@ jobs:
             -name target -prune \
             -or -name '*.o' -prune \
             -or -print | xargs tar --no-recursion --append -f $TARFILE
+          # Above command skips the whole target directories, but we
+          # need the shim library, which is in one.
+          # Add it explicitly:
+          tar --no-recursion --append -f $TARFILE \
+            shadow/build/src/shim/target/*/libshadow_shim.so
           gzip $TARFILE
       - uses: actions/upload-artifact@v3
         with:

@@ -1435,6 +1435,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadow-shim"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "cbindgen",
+ "cc",
+ "libc",
+ "logger",
+ "shadow-build-common",
+ "shadow-shim-helper-rs",
+ "shadow_shmem",
+ "shadow_tsc",
+ "system-deps",
+]
+
+[[package]]
 name = "shadow-shim-helper-rs"
 version = "0.1.0"
 dependencies = [

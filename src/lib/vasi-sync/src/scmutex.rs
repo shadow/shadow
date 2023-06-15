@@ -98,6 +98,7 @@ impl AtomicFutexWord {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct FutexWord {
     lock_state: u16,

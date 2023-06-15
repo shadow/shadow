@@ -67,6 +67,7 @@ impl From<ChannelState> for u32 {
 }
 
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
+#[repr(transparent)]
 struct AtomicChannelState(AtomicU32);
 impl AtomicChannelState {
     pub fn new() -> Self {
@@ -160,6 +161,7 @@ impl Display for SelfContainedChannelError {
 /// microbenchmark; the latter is expected to be more representative of real
 /// large simulation runs (i.e. pinning should be enabled).
 #[cfg_attr(not(loom), derive(VirtualAddressSpaceIndependent))]
+#[repr(C)]
 pub struct SelfContainedChannel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     state: AtomicChannelState,

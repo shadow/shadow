@@ -18,22 +18,19 @@
 // return value into errno upon error so that errno will be set correctly upon
 // returning control to the managed process. Be careful not to do something that
 // would overwrite errno after this function returns.
-long shim_api_syscall(long n, ...);
-
-// Same as `shim_api_syscall()`, but allows a variable arguments list.
-long shim_api_syscallv(long n, va_list args);
+long shimc_api_syscall(long n, ...);
 
 // Shim implementation of `man 3 getaddrinfo`.
-int shim_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
+int shimc_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
                          struct addrinfo** res);
 
 // Shim implementation of `man 3 freeaddrinfo`.
-void shim_api_freeaddrinfo(struct addrinfo* res);
+void shimc_api_freeaddrinfo(struct addrinfo* res);
 
 // Shim implementation of `man 3 getifaddrs`.
-int shim_api_getifaddrs(struct ifaddrs** ifap);
+int shimc_api_getifaddrs(struct ifaddrs** ifap);
 
 // Shim implementation of `man 3 freeifaddrs`.
-void shim_api_freeifaddrs(struct ifaddrs* ifa);
+void shimc_api_freeifaddrs(struct ifaddrs* ifa);
 
 #endif // SRC_LIB_SHIM_SHIM_API_H_

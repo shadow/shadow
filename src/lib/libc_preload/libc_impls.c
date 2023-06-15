@@ -33,10 +33,21 @@
 // This function drives all of our wrappers over to the shim.
 long syscall(long n, ...) {
     va_list(args);
+
+    // We used to provide shim_api_syscallv that took a va_list, but it's not
+    // clear how to wire such an API through Rust.  just enumerate the arguments
+    // and call shim_api_syscall instead.
+    
     va_start(args, n);
-    long rv = shim_api_syscallv(n, args);
+    long arg1 = va_arg(args, long);
+    long arg2 = va_arg(args, long);
+    long arg3 = va_arg(args, long);
+    long arg4 = va_arg(args, long);
+    long arg5 = va_arg(args, long);
+    long arg6 = va_arg(args, long);
     va_end(args);
-    return rv;
+
+    return shim_api_syscall(n, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 // man 3 localtime
