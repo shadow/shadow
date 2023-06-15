@@ -22,6 +22,16 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 
+// Start of shim's text (code) segment. Inclusive.
+// Immutable after global initialization, which should be done exactly once by
+// one thread.
+static void* TEXT_START = NULL;
+// End of shim's text (code) segment. Exclusive.
+// Immutable after global initialization, which should be done exactly once by
+// one thread.
+static void* TEXT_END = NULL;
+#define SIZEOF_SYSCALL_INSN 2
+
 // Handler function that receives syscalls that are stopped by the seccomp filter.
 static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);
@@ -37,7 +47,14 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     const int REG_ARG5 = REG_R8;
     const int REG_ARG6 = REG_R9;
 
-    trace("Trapped syscall %lld at %p", regs[REG_N], (void*)regs[REG_RIP]);
+    // rip points to instruction *after* the syscall instruction, which is 2
+    // bytes long.
+    const void* syscall_insn_addr = (void*)regs[REG_RIP] - SIZEOF_SYSCALL_INSN;
+    trace("Trapped syscall %lld at %p", regs[REG_N], syscall_insn_addr);
+    if (syscall_insn_addr >= TEXT_START && syscall_insn_addr < TEXT_END) {
+        panic("seccomp filter blocked syscall from %p, which is within %p-%p", syscall_insn_addr,
+              TEXT_START, TEXT_END);
+    }
 
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
@@ -132,20 +149,40 @@ void shim_seccomp_init() {
 
     // Find the region of memory containing this function. That should be
     // the `.text` section of the shim, and contain all of the code in the shim.
-    void *text_start = NULL, *text_end = NULL;
-    _getSectionContaining((void*)shim_seccomp_init, &text_start, &text_end);
-    if (text_start == NULL) {
+    _getSectionContaining((void*)shim_seccomp_init, &TEXT_START, &TEXT_END);
+    trace("text start:%p end:%p", TEXT_START, TEXT_END);
+    if (TEXT_START == NULL) {
         panic("Couldn't find memory region containing `shim_seccomp_init`");
     }
-    if (text_end == NULL) {
+    if (TEXT_END == NULL) {
         panic("bad end");
     }
+
+    // We break text start and end addresses into high and low 32 bit
+    // values for use in 32 bit seccomp filter operations.
+    uint32_t text_start_high = (uintptr_t)TEXT_START >> 32;
+    uint32_t text_start_low = (uintptr_t)TEXT_START;
+    uint32_t text_end_high = (uintptr_t)TEXT_END >> 32;
+    uint32_t text_end_low = (uintptr_t)TEXT_END;
 
     /* A bpf program to be loaded as a `seccomp` filter. Unfortunately the
      * documentation for how to write this is pretty sparse. There's a useful
      * example in samples/seccomp/bpf-direct.c of the Linux kernel source tree.
      * The best reference I've been able to find is a BSD man page:
      * https://www.freebsd.org/cgi/man.cgi?query=bpf&sektion=4&manpath=FreeBSD+4.7-RELEASE
+     *
+     * CAUTION: while that page annotates `k` as a `u_long`, `k` is only 32 bits.
+     *
+     * TODO: Consider moving filter generation into Rust, where we might be able
+     * to avoid some footguns (like implicit 64->32 bit conversions), and potentially
+     * into the Shadow process where we might be able to use some 3rd party libraries
+     * such as `libseccomp` (which unfortunately doesn't support address range filters
+     * https://github.com/seccomp/libseccomp/issues/113)
+     *
+     * Better yet, consider migrating to `PR_SET_SYSCALL_USER_DISPATCH`, which implements
+     * *almost* the seccomp filter we're creating here. It requires minimum kernel
+     * version 5.11, though.
+     * https://www.kernel.org/doc./html/latest/admin-guide/syscall-user-dispatch.html
      */
     struct sock_filter filter[] = {
         /* accumulator := syscall number */
@@ -153,18 +190,6 @@ void shim_seccomp_init() {
 
         /* Always allow sigreturn; otherwise we'd crash returning from our signal handler. */
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_rt_sigreturn, /*true-skip=*/0, /*false-skip=*/1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-
-        /* Allow syscalls made from the `.text` section.
-         * We allow-list native syscalls made from this region both for correctness
-         * (to avoid recursing in our syscall handling) and performance (avoid the
-         * interception overhead in internal synchronization primitives).
-         */
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, (long)text_end,
-                 /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)text_start, /*true-skip=*/0,
-                 /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
     /* This block was intended to whitelist reads and writes to a socket
@@ -188,8 +213,59 @@ void shim_seccomp_init() {
         BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),
 #endif
 
-        /* Trap to our syscall handler */
+        /* Allow syscalls made from the `.text` section.
+         * We allow-list native syscalls made from this region both for correctness
+         * (to avoid recursing in our syscall handling) and performance (avoid the
+         * interception overhead in internal synchronization primitives).
+         *
+         * We need to compare a 64-bit instruction pointer to 64-bit addresses.
+         * Unfortunately seccomp's BPF only supports 32-bit values, so we need
+         * to compare the high and low 32-bits separately.
+         *
+         * According to seccomp(2), the instruction pointer we load here should
+         * be the address of the `syscall` instruction itself, *not* the address
+         * of the *next* instruction, which is what we get in the signal handler.
+         *
+         * In comments below we use:
+         * IP_high: high 32 bits of instruction pointer
+         * IP_low: low 32 bits of instruction pointer
+         */
+
+        /* if (IP_high > text_end_high) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, text_end_high,
+                 /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high == text_end_high && IP_low >= text_end_low) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, text_end_high,
+                 /*true-skip=*/0, /*false-skip=*/3),
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, text_end_low,
+                 /*true-skip=*/0, /*false-skip=*/1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high < text_start_high) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, text_start_high, /*true-skip=*/1, /*false-skip=*/0),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high == text_start_high && IP_low < text_start_low) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, text_start_high,
+                 /*true-skip=*/0, /*false-skip=*/3),
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, text_start_low,
+                 /*true-skip=*/1, /*false-skip=*/0),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* Allow  */
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
     };
     struct sock_fprog prog = {
         .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
