@@ -480,7 +480,7 @@ impl Default for ExperimentalOptions {
             // Actual latencies vary from ~40 to ~400 CPU cycles. https://stackoverflow.com/a/13096917
             // Default to the lower end to minimize effect in simualations without busy loops.
             unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
-            use_memory_manager: Some(true),
+            use_memory_manager: Some(false),
             use_cpu_pinning: Some(true),
             use_worker_spinning: Some(true),
             runahead: Some(NullableOption::Value(units::Time::new(
