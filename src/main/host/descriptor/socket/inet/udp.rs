@@ -1,8 +1,10 @@
-use std::io::Read;
+use std::collections::LinkedList;
+use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use bytes::{Bytes, BytesMut};
 use linux_api::ioctls::IoctlRequest;
 use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
@@ -18,7 +20,7 @@ use crate::host::descriptor::{
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
-use crate::host::syscall::io::{write_partial, IoVec, IoVecReader};
+use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
 use crate::utility::callback_queue::{CallbackQueue, Handle};
@@ -34,8 +36,8 @@ pub struct UdpSocket {
     status: FileStatus,
     state: FileState,
     shutdown_status: ShutdownFlags,
-    send_buffer: PacketBuffer,
-    recv_buffer: PacketBuffer,
+    send_buffer: MessageBuffer<MessageSendHeader>,
+    recv_buffer: MessageBuffer<MessageRecvHeader>,
     peer_addr: Option<SocketAddrV4>,
     bound_addr: Option<SocketAddrV4>,
     association: Option<AssociationHandle>,
@@ -56,8 +58,8 @@ impl UdpSocket {
             status,
             state: FileState::ACTIVE,
             shutdown_status: ShutdownFlags::empty(),
-            send_buffer: PacketBuffer::new(send_buf_size),
-            recv_buffer: PacketBuffer::new(recv_buf_size),
+            send_buffer: MessageBuffer::new(send_buf_size),
+            recv_buffer: MessageBuffer::new(recv_buf_size),
             peer_addr: None,
             bound_addr: None,
             association: None,
@@ -118,42 +120,71 @@ impl UdpSocket {
             }
         };
 
-        // get another reference to the packet so we can add a status later
-        let mut packetrc_clone = packet.clone();
+        // TODO: also check the dst address to make sure we are the intended socket?
 
-        if let Err(mut packet) = self.recv_buffer.add_packet(packet) {
-            // no space available
+        // don't bother copying the bytes if we know the push will fail
+        if !self.recv_buffer.has_space() {
             packet.add_status(PacketStatus::RcvSocketDropped);
-        } else {
-            log::debug!("Added a packet to the socket's recv buffer");
-            packetrc_clone.add_status(PacketStatus::RcvSocketBuffered);
+            return;
         }
+
+        // in the future, the packet could contain the `Bytes` object itself and we could simply
+        // transfer the `Bytes` directly from the packet to the buffer without copying the bytes
+
+        let mut message = BytesMut::zeroed(packet.payload_size());
+        let num_bytes_copied = packet.get_payload(&mut message);
+        assert_eq!(num_bytes_copied, packet.payload_size());
+
+        let header = MessageRecvHeader {
+            src: packet.src_address(),
+            dst: packet.dst_address(),
+        };
+
+        // push the message to the receive buffer (shouldn't fail since we checked for available
+        // space above)
+        self.recv_buffer
+            .push_message(message.freeze(), header)
+            .unwrap();
+
+        log::trace!("Added a packet to the UDP socket's recv buffer");
+        packet.add_status(PacketStatus::RcvSocketBuffered);
 
         self.refresh_readable_writable(cb_queue);
     }
 
     pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc> {
-        let packet = self.send_buffer.remove_packet();
-
-        if packet.is_some() {
-            log::debug!("Removed a packet from the socket's send buffer");
-        } else {
+        // pop the message from the send buffer
+        let Some((message, header)) = self.send_buffer.pop_message() else {
             log::debug!(
-                "Attempted to remove a packet from the socket's send buffer, but none available"
+                "Attempted to remove a message from the UDP socket's send buffer, but none available"
             );
-        }
+
+            return None;
+        };
+
+        log::trace!("Removed a message from the UDP socket's send buffer");
+
+        let mut packet = PacketRc::new();
+        let priority = header.packet_priority;
+
+        // in the future, the packet could contain the `Bytes` object itself and we could simply
+        // transfer the `Bytes` directly from the buffer to the packet without copying the bytes
+
+        packet.set_udp(header.src, header.dst);
+        packet.set_payload(&message, priority);
+        packet.add_status(PacketStatus::SndCreated);
 
         self.refresh_readable_writable(cb_queue);
 
-        packet
+        Some(packet)
     }
 
     pub fn peek_next_packet_priority(&self) -> Option<u64> {
-        self.send_buffer.peek_packet().map(|p| p.priority())
+        self.send_buffer.buffer.front().map(|x| x.1.packet_priority)
     }
 
     pub fn has_data_to_send(&self) -> bool {
-        self.send_buffer.peek_packet().is_some()
+        !self.send_buffer.is_empty()
     }
 
     pub fn update_packet_header(&self, _packet: &mut PacketRc) {
@@ -359,29 +390,34 @@ impl UdpSocket {
 
         // run in a closure so that an early return doesn't skip checking if we should block
         let result = (|| {
-            // read all of the bytes into a temporary buffer
-            let mut reader = IoVecReader::new(args.iovs, mem);
-            let mut bytes = Vec::with_capacity(len);
-            reader
-                .read_to_end(&mut bytes)
-                .map_err(|e| Errno::try_from(e).unwrap())?;
-
-            let mut packet = PacketRc::new();
-            let priority =
-                Worker::with_active_host(|host| host.get_next_packet_priority()).unwrap();
-            packet.set_udp(socket_ref.bound_addr.unwrap(), dst_addr);
-            packet.set_payload(&bytes, priority);
-            packet.add_status(PacketStatus::SndCreated);
-
-            // get another reference to the packet so we can add a status later
-            let mut packetrc_clone = packet.clone();
-
-            if let Err(_packet) = socket_ref.send_buffer.add_packet(packet) {
-                // no space available
+            // don't bother copying the bytes if we know the push will fail
+            if !socket_ref.send_buffer.has_space() {
                 return Err(Errno::EWOULDBLOCK);
             }
 
-            packetrc_clone.add_status(PacketStatus::SndSocketBuffered);
+            // write the iovs to an empty message
+            let mut reader = IoVecReader::new(args.iovs, mem);
+            let mut message = BytesMut::zeroed(len);
+            reader
+                .read_exact(&mut message[..])
+                .map_err(|e| Errno::try_from(e).unwrap())?;
+
+            // get the priority that we'll assign to the eventual packet
+            let packet_priority =
+                Worker::with_active_host(|host| host.get_next_packet_priority()).unwrap();
+
+            let header = MessageSendHeader {
+                src: socket_ref.bound_addr.unwrap(),
+                dst: dst_addr,
+                packet_priority,
+            };
+
+            // push the message to the send buffer (shouldn't fail since we checked for available
+            // space above)
+            socket_ref
+                .send_buffer
+                .push_message(message.freeze(), header)
+                .unwrap();
 
             // notify the host that this socket has packets to send
             let socket = Arc::clone(socket);
@@ -429,27 +465,37 @@ impl UdpSocket {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
+        let len: libc::size_t = args.iovs.iter().map(|x| x.len).sum();
+
         // run in a closure so that an early return doesn't skip checking if we should block
         let result = (|| {
-            let Some(mut packet) = socket_ref.recv_buffer.remove_packet() else {
+            // pop the message from the receive buffer
+            let Some((message, header)) = socket_ref.recv_buffer.pop_message() else {
                 return Err(Errno::EWOULDBLOCK);
             };
 
-            packet.add_status(PacketStatus::RcvSocketDelivered);
-            let bytes_read = packet.copy_payload(args.iovs, mem)?;
+            // truncate the payload if the payload is larger than the user-provided buffers
+            let truncated_message = &message[..std::cmp::min(len, message.len())];
+
+            // write the truncated message to the iovs
+            let mut writer = IoVecWriter::new(args.iovs, mem);
+            writer
+                .write_all(truncated_message)
+                .map_err(|e| Errno::try_from(e).unwrap())?;
 
             let return_val = if flags.contains(MsgFlags::MSG_TRUNC) {
-                packet.payload_size()
+                message.len()
             } else {
-                bytes_read
+                // the number of bytes written
+                truncated_message.len()
             };
 
             let mut return_flags = MsgFlags::empty();
-            return_flags.set(MsgFlags::MSG_TRUNC, bytes_read < packet.payload_size());
+            return_flags.set(MsgFlags::MSG_TRUNC, truncated_message.len() < message.len());
 
             Ok(RecvmsgReturn {
                 return_val: return_val.try_into().unwrap(),
-                addr: Some(packet.src_address().into()),
+                addr: Some(header.src.into()),
                 msg_flags: return_flags.bits(),
                 control_len: 0,
             })
@@ -492,8 +538,8 @@ impl UdpSocket {
             IoctlRequest::FIONREAD => {
                 let len = self
                     .recv_buffer
-                    .peek_packet()
-                    .map(|p| p.payload_size())
+                    .peek_message()
+                    .map(|m| m.0.len())
                     .unwrap_or(0)
                     .try_into()
                     .unwrap();
@@ -887,17 +933,43 @@ impl UdpSocket {
     }
 }
 
-/// A buffer of packets.
-struct PacketBuffer {
-    /// The packets in the buffer.
-    buffer: std::collections::LinkedList<PacketRc>,
+/// Non-payload data for a message in the send buffer.
+#[derive(Debug)]
+struct MessageSendHeader {
+    /// The source address (typically the bind address). The application can theoretically use
+    /// `IP_PKTINFO` to set a per-message source address.
+    src: SocketAddrV4,
+    /// The destination address (for example the peer).
+    dst: SocketAddrV4,
+    /// The priority for the packet that we'll create in the future, given to us by the host.
+    packet_priority: u64,
+}
+
+/// Non-payload data for a message in the receive buffer.
+#[derive(Debug)]
+struct MessageRecvHeader {
+    /// The source address (for example the peer).
+    src: SocketAddrV4,
+    /// The destination address (typically the bind address). The application can theoretically use
+    /// `IP_PKTINFO` to get the packet destination address.
+    #[allow(dead_code)]
+    dst: SocketAddrV4,
+}
+
+/// A buffer of UDP messages and message headers.
+#[derive(Debug)]
+struct MessageBuffer<Hdr> {
+    /// The message payloads and headers.
+    // use a `LinkedList` so that socket buffers can shrink when they're empty (as opposed to
+    // `VecDeque`)
+    buffer: LinkedList<(Bytes, Hdr)>,
     /// The number of payload bytes in this socket.
     len_bytes: usize,
     /// A soft limit for the maximum number of payload bytes this buffer can hold.
     soft_limit_bytes: usize,
 }
 
-impl PacketBuffer {
+impl<Hdr> MessageBuffer<Hdr> {
     pub fn new(soft_limit_bytes: usize) -> Self {
         Self {
             buffer: std::collections::LinkedList::new(),
@@ -906,31 +978,34 @@ impl PacketBuffer {
         }
     }
 
-    /// Add a packet to the buffer. Returns the packet as an `Err` if there wasn't enough space.
-    pub fn add_packet(&mut self, packet: PacketRc) -> Result<(), PacketRc> {
+    /// Push a message to the buffer. Returns the message and header as an `Err` if there wasn't
+    /// enough space.
+    pub fn push_message(&mut self, message: Bytes, header: Hdr) -> Result<(), (Bytes, Hdr)> {
         // TODO: i think udp allows at most one packet to exceed the buffer capacity; should confirm
         // this
         if !self.has_space() {
-            return Err(packet);
+            return Err((message, header));
         }
 
         // TODO: on linux the socket buffer length also takes into account any header and struct
         // overhead, otherwise the buffer would take an infinite amount of 0-len packets
-        self.len_bytes += packet.payload_size();
-        self.buffer.push_back(packet);
+        self.len_bytes += message.len();
+        self.buffer.push_back((message, header));
 
         Ok(())
     }
 
-    /// Remove the next packet from the buffer.
-    pub fn remove_packet(&mut self) -> Option<PacketRc> {
-        let packet = self.buffer.pop_front()?;
-        self.len_bytes -= packet.payload_size();
-        Some(packet)
+    /// Pop the next message from the buffer. Returns a tuple of the message bytes and message
+    /// header.
+    pub fn pop_message(&mut self) -> Option<(Bytes, Hdr)> {
+        let (message, header) = self.buffer.pop_front()?;
+        self.len_bytes -= message.len();
+
+        Some((message, header))
     }
 
-    /// Peek the next packet in the buffer.
-    pub fn peek_packet(&self) -> Option<&PacketRc> {
+    /// Peek the next message in the buffer.
+    pub fn peek_message(&self) -> Option<&(Bytes, Hdr)> {
         self.buffer.front()
     }
 

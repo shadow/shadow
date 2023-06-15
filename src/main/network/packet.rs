@@ -93,10 +93,8 @@ impl PacketRc {
         };
     }
 
-    /// Set the payload for the packet. Will panic if the packet already has a payload.
+    /// Set the packet payload. Will panic if the packet already has a payload.
     pub fn set_payload(&mut self, payload: &[u8], priority: u64) {
-        // setting the packet's payload shouldn't require the host, so for now we'll get the host
-        // from the worker rather than require it as an argument
         unsafe {
             c::packet_setPayloadFromShadow(
                 self.c_ptr.ptr(),
@@ -104,6 +102,20 @@ impl PacketRc {
                 payload.len().try_into().unwrap(),
                 priority,
             )
+        }
+    }
+
+    /// Copy the packet payload to a buffer. Will truncate if the buffer is not large enough.
+    pub fn get_payload(&self, buffer: &mut [u8]) -> usize {
+        unsafe {
+            c::packet_copyPayloadShadow(
+                self.c_ptr.ptr(),
+                0,
+                buffer.as_mut_ptr().cast(),
+                buffer.len().try_into().unwrap(),
+            )
+            .try_into()
+            .unwrap()
         }
     }
 
