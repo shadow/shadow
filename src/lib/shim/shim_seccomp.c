@@ -22,6 +22,9 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 
+void* TEXT_START = NULL;
+void* TEXT_END = NULL;
+
 // Handler function that receives syscalls that are stopped by the seccomp filter.
 static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);
@@ -37,7 +40,12 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     const int REG_ARG5 = REG_R8;
     const int REG_ARG6 = REG_R9;
 
-    trace("Trapped syscall %lld at %p", regs[REG_N], (void*)regs[REG_RIP]);
+    const void* rip = (void*)regs[REG_RIP];
+    trace("Trapped syscall %lld at %p", regs[REG_N], rip);
+    if (rip >= TEXT_START && rip <= TEXT_END) {
+        panic("seccomp filter blocked syscall from %p, which is within %p-%p", rip, TEXT_START,
+              TEXT_END);
+    }
 
     // Make the syscall via the *the shim's* syscall function (which overrides
     // libc's).  It in turn will either emulate it or (if interposition is
@@ -132,14 +140,21 @@ void shim_seccomp_init() {
 
     // Find the region of memory containing this function. That should be
     // the `.text` section of the shim, and contain all of the code in the shim.
-    void *text_start = NULL, *text_end = NULL;
-    _getSectionContaining((void*)shim_seccomp_init, &text_start, &text_end);
-    if (text_start == NULL) {
+    _getSectionContaining((void*)shim_seccomp_init, &TEXT_START, &TEXT_END);
+    trace("text start:%p end:%p", TEXT_START, TEXT_END);
+    if (TEXT_START == NULL) {
         panic("Couldn't find memory region containing `shim_seccomp_init`");
     }
-    if (text_end == NULL) {
+    if (TEXT_END == NULL) {
         panic("bad end");
     }
+
+    // We break text start and end addresses into high and low 32 bit
+    // values for use in 32 bit seccomp filter operations.
+    uint32_t text_start_high = (uintptr_t)TEXT_START >> 32;
+    uint32_t text_start_low = (uintptr_t)TEXT_START;
+    uint32_t text_end_high = (uintptr_t)TEXT_END >> 32;
+    uint32_t text_end_low = (uintptr_t)TEXT_END;
 
     /* A bpf program to be loaded as a `seccomp` filter. Unfortunately the
      * documentation for how to write this is pretty sparse. There's a useful
@@ -155,27 +170,15 @@ void shim_seccomp_init() {
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_rt_sigreturn, /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
-        /* Always allow sched_yield. Sometimes used in IPC with Shadow; emulating
-         * would add unnecessary overhead, and potentially cause recursion.
-         * `shadow_spin_lock` relies on this exception
-         *
-         * TODO: Remove this exception, as it could interfere with escaping busy-loops
-         * in managed code.
-         */
-        //BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
-        //BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-
-        /* Allow syscalls made from the `.text` section.
-         * We allow-list native syscalls made from this region both for correctness
-         * (to avoid recursing in our syscall handling) and performance (avoid the
-         * interception overhead in internal synchronization primitives).
-         */
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
-        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, (long)text_end,
-                 /*true-skip=*/2, /*false-skip=*/0),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (long)text_start, /*true-skip=*/0,
-                 /*false-skip=*/1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+    /* Always allow sched_yield. Sometimes used in IPC with Shadow; emulating
+     * would add unnecessary overhead, and potentially cause recursion.
+     * `shadow_spin_lock` relies on this exception
+     *
+     * TODO: Remove this exception, as it could interfere with escaping busy-loops
+     * in managed code.
+     */
+    // BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, SYS_sched_yield, /*true-skip=*/0, /*false-skip=*/1),
+    // BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 
     /* This block was intended to whitelist reads and writes to a socket
      * used to communicate with Shadow. It turns out to be unnecessary though,
@@ -198,8 +201,55 @@ void shim_seccomp_init() {
         BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW),
 #endif
 
-        /* Trap to our syscall handler */
+        /* Allow syscalls made from the `.text` section.
+         * We allow-list native syscalls made from this region both for correctness
+         * (to avoid recursing in our syscall handling) and performance (avoid the
+         * interception overhead in internal synchronization primitives).
+         *
+         * We need to compare a 64-bit instruction pointer to 64-bit addresses.
+         * Unfortunately seccomp's BPF only supports 32-bit values, so we need
+         * to compare the high and low 32-bits separately.
+         *
+         * In comments below we use:
+         * IP_high: high 32 bits of instruction pointer
+         * IP_low: low 32 bits of instruction pointer
+         */
+
+        /* if (IP_high > text_end_high) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, text_end_high,
+                 /*true-skip=*/0, /*false-skip=*/1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high == text_end_high && IP_low > test_end_low) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, text_end_high,
+                 /*true-skip=*/0, /*false-skip=*/3),
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
+        BPF_JUMP(BPF_JMP + BPF_JGT + BPF_K, text_end_low,
+                 /*true-skip=*/0, /*false-skip=*/1),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high < text_start_high) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, text_start_high, /*true-skip=*/1, /*false-skip=*/0),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* if (IP_high == text_start_high && IP_low < test_start_low) trap; */
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 offsetof(struct seccomp_data, instruction_pointer) + sizeof(int32_t)),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, text_start_high,
+                 /*true-skip=*/0, /*false-skip=*/3),
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, instruction_pointer)),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, text_start_low,
+                 /*true-skip=*/1, /*false-skip=*/0),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+
+        /* Allow  */
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
     };
     struct sock_fprog prog = {
         .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
