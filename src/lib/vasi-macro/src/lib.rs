@@ -8,18 +8,33 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// Implement `vasi::VirtualAddressSpaceIndependent` for the annotated type.
 /// Requires all fields to implement `vasi::VirtualAddressSpaceIndependent`.
 ///
-/// An empty struct trivially qualifies:
-/// ```
+/// An empty struct fails becase Rust doesn't consider fieldless structs to be
+/// FFI-safe:
+/// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
 /// #[derive(VirtualAddressSpaceIndependent)]
+/// #[repr(C)]
 /// struct Foo {}
 /// ```
 ///
-/// A struct containing only `VirtualAddressSpaceIndependent` fields qualifies:
+/// FFI-safe structs containing only `VirtualAddressSpaceIndependent`
+/// fields qualify:
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
+/// #[derive(VirtualAddressSpaceIndependent)]
+/// struct Foo {
+///   x: i32,
+/// }
+/// ```
+///
+/// `#[repr(transparent)]` is OK too.
+/// ```
+/// use vasi::VirtualAddressSpaceIndependent;
+///
+/// #[repr(transparent)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo {
 ///   x: i32,
@@ -30,6 +45,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo<'a> {
 ///   x: &'a i32,
@@ -40,6 +56,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo {
 ///   x: Box<i32>,
@@ -50,6 +67,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo {
 ///   x: *const i32,
@@ -60,6 +78,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo {
 ///   // SAFETY: we ensure the pointer isn't dereferenced
@@ -73,6 +92,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// union Foo {
 ///   x: i32,
@@ -84,6 +104,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct Foo {
 ///   x: i32,
@@ -95,6 +116,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// enum Foo {
 ///   Bar(i32),
@@ -106,6 +128,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// enum Foo {
 ///   Bar(i32),
@@ -118,6 +141,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct MyWrapper<T> {
 ///   val: T,
@@ -131,6 +155,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct MyWrapper<T: Copy> {
 ///   val: T,
@@ -138,13 +163,13 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// static_assertions::assert_impl_all!(MyWrapper<i32>: vasi::VirtualAddressSpaceIndependent);
 /// static_assertions::assert_not_impl_all!(MyWrapper<* const i32>: vasi::VirtualAddressSpaceIndependent);
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct MyWrapper2<T> where T: Copy {
 ///   val: T,
 /// }
 /// static_assertions::assert_impl_all!(MyWrapper2<i32>: vasi::VirtualAddressSpaceIndependent);
 /// static_assertions::assert_not_impl_all!(MyWrapper2<* const i32>: vasi::VirtualAddressSpaceIndependent);
-///
 /// ```
 ///
 /// As with e.g. Copy and Clone, a field that is dependent on a type parameter
@@ -153,6 +178,7 @@ use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
 /// ```compile_fail
 /// use vasi::VirtualAddressSpaceIndependent;
 ///
+/// #[repr(C)]
 /// #[derive(VirtualAddressSpaceIndependent)]
 /// struct MyWrapper<T> {
 ///   val: *const T,
@@ -259,6 +285,11 @@ fn impl_derive_virtual_address_space_independent(ast: syn::DeriveInput) -> proc_
                 #calls_to_check
             };
         }
+        #[deny(improper_ctypes_definitions)]
+        const _: () = {
+            // Force compilation to fail if the type isn't FFI safe.
+            extern "C" fn _vasi_validate_ffi_safe #impl_generics (_: #name #ty_generics) #where_clause {}
+        };
     };
     gen.into()
 }

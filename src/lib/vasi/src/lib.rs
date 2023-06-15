@@ -24,6 +24,13 @@ pub use vasi_macro::VirtualAddressSpaceIndependent;
 /// [rkyv](https://crates.io/crates/rkyv), are acceptable as long as they point
 /// within the boundaries of the enclosing type.
 ///
+/// The type must also be FFI-safe; e.g. have a stable layout (e.g. `[repr(C)]`),
+/// to help ensure that different processes accessing data of a given type
+/// actually agree on its layout.  Note though that is necessary, but not
+/// sufficient, to ensure they agree on the layout; e.g. things can still go
+/// wrong if processes use different versions of the type.  (TODO: maybe split
+/// this property into a separate trait).
+///
 /// # Safety
 ///
 /// The type must actually be self-contained, as above.
