@@ -154,6 +154,14 @@ fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::EHWPOISON => Some("EHWPOISON"),
         Errno::EINTR => Some("EINTR"),
         Errno::ENFILE => Some("ENFILE"),
+        Errno::EPIPE => Some("EPIPE"),
+        Errno::ESPIPE => Some("ESPIPE"),
+        Errno::EBADF => Some("EBADF"),
+        Errno::EPERM => Some("EPERM"),
+        Errno::EFAULT => Some("EFAULT"),
+        Errno::ESRCH => Some("ESRCH"),
+        Errno::ENOENT => Some("ENOENT"),
+        Errno::ENOTTY => Some("ENOTTY"),
         _ => None,
     }
 }
@@ -281,6 +289,14 @@ impl Errno {
     pub const EHWPOISON: Self = Self::from_u32_const(bindings::LINUX_EHWPOISON);
     pub const EINTR: Self = Self::from_u32_const(bindings::LINUX_EINTR);
     pub const ENFILE: Self = Self::from_u32_const(bindings::LINUX_ENFILE);
+    pub const EPIPE: Self = Self::from_u32_const(bindings::LINUX_EPIPE);
+    pub const ESPIPE: Self = Self::from_u32_const(bindings::LINUX_ESPIPE);
+    pub const EBADF: Self = Self::from_u32_const(bindings::LINUX_EBADF);
+    pub const EPERM: Self = Self::from_u32_const(bindings::LINUX_EPERM);
+    pub const EFAULT: Self = Self::from_u32_const(bindings::LINUX_EFAULT);
+    pub const ESRCH: Self = Self::from_u32_const(bindings::LINUX_ESRCH);
+    pub const ENOENT: Self = Self::from_u32_const(bindings::LINUX_ENOENT);
+    pub const ENOTTY: Self = Self::from_u32_const(bindings::LINUX_ENOTTY);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
