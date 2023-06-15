@@ -98,8 +98,9 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* clock_id */ linux_api::time::linux___kernel_clockid_t,
-        /* flags */ std::ffi::c_int, /* request */ *const std::ffi::c_void,
+    #[log_syscall(/* clock_id */ linux_api::time::ClockId,
+        /* flags */ linux_api::time::ClockNanosleepFlags,
+        /* request */ *const std::ffi::c_void,
         /* remain */ *const std::ffi::c_void)]
     pub fn clock_nanosleep(
         ctx: &mut SyscallContext,
