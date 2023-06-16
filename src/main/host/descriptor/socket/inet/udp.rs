@@ -19,6 +19,7 @@ use crate::host::descriptor::{
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::SyscallError;
@@ -179,7 +180,7 @@ impl UdpSocket {
         Some(packet)
     }
 
-    pub fn peek_next_packet_priority(&self) -> Option<u64> {
+    pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority> {
         self.send_buffer.buffer.front().map(|x| x.1.packet_priority)
     }
 
@@ -942,7 +943,7 @@ struct MessageSendHeader {
     /// The destination address (for example the peer).
     dst: SocketAddrV4,
     /// The priority for the packet that we'll create in the future, given to us by the host.
-    packet_priority: u64,
+    packet_priority: FifoPacketPriority,
 }
 
 /// Non-payload data for a message in the receive buffer.

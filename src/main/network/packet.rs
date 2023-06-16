@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::syscall::io::IoVec;
 use crate::utility::pcap_writer::PacketDisplay;
 
@@ -94,7 +95,7 @@ impl PacketRc {
     }
 
     /// Set the packet payload. Will panic if the packet already has a payload.
-    pub fn set_payload(&mut self, payload: &[u8], priority: u64) {
+    pub fn set_payload(&mut self, payload: &[u8], priority: FifoPacketPriority) {
         unsafe {
             c::packet_setPayloadFromShadow(
                 self.c_ptr.ptr(),
@@ -199,7 +200,7 @@ impl PacketRc {
         SocketAddrV4::new(ip, port)
     }
 
-    pub fn priority(&self) -> u64 {
+    pub fn priority(&self) -> FifoPacketPriority {
         unsafe { c::packet_getPriority(self.c_ptr.ptr()) }
     }
 

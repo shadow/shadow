@@ -17,6 +17,7 @@ use crate::host::descriptor::{
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{write_partial, IoVec};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
@@ -163,7 +164,7 @@ impl LegacyTcpSocket {
         Some(packet)
     }
 
-    pub fn peek_next_packet_priority(&self) -> Option<u64> {
+    pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority> {
         self.peek_packet().map(|p| p.priority())
     }
 

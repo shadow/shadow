@@ -11,6 +11,9 @@ use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
 use crate::utility::{self, HostTreePointer};
 
+/// The priority used by the fifo qdisc to choose the next socket to send a packet from.
+pub type FifoPacketPriority = u64;
+
 #[derive(Debug, Clone)]
 pub struct PcapOptions {
     pub path: PathBuf,

@@ -35,7 +35,7 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
-use crate::host::network::interface::{NetworkInterface, PcapOptions};
+use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, PcapOptions};
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::ThreadId;
@@ -156,7 +156,7 @@ pub struct Host {
     determinism_sequence_counter: Cell<u64>,
 
     // track the order in which the application sent us application data
-    packet_priority_counter: Cell<u64>,
+    packet_priority_counter: Cell<FifoPacketPriority>,
 
     // Owned pointers to processes.
     processes: RefCell<BTreeMap<ProcessId, RootedRc<RootedRefCell<Process>>>>,
@@ -601,7 +601,7 @@ impl Host {
         res
     }
 
-    pub fn get_next_packet_priority(&self) -> u64 {
+    pub fn get_next_packet_priority(&self) -> FifoPacketPriority {
         let res = self.packet_priority_counter.get();
         self.packet_priority_counter
             .set(res.checked_add(1).unwrap());
@@ -981,7 +981,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> FifoPacketPriority {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.get_next_packet_priority()
     }

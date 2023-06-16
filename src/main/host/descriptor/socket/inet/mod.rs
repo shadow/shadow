@@ -11,6 +11,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
@@ -230,7 +231,7 @@ impl InetSocketRef<'_> {
 // inet socket-specific functions
 impl InetSocketRef<'_> {
     enum_passthrough!(self, (), LegacyTcp, Udp;
-        pub fn peek_next_packet_priority(&self) -> Option<u64>
+        pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
     );
     enum_passthrough!(self, (), LegacyTcp, Udp;
         pub fn has_data_to_send(&self) -> bool
@@ -338,7 +339,7 @@ impl InetSocketRefMut<'_> {
         pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc>
     );
     enum_passthrough!(self, (), LegacyTcp, Udp;
-        pub fn peek_next_packet_priority(&self) -> Option<u64>
+        pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
     );
     enum_passthrough!(self, (), LegacyTcp, Udp;
         pub fn has_data_to_send(&self) -> bool
