@@ -9,7 +9,7 @@ use test_utils::{ensure_ord, nop_sig_handler, set, TestEnvironment};
 enum VerifyOrder {
     ClockId,
     Request,
-    Perm,
+    Flags,
 }
 
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -43,6 +43,16 @@ impl<T> Arg<T> {
     }
 }
 
+/// Returns Verify items for those with invalid Validity.
+fn filter_discard_valid(vals: &[Validity]) -> Vec<&Verify> {
+    vals.iter()
+        .filter_map(|v| match v {
+            Validity::Invalid(verify) => Some(verify),
+            _ => None,
+        })
+        .collect()
+}
+
 fn verify_syscall_result(
     vals: Vec<Validity>,
     success_rv: libc::c_int,
@@ -50,13 +60,7 @@ fn verify_syscall_result(
     errno: libc::c_int,
 ) -> anyhow::Result<()> {
     // We want to ensure we have the correct error for invalid values.
-    let mut check: Vec<&Verify> = vals
-        .iter()
-        .filter_map(|v| match v {
-            Validity::Invalid(verify) => Some(verify),
-            _ => None,
-        })
-        .collect();
+    let mut check = filter_discard_valid(&vals);
 
     // Check the error according to the ordering defined by the caller.
     check.sort();
@@ -84,6 +88,13 @@ const SLEEP_TOLERANCE: Duration = Duration::from_millis(30);
 /// checking that we did not sleep (allows for syscall execution time).
 const SYSCALL_EXEC_TOLERANCE: Duration = Duration::from_micros(500);
 
+// For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
+// arg (see kernel/time/posix-timers.c). But for the *_ALARM clocks, Linux returns EINVAL if you set
+// undocumented bits in flags. Linux also returns EPERM for these if the caller does not have
+// CAP_WAKE_ALARM, which we do not emulate in Shadow. (Verified experimentally.)
+const SPECIAL_ALARM_CLOCKIDS: [libc::c_int; 2] =
+    [libc::CLOCK_REALTIME_ALARM, libc::CLOCK_BOOTTIME_ALARM];
+
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -109,11 +120,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![];
 
     // Encodes how Linux checks for invalid args, which we found experimentally.
-    let clockids = [
+    let clockids = vec![
         Arg::new(libc::CLOCK_REALTIME, Validity::Valid),
         Arg::new(libc::CLOCK_TAI, Validity::Valid),
         Arg::new(libc::CLOCK_MONOTONIC, Validity::Valid),
         Arg::new(libc::CLOCK_BOOTTIME, Validity::Valid),
+        Arg::new(libc::CLOCK_REALTIME_ALARM, Validity::Valid),
+        Arg::new(libc::CLOCK_BOOTTIME_ALARM, Validity::Valid),
         Arg::new(libc::CLOCK_PROCESS_CPUTIME_ID, Validity::Valid),
         Arg::new(
             libc::CLOCK_THREAD_CPUTIME_ID,
@@ -131,17 +144,9 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
             libc::CLOCK_MONOTONIC_COARSE,
             Validity::Invalid(Verify::new(VerifyOrder::ClockId, Some(libc::ENOTSUP), None)),
         ),
-        Arg::new(
-            libc::CLOCK_REALTIME_ALARM,
-            Validity::Invalid(Verify::new(VerifyOrder::Perm, Some(libc::EPERM), None)),
-        ),
-        Arg::new(
-            libc::CLOCK_BOOTTIME_ALARM,
-            Validity::Invalid(Verify::new(VerifyOrder::Perm, Some(libc::EPERM), None)),
-        ),
     ];
 
-    let flags = [
+    let flags = vec![
         Arg::new(0, Validity::Valid),
         Arg::new(libc::TIMER_ABSTIME, Validity::Valid),
     ];
@@ -194,7 +199,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
 
     // Test all combinations of valid/invalid args.
     for &clockid in clockids.iter() {
-        for &flag in flags.iter() {
+        for &flag in get_flags(clockid.value, &flags).iter() {
             for &request in requests.iter() {
                 for &remain in remains.iter() {
                     let append_args = |s| {
@@ -204,10 +209,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                         )
                     };
 
+                    // The test should succeed if there are no invalid args.
+                    let should_succeed = filter_discard_valid(&[
+                        clockid.validity,
+                        flag.validity,
+                        request.validity,
+                        remain.validity,
+                    ])
+                    .is_empty();
+
                     tests.extend(vec![test_utils::ShadowTest::new(
                         &append_args("return_values"),
                         move || test_return_values(clockid, flag, request, remain),
-                        get_passing_test_envs(clockid.value),
+                        get_passing_test_envs(clockid.value, should_succeed),
                     )]);
                 }
             }
@@ -224,12 +238,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 test_utils::ShadowTest::new(
                     &append_args("sleep_duration"),
                     move || test_sleep_duration(clockid.value, flag.value),
-                    get_passing_test_envs(clockid.value),
+                    get_passing_test_envs(clockid.value, true),
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("interrupted_sleep"),
                     move || test_interrupted_sleep(clockid.value, flag.value),
-                    get_passing_test_envs(clockid.value),
+                    get_passing_test_envs(clockid.value, true),
                 ),
             ]);
 
@@ -237,7 +251,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("abstime_in_past"),
                     move || test_abstime_in_past(clockid.value),
-                    get_passing_test_envs(clockid.value),
+                    get_passing_test_envs(clockid.value, true),
                 )]);
             }
         }
@@ -246,16 +260,39 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
     tests
 }
 
-fn get_passing_test_envs(clockid: libc::clockid_t) -> HashSet<TestEnvironment> {
-    // Skip testing CLOCK_PROCESS_CPUTIME_ID, it advances too slowly and causes timeouts.
-    let skip_linux = [libc::CLOCK_PROCESS_CPUTIME_ID];
+fn get_flags(clockid: libc::clockid_t, flags: &[Arg<libc::c_int>]) -> Vec<Arg<libc::c_int>> {
+    // See doc for `SPECIAL_ALARM_CLOCKIDS`
+    let flag_with_unspec_bits = libc::TIMER_ABSTIME | 0x1111;
 
-    // The *_ALARM variants cause EPERM on Linux, which Shadow doesn't emulate.
-    let skip_shadow = [
-        libc::CLOCK_PROCESS_CPUTIME_ID,
-        libc::CLOCK_REALTIME_ALARM,
-        libc::CLOCK_BOOTTIME_ALARM,
-    ];
+    let new_arg = if SPECIAL_ALARM_CLOCKIDS.contains(&clockid) {
+        Arg::new(
+            flag_with_unspec_bits,
+            Validity::Invalid(Verify::new(VerifyOrder::Flags, Some(libc::EINVAL), None)),
+        )
+    } else {
+        Arg::new(flag_with_unspec_bits, Validity::Valid)
+    };
+
+    let mut new_flags = flags.to_owned();
+    new_flags.push(new_arg);
+    new_flags
+}
+
+fn get_passing_test_envs(
+    clockid: libc::clockid_t,
+    should_test_succeed: bool,
+) -> HashSet<TestEnvironment> {
+    // Skip testing CLOCK_PROCESS_CPUTIME_ID: it advances too slowly and causes timeouts in Linux.
+    let mut skip_linux = vec![libc::CLOCK_PROCESS_CPUTIME_ID];
+
+    // Even if all of the args are valid, the *_ALARM variants will still cause EPERM on Linux (see
+    // doc for `SPECIAL_ALARM_CLOCKIDS`). We check the error cases, but filter the EPERM case.
+    if should_test_succeed {
+        skip_linux.extend(SPECIAL_ALARM_CLOCKIDS);
+    }
+
+    // Shadow does not yet implement CLOCK_PROCESS_CPUTIME_ID.
+    let skip_shadow = [libc::CLOCK_PROCESS_CPUTIME_ID];
 
     let mut test_envs = set![];
     if !skip_linux.contains(&clockid) {
@@ -315,9 +352,11 @@ fn test_sleep_duration(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::
 /// past results in a zero sleep duration (immediate return).
 fn test_abstime_in_past(clockid: libc::clockid_t) -> anyhow::Result<()> {
     // Get an absolute sleep time slightly in the past.
-    let mut request = clock_now(clockid)?;
-    request.tv_sec = request.tv_sec.saturating_sub(1);
-    request.tv_nsec = request.tv_nsec.saturating_sub(1);
+    let past = clock_now_duration(clockid)?.saturating_sub(Duration::from_nanos(1_000_000_001));
+    let request = libc::timespec {
+        tv_sec: past.as_secs().try_into()?,
+        tv_nsec: past.subsec_nanos().into(),
+    };
 
     let before = SystemTime::now();
     let rv = unsafe {

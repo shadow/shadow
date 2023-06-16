@@ -117,11 +117,15 @@ impl SyscallHandler {
             ClockId::CLOCK_REALTIME,
             ClockId::CLOCK_BOOTTIME,
             ClockId::CLOCK_TAI,
+            ClockId::CLOCK_REALTIME_ALARM,
+            ClockId::CLOCK_BOOTTIME_ALARM,
         ]
         .contains(&clock_id)
         {
-            // Supported and simulated in Shadow.
-            Self::nanosleep_helper(ctx, flags, request_ptr, remain_ptr)
+            // Simulated in Shadow; Linux allows unspec bitflags, but not for the *ALARM clocks.
+            let allow_unspec_bitflags =
+                ![ClockId::CLOCK_REALTIME_ALARM, ClockId::CLOCK_BOOTTIME_ALARM].contains(&clock_id);
+            Self::nanosleep_helper(ctx, flags, request_ptr, remain_ptr, allow_unspec_bitflags)
         } else if [ClockId::CLOCK_THREAD_CPUTIME_ID].contains(&clock_id) {
             // Invalid in Linux.
             log::debug!("Invalid clock id {clock_id:?}.",);
@@ -130,8 +134,6 @@ impl SyscallHandler {
             ClockId::CLOCK_MONOTONIC_RAW,
             ClockId::CLOCK_REALTIME_COARSE,
             ClockId::CLOCK_MONOTONIC_COARSE,
-            ClockId::CLOCK_REALTIME_ALARM,
-            ClockId::CLOCK_BOOTTIME_ALARM,
         ]
         .contains(&clock_id)
         {
@@ -153,10 +155,15 @@ impl SyscallHandler {
         flags: std::ffi::c_int,
         request_ptr: ForeignPtr<linux_api::time::timespec>,
         remain_ptr: ForeignPtr<linux_api::time::timespec>,
+        allow_unspec_bitflags: bool,
     ) -> Result<std::ffi::c_int, SyscallError> {
         let request = ctx.objs.process.memory_borrow().read(request_ptr)?;
         let request_time = SimulationTime::try_from(request).or(Err(Errno::EINVAL))?;
-        let flags = ClockNanosleepFlags::from_bits_truncate(flags);
+        let flags = if allow_unspec_bitflags {
+            ClockNanosleepFlags::from_bits_truncate(flags)
+        } else {
+            ClockNanosleepFlags::from_bits(flags).ok_or(Errno::EINVAL)?
+        };
 
         let now = Worker::current_time().unwrap();
 
