@@ -470,9 +470,24 @@ impl UdpSocket {
 
         // run in a closure so that an early return doesn't skip checking if we should block
         let result = (|| {
-            // pop the message from the receive buffer
-            let Some((message, header)) = socket_ref.recv_buffer.pop_message() else {
-                return Err(Errno::EWOULDBLOCK);
+            // a temporary location to store the message and header if we popped them
+            let message_storage;
+            let header_storage;
+
+            let (message, header) = if !flags.contains(MsgFlags::MSG_PEEK) {
+                // pop the message from the receive buffer
+                (message_storage, header_storage) = socket_ref
+                    .recv_buffer
+                    .pop_message()
+                    .ok_or(Errno::EWOULDBLOCK)?;
+                (&message_storage, &header_storage)
+            } else {
+                // peek the message from the receive buffer
+                let (message, header) = socket_ref
+                    .recv_buffer
+                    .peek_message()
+                    .ok_or(Errno::EWOULDBLOCK)?;
+                (message, header)
             };
 
             // truncate the payload if the payload is larger than the user-provided buffers
