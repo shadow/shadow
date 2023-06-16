@@ -202,6 +202,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         set![TestEnv::Libc, TestEnv::Shadow],
                     ),
                     test_utils::ShadowTest::new(
+                        &append_args("test_flag_peek"),
+                        move || test_flag_peek(sys_method, init_method, sock_type),
+                        // TODO: support in shadow
+                        set![TestEnv::Libc],
+                    ),
+                    test_utils::ShadowTest::new(
                         &append_args("test_blocking"),
                         move || test_blocking(sys_method, init_method, sock_type),
                         set![TestEnv::Libc, TestEnv::Shadow],
@@ -592,6 +598,91 @@ fn test_flag_dontwait(
 
     test_utils::run_and_close_fds(&[fd_client, fd_server], || {
         // try to read 10 bytes; an EAGAIN error expected
+        check_recv_call(&mut recvfrom_args, sys_method, &[libc::EAGAIN], true)?;
+
+        Ok(())
+    })
+}
+
+/// Test sendto() and recvfrom() using the `MSG_PEEK` flag.
+fn test_flag_peek(
+    sys_method: SendRecvMethod,
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    let outbuf_10_bytes: Vec<u8> = vec![1u8; 10];
+    let mut inbuf_10_bytes: Vec<u8> = vec![0u8; 10];
+
+    let sendto_args = SendtoArguments {
+        fd: fd_client,
+        len: outbuf_10_bytes.len(),
+        buf: Some(&outbuf_10_bytes),
+        flags: libc::MSG_PEEK,
+        ..Default::default()
+    };
+
+    let mut recvfrom_args = RecvfromArguments {
+        fd: fd_server,
+        len: inbuf_10_bytes.len(),
+        buf: Some(&mut inbuf_10_bytes),
+        // set the flags below
+        ..Default::default()
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // peek 10 bytes from the empty recv buffer
+        recvfrom_args.flags |= libc::MSG_PEEK;
+        check_recv_call(&mut recvfrom_args, sys_method, &[libc::EAGAIN], true)?;
+
+        // write 10 bytes
+        check_send_call(&sendto_args, sys_method, &[], true)?;
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // peek 10 bytes (we can call it multiple times)
+        recvfrom_args.flags |= libc::MSG_PEEK;
+        check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+        check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+        check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+        check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+
+        // pop 5 bytes
+        recvfrom_args.flags &= !libc::MSG_PEEK;
+        recvfrom_args.len = 5;
+        check_recv_call(&mut recvfrom_args, sys_method, &[], true)?;
+
+        // peek 10 bytes (we can call it multiple times); will return EAGAIN for dgram sockets or 5
+        // for stream sockets
+        recvfrom_args.flags |= libc::MSG_PEEK;
+        recvfrom_args.len = 10;
+        let errnos = match sock_type {
+            libc::SOCK_STREAM => vec![],
+            libc::SOCK_DGRAM | libc::SOCK_SEQPACKET => vec![libc::EAGAIN],
+            _ => unimplemented!(),
+        };
+        let (rv, _) = check_recv_call(&mut recvfrom_args, sys_method, &errnos, false)?;
+        assert!(!errnos.is_empty() || rv == 5);
+        let (rv, _) = check_recv_call(&mut recvfrom_args, sys_method, &errnos, false)?;
+        assert!(!errnos.is_empty() || rv == 5);
+        let (rv, _) = check_recv_call(&mut recvfrom_args, sys_method, &errnos, false)?;
+        assert!(!errnos.is_empty() || rv == 5);
+
+        // pop 5 bytes; will return EAGAIN for dgram sockets or 5 for stream sockets
+        recvfrom_args.flags &= !libc::MSG_PEEK;
+        recvfrom_args.len = 5;
+        check_recv_call(&mut recvfrom_args, sys_method, &errnos, true)?;
+
+        // peek 10 bytes from the empty recv buffer
+        recvfrom_args.flags |= libc::MSG_PEEK;
+        recvfrom_args.len = 10;
         check_recv_call(&mut recvfrom_args, sys_method, &[libc::EAGAIN], true)?;
 
         Ok(())
@@ -2132,13 +2223,8 @@ fn check_recv_call(
     // only check that all bytes were received (recv buffer was filled) if there
     // were no expected errors
     if verify_num_bytes && expected_errnos.is_empty() {
-        // check that recvfrom() returned the number of bytes in the buffer,
-        // or 0 if the buffer is NULL
-        test_utils::result_assert_eq(
-            rv,
-            args.buf.as_ref().map_or(0, |x| x.len()) as isize,
-            "Not all bytes were received (buffer not full)",
-        )?;
+        // check that recvfrom() returned the number of bytes requested
+        test_utils::result_assert_eq(rv, args.len as isize, "Not all bytes were received")?;
     }
 
     Ok((rv, msg_flags))
