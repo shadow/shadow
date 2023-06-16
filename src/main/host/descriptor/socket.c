@@ -429,7 +429,7 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, CompatSocket compa
     }
 
     /* add to our queue */
-    if(packet_getPriority(packet) == 0.0f) {
+    if(packet_getPriority(packet) == 0) {
         /* control packets get sent first */
         g_queue_push_tail(socket->outputControlBuffer, packet);
     } else {

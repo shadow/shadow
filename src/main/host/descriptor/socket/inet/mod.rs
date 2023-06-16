@@ -11,6 +11,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
@@ -230,7 +231,10 @@ impl InetSocketRef<'_> {
 // inet socket-specific functions
 impl InetSocketRef<'_> {
     enum_passthrough!(self, (), LegacyTcp, Udp;
-        pub fn peek_next_out_packet(&self) -> Option<PacketRc>
+        pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
+    );
+    enum_passthrough!(self, (), LegacyTcp, Udp;
+        pub fn has_data_to_send(&self) -> bool
     );
     enum_passthrough!(self, (packet), LegacyTcp, Udp;
         pub fn update_packet_header(&self, packet: &mut PacketRc)
@@ -335,7 +339,10 @@ impl InetSocketRefMut<'_> {
         pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc>
     );
     enum_passthrough!(self, (), LegacyTcp, Udp;
-        pub fn peek_next_out_packet(&self) -> Option<PacketRc>
+        pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
+    );
+    enum_passthrough!(self, (), LegacyTcp, Udp;
+        pub fn has_data_to_send(&self) -> bool
     );
     enum_passthrough!(self, (packet), LegacyTcp, Udp;
         pub fn update_packet_header(&self, packet: &mut PacketRc)
@@ -512,19 +519,25 @@ mod export {
         })
     }
 
+    /// Will return non-zero if socket doesn't have data to send (there is no priority).
     #[no_mangle]
-    pub extern "C" fn inetsocket_peekNextOutPacket(socket: *const InetSocket) -> *const c::Packet {
+    pub extern "C" fn inetsocket_peekNextPacketPriority(
+        socket: *const InetSocket,
+        priority_out: *mut u64,
+    ) -> libc::c_int {
         let socket = unsafe { socket.as_ref() }.unwrap();
-        // The `Packet` returned from `peek_next_out_packet` will be dropped and the refcount of the
-        // inner `c::Packet` will decrease. Since we're returning a pointer to the `c::Packet`, this
-        // would typically lead to a use-after-free bug, but this "peek" function assumes that the
-        // socket continues to hold its own reference to the `c::Packet`, so the refcount should not
-        // reduce to 0 here.
-        socket
-            .borrow()
-            .peek_next_out_packet()
-            .map(|p| p.borrow_inner().cast_const())
-            .unwrap_or(std::ptr::null())
+        let priority_out = unsafe { priority_out.as_mut() }.unwrap();
+        if let Some(priority) = socket.borrow().peek_next_packet_priority() {
+            *priority_out = priority;
+            return 0;
+        }
+        -1
+    }
+
+    #[no_mangle]
+    pub extern "C" fn inetsocket_hasDataToSend(socket: *const InetSocket) -> bool {
+        let socket = unsafe { socket.as_ref() }.unwrap();
+        socket.borrow().has_data_to_send()
     }
 
     #[no_mangle]

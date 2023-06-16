@@ -43,11 +43,12 @@ const gchar* protocol_toString(ProtocolType type);
 
 Packet* packet_new(const Host* host);
 void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr payload,
-                       gsize payloadLength);
-void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, UntypedForeignPtr payload,
-                                        gsize payloadLength, const MemoryManager* mem);
-void packet_setPayloadFromShadow(Packet* packet, const Host* host, const void* payload,
-                                 gsize payloadLength);
+                       gsize payloadLength, uint64_t packetPriority);
+void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
+                                        gsize payloadLength, const MemoryManager* mem,
+                                        uint64_t packetPriority);
+void packet_setPayloadFromShadow(Packet* packet, const void* payload, gsize payloadLength,
+                                 uint64_t packetPriority);
 Packet* packet_copy(Packet* packet);
 
 // Exposed for unit testing only. Use `packet_new` outside of tests.
@@ -59,8 +60,8 @@ void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
 static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(packet); }
 
-void packet_setPriority(Packet *packet, double value);
-gdouble packet_getPriority(const Packet* packet);
+void packet_setPriority(Packet *packet, uint64_t value);
+uint64_t packet_getPriority(const Packet* packet);
 
 // The port must be in network byte order.
 void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,

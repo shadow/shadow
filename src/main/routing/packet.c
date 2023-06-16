@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <netinet/in.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
@@ -78,7 +79,7 @@ struct _Packet {
      * the default FIFO network interface scheduling discipline.
      * smaller values have greater priority.
      */
-    gdouble priority;
+    uint64_t priority;
 
     PacketDeliveryStatusFlags allStatus;
     GQueue* orderedStatus;
@@ -122,7 +123,7 @@ Packet* packet_new(const Host* host) {
 /* If modifying this function, you should also modify `packet_setPayloadWithMemoryManager` below.
  */
 void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr payload,
-                       gsize payloadLength) {
+                       gsize payloadLength, uint64_t packetPriority) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(thread);
     utility_debugAssert(payload.val);
@@ -132,14 +133,15 @@ void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr p
     packet->payload = payload_new(thread, payload, payloadLength);
     utility_alwaysAssert(packet->payload != NULL);
     /* application data needs a priority ordering for FIFO onto the wire */
-    packet->priority = host_getNextPacketPriority(thread_getHost(thread));
+    packet->priority = packetPriority;
 }
 
 /* This is a copy of `packet_setPayload` but passes the memory manager through. Once we've moved UDP
  * sockets to rust, we can remove `packet_setPayload` and rename this function to
  * `packet_setPayload`. */
-void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, UntypedForeignPtr payload,
-                                        gsize payloadLength, const MemoryManager* mem) {
+void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
+                                        gsize payloadLength, const MemoryManager* mem,
+                                        uint64_t packetPriority) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(payload.val);
     utility_debugAssert(!packet->payload);
@@ -148,11 +150,11 @@ void packet_setPayloadWithMemoryManager(Packet* packet, const Host* host, Untype
     packet->payload = payload_newWithMemoryManager(payload, payloadLength, mem);
     utility_alwaysAssert(packet->payload != NULL);
     /* application data needs a priority ordering for FIFO onto the wire */
-    packet->priority = host_getNextPacketPriority(host);
+    packet->priority = packetPriority;
 }
 
-void packet_setPayloadFromShadow(Packet* packet, const Host* host, const void* payload,
-                                 gsize payloadLength) {
+void packet_setPayloadFromShadow(Packet* packet, const void* payload, gsize payloadLength,
+                                 uint64_t packetPriority) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(payload);
     utility_debugAssert(!packet->payload);
@@ -161,7 +163,7 @@ void packet_setPayloadFromShadow(Packet* packet, const Host* host, const void* p
     packet->payload = payload_newFromShadow(payload, payloadLength);
     utility_alwaysAssert(packet->payload != NULL);
     /* application data needs a priority ordering for FIFO onto the wire */
-    packet->priority = host_getNextPacketPriority(host);
+    packet->priority = packetPriority;
 }
 
 /* copy everything except the payload.
@@ -270,7 +272,7 @@ void packet_unref(Packet* packet) {
     }
 }
 
-void packet_setPriority(Packet *packet, double value) {
+void packet_setPriority(Packet *packet, uint64_t value) {
    packet->priority = value;
 }
 
@@ -405,7 +407,7 @@ gsize packet_getHeaderSize(const Packet* packet) {
     return size;
 }
 
-gdouble packet_getPriority(const Packet* packet) {
+uint64_t packet_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
 }

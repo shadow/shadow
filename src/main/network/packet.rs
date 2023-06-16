@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::interface::FifoPacketPriority;
 use crate::host::syscall::io::IoVec;
 use crate::utility::pcap_writer::PacketDisplay;
 
@@ -93,19 +94,30 @@ impl PacketRc {
         };
     }
 
-    /// Set the payload for the packet. Will panic if the packet already has a payload.
-    pub fn set_payload(&mut self, payload: &[u8]) {
-        // setting the packet's payload shouldn't require the host, so for now we'll get the host
-        // from the worker rather than require it as an argument
-        Worker::with_active_host(|host| unsafe {
+    /// Set the packet payload. Will panic if the packet already has a payload.
+    pub fn set_payload(&mut self, payload: &[u8], priority: FifoPacketPriority) {
+        unsafe {
             c::packet_setPayloadFromShadow(
                 self.c_ptr.ptr(),
-                host,
                 payload.as_ptr() as *const libc::c_void,
                 payload.len().try_into().unwrap(),
+                priority,
             )
-        })
-        .unwrap();
+        }
+    }
+
+    /// Copy the packet payload to a buffer. Will truncate if the buffer is not large enough.
+    pub fn get_payload(&self, buffer: &mut [u8]) -> usize {
+        unsafe {
+            c::packet_copyPayloadShadow(
+                self.c_ptr.ptr(),
+                0,
+                buffer.as_mut_ptr().cast(),
+                buffer.len().try_into().unwrap(),
+            )
+            .try_into()
+            .unwrap()
+        }
     }
 
     /// Copy the payload to the managed process. Even if this returns an error, some unspecified
@@ -186,6 +198,10 @@ impl PacketRc {
         let port = u16::from_be(unsafe { c::packet_getDestinationPort(self.c_ptr.ptr()) });
 
         SocketAddrV4::new(ip, port)
+    }
+
+    pub fn priority(&self) -> FifoPacketPriority {
+        unsafe { c::packet_getPriority(self.c_ptr.ptr()) }
     }
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet

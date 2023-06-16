@@ -88,21 +88,17 @@ bool rrsocketqueue_find(RrSocketQueue* self, const CompatSocket* socket) {
 }
 
 static gint _compareSocket(const CompatSocket* sa, const CompatSocket* sb) {
-    const Packet* pa = compatsocket_peekNextOutPacket(sa);
-    const Packet* pb = compatsocket_peekNextOutPacket(sb);
+    uint64_t pa = 0;
+    uint64_t pb = 0;
 
-    utility_debugAssert(pa != NULL);
-    utility_debugAssert(pb != NULL);
-
-    if (pa == NULL) {
+    if (compatsocket_peekNextPacketPriority(sa, &pa) != 0) {
         return -1;
     }
-
-    if (pb == NULL) {
+    if (compatsocket_peekNextPacketPriority(sb, &pb) != 0) {
         return +1;
     }
 
-    return packet_getPriority(pa) > packet_getPriority(pb) ? +1 : -1;
+    return pa > pb ? +1 : -1;
 }
 
 static gint _compareSocketTagged(uintptr_t sa_tagged, uintptr_t sb_tagged, gpointer userData) {

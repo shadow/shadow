@@ -258,7 +258,7 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
         compatsocket_updatePacketHeader(&socket, host, packet);
 
-        if (compatsocket_peekNextOutPacket(&socket)) {
+        if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
             rrsocketqueue_push(&interface->rrQueue, &socket);
         } else {
@@ -301,7 +301,7 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         compatsocket_updatePacketHeader(&socket, host, packet);
 
-        if (compatsocket_peekNextOutPacket(&socket)) {
+        if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
             fifosocketqueue_push(&interface->fifoQueue, &socket);
         } else {
@@ -366,7 +366,7 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
 void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket) {
     MAGIC_ASSERT(interface);
 
-    if (compatsocket_peekNextOutPacket(socket) == NULL) {
+    if (!compatsocket_hasDataToSend(socket)) {
         warning("Socket wants send, but no packets available");
         return;
     }

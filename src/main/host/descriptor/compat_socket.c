@@ -11,6 +11,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
+#include "main/routing/packet.h"
 #include "main/utility/tagged_ptr.h"
 
 static void compatsockettypes_assertValid(CompatSocketTypes type) {
@@ -119,12 +120,30 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
     return socket;
 }
 
-const Packet* compatsocket_peekNextOutPacket(const CompatSocket* socket) {
+int compatsocket_peekNextPacketPriority(const CompatSocket* socket, uint64_t* priorityOut) {
+    switch (socket->type) {
+        case CST_LEGACY_SOCKET: {
+            Packet* packet = legacysocket_peekNextOutPacket(socket->object.as_legacy_socket);
+            if (packet != NULL) {
+                *priorityOut = packet_getPriority(packet);
+                return 0;
+            }
+            return -1;
+        }
+        case CST_INET_SOCKET:
+            return inetsocket_peekNextPacketPriority(socket->object.as_inet_socket, priorityOut);
+        case CST_NONE: utility_panic("Unexpected CompatSocket type");
+    }
+
+    utility_panic("Invalid CompatSocket type");
+}
+
+bool compatsocket_hasDataToSend(const CompatSocket* socket) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
-            return legacysocket_peekNextOutPacket(socket->object.as_legacy_socket);
+            return legacysocket_peekNextOutPacket(socket->object.as_legacy_socket) != NULL;
         case CST_INET_SOCKET:
-            return inetsocket_peekNextOutPacket(socket->object.as_inet_socket);
+            return inetsocket_hasDataToSend(socket->object.as_inet_socket);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
