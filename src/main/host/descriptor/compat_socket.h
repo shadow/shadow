@@ -47,7 +47,8 @@ CompatSocket compatsocket_fromTagged(uintptr_t ptr);
 /* compatability wrappers */
 int compatsocket_peekNextPacketPriority(const CompatSocket* socket, uint64_t* priorityOut);
 bool compatsocket_hasDataToSend(const CompatSocket* socket);
-void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet);
+void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet,
+                               CEmulatedTime recvTime);
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);
 void compatsocket_updatePacketHeader(const CompatSocket* socket, const Host* host, Packet* packet);
 

@@ -36,7 +36,7 @@ void networkinterface_disassociate(NetworkInterface* interface, ProtocolType typ
 void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket);
 
 Packet* networkinterface_pop(NetworkInterface* interface);
-void networkinterface_push(NetworkInterface* interface, Packet* packet);
+void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulatedTime recvTime);
 
 /* Disassociate all bound sockets and remove sockets from the sending queue. */
 void networkinterface_removeAllSockets(NetworkInterface* interface);

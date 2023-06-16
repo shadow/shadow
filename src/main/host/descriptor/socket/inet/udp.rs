@@ -8,6 +8,7 @@ use bytes::{Bytes, BytesMut};
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
@@ -97,7 +98,12 @@ impl UdpSocket {
         self.has_open_file = val;
     }
 
-    pub fn push_in_packet(&mut self, mut packet: PacketRc, cb_queue: &mut CallbackQueue) {
+    pub fn push_in_packet(
+        &mut self,
+        mut packet: PacketRc,
+        cb_queue: &mut CallbackQueue,
+        _recv_time: EmulatedTime,
+    ) {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
         if let Some(peer_addr) = self.peer_addr {
