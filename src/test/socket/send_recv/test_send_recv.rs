@@ -204,8 +204,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     test_utils::ShadowTest::new(
                         &append_args("test_flag_peek"),
                         move || test_flag_peek(sys_method, init_method, sock_type),
-                        // TODO: support in shadow
-                        set![TestEnv::Libc],
+                        match (init_method.domain(), sock_type) {
+                            // TODO: enable if shadow supports MSG_PEEK for tcp or unix sockets
+                            (libc::AF_INET, libc::SOCK_DGRAM) => {
+                                set![TestEnv::Libc, TestEnv::Shadow]
+                            }
+                            _ => set![TestEnv::Libc],
+                        },
                     ),
                     test_utils::ShadowTest::new(
                         &append_args("test_blocking"),
