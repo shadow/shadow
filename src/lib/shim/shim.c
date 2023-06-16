@@ -18,12 +18,14 @@
 #include <ucontext.h>
 #include <unistd.h>
 
+#include "lib/log-c2rust/log-c2rust.h"
+#include "lib/log-c2rust/rustlogger.h"
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shadow_spinlock.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/patch_vdso.h"
-#include "lib/shim/shim_logger.h"
+#include "lib/shim/shim_api.h"
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_signals.h"
@@ -197,21 +199,12 @@ static void _shim_init_signal_stack() {
 }
 
 static void _shim_parent_init_logging() {
-    logger_set_global_start_time_micros(shimshmem_getLoggingStartTime(shim_managerSharedMem()));
-
-    // Redirect logger to stdout (shadow sets stdout and stderr to the shim log).
-    {
-        // the FILE takes ownership of the fd, so give it its own fd
-        int shimlog_fd = dup(STDOUT_FILENO);
-        FILE* log_file = fdopen(shimlog_fd, "w");
-        if (log_file == NULL) {
-            panic("fdopen: %s", strerror(errno));
-        }
-        logger_setDefault(shimlogger_new(log_file));
-    }
-
     int level = shimshmem_getLogLevel(shim_hostSharedMem());
-    logger_setLevel(logger_getDefault(), level);
+
+    // Route C logging through Rust's `log`
+    logger_setDefault(rustlogger_new());
+    // Install our `log` backend.
+    shimlogger_install(level);
 }
 
 static void _shim_parent_init_death_signal() {

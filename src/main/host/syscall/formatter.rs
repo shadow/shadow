@@ -4,11 +4,11 @@ use std::marker::PhantomData;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::util::time::TimeParts;
 
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
-use crate::utility::time::TimeParts;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FmtOptions {

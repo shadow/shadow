@@ -20,7 +20,6 @@ pub mod status_bar;
 pub mod stream_len;
 pub mod synchronization;
 pub mod syscall;
-pub mod time;
 
 use std::ffi::CString;
 use std::marker::PhantomData;

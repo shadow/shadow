@@ -6,17 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# TODO: switch to upstream crate if/when they merge and release
-# https://github.com/dylanmckay/vsprintf/pull/2
-#
-# Alternatively, just call libc's vsprintf directly when the unstable feature
-# `c_variadic` is stabilized, or if we decide to enable it anyway.
-# https://github.com/rust-lang/rust/issues/44930
-vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
+formatting-nostd = { path = "../formatting-nostd" }
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 num_enum = { version = "0.6.1", default-features=false }
 logger = { path = "../logger" }
+va_list = { version = "0.1.4", default-features = false }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }

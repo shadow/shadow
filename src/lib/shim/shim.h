@@ -63,6 +63,7 @@ void shim_newThreadChildInitd();
 ShimShmemThread* shim_threadSharedMem();
 ShimShmemProcess* shim_processSharedMem();
 ShimShmemHost* shim_hostSharedMem();
+ShimShmemManager* shim_managerSharedMem();
 
 // Prepare to free the current thread's signal thread stack.  Should only be
 // done just before exiting, as the stack will be freed the next another thread
