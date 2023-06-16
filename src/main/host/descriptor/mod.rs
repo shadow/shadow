@@ -437,6 +437,14 @@ impl FileRefMut<'_> {
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket, TimerFd;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
+    enum_passthrough!(self, (monitoring, filter, notify_fn), Pipe, EventFd, Socket, TimerFd;
+        pub fn add_listener(
+            &mut self,
+            monitoring: FileState,
+            filter: StateListenerFilter,
+            notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        ) -> Handle<(FileState, FileState)>
+    );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
