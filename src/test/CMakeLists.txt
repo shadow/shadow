@@ -123,7 +123,7 @@ macro(add_shadow_tests)
       && (${POST_CMD}) \
       "
    )
-   
+
    if(DEFINED SHADOW_TEST_CONFIGURATIONS)
       add_test(
          NAME ${SHADOW_TEST_NAME}
@@ -169,7 +169,6 @@ add_subdirectory(file)
 add_subdirectory(futex)
 add_subdirectory(golang)
 add_subdirectory(ifaddrs)
-add_subdirectory(itimer)
 add_subdirectory(memory)
 add_subdirectory(phold)
 add_subdirectory(pipe)
@@ -189,6 +188,7 @@ add_subdirectory(sysinfo)
 add_subdirectory(tcp)
 add_subdirectory(tgen)
 add_subdirectory(threads)
+add_subdirectory(time)
 add_subdirectory(timerfd)
 add_subdirectory(tor)
 add_subdirectory(udp)

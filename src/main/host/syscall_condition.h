@@ -46,6 +46,12 @@ struct _Trigger {
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Trigger trigger);
 
+/* Create a new object that will cause a signal to be delivered to
+ * a waiting process and thread once the abs_trigger_time is reached.
+ * The condition starts with a reference count of 1.
+ * Panics if abs_trigger_time is before the current emulated clock time. */
+SysCallCondition* syscallcondition_newWithAbsTimeout(CEmulatedTime abs_trigger_time);
+
 /* Add a timeout to the condition. At time `t`, the conditition will be triggered
  * if it hasn't already. `t` is absolute emulated time, as returned by
  * `worker_getCurrentEmulatedTime`. */

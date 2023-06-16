@@ -23,7 +23,6 @@ path = "sched_affinity/test_sched_affinity.rs"
 [[bin]]
 name = "test_sleep"
 path = "sleep/test_sleep.rs"
-#harness = false
 
 [[bin]]
 name = "test_socket"
@@ -155,15 +154,23 @@ path = "regression/test_busy_wait.rs"
 
 [[bin]]
 name = "test_itimer"
-path = "itimer/test_itimer.rs"
+path = "time/itimer/test_itimer.rs"
 
 [[bin]]
 name = "test_itimer_scheduled_after_exit"
-path = "itimer/test_itimer_scheduled_after_exit.rs"
+path = "time/itimer/test_itimer_scheduled_after_exit.rs"
 
 [[bin]]
 name = "test_stdio"
 path = "stdio/test_stdio.rs"
+
+[[bin]]
+name = "test_time"
+path = "time/time/test_time.rs"
+
+[[bin]]
+name = "test_clock_nanosleep"
+path = "time/clock_nanosleep/test_clock_nanosleep.rs"
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }

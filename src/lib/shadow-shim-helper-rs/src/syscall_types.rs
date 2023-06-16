@@ -466,6 +466,13 @@ impl TryFrom<SysCallReg> for linux_api::time::ClockId {
     }
 }
 
+impl TryFrom<SysCallReg> for linux_api::time::ClockNanosleepFlags {
+    type Error = ();
+    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+        Self::from_bits(reg.into()).ok_or(())
+    }
+}
+
 impl TryFrom<SysCallReg> for linux_api::time::ITimerId {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {

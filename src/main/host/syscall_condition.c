@@ -87,6 +87,13 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
     return cond;
 }
 
+SysCallCondition* syscallcondition_newWithAbsTimeout(CEmulatedTime abs_trigger_time) {
+    utility_debugAssert(abs_trigger_time >= worker_getCurrentEmulatedTime());
+    SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
+    syscallcondition_setTimeout(cond, abs_trigger_time);
+    return cond;
+}
+
 void syscallcondition_setTimeout(SysCallCondition* cond, CEmulatedTime t) {
     MAGIC_ASSERT(cond);
 

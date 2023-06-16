@@ -59,8 +59,7 @@ static SyscallReturn _syscallhandler_nanosleep_helper(SysCallHandler* sys, clock
     int wasBlocked = _syscallhandler_wasBlocked(sys);
 
     if (!wasBlocked) {
-        SysCallCondition* cond = syscallcondition_new((Trigger){.type = TRIGGER_NONE});
-        syscallcondition_setTimeout(cond, reqEmuTime);
+        SysCallCondition* cond = syscallcondition_newWithAbsTimeout(reqEmuTime);
 
         /* Block the thread, unblock when the timer expires. */
         return syscallreturn_makeBlocked(cond, false);
@@ -105,12 +104,3 @@ SyscallReturn syscallhandler_nanosleep(SysCallHandler* sys, const SysCallArgs* a
     //   However, Linux measures the time using the CLOCK_MONOTONIC clock.
     return _syscallhandler_nanosleep_helper(sys, CLOCK_MONOTONIC, 0, req, rem);
 }
-
-SyscallReturn syscallhandler_clock_nanosleep(SysCallHandler* sys, const SysCallArgs* args) {
-    clockid_t clock_id = args->args[0].as_i64;
-    int flags = args->args[1].as_i64;
-    UntypedForeignPtr req = args->args[2].as_ptr;
-    UntypedForeignPtr rem = args->args[3].as_ptr;
-    return _syscallhandler_nanosleep_helper(sys, clock_id, flags, req, rem);
-}
-
