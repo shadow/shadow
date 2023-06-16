@@ -16,6 +16,7 @@ use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync};
 
 pub mod descriptor_table;
+pub mod epoll;
 pub mod eventfd;
 pub mod pipe;
 pub mod shared_buf;
@@ -300,6 +301,7 @@ pub enum File {
     EventFd(Arc<AtomicRefCell<eventfd::EventFd>>),
     Socket(Socket),
     TimerFd(Arc<AtomicRefCell<timerfd::TimerFd>>),
+    Epoll(Arc<AtomicRefCell<epoll::Epoll>>),
 }
 
 // will not compile if `File` is not Send + Sync
@@ -313,6 +315,7 @@ impl File {
             Self::EventFd(ref f) => FileRef::EventFd(f.borrow()),
             Self::Socket(ref f) => FileRef::Socket(f.borrow()),
             Self::TimerFd(ref f) => FileRef::TimerFd(f.borrow()),
+            Self::Epoll(ref f) => FileRef::Epoll(f.borrow()),
         }
     }
 
@@ -322,6 +325,7 @@ impl File {
             Self::EventFd(ref f) => FileRef::EventFd(f.try_borrow()?),
             Self::Socket(ref f) => FileRef::Socket(f.try_borrow()?),
             Self::TimerFd(ref f) => FileRef::TimerFd(f.try_borrow()?),
+            Self::Epoll(ref f) => FileRef::Epoll(f.try_borrow()?),
         })
     }
 
@@ -331,6 +335,7 @@ impl File {
             Self::EventFd(ref f) => FileRefMut::EventFd(f.borrow_mut()),
             Self::Socket(ref f) => FileRefMut::Socket(f.borrow_mut()),
             Self::TimerFd(ref f) => FileRefMut::TimerFd(f.borrow_mut()),
+            Self::Epoll(ref f) => FileRefMut::Epoll(f.borrow_mut()),
         }
     }
 
@@ -340,6 +345,7 @@ impl File {
             Self::EventFd(ref f) => FileRefMut::EventFd(f.try_borrow_mut()?),
             Self::Socket(ref f) => FileRefMut::Socket(f.try_borrow_mut()?),
             Self::TimerFd(ref f) => FileRefMut::TimerFd(f.try_borrow_mut()?),
+            Self::Epoll(ref f) => FileRefMut::Epoll(f.try_borrow_mut()?),
         })
     }
 
@@ -349,6 +355,7 @@ impl File {
             Self::EventFd(f) => Arc::as_ptr(f) as usize,
             Self::Socket(ref f) => f.canonical_handle(),
             Self::TimerFd(f) => Arc::as_ptr(f) as usize,
+            Self::Epoll(f) => Arc::as_ptr(f) as usize,
         }
     }
 }
@@ -360,6 +367,7 @@ impl std::fmt::Debug for File {
             Self::EventFd(_) => write!(f, "EventFd")?,
             Self::Socket(_) => write!(f, "Socket")?,
             Self::TimerFd(_) => write!(f, "TimerFd")?,
+            Self::Epoll(_) => write!(f, "Epoll")?,
         }
 
         if let Ok(file) = self.try_borrow() {
@@ -380,6 +388,7 @@ pub enum FileRef<'a> {
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
     Socket(SocketRef<'a>),
     TimerFd(atomic_refcell::AtomicRef<'a, timerfd::TimerFd>),
+    Epoll(atomic_refcell::AtomicRef<'a, epoll::Epoll>),
 }
 
 pub enum FileRefMut<'a> {
@@ -387,55 +396,56 @@ pub enum FileRefMut<'a> {
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
     Socket(SocketRefMut<'a>),
     TimerFd(atomic_refcell::AtomicRefMut<'a, timerfd::TimerFd>),
+    Epoll(atomic_refcell::AtomicRefMut<'a, epoll::Epoll>),
 }
 
 impl FileRef<'_> {
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn supports_sa_restart(&self) -> bool
     );
 }
 
 impl FileRefMut<'_> {
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn supports_sa_restart(&self) -> bool
     );
-    enum_passthrough!(self, (val), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (val), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn set_has_open_file(&mut self, val: bool)
     );
-    enum_passthrough!(self, (cb_queue), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (cb_queue), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
-    enum_passthrough!(self, (status), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (status), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn set_status(&mut self, status: FileStatus)
     );
-    enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (monitoring, filter, notify_fn), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (monitoring, filter, notify_fn), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn add_listener(
             &mut self,
             monitoring: FileState,
@@ -443,17 +453,17 @@ impl FileRefMut<'_> {
             notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
         ) -> Handle<(FileState, FileState)>
     );
-    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
-    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
-    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn readv(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
                      mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
-    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket, TimerFd;
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn writev(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
                       mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
@@ -466,6 +476,7 @@ impl std::fmt::Debug for FileRef<'_> {
             Self::EventFd(_) => write!(f, "EventFd")?,
             Self::Socket(_) => write!(f, "Socket")?,
             Self::TimerFd(_) => write!(f, "TimerFd")?,
+            Self::Epoll(_) => write!(f, "Epoll")?,
         }
 
         write!(
@@ -484,6 +495,7 @@ impl std::fmt::Debug for FileRefMut<'_> {
             Self::EventFd(_) => write!(f, "EventFd")?,
             Self::Socket(_) => write!(f, "Socket")?,
             Self::TimerFd(_) => write!(f, "TimerFd")?,
+            Self::Epoll(_) => write!(f, "Epoll")?,
         }
 
         write!(
