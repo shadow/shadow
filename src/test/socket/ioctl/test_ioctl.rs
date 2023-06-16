@@ -81,8 +81,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 test_utils::ShadowTest::new(
                     &append_args("test_siocgstamp"),
                     move || test_siocgstamp(init_method, sock_type),
-                    // TODO: this isn't supported yet in shadow
-                    set![TestEnv::Libc],
+                    // TODO: this isn't supported yet in shadow for unix sockets
+                    if init_method.domain() == libc::AF_UNIX {
+                        set![TestEnv::Libc]
+                    } else {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    },
                 ),
             ]);
         }

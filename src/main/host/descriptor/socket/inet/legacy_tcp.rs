@@ -589,6 +589,8 @@ impl LegacyTcpSocket {
 
                 Ok(0.into())
             }
+            // this isn't supported by tcp
+            IoctlRequest::SIOCGSTAMP => Err(Errno::ENOENT.into()),
             IoctlRequest::FIONBIO => {
                 panic!("This should have been handled by the ioctl syscall handler");
             }
