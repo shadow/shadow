@@ -3,6 +3,7 @@ use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
 
 use nix::unistd::Pid;
+use test_utils::time::*;
 use test_utils::{ensure_ord, set, Arg, TestEnvironment, Validity, Verify, VerifyOrder};
 
 // For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
@@ -252,17 +253,11 @@ fn test_return_values(
 fn test_sleep_duration(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::Result<()> {
     let relative_dur = Duration::from_millis(1100);
     let request = create_sleep_request(clockid, flags, relative_dur)?;
-
-    let before = SystemTime::now();
-    let rv = unsafe { libc::clock_nanosleep(clockid, flags, &request, std::ptr::null_mut()) };
-    let after = SystemTime::now();
-    ensure_ord!(0, ==, rv);
-
-    let actual_dur = after.duration_since(before)?;
-    let diff = duration_abs_diff(relative_dur, actual_dur);
-    ensure_ord!(diff, <=, test_utils::time::SLEEP_TOLERANCE);
-
-    Ok(())
+    check_fn_exec_duration(relative_dur, SLEEP_TOLERANCE, || {
+        let rv = unsafe { libc::clock_nanosleep(clockid, flags, &request, std::ptr::null_mut()) };
+        ensure_ord!(0, ==, rv);
+        Ok(())
+    })
 }
 
 /// Calling clock_nanosleep with flag TIMER_ABSTIME where the sleep request specifies a time in the
@@ -270,23 +265,16 @@ fn test_sleep_duration(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::
 fn test_abstime_in_past(clockid: libc::clockid_t) -> anyhow::Result<()> {
     // Get an absolute sleep time slightly in the past.
     let past = clock_now_duration(clockid)?.saturating_sub(Duration::from_nanos(1_000_000_001));
-    let request = libc::timespec {
-        tv_sec: past.as_secs().try_into()?,
-        tv_nsec: past.subsec_nanos().into(),
-    };
+    let request = duration_to_timespec(past);
 
-    let before = SystemTime::now();
-    let rv = unsafe {
-        libc::clock_nanosleep(clockid, libc::TIMER_ABSTIME, &request, std::ptr::null_mut())
-    };
-    let after = SystemTime::now();
-    ensure_ord!(0, ==, rv);
-
-    // Syscall returns immediately, but allow some tolerance for syscall execution.
-    let actual_dur = after.duration_since(before)?;
-    ensure_ord!(actual_dur, <=, test_utils::time::SYSCALL_EXEC_TOLERANCE);
-
-    Ok(())
+    // clock_nanosleep should return immediately, but allow some tolerance for syscall execution.
+    check_fn_exec_duration(Duration::ZERO, SYSCALL_EXEC_TOLERANCE, || {
+        let rv = unsafe {
+            libc::clock_nanosleep(clockid, libc::TIMER_ABSTIME, &request, std::ptr::null_mut())
+        };
+        ensure_ord!(0, ==, rv);
+        Ok(())
+    })
 }
 
 /// A clock_nanosleep interrupted by a signal handler should return EINTR.
@@ -339,14 +327,14 @@ fn run_interrupted_sleeper(
     // Should have been interrupted after the signal duration.
     let actual_dur = after.duration_since(before)?;
     let interrupt_diff = duration_abs_diff(sig_dur, actual_dur);
-    ensure_ord!(interrupt_diff, <=, test_utils::time::SLEEP_TOLERANCE);
+    ensure_ord!(interrupt_diff, <=, SLEEP_TOLERANCE);
 
     if flags != libc::TIMER_ABSTIME {
         // Check reported time remaining.
         let remain_expected = sleep_dur.checked_sub(sig_dur).unwrap();
         let remain_actual = timespec_to_duration(remain);
         let remain_diff = duration_abs_diff(remain_expected, remain_actual);
-        ensure_ord!(remain_diff, <=, test_utils::time::SLEEP_TOLERANCE);
+        ensure_ord!(remain_diff, <=, SLEEP_TOLERANCE);
     }
 
     Ok(())
@@ -361,40 +349,6 @@ fn create_sleep_request(
         libc::TIMER_ABSTIME => clock_now_duration(clockid)?,
         _ => Duration::ZERO,
     };
-
     let request_dur = absolute_offset.checked_add(relative_dur).unwrap();
-    let request = libc::timespec {
-        tv_sec: request_dur.as_secs().try_into()?,
-        tv_nsec: request_dur.subsec_nanos().into(),
-    };
-    Ok(request)
-}
-
-fn clock_now_duration(clockid: libc::clockid_t) -> anyhow::Result<Duration> {
-    let now = clock_now(clockid)?;
-    Ok(timespec_to_duration(now))
-}
-
-fn clock_now(clockid: libc::clockid_t) -> anyhow::Result<libc::timespec> {
-    let mut now = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    let rv = unsafe { libc::clock_gettime(clockid, &mut now) };
-    ensure_ord!(rv, ==, 0);
-    Ok(now)
-}
-
-fn timespec_to_duration(ts: libc::timespec) -> Duration {
-    let secs = Duration::from_secs(ts.tv_sec.try_into().unwrap());
-    let nanos = Duration::from_nanos(ts.tv_nsec.try_into().unwrap());
-    secs + nanos
-}
-
-fn duration_abs_diff(t1: Duration, t0: Duration) -> Duration {
-    let res = t1.checked_sub(t0);
-    match res {
-        Some(d) => d,
-        None => t0.checked_sub(t1).unwrap(),
-    }
+    Ok(duration_to_timespec(request_dur))
 }
