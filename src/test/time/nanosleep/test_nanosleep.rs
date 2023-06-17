@@ -103,7 +103,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("return_values"),
                 move || test_return_values(request, remain),
-                set![TestEnvironment::Libc],
+                set![TestEnvironment::Libc, TestEnvironment::Shadow],
             )]);
         }
     }
@@ -113,12 +113,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         test_utils::ShadowTest::new(
             "sleep_duration",
             test_sleep_duration,
-            set![TestEnvironment::Libc],
+            set![TestEnvironment::Libc, TestEnvironment::Shadow],
         ),
         test_utils::ShadowTest::new(
             "interrupted_sleep",
             test_interrupted_sleep,
-            set![TestEnvironment::Libc],
+            set![TestEnvironment::Libc, TestEnvironment::Shadow],
         ),
     ]);
 

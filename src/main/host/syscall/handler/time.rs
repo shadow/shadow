@@ -171,6 +171,15 @@ impl SyscallHandler {
         }
     }
 
+    #[log_syscall(/* req */ *const std::ffi::c_void, /* rem */ *const std::ffi::c_void)]
+    pub fn nanosleep(
+        ctx: &mut SyscallContext,
+        req: ForeignPtr<linux_api::time::timespec>,
+        rem: ForeignPtr<linux_api::time::timespec>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
+        Self::nanosleep_helper(ctx, 0, req, rem, false)
+    }
+
     fn nanosleep_helper(
         ctx: &mut SyscallContext,
         flags: std::ffi::c_int,

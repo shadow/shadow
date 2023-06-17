@@ -68,6 +68,7 @@ impl SyscallHandler {
             libc::SYS_mprotect => SyscallHandlerFn::call(Self::mprotect, &mut ctx),
             libc::SYS_mremap => SyscallHandlerFn::call(Self::mremap, &mut ctx),
             libc::SYS_munmap => SyscallHandlerFn::call(Self::munmap, &mut ctx),
+            libc::SYS_nanosleep => SyscallHandlerFn::call(Self::nanosleep, &mut ctx),
             libc::SYS_open => SyscallHandlerFn::call(Self::open, &mut ctx),
             libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
