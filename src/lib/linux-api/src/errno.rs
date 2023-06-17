@@ -335,3 +335,22 @@ impl core::convert::From<linux_errno::Error> for Errno {
         Self::try_from(value.get()).unwrap()
     }
 }
+
+#[cfg(feature = "std")]
+impl core::convert::From<Errno> for std::io::Error {
+    fn from(e: Errno) -> Self {
+        Self::from_raw_os_error(e.into())
+    }
+}
+
+#[cfg(feature = "std")]
+impl core::convert::TryFrom<std::io::Error> for Errno {
+    type Error = std::io::Error;
+
+    fn try_from(e: std::io::Error) -> Result<Self, Self::Error> {
+        e.raw_os_error()
+            .and_then(|x| u16::try_from(x).ok())
+            .and_then(|x| x.try_into().ok())
+            .ok_or(e)
+    }
+}
