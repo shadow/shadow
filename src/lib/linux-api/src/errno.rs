@@ -408,3 +408,6 @@ impl core::convert::TryFrom<std::io::Error> for Errno {
             .ok_or(e)
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for Errno {}
