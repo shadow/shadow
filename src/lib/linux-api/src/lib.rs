@@ -34,7 +34,7 @@
 //!   Kernel constants such as `O_WRONLY` are typically defined as instants of
 //!   such types, and are convertible to and from the original integer types.
 
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
