@@ -13,45 +13,86 @@ impl TryFrom<u16> for Errno {
     type Error = ();
 
     fn try_from(val: u16) -> Result<Self, Self::Error> {
-        if (1..=(Self::MAX.0)).contains(&val) {
-            Ok(Self(val))
-        } else {
-            Err(())
-        }
+        Self::from_u16(val).ok_or(())
+    }
+}
+
+impl TryFrom<u32> for Errno {
+    type Error = ();
+
+    fn try_from(val: u32) -> Result<Self, Self::Error> {
+        u16::try_from(val).ok().and_then(Self::from_u16).ok_or(())
+    }
+}
+
+impl TryFrom<u64> for Errno {
+    type Error = ();
+
+    fn try_from(val: u64) -> Result<Self, Self::Error> {
+        u16::try_from(val).ok().and_then(Self::from_u16).ok_or(())
+    }
+}
+
+impl TryFrom<i16> for Errno {
+    type Error = ();
+
+    fn try_from(val: i16) -> Result<Self, Self::Error> {
+        u16::try_from(val).ok().and_then(Self::from_u16).ok_or(())
+    }
+}
+
+impl TryFrom<i32> for Errno {
+    type Error = ();
+
+    fn try_from(val: i32) -> Result<Self, Self::Error> {
+        u16::try_from(val).ok().and_then(Self::from_u16).ok_or(())
+    }
+}
+
+impl TryFrom<i64> for Errno {
+    type Error = ();
+
+    fn try_from(val: i64) -> Result<Self, Self::Error> {
+        u16::try_from(val).ok().and_then(Self::from_u16).ok_or(())
     }
 }
 
 impl From<Errno> for u16 {
+    #[inline]
     fn from(val: Errno) -> u16 {
         val.0
     }
 }
 
 impl From<Errno> for u32 {
+    #[inline]
     fn from(val: Errno) -> u32 {
         val.0.into()
     }
 }
 
 impl From<Errno> for u64 {
+    #[inline]
     fn from(val: Errno) -> u64 {
         val.0.into()
     }
 }
 
 impl From<Errno> for i32 {
+    #[inline]
     fn from(val: Errno) -> i32 {
         val.0.into()
     }
 }
 
 impl From<Errno> for i64 {
+    #[inline]
     fn from(val: Errno) -> i64 {
         val.0.into()
     }
 }
 
-fn errno_to_str(e: Errno) -> Option<&'static str> {
+const fn errno_to_str(e: Errno) -> Option<&'static str> {
     match e {
         Errno::EINVAL => Some("EINVAL"),
         Errno::EDEADLK => Some("EDEADLK"),
@@ -308,23 +349,36 @@ impl Errno {
     /// <https://github.com/torvalds/linux/blob/a4d7d701121981e3c3fe69ade376fe9f26324161/include/linux/err.h#L18>
     pub const MAX: Self = Self(4095);
 
-    /// For C interop.
-    pub fn to_negated_i64(self) -> i64 {
-        -(u16::from(self) as i64)
+    #[inline]
+    pub const fn from_u16(val: u16) -> Option<Self> {
+        const MAX: u16 = Errno::MAX.0;
+        match val {
+            1..=MAX => Some(Self(val)),
+            _ => None,
+        }
     }
 
     /// For C interop.
-    pub fn to_negated_i32(self) -> i32 {
-        -(u16::from(self) as i32)
+    #[inline]
+    pub const fn to_negated_i64(self) -> i64 {
+        let val: u16 = self.0;
+        -(val as i64)
     }
 
-    // Primarily for checked conversion of bindings constants.
+    /// For C interop.
+    #[inline]
+    pub const fn to_negated_i32(self) -> i32 {
+        let val: u16 = self.0;
+        -(val as i32)
+    }
+
+    /// Primarily for checked conversion of bindings constants.
     const fn from_u32_const(val: u32) -> Self {
-        let rv = Self(val as u16);
+        let Some(rv) = Self::from_u16(val as u16) else {
+            panic!("Could not construct an `Errno`");
+        };
         // check for truncation
         assert!(rv.0 as u32 == val);
-        // Don't allow out-of-range values
-        assert!(rv.0 <= Self::MAX.0);
         rv
     }
 }
