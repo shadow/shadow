@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use super::*;
 
@@ -9,25 +9,6 @@ pub const SLEEP_TOLERANCE: Duration = Duration::from_millis(30);
 /// When we make a sleep syscall that returns immediately, this is the tolerance we allow when
 /// checking that we did not sleep (allows for syscall execution time).
 pub const SYSCALL_EXEC_TOLERANCE: Duration = Duration::from_micros(500);
-
-pub fn check_fn_exec_duration<F>(
-    expected: Duration,
-    tolerance: Duration,
-    f: F,
-) -> anyhow::Result<()>
-where
-    F: FnOnce() -> anyhow::Result<()>,
-{
-    let before = SystemTime::now();
-    f()?;
-    let after = SystemTime::now();
-
-    let actual = after.duration_since(before)?;
-    let diff = duration_abs_diff(expected, actual);
-    ensure_ord!(diff, <=, tolerance);
-
-    Ok(())
-}
 
 pub fn clock_now_duration(clockid: libc::clockid_t) -> anyhow::Result<Duration> {
     let now = clock_now_timespec(clockid)?;

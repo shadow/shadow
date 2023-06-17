@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
 
 use nix::poll::PollFlags;
@@ -346,10 +346,10 @@ pub fn nop_sig_handler() -> nix::sys::signal::SigHandler {
     nix::sys::signal::SigHandler::Handler(nop_handler)
 }
 
-pub fn install_nop_signal_handler() -> anyhow::Result<()> {
+pub fn install_nop_signal_handler(signal: signal::Signal) -> anyhow::Result<()> {
     unsafe {
         nix::sys::signal::sigaction(
-            nix::sys::signal::SIGUSR1,
+            signal,
             &nix::sys::signal::SigAction::new(
                 nop_sig_handler(),
                 nix::sys::signal::SaFlags::empty(),
@@ -357,6 +357,25 @@ pub fn install_nop_signal_handler() -> anyhow::Result<()> {
             ),
         )?
     };
+    Ok(())
+}
+
+/// Run a function that will interrupted with `SIGUSR1` after the given timeout.
+pub fn interrupt_fn_exec<F>(interrupt_timeout: Duration, f: F) -> anyhow::Result<()>
+where
+    F: FnOnce() -> anyhow::Result<()>,
+{
+    let signo = signal::Signal::SIGUSR1;
+    install_nop_signal_handler(signo)?;
+
+    // Start a thread that will interrupt us after the timeout.
+    let interruptor = Interruptor::new(interrupt_timeout, signo);
+
+    // Run the function, which may be interrupted.
+    f()?;
+
+    // Cancel the interruptor, in case it hasn't already fired.
+    drop(interruptor);
     Ok(())
 }
 
@@ -536,5 +555,25 @@ pub fn verify_syscall_result(
         // Syscall should have returned success.
         ensure_ord!(success_rv, ==, rv);
     }
+    Ok(())
+}
+
+/// Run a function and check that it returns within an expected duration.
+pub fn check_fn_exec_duration<F>(
+    expected: Duration,
+    tolerance: Duration,
+    f: F,
+) -> anyhow::Result<()>
+where
+    F: FnOnce() -> anyhow::Result<()>,
+{
+    let before = SystemTime::now();
+    f()?;
+    let after = SystemTime::now();
+
+    let actual = after.duration_since(before)?;
+    let diff = time::duration_abs_diff(expected, actual);
+    ensure_ord!(diff, <=, tolerance);
+
     Ok(())
 }

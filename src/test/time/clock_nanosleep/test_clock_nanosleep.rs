@@ -1,8 +1,6 @@
 use std::collections::HashSet;
-use std::sync::mpsc::Sender;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use nix::unistd::Pid;
 use test_utils::time::*;
 use test_utils::{ensure_ord, set, Arg, TestEnvironment, Validity, Verify, VerifyOrder};
 
@@ -253,7 +251,7 @@ fn test_return_values(
 fn test_sleep_duration(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::Result<()> {
     let relative_dur = Duration::from_millis(1100);
     let request = create_sleep_request(clockid, flags, relative_dur)?;
-    check_fn_exec_duration(relative_dur, SLEEP_TOLERANCE, || {
+    test_utils::check_fn_exec_duration(relative_dur, SLEEP_TOLERANCE, || {
         let rv = unsafe { libc::clock_nanosleep(clockid, flags, &request, std::ptr::null_mut()) };
         ensure_ord!(0, ==, rv);
         Ok(())
@@ -268,7 +266,7 @@ fn test_abstime_in_past(clockid: libc::clockid_t) -> anyhow::Result<()> {
     let request = duration_to_timespec(past);
 
     // clock_nanosleep should return immediately, but allow some tolerance for syscall execution.
-    check_fn_exec_duration(Duration::ZERO, SYSCALL_EXEC_TOLERANCE, || {
+    test_utils::check_fn_exec_duration(Duration::ZERO, SYSCALL_EXEC_TOLERANCE, || {
         let rv = unsafe {
             libc::clock_nanosleep(clockid, libc::TIMER_ABSTIME, &request, std::ptr::null_mut())
         };
@@ -280,64 +278,33 @@ fn test_abstime_in_past(clockid: libc::clockid_t) -> anyhow::Result<()> {
 /// A clock_nanosleep interrupted by a signal handler should return EINTR.
 fn test_interrupted_sleep(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::Result<()> {
     // The signaler sleeps and then interrupts a sleeping sleeper.
-    let signaler_sleep_duration = Duration::from_millis(300);
-    let sleeper_sleep_duration = Duration::from_millis(900);
+    let intr_dur = Duration::from_millis(300);
+    let sleep_dur = Duration::from_millis(900);
 
-    test_utils::install_nop_signal_handler()?;
+    test_utils::interrupt_fn_exec(intr_dur, || {
+        let request = create_sleep_request(clockid, flags, sleep_dur)?;
+        let mut remain = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
 
-    let (sender, receiver) = std::sync::mpsc::channel::<Pid>();
-    let sleeper: std::thread::JoinHandle<_> = std::thread::spawn(move || {
-        run_interrupted_sleeper(
-            clockid,
-            flags,
-            signaler_sleep_duration,
-            sleeper_sleep_duration,
-            sender,
-        )
-    });
+        // Should be interrupted after the interrupt signal duration.
+        test_utils::check_fn_exec_duration(intr_dur, SLEEP_TOLERANCE, || {
+            let rv = unsafe { libc::clock_nanosleep(clockid, flags, &request, &mut remain) };
+            ensure_ord!(libc::EINTR, ==, rv);
+            Ok(())
+        })?;
 
-    std::thread::sleep(signaler_sleep_duration);
-    unsafe {
-        libc::syscall(libc::SYS_tkill, receiver.recv()?.as_raw(), libc::SIGUSR1);
-    }
+        if flags != libc::TIMER_ABSTIME {
+            // Check reported time remaining.
+            let remain_expected = sleep_dur.checked_sub(intr_dur).unwrap();
+            let remain_actual = timespec_to_duration(remain);
+            let remain_diff = duration_abs_diff(remain_expected, remain_actual);
+            ensure_ord!(remain_diff, <=, SLEEP_TOLERANCE);
+        }
 
-    sleeper.join().unwrap()
-}
-
-fn run_interrupted_sleeper(
-    clockid: libc::clockid_t,
-    flags: libc::c_int,
-    sig_dur: Duration,
-    sleep_dur: Duration,
-    sender: Sender<Pid>,
-) -> anyhow::Result<()> {
-    sender.send(nix::unistd::gettid()).unwrap();
-
-    let request = create_sleep_request(clockid, flags, sleep_dur)?;
-    let mut remain = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-
-    let before = SystemTime::now();
-    let rv = unsafe { libc::clock_nanosleep(clockid, flags, &request, &mut remain) };
-    let after = SystemTime::now();
-    ensure_ord!(libc::EINTR, ==, rv);
-
-    // Should have been interrupted after the signal duration.
-    let actual_dur = after.duration_since(before)?;
-    let interrupt_diff = duration_abs_diff(sig_dur, actual_dur);
-    ensure_ord!(interrupt_diff, <=, SLEEP_TOLERANCE);
-
-    if flags != libc::TIMER_ABSTIME {
-        // Check reported time remaining.
-        let remain_expected = sleep_dur.checked_sub(sig_dur).unwrap();
-        let remain_actual = timespec_to_duration(remain);
-        let remain_diff = duration_abs_diff(remain_expected, remain_actual);
-        ensure_ord!(remain_diff, <=, SLEEP_TOLERANCE);
-    }
-
-    Ok(())
+        Ok(())
+    })
 }
 
 fn create_sleep_request(
