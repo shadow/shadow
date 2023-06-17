@@ -3,8 +3,8 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -408,7 +408,7 @@ impl LegacyTcpSocket {
 
                 if rv < 0 {
                     if bytes_sent == 0 {
-                        return Err(Errno::from_i32(-rv as i32));
+                        return Err(Errno::try_from(-rv).unwrap());
                     } else {
                         break;
                     }
@@ -508,7 +508,7 @@ impl LegacyTcpSocket {
 
                 if rv < 0 {
                     if bytes_read == 0 {
-                        return Err(Errno::from_i32(-rv as i32));
+                        return Err(Errno::try_from(-rv).unwrap());
                     } else {
                         break;
                     }
@@ -792,7 +792,7 @@ impl LegacyTcpSocket {
         assert!(errcode <= 0);
 
         let mut errcode = if errcode < 0 {
-            Err(Errno::from_i32(-errcode))
+            Err(Errno::try_from(-errcode).unwrap())
         } else {
             Ok(())
         };
@@ -863,7 +863,7 @@ impl LegacyTcpSocket {
 
         if errcode < 0 {
             log::trace!("TCP error when accepting connection");
-            return Err(Errno::from_i32(-errcode).into());
+            return Err(Errno::try_from(-errcode).unwrap().into());
         }
 
         // we accepted something!
@@ -932,7 +932,7 @@ impl LegacyTcpSocket {
         assert!(errcode <= 0);
 
         if errcode < 0 {
-            return Err(Errno::from_i32(-errcode).into());
+            return Err(Errno::try_from(-errcode).unwrap().into());
         }
 
         Ok(())

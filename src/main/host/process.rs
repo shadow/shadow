@@ -12,9 +12,9 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
+use linux_api::errno::Errno;
 use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalFromI32Error};
 use log::{debug, trace, warn};
-use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
@@ -992,7 +992,7 @@ impl Process {
             panic!(
                 "Opening {}: {:?}",
                 path.to_str().unwrap(),
-                nix::errno::Errno::from_i32(-errorcode)
+                linux_api::errno::Errno::try_from(-errorcode).unwrap()
             );
         }
         let desc = unsafe {
@@ -1588,7 +1588,7 @@ mod export {
             Ok(_) => 0,
             Err(e) => {
                 trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
+                e.to_negated_i32()
             }
         }
     }
@@ -1609,7 +1609,7 @@ mod export {
             Ok(_) => 0,
             Err(e) => {
                 trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
+                e.to_negated_i32()
             }
         }
     }
@@ -1686,7 +1686,7 @@ mod export {
             .copy_str_from_ptr(buf, ForeignArrayPtr::new(ptr.cast::<u8>(), maxlen))
         {
             Ok(cstr) => cstr,
-            Err(e) => return -(e as libc::ssize_t),
+            Err(e) => return e.to_negated_i32() as isize,
         };
         cstr.to_bytes().len().try_into().unwrap()
     }
@@ -1716,7 +1716,7 @@ mod export {
                 }
                 0
             }
-            Err(e) => -(e as i32),
+            Err(e) => e.to_negated_i32(),
         }
     }
 
@@ -1955,7 +1955,7 @@ mod export {
         let proc = unsafe { proc.as_ref().unwrap() };
         match proc.free_unsafe_borrows_flush() {
             Ok(_) => 0,
-            Err(e) => -(e as i32),
+            Err(e) => e.to_negated_i32(),
         }
     }
 

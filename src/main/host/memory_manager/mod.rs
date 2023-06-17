@@ -20,10 +20,11 @@ use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 
+use linux_api::errno::Errno;
 use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
-use nix::{errno::Errno, unistd::Pid};
+use nix::unistd::Pid;
 use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -50,8 +51,7 @@ impl<'a> std::io::Read for MemoryReaderCursor<'a> {
             return Ok(0);
         }
         self.memory_manager
-            .copy_from_ptr(&mut buf[..toread], ptr.slice(..toread))
-            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+            .copy_from_ptr(&mut buf[..toread], ptr.slice(..toread))?;
         self.offset += toread;
         Ok(toread)
     }
@@ -68,7 +68,7 @@ fn seek_helper(offset: &mut usize, len: usize, pos: std::io::SeekFrom) -> std::i
     // Seeking before the beginning is an error (but seeking to or past the
     // end isn't).
     if new_offset < 0 {
-        return Err(std::io::Error::from_raw_os_error(Errno::EFAULT as i32));
+        return Err(Errno::EFAULT.into());
     }
     *offset = new_offset as usize;
     Ok(new_offset as u64)
@@ -96,8 +96,7 @@ impl<'a> std::io::Write for MemoryWriterCursor<'a> {
             return Ok(0);
         }
         self.memory_manager
-            .copy_to_ptr(ptr.slice(..towrite), &buf[..towrite])
-            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))?;
+            .copy_to_ptr(ptr.slice(..towrite), &buf[..towrite])?;
         self.offset += towrite;
         Ok(towrite)
     }
@@ -408,7 +407,7 @@ impl MemoryManager {
     /// ```no_run
     /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
     /// # use shadow_rs::host::memory_manager::MemoryManager;
-    /// # use nix::errno::Errno;
+    /// # use linux_api::errno::Errno;
     /// # fn foo() -> Result<(), Errno> {
     /// # let memory_manager: MemoryManager = todo!();
     /// let ptr: ForeignPtr<u32> = todo!();
@@ -420,7 +419,7 @@ impl MemoryManager {
     /// ```no_run
     /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
     /// # use shadow_rs::host::memory_manager::MemoryManager;
-    /// # use nix::errno::Errno;
+    /// # use linux_api::errno::Errno;
     /// # fn foo() -> Result<(), Errno> {
     /// # let memory_manager: MemoryManager = todo!();
     /// let ptr: ForeignPtr<[u32; 2]> = todo!();
@@ -442,7 +441,7 @@ impl MemoryManager {
     /// ```no_run
     /// # use shadow_shim_helper_rs::syscall_types::ForeignPtr;
     /// # use shadow_rs::host::memory_manager::MemoryManager;
-    /// # use nix::errno::Errno;
+    /// # use linux_api::errno::Errno;
     /// # fn foo() -> Result<(), Errno> {
     /// # let mut memory_manager: MemoryManager = todo!();
     /// let ptr: ForeignPtr<u32> = todo!();
@@ -876,7 +875,7 @@ mod export {
             Ok(()) => 0,
             Err(e) => {
                 warn!("Failed to flush writes");
-                -(e as i32)
+                e.to_negated_i32()
             }
         }
     }
@@ -908,7 +907,7 @@ mod export {
             Ok(_) => 0,
             Err(e) => {
                 trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
+                e.to_negated_i32()
             }
         }
     }
@@ -929,7 +928,7 @@ mod export {
             Ok(_) => 0,
             Err(e) => {
                 trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
-                -(e as i32)
+                e.to_negated_i32()
             }
         }
     }

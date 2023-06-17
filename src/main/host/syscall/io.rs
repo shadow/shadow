@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::memory_manager::MemoryManager;

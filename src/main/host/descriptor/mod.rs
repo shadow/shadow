@@ -1093,7 +1093,7 @@ mod tests {
     fn test_syscallresult_roundtrip() {
         for val in vec![
             Ok(1.into()),
-            Err(nix::errno::Errno::EPERM.into()),
+            Err(linux_api::errno::Errno::EPERM.into()),
             Err(SyscallError::Failed(Failed {
                 errno: linux_api::errno::Errno::EINTR,
                 restartable: true,

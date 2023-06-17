@@ -1,7 +1,7 @@
+use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 use linux_api::ioctls::IoctlRequest;
 use log::debug;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 

@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};

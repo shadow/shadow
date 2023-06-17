@@ -1,6 +1,6 @@
+use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, FcntlCommand, OFlag};
 use log::debug;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use syscall_logger::log_syscall;
 

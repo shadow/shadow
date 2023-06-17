@@ -1,7 +1,7 @@
+use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::rseq;
 use log::warn;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 

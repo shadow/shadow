@@ -1,6 +1,6 @@
+use linux_api::errno::Errno;
 use linux_api::time::{ClockId, ClockNanosleepFlags, ITimerId};
 use log::*;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;

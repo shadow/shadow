@@ -2,8 +2,8 @@ use std::net::SocketAddrV4;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use nix::sys::socket::Shutdown;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 

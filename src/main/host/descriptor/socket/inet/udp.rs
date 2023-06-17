@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use bytes::{Bytes, BytesMut};
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -324,7 +324,7 @@ impl UdpSocket {
 
         // if the file's writing has been shut down, return EPIPE
         if socket_ref.shutdown_status.contains(ShutdownFlags::WRITE) {
-            return Err(nix::errno::Errno::EPIPE.into());
+            return Err(linux_api::errno::Errno::EPIPE.into());
         }
 
         let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
@@ -354,7 +354,7 @@ impl UdpSocket {
 
         // TODO: should use IP fragmentation to make sure packets fit within the MTU
         if len > CONFIG_DATAGRAM_MAX_SIZE {
-            return Err(nix::errno::Errno::EMSGSIZE.into());
+            return Err(linux_api::errno::Errno::EMSGSIZE.into());
         }
 
         // make sure that we're bound

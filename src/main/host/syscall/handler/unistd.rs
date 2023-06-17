@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, OFlag};
 use linux_api::posix_types::kernel_off_t;
 use log::*;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -23,7 +23,7 @@ impl SyscallHandler {
     pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         trace!("Trying to close fd {}", fd);
 
-        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
+        let fd = fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         // according to "man 2 close", in Linux any errors that may occur will happen after the fd is
         // released, so we should always deregister the descriptor even if there's an error while
@@ -33,7 +33,7 @@ impl SyscallHandler {
             .process
             .descriptor_table_borrow_mut()
             .deregister_descriptor(fd)
-            .ok_or(nix::errno::Errno::EBADF)?;
+            .ok_or(linux_api::errno::Errno::EBADF)?;
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
@@ -76,7 +76,7 @@ impl SyscallHandler {
             return Ok(new_fd.into());
         }
 
-        let new_fd = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
+        let new_fd = new_fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
@@ -107,14 +107,14 @@ impl SyscallHandler {
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
         if old_fd == new_fd {
-            return Err(nix::errno::Errno::EINVAL.into());
+            return Err(linux_api::errno::Errno::EINVAL.into());
         }
 
-        let new_fd = new_fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
+        let new_fd = new_fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         let Some(flags) = OFlag::from_bits(flags) else {
             debug!("Invalid flags: {flags}");
-            return Err(nix::errno::Errno::EINVAL.into());
+            return Err(linux_api::errno::Errno::EINVAL.into());
         };
 
         let mut descriptor_flags = DescriptorFlags::empty();
@@ -128,7 +128,7 @@ impl SyscallHandler {
                 }
                 _ => {
                     debug!("Invalid flags for dup3: {flags:?}");
-                    return Err(nix::errno::Errno::EINVAL.into());
+                    return Err(linux_api::errno::Errno::EINVAL.into());
                 }
             }
         }
@@ -395,7 +395,7 @@ impl SyscallHandler {
     ) -> SyscallResult {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
-            return Err(nix::errno::Errno::EFAULT.into());
+            return Err(linux_api::errno::Errno::EFAULT.into());
         }
 
         let Some(flags) = OFlag::from_bits(flags) else {

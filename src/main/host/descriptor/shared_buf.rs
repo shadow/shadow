@@ -1,4 +1,4 @@
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 
 use crate::utility::byte_queue::ByteQueue;
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};

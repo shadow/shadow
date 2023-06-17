@@ -1,4 +1,4 @@
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
@@ -118,13 +118,13 @@ impl SyscallHandler {
     fn get_descriptor(
         descriptor_table: &DescriptorTable,
         fd: impl TryInto<DescriptorHandle>,
-    ) -> Result<&Descriptor, nix::errno::Errno> {
+    ) -> Result<&Descriptor, linux_api::errno::Errno> {
         // check that fd is within bounds
-        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
+        let fd = fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         match descriptor_table.get(fd) {
             Some(desc) => Ok(desc),
-            None => Err(nix::errno::Errno::EBADF),
+            None => Err(linux_api::errno::Errno::EBADF),
         }
     }
 
@@ -133,13 +133,13 @@ impl SyscallHandler {
     fn get_descriptor_mut(
         descriptor_table: &mut DescriptorTable,
         fd: impl TryInto<DescriptorHandle>,
-    ) -> Result<&mut Descriptor, nix::errno::Errno> {
+    ) -> Result<&mut Descriptor, linux_api::errno::Errno> {
         // check that fd is within bounds
-        let fd = fd.try_into().or(Err(nix::errno::Errno::EBADF))?;
+        let fd = fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         match descriptor_table.get_mut(fd) {
             Some(desc) => Ok(desc),
-            None => Err(nix::errno::Errno::EBADF),
+            None => Err(linux_api::errno::Errno::EBADF),
         }
     }
 
