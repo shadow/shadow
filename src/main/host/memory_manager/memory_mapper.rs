@@ -10,6 +10,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
+use linux_api::errno::Errno;
 use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
@@ -21,7 +22,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall_types::ForeignArrayPtr;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
@@ -628,7 +629,7 @@ impl MemoryMapper {
         new_size: usize,
         flags: i32,
         new_address: ForeignPtr<u8>,
-    ) -> Result<ForeignPtr<u8>, SyscallError> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mremap(&ctx, old_address, old_size, new_size, flags, new_address)?
@@ -754,7 +755,7 @@ impl MemoryMapper {
         &mut self,
         ctx: &ThreadContext,
         ptr: ForeignPtr<u8>,
-    ) -> Result<ForeignPtr<u8>, SyscallError> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
@@ -883,7 +884,7 @@ impl MemoryMapper {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
-    ) -> Result<i32, SyscallError> {
+    ) -> Result<i32, Errno> {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(&ctx, addr, size, prot)?;

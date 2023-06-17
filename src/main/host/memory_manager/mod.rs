@@ -619,7 +619,7 @@ impl MemoryManager {
         ptr: ForeignPtr<u8>,
     ) -> Result<ForeignPtr<u8>, SyscallError> {
         match &mut self.memory_mapper {
-            Some(mm) => mm.handle_brk(ctx, ptr),
+            Some(mm) => Ok(mm.handle_brk(ctx, ptr)?),
             None => Err(SyscallError::Native),
         }
     }
@@ -667,7 +667,7 @@ impl MemoryManager {
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
         length: usize,
-    ) -> nix::Result<()> {
+    ) -> Result<(), Errno> {
         let (ctx, thread) = ctx.split_thread();
         thread.native_munmap(&ctx, addr, length)?;
         if let Some(mm) = &mut self.memory_mapper {
@@ -686,7 +686,9 @@ impl MemoryManager {
         new_address: ForeignPtr<u8>,
     ) -> Result<ForeignPtr<u8>, SyscallError> {
         match &mut self.memory_mapper {
-            Some(mm) => mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address),
+            Some(mm) => {
+                Ok(mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address)?)
+            }
             None => Err(SyscallError::Native),
         }
     }
@@ -699,7 +701,7 @@ impl MemoryManager {
         prot: i32,
     ) -> Result<i32, SyscallError> {
         match &mut self.memory_mapper {
-            Some(mm) => mm.handle_mprotect(ctx, addr, size, prot),
+            Some(mm) => Ok(mm.handle_mprotect(ctx, addr, size, prot)?),
             None => Err(SyscallError::Native),
         }
     }

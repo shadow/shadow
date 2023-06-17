@@ -20,12 +20,3 @@ pub fn raw_return_value_to_result(rv: i64) -> Result<SysCallReg, linux_api::errn
 
     Ok(rv.into())
 }
-
-/// For legacy code that uses the nix [`Errno`](nix::errno::Errno).
-pub fn raw_return_value_to_nix_result(rv: i64) -> Result<SysCallReg, nix::errno::Errno> {
-    if (-MAX_ERRNO..=-1).contains(&rv) {
-        return Err(nix::errno::Errno::from_i32(-rv as i32));
-    }
-
-    Ok(rv.into())
-}
