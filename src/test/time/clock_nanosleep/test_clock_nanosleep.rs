@@ -3,90 +3,7 @@ use std::sync::mpsc::Sender;
 use std::time::{Duration, SystemTime};
 
 use nix::unistd::Pid;
-use test_utils::{ensure_ord, nop_sig_handler, set, TestEnvironment};
-
-#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-enum VerifyOrder {
-    ClockId,
-    Request,
-    Flags,
-}
-
-#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-struct Verify {
-    order: VerifyOrder,
-    rv: Option<libc::c_int>,
-    errno: Option<libc::c_int>,
-}
-
-impl Verify {
-    fn new(order: VerifyOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
-        Verify { order, rv, errno }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum Validity {
-    Valid,
-    Invalid(Verify),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Arg<T> {
-    value: T,
-    validity: Validity,
-}
-
-impl<T> Arg<T> {
-    fn new(value: T, validity: Validity) -> Self {
-        Arg::<T> { value, validity }
-    }
-}
-
-/// Returns Verify items for those with invalid Validity.
-fn filter_discard_valid(vals: &[Validity]) -> Vec<&Verify> {
-    vals.iter()
-        .filter_map(|v| match v {
-            Validity::Invalid(verify) => Some(verify),
-            _ => None,
-        })
-        .collect()
-}
-
-fn verify_syscall_result(
-    vals: Vec<Validity>,
-    success_rv: libc::c_int,
-    rv: libc::c_int,
-    errno: libc::c_int,
-) -> anyhow::Result<()> {
-    // We want to ensure we have the correct error for invalid values.
-    let mut check = filter_discard_valid(&vals);
-
-    // Check the error according to the ordering defined by the caller.
-    check.sort();
-
-    if let Some(error) = check.first() {
-        // Should have been error, which are returned in rv (not in errno)
-        if let Some(expected_rv) = error.rv {
-            ensure_ord!(expected_rv, ==, rv);
-        }
-        if let Some(expected_errno) = error.errno {
-            ensure_ord!(expected_errno, ==, errno);
-        }
-    } else {
-        // Syscall should have returned success.
-        ensure_ord!(success_rv, ==, rv);
-    }
-    Ok(())
-}
-
-/// When we go to sleep, this is the tolerance we allow when checking that we slept the correct
-/// amount of time (allows for imprecise kernel wakeups or thread preemption).
-const SLEEP_TOLERANCE: Duration = Duration::from_millis(30);
-
-/// When we make a sleep syscall that returns immediately, this is the tolerance we allow when
-/// checking that we did not sleep (allows for syscall execution time).
-const SYSCALL_EXEC_TOLERANCE: Duration = Duration::from_micros(500);
+use test_utils::{ensure_ord, set, Arg, TestEnvironment, Validity, Verify, VerifyOrder};
 
 // For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
 // arg (see kernel/time/posix-timers.c). But for the *_ALARM clocks, Linux returns EINVAL if you set
@@ -130,19 +47,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         Arg::new(libc::CLOCK_PROCESS_CPUTIME_ID, Validity::Valid),
         Arg::new(
             libc::CLOCK_THREAD_CPUTIME_ID,
-            Validity::Invalid(Verify::new(VerifyOrder::ClockId, Some(libc::EINVAL), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::EINVAL), None)),
         ),
         Arg::new(
             libc::CLOCK_MONOTONIC_RAW,
-            Validity::Invalid(Verify::new(VerifyOrder::ClockId, Some(libc::ENOTSUP), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
         ),
         Arg::new(
             libc::CLOCK_REALTIME_COARSE,
-            Validity::Invalid(Verify::new(VerifyOrder::ClockId, Some(libc::ENOTSUP), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
         ),
         Arg::new(
             libc::CLOCK_MONOTONIC_COARSE,
-            Validity::Invalid(Verify::new(VerifyOrder::ClockId, Some(libc::ENOTSUP), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
         ),
     ];
 
@@ -164,25 +81,25 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 tv_sec: -1,
                 tv_nsec: 0,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Request, Some(libc::EINVAL), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
         ),
         Arg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: -1,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Request, Some(libc::EINVAL), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
         ),
         Arg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 1_000_000_000,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Request, Some(libc::EINVAL), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
         ),
         Arg::new(
             std::ptr::null(),
-            Validity::Invalid(Verify::new(VerifyOrder::Request, Some(libc::EFAULT), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EFAULT), None)),
         ),
     ];
 
@@ -210,7 +127,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                     };
 
                     // The test should succeed if there are no invalid args.
-                    let should_succeed = filter_discard_valid(&[
+                    let should_succeed = test_utils::filter_discard_valid(&[
                         clockid.validity,
                         flag.validity,
                         request.validity,
@@ -267,7 +184,7 @@ fn get_flags(clockid: libc::clockid_t, flags: &[Arg<libc::c_int>]) -> Vec<Arg<li
     let new_arg = if SPECIAL_ALARM_CLOCKIDS.contains(&clockid) {
         Arg::new(
             flag_with_unspec_bits,
-            Validity::Invalid(Verify::new(VerifyOrder::Flags, Some(libc::EINVAL), None)),
+            Validity::Invalid(Verify::new(VerifyOrder::Third, Some(libc::EINVAL), None)),
         )
     } else {
         Arg::new(flag_with_unspec_bits, Validity::Valid)
@@ -327,7 +244,7 @@ fn test_return_values(
     ];
 
     // `clock_nanosleep` returns 0 on success.
-    verify_syscall_result(validation, 0, rv, errno)?;
+    test_utils::verify_syscall_result(validation, 0, rv, errno)?;
 
     Ok(())
 }
@@ -343,7 +260,7 @@ fn test_sleep_duration(clockid: libc::clockid_t, flags: libc::c_int) -> anyhow::
 
     let actual_dur = after.duration_since(before)?;
     let diff = duration_abs_diff(relative_dur, actual_dur);
-    ensure_ord!(diff, <=, SLEEP_TOLERANCE);
+    ensure_ord!(diff, <=, test_utils::time::SLEEP_TOLERANCE);
 
     Ok(())
 }
@@ -367,7 +284,7 @@ fn test_abstime_in_past(clockid: libc::clockid_t) -> anyhow::Result<()> {
 
     // Syscall returns immediately, but allow some tolerance for syscall execution.
     let actual_dur = after.duration_since(before)?;
-    ensure_ord!(actual_dur, <=, SYSCALL_EXEC_TOLERANCE);
+    ensure_ord!(actual_dur, <=, test_utils::time::SYSCALL_EXEC_TOLERANCE);
 
     Ok(())
 }
@@ -378,7 +295,7 @@ fn test_interrupted_sleep(clockid: libc::clockid_t, flags: libc::c_int) -> anyho
     let signaler_sleep_duration = Duration::from_millis(300);
     let sleeper_sleep_duration = Duration::from_millis(900);
 
-    install_signal_handler()?;
+    test_utils::install_nop_signal_handler()?;
 
     let (sender, receiver) = std::sync::mpsc::channel::<Pid>();
     let sleeper: std::thread::JoinHandle<_> = std::thread::spawn(move || {
@@ -422,30 +339,16 @@ fn run_interrupted_sleeper(
     // Should have been interrupted after the signal duration.
     let actual_dur = after.duration_since(before)?;
     let interrupt_diff = duration_abs_diff(sig_dur, actual_dur);
-    ensure_ord!(interrupt_diff, <=, SLEEP_TOLERANCE);
+    ensure_ord!(interrupt_diff, <=, test_utils::time::SLEEP_TOLERANCE);
 
     if flags != libc::TIMER_ABSTIME {
         // Check reported time remaining.
         let remain_expected = sleep_dur.checked_sub(sig_dur).unwrap();
         let remain_actual = timespec_to_duration(remain);
         let remain_diff = duration_abs_diff(remain_expected, remain_actual);
-        ensure_ord!(remain_diff, <=, SLEEP_TOLERANCE);
+        ensure_ord!(remain_diff, <=, test_utils::time::SLEEP_TOLERANCE);
     }
 
-    Ok(())
-}
-
-fn install_signal_handler() -> anyhow::Result<()> {
-    unsafe {
-        nix::sys::signal::sigaction(
-            nix::sys::signal::SIGUSR1,
-            &nix::sys::signal::SigAction::new(
-                nop_sig_handler(),
-                nix::sys::signal::SaFlags::empty(),
-                nix::sys::signal::SigSet::empty(),
-            ),
-        )?
-    };
     Ok(())
 }
 

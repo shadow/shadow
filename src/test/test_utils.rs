@@ -16,6 +16,7 @@ use nix::sys::signal;
 use nix::sys::time::TimeVal;
 
 pub mod socket_utils;
+pub mod time;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TestEnvironment {
@@ -345,6 +346,20 @@ pub fn nop_sig_handler() -> nix::sys::signal::SigHandler {
     nix::sys::signal::SigHandler::Handler(nop_handler)
 }
 
+pub fn install_nop_signal_handler() -> anyhow::Result<()> {
+    unsafe {
+        nix::sys::signal::sigaction(
+            nix::sys::signal::SIGUSR1,
+            &nix::sys::signal::SigAction::new(
+                nop_sig_handler(),
+                nix::sys::signal::SaFlags::empty(),
+                nix::sys::signal::SigSet::empty(),
+            ),
+        )?
+    };
+    Ok(())
+}
+
 /// Convenience wrapper around `anyhow::ensure` that generates useful error messages.
 ///
 /// Example:
@@ -444,4 +459,82 @@ where
     iov.into_iter()
         .map(|x| std::io::IoSliceMut::new(x.as_mut()))
         .collect()
+}
+
+#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub enum VerifyOrder {
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+}
+
+#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Verify {
+    pub order: VerifyOrder,
+    pub rv: Option<libc::c_int>,
+    pub errno: Option<libc::c_int>,
+}
+
+impl Verify {
+    pub fn new(order: VerifyOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
+        Verify { order, rv, errno }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Validity {
+    Valid,
+    Invalid(Verify),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Arg<T> {
+    pub value: T,
+    pub validity: Validity,
+}
+
+impl<T> Arg<T> {
+    pub fn new(value: T, validity: Validity) -> Self {
+        Arg::<T> { value, validity }
+    }
+}
+
+/// Returns Verify items for those with invalid Validity.
+pub fn filter_discard_valid(vals: &[Validity]) -> Vec<&Verify> {
+    vals.iter()
+        .filter_map(|v| match v {
+            Validity::Invalid(verify) => Some(verify),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn verify_syscall_result(
+    vals: Vec<Validity>,
+    success_rv: libc::c_int,
+    rv: libc::c_int,
+    errno: libc::c_int,
+) -> anyhow::Result<()> {
+    // We want to ensure we have the correct error for invalid values.
+    let mut check = filter_discard_valid(&vals);
+
+    // Check the error according to the ordering defined by the caller.
+    check.sort();
+
+    if let Some(error) = check.first() {
+        // Should have been error, which are returned in rv (not in errno)
+        if let Some(expected_rv) = error.rv {
+            ensure_ord!(expected_rv, ==, rv);
+        }
+        if let Some(expected_errno) = error.errno {
+            ensure_ord!(expected_errno, ==, errno);
+        }
+    } else {
+        // Syscall should have returned success.
+        ensure_ord!(success_rv, ==, rv);
+    }
+    Ok(())
 }
