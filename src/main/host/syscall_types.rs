@@ -185,18 +185,6 @@ impl From<SyscallResult> for SyscallReturn {
     }
 }
 
-impl From<nix::errno::Errno> for SyscallError {
-    fn from(e: nix::errno::Errno) -> Self {
-        SyscallError::Failed(Failed {
-            // the nix Errno is an enum that only contains valid errno values and 0, so this
-            // should only panic for 0 values (Errno::UnknownErrno) which we wouldn't want to use
-            // anyway
-            errno: Errno::try_from(u16::try_from(e as i32).unwrap()).unwrap(),
-            restartable: false,
-        })
-    }
-}
-
 impl From<linux_api::errno::Errno> for SyscallError {
     fn from(e: linux_api::errno::Errno) -> Self {
         SyscallError::Failed(Failed {
