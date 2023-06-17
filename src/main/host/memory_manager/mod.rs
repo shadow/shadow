@@ -613,7 +613,11 @@ impl MemoryManager {
         }
     }
 
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<u8>) -> SyscallResult {
+    pub fn handle_brk(
+        &mut self,
+        ctx: &ThreadContext,
+        ptr: ForeignPtr<u8>,
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_brk(ctx, ptr),
             None => Err(SyscallError::Native),
@@ -680,7 +684,7 @@ impl MemoryManager {
         new_size: usize,
         flags: i32,
         new_address: ForeignPtr<u8>,
-    ) -> SyscallResult {
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address),
             None => Err(SyscallError::Native),
@@ -693,7 +697,7 @@ impl MemoryManager {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
-    ) -> SyscallResult {
+    ) -> Result<i32, SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => mm.handle_mprotect(ctx, addr, size, prot),
             None => Err(SyscallError::Native),

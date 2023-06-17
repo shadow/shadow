@@ -1797,9 +1797,10 @@ mod export {
                     flags,
                     new_addr.cast::<u8>(),
                 )
-                .into()
+                .map(Into::into)
         })
         .unwrap()
+        .into()
     }
 
     #[no_mangle]
@@ -1821,9 +1822,10 @@ mod export {
                     size,
                     prot,
                 )
-                .into()
+                .map(Into::into)
         })
         .unwrap()
+        .into()
     }
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
@@ -1842,9 +1844,10 @@ mod export {
                     &ThreadContext::new(host, process, thread),
                     plugin_src.cast::<u8>(),
                 )
-                .into()
+                .map(Into::into)
         })
         .unwrap()
+        .into()
     }
 
     /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
