@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
-use nix::sched::CpuSet;
-use nix::unistd::Pid;
+use rustix::process::{CpuSet, Pid};
 use vasi_sync::scchannel::SelfContainedChannel;
 
 /// Mock-up of Ipc between Shadow and its plugin.
@@ -13,19 +12,21 @@ use vasi_sync::scchannel::SelfContainedChannel;
 #[repr(align(128))]
 struct Ipc(SelfContainedChannel<()>, SelfContainedChannel<()>);
 
+const PID_ZERO: Option<Pid> = unsafe { Pid::from_raw(0) };
+
 fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
-    let initial_cpu_set = nix::sched::sched_getaffinity(Pid::from_raw(0)).unwrap();
+    let initial_cpu_set = rustix::process::sched_getaffinity(PID_ZERO).unwrap();
     let pinned_cpu_id = (0..)
         .into_iter()
-        .find(|i| initial_cpu_set.is_set(*i).unwrap())
+        .find(|i| initial_cpu_set.is_set(*i))
         .unwrap();
     let pinned_cpu_set = {
         let mut s = CpuSet::new();
-        s.set(pinned_cpu_id).unwrap();
+        s.set(pinned_cpu_id);
         s
     };
     if do_pinning {
-        nix::sched::sched_setaffinity(Pid::from_raw(0), &pinned_cpu_set).unwrap();
+        rustix::process::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
     }
 
     let ipc = Arc::new(Ipc(
@@ -37,7 +38,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
         let ipc = ipc.clone();
         std::thread::spawn(move || {
             if do_pinning {
-                nix::sched::sched_setaffinity(Pid::from_raw(0), &pinned_cpu_set).unwrap();
+                rustix::process::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
             }
             loop {
                 if ipc.0.receive().is_err() {
@@ -56,7 +57,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
     ipc.0.close_writer();
     receiver_thread.join().unwrap();
     if do_pinning {
-        nix::sched::sched_setaffinity(Pid::from_raw(0), &initial_cpu_set).unwrap();
+        rustix::process::sched_setaffinity(PID_ZERO, &initial_cpu_set).unwrap();
     }
 }
 

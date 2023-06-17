@@ -13,6 +13,7 @@ vasi = { path = "../vasi" }
 [dev-dependencies]
 criterion = "0.5.1"
 rand = "0.8.5"
+rustix = { version = "0.37.19", default-features = false, features=["process"] }
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
