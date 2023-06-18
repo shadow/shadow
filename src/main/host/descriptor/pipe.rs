@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
@@ -130,12 +130,12 @@ impl Pipe {
     ) -> Result<libc::ssize_t, SyscallError> {
         // pipes don't support seeking
         if offset.is_some() {
-            return Err(nix::errno::Errno::ESPIPE.into());
+            return Err(linux_api::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for reading, return EBADF
         if !self.mode.contains(FileMode::READ) {
-            return Err(nix::errno::Errno::EBADF.into());
+            return Err(linux_api::errno::Errno::EBADF.into());
         }
 
         let num_bytes_to_read: libc::size_t = iovs.iter().map(|x| x.len).sum();
@@ -173,18 +173,18 @@ impl Pipe {
     ) -> Result<libc::ssize_t, SyscallError> {
         // pipes don't support seeking
         if offset.is_some() {
-            return Err(nix::errno::Errno::ESPIPE.into());
+            return Err(linux_api::errno::Errno::ESPIPE.into());
         }
 
         // if the file is not open for writing, return EBADF
         if !self.mode.contains(FileMode::WRITE) {
-            return Err(nix::errno::Errno::EBADF.into());
+            return Err(linux_api::errno::Errno::EBADF.into());
         }
 
         let mut buffer = self.buffer.as_ref().unwrap().borrow_mut();
 
         if buffer.num_readers() == 0 {
-            return Err(nix::errno::Errno::EPIPE.into());
+            return Err(linux_api::errno::Errno::EPIPE.into());
         }
 
         if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {

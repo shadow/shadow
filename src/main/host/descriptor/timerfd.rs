@@ -2,9 +2,9 @@ use std::io::Write;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use linux_api::posix_types::kernel_off_t;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::{
     emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
 };

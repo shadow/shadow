@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;

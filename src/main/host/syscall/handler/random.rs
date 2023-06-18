@@ -1,5 +1,5 @@
+use linux_api::errno::Errno;
 use log::*;
-use nix::errno::Errno;
 use rand::RngCore;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;

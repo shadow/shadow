@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Deref;
 
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
@@ -74,8 +74,8 @@ impl Thread {
         ctx: &ProcessContext,
         n: i64,
         args: &[SysCallReg],
-    ) -> nix::Result<SysCallReg> {
-        syscall::raw_return_value_to_nix_result(self.native_syscall_raw(ctx, n, args))
+    ) -> Result<SysCallReg, Errno> {
+        syscall::raw_return_value_to_result(self.native_syscall_raw(ctx, n, args))
     }
 
     pub fn process_id(&self) -> ProcessId {
@@ -150,7 +150,7 @@ impl Thread {
         ctx: &ProcessContext,
         ptr: ForeignPtr<u8>,
         size: usize,
-    ) -> nix::Result<()> {
+    ) -> Result<(), Errno> {
         self.native_syscall(ctx, libc::SYS_munmap, &[ptr.into(), size.into()])?;
         Ok(())
     }
@@ -165,7 +165,7 @@ impl Thread {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> nix::Result<ForeignPtr<u8>> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -191,7 +191,7 @@ impl Thread {
         new_len: usize,
         flags: i32,
         new_addr: ForeignPtr<u8>,
-    ) -> nix::Result<ForeignPtr<u8>> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         Ok(self
             .native_syscall(
                 ctx,
@@ -214,7 +214,7 @@ impl Thread {
         addr: ForeignPtr<u8>,
         len: usize,
         prot: i32,
-    ) -> nix::Result<()> {
+    ) -> Result<(), Errno> {
         self.native_syscall(
             ctx,
             libc::SYS_mprotect,
@@ -234,7 +234,7 @@ impl Thread {
         pathname: ForeignPtr<u8>,
         flags: i32,
         mode: i32,
-    ) -> nix::Result<i32> {
+    ) -> Result<i32, Errno> {
         let res = self.native_syscall(
             ctx,
             libc::SYS_open,
@@ -248,7 +248,7 @@ impl Thread {
     }
 
     /// Natively execute close(2) on the given thread.
-    pub fn native_close(&self, ctx: &ProcessContext, fd: i32) -> nix::Result<()> {
+    pub fn native_close(&self, ctx: &ProcessContext, fd: i32) -> Result<(), Errno> {
         self.native_syscall(ctx, libc::SYS_close, &[SysCallReg::from(fd)])?;
         Ok(())
     }
@@ -258,7 +258,7 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         addr: ForeignPtr<u8>,
-    ) -> nix::Result<ForeignPtr<u8>> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
@@ -269,7 +269,7 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         size: usize,
-    ) -> nix::Result<ForeignPtr<u8>> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         // SAFETY: No pointer specified; can't pass a bad one.
         self.native_mmap(
             ctx,
@@ -288,7 +288,7 @@ impl Thread {
         ctx: &ProcessContext,
         ptr: ForeignPtr<u8>,
         size: usize,
-    ) -> nix::Result<()> {
+    ) -> Result<(), Errno> {
         self.native_munmap(ctx, ptr, size)?;
         Ok(())
     }

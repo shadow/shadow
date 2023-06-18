@@ -4,8 +4,8 @@ use std::ops::DerefMut;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::errno::Errno;
 use nix::sys::socket::{MsgFlags, Shutdown};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -2048,13 +2048,13 @@ impl UnixSocketCommon {
                     } else {
                         send_buffer
                             .write_stream(reader, len, cb_queue)
-                            .map_err(|e| e.try_into().unwrap())?
+                            .map_err(|e| Errno::try_from(e).unwrap())?
                     }
                 }
                 UnixSocketType::Dgram | UnixSocketType::SeqPacket => {
                     send_buffer
                         .write_packet(reader, len, cb_queue)
-                        .map_err(|e| e.try_into().unwrap())?;
+                        .map_err(|e| Errno::try_from(e).unwrap())?;
                     len
                 }
             };
@@ -2123,7 +2123,7 @@ impl UnixSocketCommon {
 
             let (num_copied, num_removed_from_buf) = recv_buffer
                 .read(writer, cb_queue)
-                .map_err(|e| e.try_into().unwrap())?;
+                .map_err(|e| Errno::try_from(e).unwrap())?;
 
             let mut msg_flags = 0;
 
@@ -2195,16 +2195,16 @@ fn lookup_address(
     namespace: &AbstractUnixNamespace,
     socket_type: UnixSocketType,
     addr: &SockaddrUnix<&libc::sockaddr_un>,
-) -> Result<Arc<AtomicRefCell<UnixSocket>>, nix::errno::Errno> {
+) -> Result<Arc<AtomicRefCell<UnixSocket>>, linux_api::errno::Errno> {
     // if an abstract address
     if let Some(name) = addr.as_abstract() {
         // look up the socket from the address name
         namespace
             .lookup(socket_type, name)
-            .ok_or(nix::errno::Errno::ECONNREFUSED)
+            .ok_or(linux_api::errno::Errno::ECONNREFUSED)
     } else {
         log::warn!("Unix sockets with pathname addresses are not yet supported");
-        Err(nix::errno::Errno::ENOENT)
+        Err(linux_api::errno::Errno::ENOENT)
     }
 }
 

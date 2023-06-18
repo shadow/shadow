@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
+use linux_api::errno::Errno;
 use log::*;
-use nix::{errno::Errno, unistd::Pid};
+use nix::unistd::Pid;
 use shadow_pod::Pod;
 
 use crate::core::worker::Worker;
@@ -181,7 +182,8 @@ impl MemoryCopier {
         })
         .unwrap();
 
-        let nread = nix::sys::uio::process_vm_readv(tid, dsts, srcs)?;
+        let nread = nix::sys::uio::process_vm_readv(tid, dsts, srcs)
+            .map_err(|e| Errno::try_from(e as i32).unwrap())?;
 
         Ok(nread)
     }
@@ -229,7 +231,8 @@ impl MemoryCopier {
         })
         .unwrap();
 
-        let nwritten = nix::sys::uio::process_vm_writev(tid, &local, &remote)?;
+        let nwritten = nix::sys::uio::process_vm_writev(tid, &local, &remote)
+            .map_err(|e| Errno::try_from(e as i32).unwrap())?;
         // There shouldn't be any partial writes with a single remote iovec.
         assert_eq!(nwritten, towrite);
         Ok(())

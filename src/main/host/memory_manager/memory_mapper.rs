@@ -10,6 +10,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
+use linux_api::errno::Errno;
 use log::*;
 use nix::sys::memfd::MemFdCreateFlag;
 use nix::unistd::Pid;
@@ -21,7 +22,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall_types::ForeignArrayPtr;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
@@ -628,7 +629,7 @@ impl MemoryMapper {
         new_size: usize,
         flags: i32,
         new_address: ForeignPtr<u8>,
-    ) -> SyscallResult {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let new_address = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mremap(&ctx, old_address, old_size, new_size, flags, new_address)?
@@ -652,7 +653,7 @@ impl MemoryMapper {
             assert_eq!(region.shadow_base, std::ptr::null_mut());
             let mutations = self.regions.insert(new_interval, region);
             self.unmap_mutations(mutations);
-            return Ok(new_address.into());
+            return Ok(new_address);
         }
 
         // Clear and retrieve the old mapping.
@@ -744,20 +745,24 @@ impl MemoryMapper {
         let mutations = self.regions.insert(new_interval, region);
         assert_eq!(mutations.len(), 0);
 
-        Ok(new_address.into())
+        Ok(new_address)
     }
 
     /// Execute the requested `brk` and update our mappings accordingly. May invalidate outstanding
     /// pointers. (Rust won't allow mutable methods such as this one to be called with outstanding
     /// borrowed references).
-    pub fn handle_brk(&mut self, ctx: &ThreadContext, ptr: ForeignPtr<u8>) -> SyscallResult {
+    pub fn handle_brk(
+        &mut self,
+        ctx: &ThreadContext,
+        ptr: ForeignPtr<u8>,
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let requested_brk = usize::from(ptr);
 
         // On error, brk syscall returns current brk (end of heap). The only errors we specifically
         // handle is trying to set the end of heap before the start. In practice this case is
         // generally triggered with a NULL argument to get the current brk value.
         if requested_brk < self.heap.start {
-            return Ok(ForeignPtr::from(self.heap.end).into());
+            return Ok(ForeignPtr::from(self.heap.end).cast::<u8>());
         }
 
         // Unclear how to handle a non-page-size increment. panic for now.
@@ -766,7 +771,7 @@ impl MemoryMapper {
         // Not aware of this happening in practice, but handle this case specifically so we can
         // assume it's not the case below.
         if requested_brk == self.heap.end {
-            return Ok(ptr.into());
+            return Ok(ptr);
         }
 
         let opt_heap_interval_and_region = self.regions.get(self.heap.start);
@@ -859,7 +864,7 @@ impl MemoryMapper {
         }
         self.heap = new_heap;
 
-        Ok(ForeignPtr::from(requested_brk).into())
+        Ok(ForeignPtr::from(requested_brk).cast::<u8>())
     }
 
     /// Shadow should delegate a plugin's call to mprotect to this method.
@@ -879,7 +884,7 @@ impl MemoryMapper {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: i32,
-    ) -> SyscallResult {
+    ) -> Result<i32, Errno> {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(&ctx, addr, size, prot)?;
@@ -996,7 +1001,7 @@ impl MemoryMapper {
                 }
             }
         }
-        Ok(0.into())
+        Ok(0)
     }
 
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.

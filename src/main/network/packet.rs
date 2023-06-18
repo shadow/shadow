@@ -8,7 +8,7 @@ use crate::host::network::interface::FifoPacketPriority;
 use crate::host::syscall::io::IoVec;
 use crate::utility::pcap_writer::PacketDisplay;
 
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 
 #[repr(i32)]
@@ -126,7 +126,7 @@ impl PacketRc {
         &self,
         iovs: impl IntoIterator<Item = &'a IoVec>,
         mem: &mut MemoryManager,
-    ) -> Result<usize, nix::errno::Errno> {
+    ) -> Result<usize, linux_api::errno::Errno> {
         let iovs = iovs.into_iter();
         let mut bytes_copied = 0;
 
@@ -142,7 +142,7 @@ impl PacketRc {
             };
 
             if rv < 0 {
-                return Err(Errno::from_i32(i32::try_from(-rv).unwrap()));
+                return Err(Errno::try_from(-rv).unwrap());
             }
 
             let rv = rv as u64;
