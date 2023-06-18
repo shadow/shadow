@@ -169,6 +169,10 @@ name = "test_time"
 path = "time/time/test_time.rs"
 
 [[bin]]
+name = "test_clock_getres"
+path = "time/clock_getres/test_clock_getres.rs"
+
+[[bin]]
 name = "test_clock_nanosleep"
 path = "time/clock_nanosleep/test_clock_nanosleep.rs"
 
