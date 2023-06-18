@@ -6,34 +6,20 @@
 use std::time::{Duration, Instant};
 
 use nix::unistd;
+use test_utils::time::duration_abs_diff;
 
 type SleepFn = (fn(u32) -> Option<Duration>, &'static str);
 type TimeFn = (fn(libc::clockid_t) -> Duration, &'static str);
 
-const SLEEP_FNS: [SleepFn; 4] = [
-    (sleep, "sleep"),
-    (usleep, "usleep"),
-    (nanosleep, "nanosleep"),
-    (clock_nanosleep, "clock_nanosleep"),
-];
+const SLEEP_FNS: [SleepFn; 2] = [(sleep, "sleep"), (usleep, "usleep")];
 const TIME_FNS: [TimeFn; 2] = [
     (call_clock_gettime, "call_clock_gettime"),
     (syscall_clock_gettime, "syscall_clock_gettime"),
 ];
 
-fn duration_abs_diff(t1: Duration, t0: Duration) -> Duration {
-    let res = t1.checked_sub(t0);
-    match res {
-        Some(d) => d,
-        None => t0.checked_sub(t1).unwrap(),
-    }
-}
-
 fn main() {
     sleep_and_test();
     sleep_and_signal_test();
-    clock_nanosleep_with_abstime();
-    clock_nanosleep_with_past_abstime();
     println!("Success.");
 }
 
@@ -125,65 +111,6 @@ fn sleep_and_signal_test() {
     }
 }
 
-fn clock_nanosleep_with_abstime() {
-    let clock = libc::CLOCK_MONOTONIC;
-
-    // get time time before sleeping
-    let before = call_clock_gettime(clock);
-
-    // sleep until the current absolute time + 500 ms
-    let sleep_duration = Duration::from_millis(500);
-    let stop = before + sleep_duration;
-    let stop = libc::timespec {
-        tv_sec: stop.as_secs().try_into().unwrap(),
-        tv_nsec: stop.subsec_nanos().try_into().unwrap(),
-    };
-    let mut rem = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    assert_eq!(0, unsafe {
-        libc::clock_nanosleep(clock, libc::TIMER_ABSTIME, &stop, &mut rem)
-    });
-
-    // get time after sleeping
-    let after = call_clock_gettime(clock);
-
-    let tolerance = Duration::from_millis(30);
-    let duration = after - before;
-    assert!(duration_abs_diff(sleep_duration, duration) < tolerance);
-}
-
-fn clock_nanosleep_with_past_abstime() {
-    let clock = libc::CLOCK_MONOTONIC;
-
-    // get time time before sleeping
-    let before = call_clock_gettime(clock);
-
-    // sleep until the current absolute time - 500 ms
-    let stop = before - Duration::from_millis(500);
-    let stop = libc::timespec {
-        tv_sec: stop.as_secs().try_into().unwrap(),
-        tv_nsec: stop.subsec_nanos().try_into().unwrap(),
-    };
-    let mut rem = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    assert_eq!(0, unsafe {
-        libc::clock_nanosleep(clock, libc::TIMER_ABSTIME, &stop, &mut rem)
-    });
-
-    // get time after sleeping
-    let after = call_clock_gettime(clock);
-
-    // should have returned immediately, but the syscall itself may have taken a small amount of
-    // time
-    let tolerance = Duration::from_micros(500);
-    let duration = after - before;
-    assert!(duration_abs_diff(Duration::ZERO, duration) < tolerance);
-}
-
 fn sleep(seconds: u32) -> Option<Duration> {
     let rv;
     unsafe {
@@ -213,56 +140,6 @@ fn usleep(seconds: u32) -> Option<Duration> {
             Duration::from_secs(seconds.into())
                 .checked_sub(t1.duration_since(t0))
                 .unwrap(),
-        )
-    }
-}
-
-fn nanosleep(seconds: u32) -> Option<Duration> {
-    let stop = libc::timespec {
-        tv_sec: seconds as i64,
-        tv_nsec: 0,
-    };
-    let mut rem = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    let rv;
-    let e;
-    unsafe {
-        rv = libc::nanosleep(&stop, &mut rem);
-        e = *libc::__errno_location();
-    }
-    if rv != 0 {
-        assert_eq!(e, libc::EINTR);
-        Some(
-            Duration::from_secs(rem.tv_sec.try_into().unwrap())
-                + Duration::from_nanos(rem.tv_nsec.try_into().unwrap()),
-        )
-    } else {
-        None
-    }
-}
-
-fn clock_nanosleep(seconds: u32) -> Option<Duration> {
-    let stop = libc::timespec {
-        tv_sec: seconds as i64,
-        tv_nsec: 0,
-    };
-    let mut rem = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    let rv;
-    unsafe {
-        rv = libc::clock_nanosleep(libc::CLOCK_MONOTONIC, 0, &stop, &mut rem);
-    }
-    if rv == 0 {
-        None
-    } else {
-        assert_eq!(rv, libc::EINTR);
-        Some(
-            Duration::from_secs(rem.tv_sec.try_into().unwrap())
-                + Duration::from_nanos(rem.tv_nsec.try_into().unwrap()),
         )
     }
 }
