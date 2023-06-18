@@ -78,12 +78,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 test_utils::ShadowTest::new(
                     &append_args("clock_gerres"),
                     move || test_clock_getres(clockid, resolution),
-                    set![TestEnvironment::Libc],
+                    set![TestEnvironment::Libc, TestEnvironment::Shadow],
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("syscall_clock_gerres"),
                     move || test_syscall_clock_getres(clockid, resolution),
-                    set![TestEnvironment::Libc],
+                    set![TestEnvironment::Libc, TestEnvironment::Shadow],
                 ),
             ]);
         }

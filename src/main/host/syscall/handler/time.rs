@@ -98,6 +98,27 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
+    #[log_syscall(/* clock_id */ linux_api::time::ClockId, /* res */ *const std::ffi::c_void)]
+    pub fn clock_getres(
+        ctx: &mut SyscallContext,
+        clock_id: linux_api::time::linux___kernel_clockid_t,
+        res_ptr: ForeignPtr<linux_api::time::timespec>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
+        // Make sure we have a valid clock id.
+        ClockId::try_from(clock_id).map_err(|_| Errno::EINVAL)?;
+
+        // All clocks have nanosecond resolution.
+        if !res_ptr.is_null() {
+            let res_time = linux_api::time::timespec::try_from(SimulationTime::NANOSECOND).unwrap();
+            ctx.objs
+                .process
+                .memory_borrow_mut()
+                .write(res_ptr, &res_time)?;
+        }
+
+        Ok(0)
+    }
+
     #[log_syscall(/* clock_id */ linux_api::time::ClockId,
         /* flags */ linux_api::time::ClockNanosleepFlags,
         /* request */ *const std::ffi::c_void,
