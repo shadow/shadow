@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use test_utils::time::*;
-use test_utils::{ensure_ord, set, Arg, TestEnvironment, Validity, Verify, VerifyOrder};
+use test_utils::{ensure_ord, set, FuzzArg, FuzzError, TestEnvironment, VerifyOrder};
 
 // For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
 // arg (see kernel/time/posix-timers.c). But for the *_ALARM clocks, Linux returns EINVAL if you set
@@ -37,80 +37,108 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
 
     // Encodes how Linux checks for invalid args, which we found experimentally.
     let clockids = vec![
-        Arg::new(libc::CLOCK_REALTIME, Validity::Valid),
-        Arg::new(libc::CLOCK_TAI, Validity::Valid),
-        Arg::new(libc::CLOCK_MONOTONIC, Validity::Valid),
-        Arg::new(libc::CLOCK_BOOTTIME, Validity::Valid),
-        Arg::new(libc::CLOCK_REALTIME_ALARM, Validity::Valid),
-        Arg::new(libc::CLOCK_BOOTTIME_ALARM, Validity::Valid),
-        Arg::new(libc::CLOCK_PROCESS_CPUTIME_ID, Validity::Valid),
-        Arg::new(
+        FuzzArg::new(libc::CLOCK_REALTIME, Ok(())),
+        FuzzArg::new(libc::CLOCK_TAI, Ok(())),
+        FuzzArg::new(libc::CLOCK_MONOTONIC, Ok(())),
+        FuzzArg::new(libc::CLOCK_BOOTTIME, Ok(())),
+        FuzzArg::new(libc::CLOCK_REALTIME_ALARM, Ok(())),
+        FuzzArg::new(libc::CLOCK_BOOTTIME_ALARM, Ok(())),
+        FuzzArg::new(libc::CLOCK_PROCESS_CPUTIME_ID, Ok(())),
+        FuzzArg::new(
             libc::CLOCK_THREAD_CPUTIME_ID,
-            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(VerifyOrder::First, Some(libc::EINVAL), None)),
         ),
-        Arg::new(
+        FuzzArg::new(
             libc::CLOCK_MONOTONIC_RAW,
-            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
+            Err(FuzzError::new(
+                VerifyOrder::First,
+                Some(libc::ENOTSUP),
+                None,
+            )),
         ),
-        Arg::new(
+        FuzzArg::new(
             libc::CLOCK_REALTIME_COARSE,
-            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
+            Err(FuzzError::new(
+                VerifyOrder::First,
+                Some(libc::ENOTSUP),
+                None,
+            )),
         ),
-        Arg::new(
+        FuzzArg::new(
             libc::CLOCK_MONOTONIC_COARSE,
-            Validity::Invalid(Verify::new(VerifyOrder::First, Some(libc::ENOTSUP), None)),
+            Err(FuzzError::new(
+                VerifyOrder::First,
+                Some(libc::ENOTSUP),
+                None,
+            )),
         ),
     ];
 
     let flags = vec![
-        Arg::new(0, Validity::Valid),
-        Arg::new(libc::TIMER_ABSTIME, Validity::Valid),
+        FuzzArg::new(0, Ok(())),
+        FuzzArg::new(libc::TIMER_ABSTIME, Ok(())),
     ];
 
-    let requests: Vec<Arg<*const libc::timespec>> = vec![
-        Arg::new(
+    let requests: Vec<FuzzArg<*const libc::timespec>> = vec![
+        FuzzArg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 0,
             },
-            Validity::Valid,
+            Ok(()),
         ),
-        Arg::new(
+        FuzzArg::new(
             &libc::timespec {
                 tv_sec: -1,
                 tv_nsec: 0,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(
+                VerifyOrder::Second,
+                Some(libc::EINVAL),
+                None,
+            )),
         ),
-        Arg::new(
+        FuzzArg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: -1,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(
+                VerifyOrder::Second,
+                Some(libc::EINVAL),
+                None,
+            )),
         ),
-        Arg::new(
+        FuzzArg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 1_000_000_000,
             },
-            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(
+                VerifyOrder::Second,
+                Some(libc::EINVAL),
+                None,
+            )),
         ),
-        Arg::new(
+        FuzzArg::new(
             std::ptr::null(),
-            Validity::Invalid(Verify::new(VerifyOrder::Second, Some(libc::EFAULT), None)),
+            Err(FuzzError::new(
+                VerifyOrder::Second,
+                Some(libc::EFAULT),
+                None,
+            )),
         ),
     ];
 
-    let remains: Vec<Arg<*mut libc::timespec>> = vec![
-        Arg::new(
+    let remains: Vec<FuzzArg<*mut libc::timespec>> = vec![
+        FuzzArg::new(
             &mut libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 0,
             },
-            Validity::Valid,
+            Ok(()),
         ),
-        Arg::new(std::ptr::null_mut(), Validity::Valid),
+        FuzzArg::new(std::ptr::null_mut(), Ok(())),
     ];
 
     // Test all combinations of valid/invalid args.
@@ -127,10 +155,10 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
 
                     // The test should succeed if there are no invalid args.
                     let should_succeed = test_utils::filter_discard_valid(&[
-                        clockid.validity,
-                        flag.validity,
-                        request.validity,
-                        remain.validity,
+                        clockid.expected_result,
+                        flag.expected_result,
+                        request.expected_result,
+                        remain.expected_result,
                     ])
                     .is_empty();
 
@@ -145,8 +173,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
     }
 
     // Test only valid syscall behavior.
-    for &clockid in clockids.iter().filter(|c| c.validity == Validity::Valid) {
-        for &flag in flags.iter().filter(|f| f.validity == Validity::Valid) {
+    for &clockid in clockids.iter().filter(|c| c.expected_result.is_ok()) {
+        for &flag in flags.iter().filter(|f| f.expected_result.is_ok()) {
             let append_args =
                 |s| format!("{} <clockid={:?},flags={:?}", s, clockid.value, flag.value);
 
@@ -176,17 +204,20 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
     tests
 }
 
-fn get_flags(clockid: libc::clockid_t, flags: &[Arg<libc::c_int>]) -> Vec<Arg<libc::c_int>> {
+fn get_flags(
+    clockid: libc::clockid_t,
+    flags: &[FuzzArg<libc::c_int>],
+) -> Vec<FuzzArg<libc::c_int>> {
     // See doc for `SPECIAL_ALARM_CLOCKIDS`
     let flag_with_unspec_bits = libc::TIMER_ABSTIME | 0x1111;
 
     let new_arg = if SPECIAL_ALARM_CLOCKIDS.contains(&clockid) {
-        Arg::new(
+        FuzzArg::new(
             flag_with_unspec_bits,
-            Validity::Invalid(Verify::new(VerifyOrder::Third, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(VerifyOrder::Third, Some(libc::EINVAL), None)),
         )
     } else {
-        Arg::new(flag_with_unspec_bits, Validity::Valid)
+        FuzzArg::new(flag_with_unspec_bits, Ok(()))
     };
 
     let mut new_flags = flags.to_owned();
@@ -221,10 +252,10 @@ fn get_passing_test_envs(
 }
 
 fn test_return_values(
-    clockid: Arg<libc::clockid_t>,
-    flags: Arg<libc::c_int>,
-    request: Arg<*const libc::timespec>,
-    remain: Arg<*mut libc::timespec>,
+    clockid: FuzzArg<libc::clockid_t>,
+    flags: FuzzArg<libc::c_int>,
+    request: FuzzArg<*const libc::timespec>,
+    remain: FuzzArg<*mut libc::timespec>,
 ) -> anyhow::Result<()> {
     // Notably, errors are returned as positive return value, not in errno.
     let (rv, errno) = unsafe {
@@ -235,15 +266,15 @@ fn test_return_values(
     };
 
     // Args may be valid or invalid.
-    let validation = vec![
-        clockid.validity,
-        flags.validity,
-        request.validity,
-        remain.validity,
+    let results = vec![
+        clockid.expected_result,
+        flags.expected_result,
+        request.expected_result,
+        remain.expected_result,
     ];
 
     // `clock_nanosleep` returns 0 on success.
-    test_utils::verify_syscall_result(validation, 0, rv, errno)?;
+    test_utils::verify_syscall_result(results, 0, rv, errno)?;
 
     Ok(())
 }

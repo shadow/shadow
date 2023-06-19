@@ -480,6 +480,9 @@ where
         .collect()
 }
 
+/// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
+/// invalid values for multiple syscall args, this ordering enables us to determine which invalid
+/// arg's associated error code is expected to be returned.
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum VerifyOrder {
     First,
@@ -490,82 +493,102 @@ pub enum VerifyOrder {
     Sixth,
 }
 
+/// Helps us fuzz syscalls by encoding syscall argument fuzz values and the syscall result we expect
+/// from Linux.
+#[derive(Debug, Copy, Clone)]
+pub struct FuzzArg<T> {
+    /// The fuzz value to pass as an argument to a syscall.
+    pub value: T,
+    /// The expected result for passing the arg value into the syscall. If we expect the value to
+    /// produce an error, the expected rv and/or errno are encoded in `FuzzerError`.
+    pub expected_result: FuzzResult,
+}
+
+impl<T> FuzzArg<T> {
+    /// Create a new `FuzzArg` without manually specifying the `FuzzArg` struct.
+    pub fn new(value: T, expected_result: FuzzResult) -> Self {
+        FuzzArg::<T> {
+            value,
+            expected_result,
+        }
+    }
+}
+
+/// Encodes the expected result of a particular syscall arg.
+pub type FuzzResult = Result<(), FuzzError>;
+
+/// Encodes that a fuzz test is expected to produce a syscall error. When validating a result, the
+/// syscall rv and errno are optionally verfied if provided.
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Verify {
+pub struct FuzzError {
+    /// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
+    /// invalid values for multiple syscall args, this ordering enables us to determine which
+    /// invalid arg's associated error code is expected to be returned.
     pub order: VerifyOrder,
+    /// If `Some`, this return value is expected as a syscall result.
     pub rv: Option<libc::c_int>,
+    /// If `Some`, this errno value is expected as a syscall result.
     pub errno: Option<libc::c_int>,
 }
 
-impl Verify {
+impl FuzzError {
+    /// Encode that a new syscall error with priority `order` should have occurred, optionally
+    /// causing return val `rv` and/or `errno` to be returned.
     pub fn new(order: VerifyOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
-        Verify { order, rv, errno }
+        FuzzError { order, rv, errno }
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Validity {
-    Valid,
-    Invalid(Verify),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Arg<T> {
-    pub value: T,
-    pub validity: Validity,
-}
-
-impl<T> Arg<T> {
-    pub fn new(value: T, validity: Validity) -> Self {
-        Arg::<T> { value, validity }
-    }
-}
-
-/// Returns Verify items for those with invalid Validity.
-pub fn filter_discard_valid(vals: &[Validity]) -> Vec<&Verify> {
-    vals.iter()
+/// Returns `FuzzError` items for the results where we expect errors.
+pub fn filter_discard_valid(results: &[FuzzResult]) -> Vec<&FuzzError> {
+    results
+        .iter()
         .filter_map(|v| match v {
-            Validity::Invalid(verify) => Some(verify),
+            Err(verify) => Some(verify),
             _ => None,
         })
         .collect()
 }
 
+/// Check that the actual syscall retval and errno matches the expected results.
 pub fn verify_syscall_result(
-    vals: Vec<Validity>,
-    success_rv: libc::c_int,
-    rv: libc::c_int,
-    errno: libc::c_int,
+    expected_results: Vec<FuzzResult>,
+    expected_success_rv: libc::c_int,
+    actual_rv: libc::c_int,
+    actual_errno: libc::c_int,
 ) -> anyhow::Result<()> {
     // We want to ensure we have the correct error for invalid values.
-    let mut check = filter_discard_valid(&vals);
+    let mut expected_errors = filter_discard_valid(&expected_results);
 
     // Check the error according to the ordering defined by the caller.
-    check.sort();
+    expected_errors.sort();
 
-    if let Some(error) = check.first() {
-        // Should have been error, which are returned in rv (not in errno)
+    if let Some(error) = expected_errors.first() {
+        // The caller encoded that this should have been error.
         if let Some(expected_rv) = error.rv {
-            ensure_ord!(expected_rv, ==, rv);
+            // The caller wants to validate the return value.
+            ensure_ord!(expected_rv, ==, actual_rv);
         }
         if let Some(expected_errno) = error.errno {
-            ensure_ord!(expected_errno, ==, errno);
+            // The caller wants to validate the errno.
+            ensure_ord!(expected_errno, ==, actual_errno);
         }
     } else {
-        // Syscall should have returned success.
-        ensure_ord!(success_rv, ==, rv);
+        // The caller encoded that the syscall should have returned success.
+        ensure_ord!(expected_success_rv, ==, actual_rv);
     }
     Ok(())
 }
 
 /// Run a function and check that it returns within an expected duration.
-pub fn check_fn_exec_duration<F>(
+pub fn check_fn_exec_duration<F, E>(
     expected: Duration,
     tolerance: Duration,
     f: F,
 ) -> anyhow::Result<()>
 where
-    F: FnOnce() -> anyhow::Result<()>,
+    F: FnOnce() -> Result<(), E>,
+    anyhow::Error: From<E>,
 {
     let before = SystemTime::now();
     f()?;
