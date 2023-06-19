@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use test_utils::time::*;
-use test_utils::{ensure_ord, set, FuzzArg, FuzzError, TestEnvironment, VerifyOrder};
+use test_utils::{ensure_ord, set, FuzzArg, FuzzError, FuzzOrder, TestEnvironment};
 
 // For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
 // arg (see kernel/time/posix-timers.c). But for the *_ALARM clocks, Linux returns EINVAL if you set
@@ -46,31 +46,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         FuzzArg::new(libc::CLOCK_PROCESS_CPUTIME_ID, Ok(())),
         FuzzArg::new(
             libc::CLOCK_THREAD_CPUTIME_ID,
-            Err(FuzzError::new(VerifyOrder::First, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(FuzzOrder::First, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
             libc::CLOCK_MONOTONIC_RAW,
-            Err(FuzzError::new(
-                VerifyOrder::First,
-                Some(libc::ENOTSUP),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::First, Some(libc::ENOTSUP), None)),
         ),
         FuzzArg::new(
             libc::CLOCK_REALTIME_COARSE,
-            Err(FuzzError::new(
-                VerifyOrder::First,
-                Some(libc::ENOTSUP),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::First, Some(libc::ENOTSUP), None)),
         ),
         FuzzArg::new(
             libc::CLOCK_MONOTONIC_COARSE,
-            Err(FuzzError::new(
-                VerifyOrder::First,
-                Some(libc::ENOTSUP),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::First, Some(libc::ENOTSUP), None)),
         ),
     ];
 
@@ -92,41 +80,25 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 tv_sec: -1,
                 tv_nsec: 0,
             },
-            Err(FuzzError::new(
-                VerifyOrder::Second,
-                Some(libc::EINVAL),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: -1,
             },
-            Err(FuzzError::new(
-                VerifyOrder::Second,
-                Some(libc::EINVAL),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
             &libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 1_000_000_000,
             },
-            Err(FuzzError::new(
-                VerifyOrder::Second,
-                Some(libc::EINVAL),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
             std::ptr::null(),
-            Err(FuzzError::new(
-                VerifyOrder::Second,
-                Some(libc::EFAULT),
-                None,
-            )),
+            Err(FuzzError::new(FuzzOrder::Second, Some(libc::EFAULT), None)),
         ),
     ];
 
@@ -214,7 +186,7 @@ fn get_flags(
     let new_arg = if SPECIAL_ALARM_CLOCKIDS.contains(&clockid) {
         FuzzArg::new(
             flag_with_unspec_bits,
-            Err(FuzzError::new(VerifyOrder::Third, Some(libc::EINVAL), None)),
+            Err(FuzzError::new(FuzzOrder::Third, Some(libc::EINVAL), None)),
         )
     } else {
         FuzzArg::new(flag_with_unspec_bits, Ok(()))

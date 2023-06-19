@@ -1,4 +1,4 @@
-use test_utils::{set, FuzzArg, FuzzError, TestEnvironment, VerifyOrder};
+use test_utils::{set, FuzzArg, FuzzError, FuzzOrder, TestEnvironment};
 
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?
@@ -39,7 +39,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         FuzzArg::new(
             128,
             Err(FuzzError::new(
-                VerifyOrder::First,
+                FuzzOrder::First,
                 Some(-1),
                 Some(libc::EINVAL),
             )),
@@ -47,7 +47,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         FuzzArg::new(
             -1,
             Err(FuzzError::new(
-                VerifyOrder::First,
+                FuzzOrder::First,
                 Some(-1),
                 Some(libc::EINVAL),
             )),
