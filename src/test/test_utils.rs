@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::io::Write;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
 
 use nix::poll::PollFlags;
@@ -16,6 +16,7 @@ use nix::sys::signal;
 use nix::sys::time::TimeVal;
 
 pub mod socket_utils;
+pub mod time;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TestEnvironment {
@@ -345,6 +346,39 @@ pub fn nop_sig_handler() -> nix::sys::signal::SigHandler {
     nix::sys::signal::SigHandler::Handler(nop_handler)
 }
 
+pub fn install_nop_signal_handler(signal: signal::Signal) -> anyhow::Result<()> {
+    unsafe {
+        nix::sys::signal::sigaction(
+            signal,
+            &nix::sys::signal::SigAction::new(
+                nop_sig_handler(),
+                nix::sys::signal::SaFlags::empty(),
+                nix::sys::signal::SigSet::empty(),
+            ),
+        )?
+    };
+    Ok(())
+}
+
+/// Run a function that will interrupted with `SIGUSR1` after the given timeout.
+pub fn interrupt_fn_exec<F>(interrupt_timeout: Duration, f: F) -> anyhow::Result<()>
+where
+    F: FnOnce() -> anyhow::Result<()>,
+{
+    let signo = signal::Signal::SIGUSR1;
+    install_nop_signal_handler(signo)?;
+
+    // Start a thread that will interrupt us after the timeout.
+    let interruptor = Interruptor::new(interrupt_timeout, signo);
+
+    // Run the function, which may be interrupted.
+    f()?;
+
+    // Cancel the interruptor, in case it hasn't already fired.
+    drop(interruptor);
+    Ok(())
+}
+
 /// Convenience wrapper around `anyhow::ensure` that generates useful error messages.
 ///
 /// Example:
@@ -444,4 +478,125 @@ where
     iov.into_iter()
         .map(|x| std::io::IoSliceMut::new(x.as_mut()))
         .collect()
+}
+
+/// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
+/// invalid values for multiple syscall args, this ordering enables us to determine which invalid
+/// arg's associated error code is expected to be returned.
+#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub enum VerifyOrder {
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+}
+
+/// Helps us fuzz syscalls by encoding syscall argument fuzz values and the syscall result we expect
+/// from Linux.
+#[derive(Debug, Copy, Clone)]
+pub struct FuzzArg<T> {
+    /// The fuzz value to pass as an argument to a syscall.
+    pub value: T,
+    /// The expected result for passing the arg value into the syscall. If we expect the value to
+    /// produce an error, the expected rv and/or errno are encoded in `FuzzerError`.
+    pub expected_result: FuzzResult,
+}
+
+impl<T> FuzzArg<T> {
+    /// Create a new `FuzzArg` without manually specifying the `FuzzArg` struct.
+    pub fn new(value: T, expected_result: FuzzResult) -> Self {
+        FuzzArg::<T> {
+            value,
+            expected_result,
+        }
+    }
+}
+
+/// Encodes the expected result of a particular syscall arg.
+pub type FuzzResult = Result<(), FuzzError>;
+
+/// Encodes that a fuzz test is expected to produce a syscall error. When validating a result, the
+/// syscall rv and errno are optionally verfied if provided.
+#[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct FuzzError {
+    /// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
+    /// invalid values for multiple syscall args, this ordering enables us to determine which
+    /// invalid arg's associated error code is expected to be returned.
+    pub order: VerifyOrder,
+    /// If `Some`, this return value is expected as a syscall result.
+    pub rv: Option<libc::c_int>,
+    /// If `Some`, this errno value is expected as a syscall result.
+    pub errno: Option<libc::c_int>,
+}
+
+impl FuzzError {
+    /// Encode that a new syscall error with priority `order` should have occurred, optionally
+    /// causing return val `rv` and/or `errno` to be returned.
+    pub fn new(order: VerifyOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
+        FuzzError { order, rv, errno }
+    }
+}
+
+/// Returns `FuzzError` items for the results where we expect errors.
+pub fn filter_discard_valid(results: &[FuzzResult]) -> Vec<&FuzzError> {
+    results
+        .iter()
+        .filter_map(|v| match v {
+            Err(verify) => Some(verify),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Check that the actual syscall retval and errno matches the expected results.
+pub fn verify_syscall_result(
+    expected_results: Vec<FuzzResult>,
+    expected_success_rv: libc::c_int,
+    actual_rv: libc::c_int,
+    actual_errno: libc::c_int,
+) -> anyhow::Result<()> {
+    // We want to ensure we have the correct error for invalid values.
+    let mut expected_errors = filter_discard_valid(&expected_results);
+
+    // Check the error according to the ordering defined by the caller.
+    expected_errors.sort();
+
+    if let Some(error) = expected_errors.first() {
+        // The caller encoded that this should have been error.
+        if let Some(expected_rv) = error.rv {
+            // The caller wants to validate the return value.
+            ensure_ord!(expected_rv, ==, actual_rv);
+        }
+        if let Some(expected_errno) = error.errno {
+            // The caller wants to validate the errno.
+            ensure_ord!(expected_errno, ==, actual_errno);
+        }
+    } else {
+        // The caller encoded that the syscall should have returned success.
+        ensure_ord!(expected_success_rv, ==, actual_rv);
+    }
+    Ok(())
+}
+
+/// Run a function and check that it returns within an expected duration.
+pub fn check_fn_exec_duration<F, E>(
+    expected: Duration,
+    tolerance: Duration,
+    f: F,
+) -> anyhow::Result<()>
+where
+    F: FnOnce() -> Result<(), E>,
+    anyhow::Error: From<E>,
+{
+    let before = SystemTime::now();
+    f()?;
+    let after = SystemTime::now();
+
+    let actual = after.duration_since(before)?;
+    let diff = time::duration_abs_diff(expected, actual);
+    ensure_ord!(diff, <=, tolerance);
+
+    Ok(())
 }
