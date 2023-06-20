@@ -67,50 +67,50 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
         FuzzArg::new(libc::TIMER_ABSTIME, Ok(())),
     ];
 
-    let requests: Vec<FuzzArg<*const libc::timespec>> = vec![
+    let requests: Vec<FuzzArg<Option<libc::timespec>>> = vec![
         FuzzArg::new(
-            &libc::timespec {
+            Some(libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 0,
-            },
+            }),
             Ok(()),
         ),
         FuzzArg::new(
-            &libc::timespec {
+            Some(libc::timespec {
                 tv_sec: -1,
                 tv_nsec: 0,
-            },
+            }),
             Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
-            &libc::timespec {
+            Some(libc::timespec {
                 tv_sec: 0,
                 tv_nsec: -1,
-            },
+            }),
             Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
-            &libc::timespec {
+            Some(libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 1_000_000_000,
-            },
+            }),
             Err(FuzzError::new(FuzzOrder::Second, Some(libc::EINVAL), None)),
         ),
         FuzzArg::new(
-            std::ptr::null(),
+            None,
             Err(FuzzError::new(FuzzOrder::Second, Some(libc::EFAULT), None)),
         ),
     ];
 
-    let remains: Vec<FuzzArg<*mut libc::timespec>> = vec![
+    let remains: Vec<FuzzArg<Option<libc::timespec>>> = vec![
         FuzzArg::new(
-            &mut libc::timespec {
+            Some(libc::timespec {
                 tv_sec: 0,
                 tv_nsec: 0,
-            },
+            }),
             Ok(()),
         ),
-        FuzzArg::new(std::ptr::null_mut(), Ok(())),
+        FuzzArg::new(None, Ok(())),
     ];
 
     // Test all combinations of valid/invalid args.
@@ -226,15 +226,26 @@ fn get_passing_test_envs(
 fn test_return_values(
     clockid: FuzzArg<libc::clockid_t>,
     flags: FuzzArg<libc::c_int>,
-    request: FuzzArg<*const libc::timespec>,
-    remain: FuzzArg<*mut libc::timespec>,
+    request: FuzzArg<Option<libc::timespec>>,
+    mut remain: FuzzArg<Option<libc::timespec>>,
 ) -> anyhow::Result<()> {
     // Notably, errors are returned as positive return value, not in errno.
-    let (rv, errno) = unsafe {
-        (
-            libc::clock_nanosleep(clockid.value, flags.value, request.value, remain.value),
-            *libc::__errno_location(),
-        )
+    let (rv, errno) = {
+        let request_ptr = request
+            .value
+            .as_ref()
+            .map_or(std::ptr::null(), |v| v as *const libc::timespec);
+        let remain_ptr = remain
+            .value
+            .as_mut()
+            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+
+        unsafe {
+            (
+                libc::clock_nanosleep(clockid.value, flags.value, request_ptr, remain_ptr),
+                *libc::__errno_location(),
+            )
+        }
     };
 
     // Args may be valid or invalid.
