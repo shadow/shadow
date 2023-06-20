@@ -82,7 +82,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
             };
 
             // NULL timespec causes SEGFAULT on Linux.
-            let mut passing = set![];
+            let mut passing = set![TestEnvironment::Shadow];
             if ts.value.is_some() {
                 passing.insert(TestEnvironment::Libc);
             }
