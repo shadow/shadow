@@ -1274,6 +1274,59 @@ pub unsafe fn rt_sigaction(
     }
 }
 
+/// For use with [`rt_sigprocmask`].
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigProcMaskAction {
+    SIG_BLOCK = const_conversions::i32_from_u32(bindings::LINUX_SIG_BLOCK),
+    SIG_UNBLOCK = const_conversions::i32_from_u32(bindings::LINUX_SIG_UNBLOCK),
+    SIG_SETMASK = const_conversions::i32_from_u32(bindings::LINUX_SIG_SETMASK),
+}
+
+/// Make the `rt_sigprocmask` syscall.
+///
+/// # Safety
+///
+/// * `sigset_in` must be safe to dereference
+/// * `sigset_out` must be safe to write (uninit is ok)
+pub unsafe fn rt_sigprocmask_raw(
+    how: i32,
+    sigset_in: *const sigset_t,
+    sigset_out: *mut sigset_t,
+    sigset_sz: usize,
+) -> Result<(), Errno> {
+    unsafe {
+        syscall!(
+            linux_syscall::SYS_rt_sigprocmask,
+            how,
+            sigset_in,
+            sigset_out,
+            sigset_sz,
+        )
+        .check()
+        .map_err(Errno::from)
+    }
+}
+
+/// Make the `rt_sigprocmask` syscall.
+pub fn rt_sigprocmask(
+    how: SigProcMaskAction,
+    sigset_in: &sigset_t,
+    sigset_out: Option<&mut sigset_t>,
+) -> Result<(), Errno> {
+    unsafe {
+        rt_sigprocmask_raw(
+            how.into(),
+            sigset_in,
+            sigset_out
+                .map(|s| s as *mut _)
+                .unwrap_or(core::ptr::null_mut()),
+            core::mem::size_of::<sigset_t>(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod rt_sigaction_tests {
     use core::sync::atomic::AtomicI32;
@@ -1314,17 +1367,7 @@ mod rt_sigaction_tests {
         // Ensure the signal isn't blocked.
         let mut old_mask: sigset_t = sigset_t::EMPTY;
         let mask = sigset_t::from(signal);
-        unsafe {
-            linux_syscall::syscall!(
-                linux_syscall::SYS_rt_sigprocmask,
-                bindings::LINUX_SIG_UNBLOCK,
-                &mask,
-                &mut old_mask,
-                core::mem::size_of::<sigset_t>()
-            )
-        }
-        .check()
-        .unwrap();
+        rt_sigprocmask(SigProcMaskAction::SIG_UNBLOCK, &mask, Some(&mut old_mask)).unwrap();
 
         // Send the signal to this thread. This should guarantee that the signal
         // is handled before returning from the `tgkill` syscall.
@@ -1345,17 +1388,7 @@ mod rt_sigaction_tests {
         assert_eq!(CALL_COUNTER.load(core::sync::atomic::Ordering::Relaxed), 1);
 
         // Restore previous signal action and mask.
-        unsafe {
-            linux_syscall::syscall!(
-                linux_syscall::SYS_rt_sigprocmask,
-                bindings::LINUX_SIG_SETMASK,
-                &old_mask,
-                core::ptr::null_mut::<sigset_t>(),
-                core::mem::size_of::<sigset_t>()
-            )
-        }
-        .check()
-        .unwrap();
+        rt_sigprocmask(SigProcMaskAction::SIG_SETMASK, &old_mask, None).unwrap();
         unsafe { rt_sigaction(signal, &old_action, None) }.unwrap();
     }
 }
