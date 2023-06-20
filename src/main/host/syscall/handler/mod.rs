@@ -43,6 +43,7 @@ impl SyscallHandler {
             libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
             libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
             libc::SYS_brk => SyscallHandlerFn::call(Self::brk, &mut ctx),
+            libc::SYS_clock_getres => SyscallHandlerFn::call(Self::clock_getres, &mut ctx),
             libc::SYS_clock_nanosleep => SyscallHandlerFn::call(Self::clock_nanosleep, &mut ctx),
             libc::SYS_clone => SyscallHandlerFn::call(Self::clone, &mut ctx),
             libc::SYS_clone3 => SyscallHandlerFn::call(Self::clone3, &mut ctx),

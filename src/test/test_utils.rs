@@ -484,7 +484,7 @@ where
 /// invalid values for multiple syscall args, this ordering enables us to determine which invalid
 /// arg's associated error code is expected to be returned.
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub enum VerifyOrder {
+pub enum FuzzOrder {
     First,
     Second,
     Third,
@@ -521,10 +521,8 @@ pub type FuzzResult = Result<(), FuzzError>;
 /// syscall rv and errno are optionally verfied if provided.
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct FuzzError {
-    /// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
-    /// invalid values for multiple syscall args, this ordering enables us to determine which
-    /// invalid arg's associated error code is expected to be returned.
-    pub order: VerifyOrder,
+    /// Encodes the order in which Linux checks the syscall args.
+    pub order: FuzzOrder,
     /// If `Some`, this return value is expected as a syscall result.
     pub rv: Option<libc::c_int>,
     /// If `Some`, this errno value is expected as a syscall result.
@@ -534,7 +532,7 @@ pub struct FuzzError {
 impl FuzzError {
     /// Encode that a new syscall error with priority `order` should have occurred, optionally
     /// causing return val `rv` and/or `errno` to be returned.
-    pub fn new(order: VerifyOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
+    pub fn new(order: FuzzOrder, rv: Option<libc::c_int>, errno: Option<libc::c_int>) -> Self {
         FuzzError { order, rv, errno }
     }
 }
