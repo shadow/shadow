@@ -11,5 +11,6 @@
 #include <linux/signal.h>
 #include <linux/sockios.h>
 #include <linux/time.h>
+#include <linux/unistd.h>
 
 #include <asm/ioctls.h>
