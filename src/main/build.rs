@@ -360,7 +360,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/select.c",
         "host/syscall/shadow.c",
         "host/syscall/signal.c",
-        "host/syscall/time.c",
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
         "host/syscall_condition.c",

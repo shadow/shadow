@@ -180,6 +180,10 @@ path = "time/clock_gettime/test_clock_gettime.rs"
 name = "test_clock_nanosleep"
 path = "time/clock_nanosleep/test_clock_nanosleep.rs"
 
+[[bin]]
+name = "test_nanosleep"
+path = "time/nanosleep/test_nanosleep.rs"
+
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 libc = "0.2"

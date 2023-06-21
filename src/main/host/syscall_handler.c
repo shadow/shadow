@@ -34,7 +34,6 @@
 #include "main/host/syscall/select.h"
 #include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
-#include "main/host/syscall/time.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
@@ -383,7 +382,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(mprotect);
             HANDLE_RUST(mremap);
             HANDLE_RUST(munmap);
-            HANDLE_C(nanosleep);
+            HANDLE_RUST(nanosleep);
             HANDLE_C(newfstatat);
             HANDLE_RUST(open);
             HANDLE_RUST(openat);

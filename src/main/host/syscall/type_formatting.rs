@@ -95,7 +95,7 @@ macro_rules! deref_pointer_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{} ({:p})", &(*vals)[0], ptr),
+                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
@@ -164,6 +164,7 @@ simple_display_impl!(u8, u16, u32, u64, usize);
 
 deref_pointer_impl!(i8, i16, i32, i64, isize);
 deref_pointer_impl!(u8, u16, u32, u64, usize);
+deref_pointer_impl!(linux_api::time::timespec);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
