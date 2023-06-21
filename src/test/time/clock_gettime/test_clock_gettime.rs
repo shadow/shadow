@@ -81,7 +81,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 )
             };
 
-            // NULL timespec causes SEGFAULT on Linux.
+            // NULL ts causes SEGFAULT in glibc on Linux (but the direct syscall works OK).
             let mut passing = set![TestEnvironment::Shadow];
             if ts.value.is_some() {
                 passing.insert(TestEnvironment::Libc);
@@ -91,12 +91,12 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), anyhow::Error>> {
                 test_utils::ShadowTest::new(
                     &append_args("clock_gettime"),
                     move || test_clock_gettime(clockid, ts),
-                    passing.clone(),
+                    passing,
                 ),
                 test_utils::ShadowTest::new(
                     &append_args("syscall_clock_gettime"),
                     move || test_syscall_clock_gettime(clockid, ts),
-                    passing,
+                    set![TestEnvironment::Libc, TestEnvironment::Shadow],
                 ),
             ]);
         }
