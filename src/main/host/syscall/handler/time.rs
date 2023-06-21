@@ -121,7 +121,7 @@ impl SyscallHandler {
 
     #[log_syscall(/* clock_id */ linux_api::time::ClockId,
         /* flags */ linux_api::time::ClockNanosleepFlags,
-        /* request */ *const std::ffi::c_void,
+        /* request */ *const linux_api::time::timespec,
         /* remain */ *const std::ffi::c_void)]
     pub fn clock_nanosleep(
         ctx: &mut SyscallContext,
@@ -171,7 +171,7 @@ impl SyscallHandler {
         }
     }
 
-    #[log_syscall(/* req */ *const std::ffi::c_void, /* rem */ *const std::ffi::c_void)]
+    #[log_syscall(/* req */ *const linux_api::time::timespec, /* rem */ *const std::ffi::c_void)]
     pub fn nanosleep(
         ctx: &mut SyscallContext,
         req: ForeignPtr<linux_api::time::timespec>,
