@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use std::time::Duration;
+
 use test_utils::set;
 use test_utils::socket_utils::{socket_init_helper, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
@@ -65,16 +67,28 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             let append_args =
                 |s| format!("{s} <init_method={init_method:?}, sock_type={sock_type}>");
 
-            tests.extend(vec![test_utils::ShadowTest::new(
-                &append_args("test_fionread"),
-                move || test_fionread(init_method, sock_type),
-                // TODO: this isn't supported yet in shadow for unix sockets
-                if init_method.domain() == libc::AF_UNIX {
-                    set![TestEnv::Libc]
-                } else {
-                    set![TestEnv::Libc, TestEnv::Shadow]
-                },
-            )]);
+            tests.extend(vec![
+                test_utils::ShadowTest::new(
+                    &append_args("test_fionread"),
+                    move || test_fionread(init_method, sock_type),
+                    // TODO: this isn't supported yet in shadow for unix sockets
+                    if init_method.domain() == libc::AF_UNIX {
+                        set![TestEnv::Libc]
+                    } else {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    },
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_siocgstamp"),
+                    move || test_siocgstamp(init_method, sock_type),
+                    // TODO: this isn't supported yet in shadow for unix sockets
+                    if init_method.domain() == libc::AF_UNIX {
+                        set![TestEnv::Libc]
+                    } else {
+                        set![TestEnv::Libc, TestEnv::Shadow]
+                    },
+                ),
+            ]);
         }
     }
 
@@ -180,6 +194,123 @@ fn test_fionread(init_method: SocketInitMethod, sock_type: libc::c_int) -> Resul
             peer_expected_result,
             "Unexpected FIONREAD result",
         )?;
+
+        Ok(())
+    })
+}
+
+/// Test ioctl() using the `SIOCGSTAMP` ioctl request.
+fn test_siocgstamp(init_method: SocketInitMethod, sock_type: libc::c_int) -> Result<(), String> {
+    let (fd_client, fd_peer) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    /// Returns the value if successful, otherwise returns the errno.
+    fn ioctl_siocgstamp(fd: libc::c_int) -> Result<libc::timeval, libc::c_int> {
+        // not currently available in the libc crate
+        use linux_api::ioctls::IoctlRequest::SIOCGSTAMP;
+
+        let mut out: libc::timeval = unsafe { std::mem::zeroed() };
+        let rv = unsafe { libc::ioctl(fd, SIOCGSTAMP as u64, &mut out) };
+        if rv != 0 {
+            return Err(test_utils::get_errno());
+        }
+        Ok(out)
+    }
+
+    test_utils::run_and_close_fds(&[fd_client, fd_peer], || {
+        // neither socket has received any data, so should return ENOENT for inet sockets
+        let expected_result = match (init_method.domain(), sock_type) {
+            (libc::AF_INET, _) => Err(libc::ENOENT),
+            (libc::AF_UNIX, _) => Err(libc::ENOTTY),
+            _ => unimplemented!(),
+        };
+        test_utils::result_assert_eq(
+            ioctl_siocgstamp(fd_client),
+            expected_result,
+            "Unexpected SIOCGSTAMP result",
+        )?;
+        test_utils::result_assert_eq(
+            ioctl_siocgstamp(fd_peer),
+            expected_result,
+            "Unexpected SIOCGSTAMP result",
+        )?;
+
+        // send data from the client to the peer
+        let flags = nix::sys::socket::MsgFlags::empty();
+        nix::sys::socket::send(fd_client, &[1, 2, 3], flags).unwrap();
+
+        // approximately the time that we sent the message
+        let send_time = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+
+        // shadow needs to run events, but we also sleep so that we make the recv() call much later
+        // than the send() call
+        std::thread::sleep(Duration::from_millis(50));
+
+        // use use a small threshold when comparing the send time to the recv time below since the
+        // message is only travelling over localhost; should be much shorter than the sleep above
+        let threshold = Duration::from_millis(1);
+
+        // recv() has not been called on the socket, so should still return ENOENT for inet sockets
+        let expected_result = match (init_method.domain(), sock_type) {
+            (libc::AF_INET, _) => Err(libc::ENOENT),
+            (libc::AF_UNIX, _) => Err(libc::ENOTTY),
+            _ => unimplemented!(),
+        };
+        test_utils::result_assert_eq(
+            ioctl_siocgstamp(fd_peer),
+            expected_result,
+            "Unexpected SIOCGSTAMP result",
+        )?;
+
+        // receive data at the peer
+        let flags = nix::sys::socket::MsgFlags::empty();
+        nix::sys::socket::recv(fd_peer, &mut [0u8; 3], flags).unwrap();
+
+        // check the result of SIOCGSTAMP on the peer; only supported by udp sockets
+        let expected_err = match (init_method.domain(), sock_type) {
+            (libc::AF_INET, libc::SOCK_DGRAM) => None,
+            (libc::AF_INET, _) => Some(libc::ENOENT),
+            (libc::AF_UNIX, _) => Some(libc::ENOTTY),
+            _ => unimplemented!(),
+        };
+        match expected_err {
+            None => {
+                // the receive time reported by the kernel
+                let recv_time = ioctl_siocgstamp(fd_peer).unwrap();
+                let recv_time = Duration::from_secs(recv_time.tv_sec.try_into().unwrap())
+                    + Duration::from_micros(recv_time.tv_usec.try_into().unwrap());
+
+                // Get the time difference between the send and receive. We can't know if the
+                // receive or send time will be smaller since the send time was measured after the
+                // send() call completed, and the message may have already been received before we
+                // take the send-time measurement. For example:
+                //
+                // 1. `send()` call
+                //   a. since it's localhost, the packet is given directly to the receiving socket
+                //      within the `send()` call
+                //   b. receive time is recorded by the kernel here
+                // 2. shadow records the send time with:
+                //    let send_time = std::time::SystemTime::now()
+                //
+                // In this case the send time is later than the receive time.
+                let difference = test_utils::time::duration_abs_diff(send_time, recv_time);
+
+                // since it was sent over localhost, the difference between the send time and
+                // receive time should be very small
+                test_utils::result_assert(difference < threshold, "Time difference was too large")?;
+            }
+            Some(e) => test_utils::result_assert_eq(
+                ioctl_siocgstamp(fd_peer),
+                Err(e),
+                "Unexpected SIOCGSTAMP result",
+            )?,
+        }
 
         Ok(())
     })

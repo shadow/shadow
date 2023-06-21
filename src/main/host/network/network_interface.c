@@ -168,7 +168,7 @@ static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
     return compatsocket_fromTagged((uintptr_t)ptr);
 }
 
-void networkinterface_push(NetworkInterface* interface, Packet* packet) {
+void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulatedTime recvTime) {
     MAGIC_ASSERT(interface);
 
     const Host* host = worker_getCurrentHost();
@@ -215,7 +215,7 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet) {
 
     /* if the socket closed, just drop the packet */
     if (socket.type != CST_NONE) {
-        compatsocket_pushInPacket(&socket, host, packet);
+        compatsocket_pushInPacket(&socket, host, packet, recvTime);
     } else {
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }

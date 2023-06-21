@@ -6,6 +6,7 @@ use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
@@ -129,7 +130,12 @@ impl LegacyTcpSocket {
         self.has_open_file = val;
     }
 
-    pub fn push_in_packet(&mut self, packet: PacketRc, _cb_queue: &mut CallbackQueue) {
+    pub fn push_in_packet(
+        &mut self,
+        packet: PacketRc,
+        _cb_queue: &mut CallbackQueue,
+        _recv_time: EmulatedTime,
+    ) {
         Worker::with_active_host(|host| {
             // the C code should ref the inner `Packet`, so it's fine to drop the `PacketRc`
             unsafe {
@@ -583,6 +589,8 @@ impl LegacyTcpSocket {
 
                 Ok(0.into())
             }
+            // this isn't supported by tcp
+            IoctlRequest::SIOCGSTAMP => Err(Errno::ENOENT.into()),
             IoctlRequest::FIONBIO => {
                 panic!("This should have been handled by the ioctl syscall handler");
             }

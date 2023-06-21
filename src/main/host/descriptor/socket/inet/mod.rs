@@ -5,6 +5,7 @@ use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use nix::sys::socket::Shutdown;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
@@ -332,8 +333,8 @@ impl InetSocketRefMut<'_> {
 
 // inet socket-specific functions
 impl InetSocketRefMut<'_> {
-    enum_passthrough!(self, (packet, cb_queue), LegacyTcp, Udp;
-        pub fn push_in_packet(&mut self, packet: PacketRc, cb_queue: &mut CallbackQueue)
+    enum_passthrough!(self, (packet, cb_queue, recv_time), LegacyTcp, Udp;
+        pub fn push_in_packet(&mut self, packet: PacketRc, cb_queue: &mut CallbackQueue, recv_time: EmulatedTime)
     );
     enum_passthrough!(self, (cb_queue), LegacyTcp, Udp;
         pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc>
@@ -457,6 +458,8 @@ fn associate_socket(
 mod export {
     use super::*;
 
+    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
+
     /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
     /// calling this function.
     #[no_mangle]
@@ -490,8 +493,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn inetsocket_pushInPacket(socket: *const InetSocket, packet: *mut c::Packet) {
+    pub extern "C" fn inetsocket_pushInPacket(
+        socket: *const InetSocket,
+        packet: *mut c::Packet,
+        recv_time: CEmulatedTime,
+    ) {
         let socket = unsafe { socket.as_ref() }.unwrap();
+        let recv_time = EmulatedTime::from_c_emutime(recv_time).unwrap();
 
         // we don't own the reference to the packet, so we need our own reference
         unsafe { c::packet_ref(packet) };
@@ -499,7 +507,9 @@ mod export {
 
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| {
-                socket.borrow_mut().push_in_packet(packet, cb_queue);
+                socket
+                    .borrow_mut()
+                    .push_in_packet(packet, cb_queue, recv_time);
             });
         });
     }

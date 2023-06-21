@@ -3,9 +3,11 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::support::configuration::QDiscMode;
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
@@ -156,7 +158,14 @@ impl PacketDevice for NetworkInterface {
 
     fn push(&self, packet: PacketRc) {
         let packet_ptr = packet.into_inner();
-        unsafe { c::networkinterface_push(self.c_ptr.ptr(), packet_ptr) };
+        let current_time = Worker::current_time().unwrap();
+        unsafe {
+            c::networkinterface_push(
+                self.c_ptr.ptr(),
+                packet_ptr,
+                EmulatedTime::to_c_emutime(Some(current_time)),
+            )
+        };
         unsafe { c::packet_unref(packet_ptr) };
     }
 }

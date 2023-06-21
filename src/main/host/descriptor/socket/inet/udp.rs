@@ -8,6 +8,7 @@ use bytes::{Bytes, BytesMut};
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
@@ -42,6 +43,9 @@ pub struct UdpSocket {
     peer_addr: Option<SocketAddrV4>,
     bound_addr: Option<SocketAddrV4>,
     association: Option<AssociationHandle>,
+    /// The receive time of the last packet returned to the managed process during a call to
+    /// `recvmsg()`. Used for `SIOCGSTAMP`.
+    recv_time_of_last_read_packet: Option<EmulatedTime>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -64,6 +68,7 @@ impl UdpSocket {
             peer_addr: None,
             bound_addr: None,
             association: None,
+            recv_time_of_last_read_packet: None,
             has_open_file: false,
             _counter: ObjectCounter::new("UdpSocket"),
         };
@@ -97,7 +102,12 @@ impl UdpSocket {
         self.has_open_file = val;
     }
 
-    pub fn push_in_packet(&mut self, mut packet: PacketRc, cb_queue: &mut CallbackQueue) {
+    pub fn push_in_packet(
+        &mut self,
+        mut packet: PacketRc,
+        cb_queue: &mut CallbackQueue,
+        recv_time: EmulatedTime,
+    ) {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
         if let Some(peer_addr) = self.peer_addr {
@@ -139,6 +149,7 @@ impl UdpSocket {
         let header = MessageRecvHeader {
             src: packet.src_address(),
             dst: packet.dst_address(),
+            recv_time,
         };
 
         // push the message to the receive buffer (shouldn't fail since we checked for available
@@ -455,7 +466,7 @@ impl UdpSocket {
         mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
     ) -> Result<RecvmsgReturn, SyscallError> {
-        let mut socket_ref = socket.borrow_mut();
+        let socket_ref = &mut *socket.borrow_mut();
 
         let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
             log::debug!("Unrecognized recv flags: {:#b}", args.flags);
@@ -508,6 +519,9 @@ impl UdpSocket {
 
             let mut return_flags = MsgFlags::empty();
             return_flags.set(MsgFlags::MSG_TRUNC, truncated_message.len() < message.len());
+
+            // update the cache of the last recv time
+            socket_ref.recv_time_of_last_read_packet = Some(header.recv_time);
 
             Ok(RecvmsgReturn {
                 return_val: return_val.try_into().unwrap(),
@@ -571,6 +585,26 @@ impl UdpSocket {
 
                 let arg_ptr = arg_ptr.cast::<libc::c_int>();
                 mem.write(arg_ptr, &len)?;
+
+                Ok(0.into())
+            }
+            IoctlRequest::SIOCGSTAMP => {
+                // socket(7): "Return a struct timeval with the receive timestamp of the last packet
+                // passed to the user. [...] This ioctl should only be used if the socket option
+                // SO_TIMESTAMP is not set on the socket. Otherwise, it returns the timestamp of the
+                // last packet that was received while SO_TIMESTAMP was not set, or it fails if no
+                // such packet has been received, (i.e., ioctl(2) returns -1 with errno set to
+                // ENOENT)."
+                let Some(last_recv_time) = self.recv_time_of_last_read_packet else {
+                    return Err(Errno::ENOENT.into());
+                };
+
+                let last_recv_time = (last_recv_time - EmulatedTime::UNIX_EPOCH)
+                    .try_into()
+                    .unwrap();
+
+                let arg_ptr = arg_ptr.cast::<libc::timeval>();
+                mem.write(arg_ptr, &last_recv_time)?;
 
                 Ok(0.into())
             }
@@ -970,6 +1004,8 @@ struct MessageRecvHeader {
     /// `IP_PKTINFO` to get the packet destination address.
     #[allow(dead_code)]
     dst: SocketAddrV4,
+    /// The time when the network interface received the message.
+    recv_time: EmulatedTime,
 }
 
 /// A buffer of UDP messages and message headers.

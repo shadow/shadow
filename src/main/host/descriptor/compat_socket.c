@@ -150,12 +150,13 @@ bool compatsocket_hasDataToSend(const CompatSocket* socket) {
     utility_panic("Invalid CompatSocket type");
 }
 
-void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet) {
+void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet,
+                               CEmulatedTime recvTime) {
     switch (socket->type) {
         case CST_LEGACY_SOCKET:
             return legacysocket_pushInPacket(socket->object.as_legacy_socket, host, packet);
         case CST_INET_SOCKET:
-            return inetsocket_pushInPacket(socket->object.as_inet_socket, packet);
+            return inetsocket_pushInPacket(socket->object.as_inet_socket, packet, recvTime);
         case CST_NONE: utility_panic("Unexpected CompatSocket type");
     }
 
