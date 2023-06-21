@@ -72,7 +72,10 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             clockid_t clk_id = va_arg(args, clockid_t);
             struct timespec* tp = va_arg(args, struct timespec*);
 
-            if (tp) {
+            if (clk_id < LINUX_CLOCK_REALTIME || clk_id > LINUX_CLOCK_TAI) {
+                trace("found invalid clock id %ld", (long)clk_id);
+                *rv = -EINVAL;
+            } else if (tp) {
                 *tp = (struct timespec){
                     .tv_sec = emulated_time / SIMTIME_ONE_SECOND,
                     .tv_nsec = emulated_time % SIMTIME_ONE_SECOND,
