@@ -35,6 +35,7 @@
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
 // This thread's IPC block, for communication with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_ipcDataBlk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
@@ -44,32 +45,36 @@ struct IPCData* shim_thisThreadEventIPC() {
 }
 
 // Per-thread state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_thread_shared_mem_blk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
-ShimShmemThread* shim_threadSharedMem() { return _shim_thread_shared_mem_blk()->p; }
+const ShimShmemThread* shim_threadSharedMem() { return _shim_thread_shared_mem_blk()->p; }
 
 // Per-process state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_process_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemProcess* shim_processSharedMem() { return _shim_process_shared_mem_blk()->p; }
+const ShimShmemProcess* shim_processSharedMem() { return _shim_process_shared_mem_blk()->p; }
 
 // Per-host state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_host_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
+const ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
 
 // Per-manager state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_manager_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
+const ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
 
 // We disable syscall interposition when this is > 0.
 static int* _shim_allowNativeSyscallsFlag() {

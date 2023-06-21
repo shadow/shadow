@@ -60,10 +60,10 @@ void shim_newThreadChildInitd();
 #define SHIM_SIGNAL_STACK_SIZE                                                                     \
     (SHIM_SIGNAL_STACK_GUARD_OVERHEAD + SHIM_SIGNAL_STACK_MIN_USABLE_SIZE)
 
-ShimShmemThread* shim_threadSharedMem();
-ShimShmemProcess* shim_processSharedMem();
-ShimShmemHost* shim_hostSharedMem();
-ShimShmemManager* shim_managerSharedMem();
+const ShimShmemThread* shim_threadSharedMem();
+const ShimShmemProcess* shim_processSharedMem();
+const ShimShmemHost* shim_hostSharedMem();
+const ShimShmemManager* shim_managerSharedMem();
 
 // Prepare to free the current thread's signal thread stack.  Should only be
 // done just before exiting, as the stack will be freed the next another thread

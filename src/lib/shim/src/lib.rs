@@ -19,6 +19,8 @@ pub fn simtime() -> Option<SimulationTime> {
 }
 
 pub fn manager_shmem() -> Option<&'static ManagerShmem> {
+    // SAFETY: Sync, and once this is initialized, it stays alive for the
+    // lifetime of this process.
     unsafe { bindings::shim_managerSharedMem().as_ref() }
 }
 
