@@ -3,7 +3,6 @@
 use vasi::VirtualAddressSpaceIndependent;
 
 #[derive(Debug)]
-#[repr(transparent)]
 pub struct Block<'alloc, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
@@ -144,6 +143,5 @@ mod tests {
     }
 
     #[test]
-    fn foo() {
-    }
+    fn foo() {}
 }

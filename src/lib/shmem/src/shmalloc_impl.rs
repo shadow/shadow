@@ -25,14 +25,21 @@ fn get_magic_buf() -> MagicBuf {
 type MagicBuf = [u8; 0];
 
 #[cfg(not(debug_assertions))]
-fn get_magic_buf() -> MagicBuf { [] }
+fn get_magic_buf() -> MagicBuf {
+    []
+}
 
 trait Magic {
     fn magic_init(&mut self);
     fn magic_check(&self) -> bool;
+
+    #[cfg(debug_assertions)]
     fn magic_assert(&self) {
         assert!(self.magic_check());
     }
+
+    #[cfg(not(debug_assertions))]
+    fn magic_assert(&self) {}
 }
 
 fn format_shmem_name(buf: &mut [u8]) {
@@ -92,6 +99,32 @@ fn create_map_shared_memory<'a>(
     Ok((retval, fd))
 }
 
+// Similar to `create_map_shared_memory` but no O_CREAT or O_EXCL and no ftruncate calls.
+fn view_shared_memory<'a>(
+    path_buf: &PathBuf,
+    nbytes: usize,
+) -> Result<(&'a mut [u8], i32), i32> {
+    const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CLOEXEC;
+    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
+    const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
+    const MAP_FLAGS: i32 = libc::MAP_SHARED;
+
+    let fd = unsafe { open(path_buf.as_ptr(), OPEN_FLAGS, MODE)? };
+
+    let retval = unsafe {
+        mmap(
+            core::ptr::null_mut(),
+            nbytes.try_into().unwrap(),
+            PROT,
+            MAP_FLAGS,
+            fd,
+            0,
+        )?
+    };
+
+    Ok((retval, fd))
+}
+
 #[repr(C)]
 #[derive(Debug)]
 struct ChunkMeta {
@@ -124,10 +157,14 @@ fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk
         (*chunk_meta).data_start = (chunk_meta as *mut u8).add(core::mem::size_of::<ChunkMeta>());
         (*chunk_meta).next_chunk = core::ptr::null_mut();
         (*chunk_meta).magic_init();
-
-        println!("{:?}", *chunk_meta);
     }
 
+    Ok(chunk_meta)
+}
+
+fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut ChunkMeta, i32> {
+    let (p, _) = view_shared_memory(path_buf, nbytes)?;
+    let chunk_meta: *mut ChunkMeta = p.as_mut_ptr() as *mut ChunkMeta;
     Ok(chunk_meta)
 }
 
@@ -155,6 +192,13 @@ pub(crate) struct BlockHdr {
     next_free_block: *mut BlockHdr,
     data_start: *mut u8,
     magic_back: MagicBuf,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub(crate) struct BlockHdrSerialized {
+    chunk_name: PathBuf,
+    offset: isize,
 }
 
 const MEM_BLOCK_NBYTES: usize = core::mem::size_of::<BlockHdr>();
@@ -329,6 +373,58 @@ impl UniformFreelistAllocator {
         }
     }
 
+    // PRE: Block was allocated with this allocator
+    fn find_chunk(&self, block: *const BlockHdr) -> Option<*const ChunkMeta> {
+        unsafe {
+            (*block).magic_assert();
+        }
+
+        if let Some(chunk) = self.first_chunk {
+            let mut chunk_to_check = chunk;
+
+            while !chunk_to_check.is_null() {
+                // Safe to deref throughout this block because we checked for null above
+                unsafe {
+                    (*chunk_to_check).magic_assert();
+                }
+                let data_start = unsafe { (*chunk_to_check).data_start };
+                let data_end = unsafe { (chunk_to_check as *const u8).add(CHUNK_NBYTES) };
+
+                // Now we just see if the block is in the range.
+                let block_p = block as *const u8;
+
+                if block_p >= data_start && block_p < data_end {
+                    return Some(chunk_to_check);
+                }
+
+                chunk_to_check = unsafe { (*chunk_to_check).next_chunk };
+            }
+        }
+
+        None
+    }
+
+    // PRE: Block was allocated with this allocator
+    pub fn serialize(&self, block: *const BlockHdr) -> BlockHdrSerialized {
+        unsafe {
+            (*block).magic_assert();
+        }
+
+        if let Some(chunk) = self.find_chunk(block) {
+            let chunk_p = chunk as *const u8;
+            let block_p = block as *const u8;
+            let offset = unsafe { block_p.offset_from(chunk_p) };
+            assert!(offset > 0);
+
+            BlockHdrSerialized {
+                chunk_name: unsafe { (*chunk).chunk_name },
+                offset,
+            }
+        } else {
+            panic!("Block attempted to be serialized with wrong allocator.");
+        }
+    }
+
     pub unsafe fn get_mut_bytes(&self, block: *mut BlockHdr) -> &mut [u8] {
         if !block.is_null() {
             let block = unsafe { &mut *block };
@@ -375,19 +471,10 @@ impl UniformFreelistAllocator {
             block = self.init_block(block, p, end_p);
         }
 
-        println!("First block: {:?} {:?}", first_block, unsafe {
-            &(*first_block)
-        });
-        println!("Last block: {:?} {:?}", last_block, unsafe {
-            &(*last_block)
-        });
-
         (first_block, last_block)
     }
 
     pub fn destruct(&mut self) {
-        return;
-
         if let Some(chunk) = self.first_chunk {
             let mut chunk_to_dealloc = chunk;
 
@@ -420,12 +507,6 @@ impl UniformFreelistAllocator {
             (*block).get_mut_block_data_range(self.alloc_nbytes, self.alloc_alignment)
         };
 
-        println!("Initializing block");
-        println!("Block begin: {:?}", block_begin);
-        println!("Block end: {:?}", block_end);
-        println!("Data begin: {:?}", data_begin);
-        println!("Data end: {:?}", data_end);
-
         assert!(unsafe { block_end.offset_from(block_begin) } as usize == MEM_BLOCK_NBYTES);
         assert!(unsafe { data_end.offset_from(data_begin) } as usize == self.alloc_nbytes);
         assert!(block_begin.align_offset(MEM_BLOCK_ALIGNMENT) == 0);
@@ -434,7 +515,6 @@ impl UniformFreelistAllocator {
 
         if data_end < end_p {
             let this_block = block_begin as *mut BlockHdr;
-            println!("{:?}", this_block);
             // Safe to unwrap here -- we validated above that this is a valid pointer.
             let mut this_block = unsafe { this_block.as_mut().unwrap() };
             this_block.magic_init();
@@ -454,6 +534,38 @@ impl UniformFreelistAllocator {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct UniformFreelistDeserializer<const ChunkCapacity: usize> {
+    chunks: [*mut ChunkMeta; ChunkCapacity],
+    nmapped_chunks: usize,
+}
+
+impl<const ChunkCapacity: usize> UniformFreelistDeserializer<ChunkCapacity> {
+    fn new() -> UniformFreelistDeserializer<ChunkCapacity> {
+        UniformFreelistDeserializer {
+            chunks: [core::ptr::null_mut(); ChunkCapacity],
+            nmapped_chunks: 0,
+        }
+    }
+
+    fn find_chunk(&self, chunk_name: PathBuf) -> *mut ChunkMeta {
+        for idx in 0..self.nmapped_chunks {
+            let chunk = self.chunks[idx];
+
+            // Safe here to deref because we are only checking within the allocated range.
+            if unsafe { (*chunk).chunk_name == chunk_name } {
+                return chunk;
+            }
+        }
+
+        core::ptr::null_mut()
+    }
+
+    fn map_chunk(&mut self, chunk_name: PathBuf) {
+        self.nmapped_chunks += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,6 +579,11 @@ mod tests {
 
         for _ in 0..1000 {
             v.push(alloc.alloc());
+        }
+
+        for b in &v[..] {
+            let serialized = alloc.serialize(*b);
+            println!("{:?}", serialized);
         }
 
         alloc.dealloc(v.remove(0));
