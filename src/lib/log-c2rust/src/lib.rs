@@ -8,10 +8,10 @@
 //! At that point `logger` can be merged into this crate and simplified.
 //!
 //! TODO: This crate should be `no_std`.
-use std::os::raw::{c_char, c_int, c_void};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int};
 
 use log::log_enabled;
-use vsprintf::vsprintf_raw;
 
 /// Flush Rust's log::logger().
 #[no_mangle]
@@ -58,7 +58,8 @@ pub extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
 ///
 /// # Safety
 ///
-/// Pointer args must be safely dereferenceable.
+/// Pointer args must be safely dereferenceable. `format` and `args` must
+/// follow the rules of `sprintf(3)`.
 #[no_mangle]
 pub unsafe extern "C" fn rustlogger_log(
     level: logger::LogLevel,
@@ -66,7 +67,7 @@ pub unsafe extern "C" fn rustlogger_log(
     fn_name: *const c_char,
     line: i32,
     format: *const c_char,
-    va_list: *mut c_void,
+    args: va_list::VaList,
 ) {
     let log_level = c_to_rust_log_level(level).unwrap();
 
@@ -74,9 +75,11 @@ pub unsafe extern "C" fn rustlogger_log(
         return;
     }
 
-    // SAFETY: Safe if caller provided valid format and va_list.
-    let msg_vec = unsafe { vsprintf_raw(format, va_list).unwrap() };
-    let msg = String::from_utf8_lossy(&msg_vec);
+    assert!(!format.is_null());
+    let format = unsafe { CStr::from_ptr(format) };
+    let mut msgbuf = formatting_nostd::FormatBuffer::<500>::new();
+    // SAFETY: Safe if caller provided valid format and args.
+    unsafe { msgbuf.sprintf(format, args) };
 
     log::logger().log(
         &log::Record::builder()
@@ -86,7 +89,7 @@ pub unsafe extern "C" fn rustlogger_log(
             .line(Some(u32::try_from(line).unwrap()))
             // SAFETY: fn_name is statically allocated.
             .module_path_static(unsafe { optional_str(fn_name) })
-            .args(format_args!("{}", msg))
+            .args(format_args!("{}", msgbuf))
             .build(),
     );
 }

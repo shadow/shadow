@@ -13,7 +13,6 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
-#include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"

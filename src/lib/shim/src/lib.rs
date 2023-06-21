@@ -1,5 +1,7 @@
-// TODO:
-// #![no_std]
+#![no_std]
+
+use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 /// cbindgen:ignore
 mod bindings {
@@ -12,9 +14,23 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+pub fn simtime() -> Option<SimulationTime> {
+    SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
+}
+
+pub fn manager_shmem() -> Option<&'static ManagerShmem> {
+    // SAFETY: Sync, and once this is initialized, it stays alive for the
+    // lifetime of this process.
+    unsafe { bindings::shim_managerSharedMem().as_ref() }
+}
+
+mod shimlogger;
+pub use shimlogger::export as shimlogger_export;
+
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
 // https://github.com/rust-lang/cargo/issues/9391
+extern crate log_c2rust;
 extern crate logger;
 extern crate shadow_shim_helper_rs;
 extern crate shadow_shmem;

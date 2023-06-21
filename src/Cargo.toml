@@ -3,6 +3,7 @@
 members = [
     "main",
     "test",
+    "lib/formatting-nostd",
     "lib/gml-parser",
     "lib/linux-api",
     "lib/log-c2rust",

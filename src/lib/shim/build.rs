@@ -7,10 +7,14 @@ use shadow_build_common::ShadowBuildCommon;
 fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
+        .use_core()
         .header("shim.h")
         .allowlist_function("shim_.*")
         .header("shim_api_c.h")
         .allowlist_function("shimc_.*")
+        .header("shim_sys.h")
+        .allowlist_function("shim_sys_get_simtime_nanos")
+        .header("shim_syscall.h")
         // get libc types from libc crate
         .blocklist_type("addrinfo")
         .raw_line("use libc::addrinfo;")
@@ -18,6 +22,10 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use libc::ifaddrs;")
         .blocklist_type("socklen_t")
         .blocklist_type("__socklen_t")
+        // Import instead
+        .blocklist_type("ShimShmem.*")
+        .raw_line("use shadow_shim_helper_rs::shim_shmem::*;")
+        .raw_line("use shadow_shim_helper_rs::shim_shmem::export::*;")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.
@@ -42,6 +50,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "sys/types.h".into(),
             "netdb.h".into(),
         ],
+        includes: vec!["lib/log-c2rust/rustlogger.h".into()],
         after_includes: {
             let mut v = base_config.after_includes.clone().unwrap_or_default();
             // We have to manually create the vararg declaration.
@@ -92,7 +101,6 @@ fn main() {
             "shim_api_addrinfo.c",
             "shim_api_ifaddrs.c",
             "shim_api_syscall.c",
-            "shim_logger.c",
             "shim_rdtsc.c",
             "shim_seccomp.c",
             "shim_signals.c",

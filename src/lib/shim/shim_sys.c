@@ -20,7 +20,7 @@
 #include "main/host/syscall_numbers.h"
 
 static CEmulatedTime _shim_sys_get_time() {
-    ShimShmemHost* mem = shim_hostSharedMem();
+    const ShimShmemHost* mem = shim_hostSharedMem();
 
     // If that's unavailable, fail. This shouldn't happen.
     if (mem == NULL) {

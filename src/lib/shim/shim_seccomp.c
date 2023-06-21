@@ -10,6 +10,7 @@
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
@@ -18,7 +19,6 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shim/shim_logger.h"
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 

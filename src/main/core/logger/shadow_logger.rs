@@ -9,10 +9,10 @@ use log::{Level, LevelFilter, Log, Metadata, Record, SetLoggerError};
 use logger as c_log;
 use once_cell::sync::{Lazy, OnceCell};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::util::time::TimeParts;
 
 use crate::core::worker::Worker;
 use crate::host::host::HostInfo;
-use crate::utility::time::TimeParts;
 
 /// Trigger an asynchronous flush when this many lines are queued.
 const ASYNC_FLUSH_QD_LINES_THRESHOLD: usize = 100_000;

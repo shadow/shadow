@@ -18,12 +18,14 @@
 #include <ucontext.h>
 #include <unistd.h>
 
+#include "lib/log-c2rust/log-c2rust.h"
+#include "lib/log-c2rust/rustlogger.h"
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shadow_spinlock.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/patch_vdso.h"
-#include "lib/shim/shim_logger.h"
+#include "lib/shim/shim_api.h"
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_signals.h"
@@ -33,6 +35,7 @@
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
 // This thread's IPC block, for communication with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_ipcDataBlk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
@@ -42,32 +45,36 @@ struct IPCData* shim_thisThreadEventIPC() {
 }
 
 // Per-thread state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_thread_shared_mem_blk() {
     static ShimTlsVar v = {0};
     return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
 }
-ShimShmemThread* shim_threadSharedMem() { return _shim_thread_shared_mem_blk()->p; }
+const ShimShmemThread* shim_threadSharedMem() { return _shim_thread_shared_mem_blk()->p; }
 
 // Per-process state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_process_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemProcess* shim_processSharedMem() { return _shim_process_shared_mem_blk()->p; }
+const ShimShmemProcess* shim_processSharedMem() { return _shim_process_shared_mem_blk()->p; }
 
 // Per-host state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_host_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
+const ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
 
 // Per-manager state shared with Shadow.
+// Must remain valid for the lifetime of this process once initialized.
 static ShMemBlock* _shim_manager_shared_mem_blk() {
     static ShMemBlock block = {0};
     return &block;
 }
-ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
+const ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
 
 // We disable syscall interposition when this is > 0.
 static int* _shim_allowNativeSyscallsFlag() {
@@ -197,21 +204,12 @@ static void _shim_init_signal_stack() {
 }
 
 static void _shim_parent_init_logging() {
-    logger_set_global_start_time_micros(shimshmem_getLoggingStartTime(shim_managerSharedMem()));
-
-    // Redirect logger to stdout (shadow sets stdout and stderr to the shim log).
-    {
-        // the FILE takes ownership of the fd, so give it its own fd
-        int shimlog_fd = dup(STDOUT_FILENO);
-        FILE* log_file = fdopen(shimlog_fd, "w");
-        if (log_file == NULL) {
-            panic("fdopen: %s", strerror(errno));
-        }
-        logger_setDefault(shimlogger_new(log_file));
-    }
-
     int level = shimshmem_getLogLevel(shim_hostSharedMem());
-    logger_setLevel(logger_getDefault(), level);
+
+    // Route C logging through Rust's `log`
+    logger_setDefault(rustlogger_new());
+    // Install our `log` backend.
+    shimlogger_install(level);
 }
 
 static void _shim_parent_init_death_signal() {
