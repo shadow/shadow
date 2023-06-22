@@ -1,32 +1,9 @@
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::read_sockaddr;
 use crate::host::syscall_types::ForeignArrayPtr;
-
-/// Convert from a `SysCallReg`. This is a helper trait for the `simple_display_impl` and
-/// `simple_debug_impl` macros. This is used instead of just `TryFrom` so that we can implement this
-/// on any types without affecting `TryFrom` implementations in the rest of Shadow.
-///
-/// XXX: This is trickier to maintain now that SysCallReg is owned by another crate;
-/// the implementations have been changed to `TryFrom<SysCallReg>` instead.
-/// TODO: Remove this trait and use `TryFrom<SysCallReg>` directly (or else remove the
-/// blanket implementation and explicitly implement `TryFromSysCallReg` for all types
-/// we need formatting for).
-pub trait TryFromSyscallReg
-where
-    Self: Sized,
-{
-    fn try_from_reg(reg: SysCallReg) -> Option<Self>;
-}
-
-impl<T: TryFrom<SysCallReg>> TryFromSyscallReg for T {
-    fn try_from_reg(reg: SysCallReg) -> Option<Self> {
-        Self::try_from(reg).ok()
-    }
-}
 
 /// Implement `SyscallDisplay` using its `Display` implementation. The type must implement
 /// `TryFromSyscallReg`.
@@ -43,7 +20,7 @@ macro_rules! simple_display_impl {
                 _options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match <$type>::try_from_reg(self.reg) {
+                match <$type>::try_from(self.reg).ok() {
                     Some(x) => write!(f, "{x}"),
                     // if the conversion to type T was unsuccessful, just show an integer
                     None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
@@ -68,7 +45,7 @@ macro_rules! simple_debug_impl {
                 _options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match <$type>::try_from_reg(self.reg) {
+                match <$type>::try_from(self.reg).ok() {
                     Some(x) => write!(f, "{x:?}"),
                     // if the conversion to type T was unsuccessful, just show an integer
                     None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
@@ -92,7 +69,7 @@ macro_rules! bitflags_impl {
                 _options: FmtOptions,
                 _mem: &MemoryManager,
             ) -> std::fmt::Result {
-                match <$type>::try_from_reg(self.reg) {
+                match <$type>::try_from(self.reg).ok() {
                     Some(x) => {
                         if x.is_empty() {
                             write!(f, "(empty)")

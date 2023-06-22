@@ -403,10 +403,9 @@ impl std::fmt::Debug for SysCallReg {
 
 // implement conversions from `SysCallReg`
 
-impl TryFrom<SysCallReg> for linux_api::fcntl::OFlag {
-    type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_bits(reg.into()).ok_or(())
+impl From<SysCallReg> for linux_api::fcntl::OFlag {
+    fn from(reg: SysCallReg) -> Self {
+        Self::from_bits_retain(reg.into())
     }
 }
 
@@ -438,24 +437,21 @@ impl TryFrom<SysCallReg> for nix::sys::stat::Mode {
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::mman::ProtFlags {
-    type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_bits(reg.into()).ok_or(())
+impl From<SysCallReg> for linux_api::mman::ProtFlags {
+    fn from(reg: SysCallReg) -> Self {
+        Self::from_bits_retain(reg.into())
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::mman::MapFlags {
-    type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_bits(reg.into()).ok_or(())
+impl From<SysCallReg> for linux_api::mman::MapFlags {
+    fn from(reg: SysCallReg) -> Self {
+        Self::from_bits_retain(reg.into())
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::mman::MRemapFlags {
-    type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_bits(reg.into()).ok_or(())
+impl From<SysCallReg> for linux_api::mman::MRemapFlags {
+    fn from(reg: SysCallReg) -> Self {
+        Self::from_bits_retain(reg.into())
     }
 }
 
@@ -466,10 +462,9 @@ impl TryFrom<SysCallReg> for linux_api::time::ClockId {
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::time::ClockNanosleepFlags {
-    type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_bits(reg.into()).ok_or(())
+impl From<SysCallReg> for linux_api::time::ClockNanosleepFlags {
+    fn from(reg: SysCallReg) -> Self {
+        Self::from_bits_retain(reg.into())
     }
 }
 
