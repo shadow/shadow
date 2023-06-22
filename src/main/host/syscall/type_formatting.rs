@@ -78,6 +78,36 @@ macro_rules! simple_debug_impl {
     };
 }
 
+/// Implement `SyscallDisplay` for a bitflags type. The type must implement `TryFromSyscallReg`.
+macro_rules! bitflags_impl {
+    ($type:ty, $($types:ty),+) => {
+        bitflags_impl!($type);
+        bitflags_impl!($($types),+);
+    };
+    ($type:ty) => {
+        impl SyscallDisplay for SyscallVal<'_, $type> {
+            fn fmt(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+                _options: FmtOptions,
+                _mem: &MemoryManager,
+            ) -> std::fmt::Result {
+                match <$type>::try_from_reg(self.reg) {
+                    Some(x) => {
+                        if x.is_empty() {
+                            write!(f, "(empty)")
+                        } else {
+                            bitflags::parser::to_writer(&x, f)
+                        }
+                    }
+                    // if the conversion to type T was unsuccessful, just show an integer
+                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
+                }
+            }
+        }
+    };
+}
+
 /// Display the pointer and data. Accesses plugin memory. Can only be used for pod types (enforced
 /// by the memory manager).
 macro_rules! deref_pointer_impl {
@@ -174,17 +204,19 @@ safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
-simple_debug_impl!(linux_api::fcntl::OFlag);
+// nix still uses an old bitflags version which isn't supported by `bitflags_impl`
+simple_debug_impl!(linux_api::time::ITimerId);
+simple_debug_impl!(linux_api::time::ClockId);
+simple_debug_impl!(nix::sys::stat::Mode);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
-simple_debug_impl!(nix::sys::stat::Mode);
-simple_debug_impl!(linux_api::mman::ProtFlags);
-simple_debug_impl!(linux_api::mman::MapFlags);
-simple_debug_impl!(linux_api::mman::MRemapFlags);
-simple_debug_impl!(linux_api::time::ClockId);
-simple_debug_impl!(linux_api::time::ClockNanosleepFlags);
-simple_debug_impl!(linux_api::time::ITimerId);
+
+bitflags_impl!(linux_api::fcntl::OFlag);
+bitflags_impl!(linux_api::mman::ProtFlags);
+bitflags_impl!(linux_api::mman::MapFlags);
+bitflags_impl!(linux_api::mman::MRemapFlags);
+bitflags_impl!(linux_api::time::ClockNanosleepFlags);
 
 fn fmt_buffer(
     f: &mut std::fmt::Formatter<'_>,
