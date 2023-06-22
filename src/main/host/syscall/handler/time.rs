@@ -52,7 +52,8 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* which */ linux_api::time::ITimerId, /* new_value */ *const std::ffi::c_void, /* old_value */ *const std::ffi::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* which */ linux_api::time::ITimerId,
+                  /* new_value */ *const std::ffi::c_void, /* old_value */ *const std::ffi::c_void)]
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: std::ffi::c_int,
@@ -98,7 +99,8 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* clock_id */ linux_api::time::ClockId, /* res */ *const std::ffi::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* clock_id */ linux_api::time::ClockId,
+                  /* res */ *const std::ffi::c_void)]
     pub fn clock_getres(
         ctx: &mut SyscallContext,
         clock_id: linux_api::time::linux___kernel_clockid_t,
@@ -119,7 +121,8 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* clock_id */ linux_api::time::ClockId,
+    #[log_syscall(/* rv */ std::ffi::c_int,
+        /* clock_id */ linux_api::time::ClockId,
         /* flags */ linux_api::time::ClockNanosleepFlags,
         /* request */ *const linux_api::time::timespec,
         /* remain */ *const std::ffi::c_void)]
@@ -171,7 +174,8 @@ impl SyscallHandler {
         }
     }
 
-    #[log_syscall(/* req */ *const linux_api::time::timespec, /* rem */ *const std::ffi::c_void)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* req */ *const linux_api::time::timespec,
+                  /* rem */ *const std::ffi::c_void)]
     pub fn nanosleep(
         ctx: &mut SyscallContext,
         req: ForeignPtr<linux_api::time::timespec>,
