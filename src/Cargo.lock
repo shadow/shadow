@@ -732,7 +732,9 @@ dependencies = [
  "linux-syscall",
  "log",
  "memoffset 0.9.0",
+ "naked-function",
  "num_enum",
+ "rustix",
  "shadow-build-common",
  "shadow-pod",
  "static_assertions",
@@ -899,6 +901,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
 dependencies = [
  "adler",
+]
+
+[[package]]
+name = "naked-function"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b8d5fca6ab1e6215b010aefd3b9ac5aae369dae0faea3a7f34f296cc9f719ac"
+dependencies = [
+ "cfg-if",
+ "naked-function-macro",
+]
+
+[[package]]
+name = "naked-function-macro"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b4123e70df5fe0bb370cff166ae453b9c5324a2cfc932c0f7e55498147a0475"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
 ]
 
 [[package]]

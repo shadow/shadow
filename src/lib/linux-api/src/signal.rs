@@ -942,10 +942,69 @@ pub enum SignalHandler {
 #[allow(non_camel_case_types)]
 pub type linux_sigaction = bindings::linux_sigaction;
 
+/// Restorer suitable for use with `sigaction`.
+///
+/// Normally libc's implementation of the `sigaction` function injects a similar
+/// restorer function.
+///
+/// From `sigreturn(2)`:
+///
+/// > If the Linux kernel determines that an unblocked signal is pending for a
+/// > process, then, at the next transition back to user mode in that process
+/// > (e.g., upon return from a system call or when the process is rescheduled
+/// > onto the CPU), it creates a new frame on the user-space stack where it saves
+/// > various pieces of process context (processor status word, registers, signal
+/// > mask,  and  signal stack settings).
+/// >
+/// > The  kernel  also  arranges that, during the transition back to user mode,
+/// > the signal handler is called, and that, upon return from the handler,
+/// > control passes to a piece of user-space code com‐ monly called the "signal
+/// > trampoline".  The signal trampoline code in turn calls sigreturn().
+/// >
+/// > This sigreturn() call undoes everything that was done—changing the
+/// > process's signal mask, switching signal stacks (see sigaltstack(2))—in order
+/// > to invoke the signal handler.  Using the  informa‐ tion  that was earlier
+/// > saved on the user-space stack sigreturn() restores the process's signal
+/// > mask, switches stacks, and restores the process's context (processor flags
+/// > and registers, including the stack pointer and instruction pointer), so that
+/// > the process resumes execution at the point where it was interrupted by the
+/// > signal.
+///
+/// # Safety
+///
+/// This function is only intended for use as a `restorer` in `sigaction`.
+/// Do not call this function directly.
+//
+// This has to be a `naked` function; the `rt_return` syscall assumes that the
+// signal stack frame is at an exact offset from the current stack address; a
+// non-naked function would manipulate the stack and break this assumption.
+//
+// TODO: use the language-provided `naked` attribute if and when one is provided.
+// There's been a fair bit of discussion and issues about it, but the current state
+// is unclear. See e.g.
+// <https://github.com/rust-lang/rfcs/blob/master/text/1201-naked-fns.md>
+#[cfg(target_arch = "x86_64")]
+#[naked_function::naked]
+pub unsafe extern "C" fn sigaction_restorer() {
+    // 15 is rt_sigreturn; see static assertion below.
+    // The `naked` macro doesn't support putting the assertion here in the
+    // function body.
+    //
+    // The `rt_sigreturn` shouldn't return, but we use `ud2` (illegal
+    // instruction) to ensure we don't unexpectedly return in case it does.
+    // Strictly speaking the signature of this function could be `-> !`, but
+    // that doesn't match the signature expected for the restorer.
+    //
+    // TODO: use a `const` operand to the asm template instead of inlining "15",
+    // once `const` asm template operands are stabilized.
+    asm!("mov rax, 15", "syscall", "ud2")
+}
+static_assertions::const_assert_eq!(bindings::LINUX___NR_rt_sigreturn, 15);
+
 /// # Invariants
 ///
-/// `SigAction` does *not* require or guarantee that its internal function
-/// pointer, if any, is safe to call/dereference.
+/// `sigaction` does *not* require or guarantee that its internal function
+/// pointers, if any, are safe to call/dereference.
 #[derive(Copy, Clone)]
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -959,6 +1018,68 @@ impl sigaction {
     // Copied from linux's include/uapi/asm-generic/signal-defs.h.
     const SIG_DFL: usize = 0;
     const SIG_IGN: usize = 1;
+
+    /// Consider [`sigaction::new_with_default_restorer`] instead, which takes
+    /// care of setting up a restorer.
+    ///
+    /// panics if `handler` is inconsistent with the presence or absence of the
+    /// `SA_SIGINFO` flag.
+    pub fn new_raw(
+        handler: SignalHandler,
+        flags: SigActionFlags,
+        mask: sigset_t,
+        restorer: Option<unsafe extern "C" fn()>,
+    ) -> Self {
+        // The sigaction struct only has a field to hold a handler of type
+        // `SignalHandlerFn`, but it can alternatively store a function of type
+        // `SignalActionFn` or the integer `SIG_IGN`.
+        //
+        // We don't have much choice other than to `transmute` here.  We
+        // validate the `SA_SIGINFO` flag to ensure we don't reinterpret as the
+        // wrong type when extracting from the internal C structure again.
+        let handler = match handler {
+            SignalHandler::Handler(h) => {
+                assert!(!flags.contains(SigActionFlags::SA_SIGINFO));
+                Some(h)
+            }
+            SignalHandler::Action(a) => {
+                assert!(flags.contains(SigActionFlags::SA_SIGINFO));
+                Some(unsafe { core::mem::transmute::<SignalActionFn, SignalHandlerFn>(a) })
+            }
+            SignalHandler::SigIgn => {
+                assert!(!flags.contains(SigActionFlags::SA_SIGINFO));
+                Some(unsafe { core::mem::transmute::<usize, SignalHandlerFn>(Self::SIG_IGN) })
+            }
+            SignalHandler::SigDfl => {
+                assert!(!flags.contains(SigActionFlags::SA_SIGINFO));
+                static_assertions::const_assert_eq!(sigaction::SIG_DFL, 0);
+                None
+            }
+        };
+        sigaction(linux_sigaction {
+            lsa_handler: handler,
+            lsa_flags: flags.bits(),
+            lsa_mask: mask.0,
+            lsa_restorer: restorer,
+        })
+    }
+
+    /// Creates a `sigaction` with `SA_RESTORER` set, and the internal
+    /// `restorer` field set to [`sigaction_restorer`]. The libc `sigaction`
+    /// function normally makes these changes to the provided `struct
+    /// sigaction`.
+    pub fn new_with_default_restorer(
+        handler: SignalHandler,
+        flags: SigActionFlags,
+        mask: sigset_t,
+    ) -> Self {
+        Self::new_raw(
+            handler,
+            flags | SigActionFlags::SA_RESTORER,
+            mask,
+            Some(sigaction_restorer),
+        )
+    }
 
     pub fn wrap(si: linux_sigaction) -> Self {
         Self(si)
@@ -1095,6 +1216,181 @@ pub fn kill_raw(pid: i32, sig: i32) -> Result<(), Errno> {
 /// Execute the `kill` syscall.
 pub fn kill(pid: i32, sig: Option<Signal>) -> Result<(), Errno> {
     kill_raw(pid, sig.map(i32::from).unwrap_or(0))
+}
+
+/// Calls the `rt_sigaction` syscall.
+///
+/// # Safety
+///
+/// * `new_action` must be safe to dereference.
+/// * `old_action` must be safe to write to. (uninitd is ok).
+/// * `new_action`'s handler must be safe to call as a signal handler.
+///   See `signal-safety(7)`.
+/// * Generally, `new_action` must have `SA_RESTORER` set and a suitable
+///   `restorer`, such as [`sigaction_restorer`]. (There might be some esoteric
+///   way to call this syscall without this property, but I'm not aware of one).
+pub unsafe fn rt_sigaction_raw(
+    signo: i32,
+    new_action: *const sigaction,
+    old_action: *mut sigaction,
+    sigsetsize: usize,
+) -> Result<(), Errno> {
+    unsafe {
+        syscall!(
+            linux_syscall::SYS_rt_sigaction,
+            signo,
+            new_action,
+            old_action,
+            sigsetsize
+        )
+    }
+    .check()
+    .map_err(Errno::from)
+}
+
+/// Calls the `rt_sigaction` syscall.
+///
+/// # Safety
+///
+/// * `new_action`'s handler must be safe to call as a signal handler.
+///   See `signal-safety(7)`.
+/// * Generally, `new_action` must have `SA_RESTORER` set and a suitable
+///   `restorer`, such as [`sigaction_restorer`]. (There might be some esoteric
+///   way to call this syscall without this property, but I'm not aware of one).
+pub unsafe fn rt_sigaction(
+    signal: Signal,
+    new_action: &sigaction,
+    old_action: Option<&mut sigaction>,
+) -> Result<(), Errno> {
+    unsafe {
+        rt_sigaction_raw(
+            signal.as_i32(),
+            new_action,
+            old_action
+                .map(|o| o as *mut _)
+                .unwrap_or(core::ptr::null_mut()),
+            core::mem::size_of::<sigset_t>(),
+        )
+    }
+}
+
+/// For use with [`rt_sigprocmask`].
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum SigProcMaskAction {
+    SIG_BLOCK = const_conversions::i32_from_u32(bindings::LINUX_SIG_BLOCK),
+    SIG_UNBLOCK = const_conversions::i32_from_u32(bindings::LINUX_SIG_UNBLOCK),
+    SIG_SETMASK = const_conversions::i32_from_u32(bindings::LINUX_SIG_SETMASK),
+}
+
+/// Make the `rt_sigprocmask` syscall.
+///
+/// # Safety
+///
+/// * `sigset_in` must be safe to dereference
+/// * `sigset_out` must be safe to write (uninit is ok)
+pub unsafe fn rt_sigprocmask_raw(
+    how: i32,
+    sigset_in: *const sigset_t,
+    sigset_out: *mut sigset_t,
+    sigset_sz: usize,
+) -> Result<(), Errno> {
+    unsafe {
+        syscall!(
+            linux_syscall::SYS_rt_sigprocmask,
+            how,
+            sigset_in,
+            sigset_out,
+            sigset_sz,
+        )
+        .check()
+        .map_err(Errno::from)
+    }
+}
+
+/// Make the `rt_sigprocmask` syscall.
+pub fn rt_sigprocmask(
+    how: SigProcMaskAction,
+    sigset_in: &sigset_t,
+    sigset_out: Option<&mut sigset_t>,
+) -> Result<(), Errno> {
+    unsafe {
+        rt_sigprocmask_raw(
+            how.into(),
+            sigset_in,
+            sigset_out
+                .map(|s| s as *mut _)
+                .unwrap_or(core::ptr::null_mut()),
+            core::mem::size_of::<sigset_t>(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod rt_sigaction_tests {
+    use core::sync::atomic::AtomicI32;
+
+    use shadow_pod::zeroed;
+
+    use super::*;
+
+    // This test calls `rt_sigaction` with `SIGUSR2`. `rt_sigaction` sets the
+    // handler *process*-wide, so could interfere if other unit tests use
+    // `SIGUSR2`. This is *probably* the only module in this crate that uses
+    // signal handling, but we should be careful about creating other tests that
+    // do signal handling. e.g. add those to this test to ensure they are
+    // effectively serialized, or ensure they use different signals.
+    #[cfg(not(miri))]
+    #[test]
+    fn test_rt_sigaction() {
+        // Test signal handler
+        static CALL_COUNTER: AtomicI32 = AtomicI32::new(0);
+        extern "C" fn handler(_signo: i32) {
+            CALL_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+
+        // Test sigaction
+        let action = sigaction::new_with_default_restorer(
+            SignalHandler::Handler(handler),
+            SigActionFlags::empty(),
+            sigset_t::EMPTY,
+        );
+
+        // Signal that we'll be using.
+        let signal = Signal::SIGUSR2;
+
+        // Install our handler.
+        let mut old_action = zeroed();
+        unsafe { rt_sigaction(signal, &action, Some(&mut old_action)) }.unwrap();
+
+        // Ensure the signal isn't blocked.
+        let mut old_mask: sigset_t = sigset_t::EMPTY;
+        let mask = sigset_t::from(signal);
+        rt_sigprocmask(SigProcMaskAction::SIG_UNBLOCK, &mask, Some(&mut old_mask)).unwrap();
+
+        // Send the signal to this thread. This should guarantee that the signal
+        // is handled before returning from the `tgkill` syscall.
+        let pid = rustix::process::getpid();
+        let tid = rustix::thread::gettid();
+        unsafe {
+            linux_syscall::syscall!(
+                linux_syscall::SYS_tgkill,
+                pid.as_raw_nonzero().get(),
+                tid.as_raw_nonzero().get(),
+                signal.as_i32()
+            )
+        }
+        .check()
+        .unwrap();
+
+        // Validate that our signal handler was called.
+        assert_eq!(CALL_COUNTER.load(core::sync::atomic::Ordering::Relaxed), 1);
+
+        // Restore previous signal action and mask.
+        rt_sigprocmask(SigProcMaskAction::SIG_SETMASK, &old_mask, None).unwrap();
+        unsafe { rt_sigaction(signal, &old_action, None) }.unwrap();
+    }
 }
 
 mod export {
