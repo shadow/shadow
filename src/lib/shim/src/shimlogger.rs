@@ -79,7 +79,7 @@ impl log::Log for ShimLogger {
 
         let mut writer = ShimLoggerWriter::new();
 
-        match crate::manager_shmem() {
+        match crate::global_manager_shmem::try_get() {
             Some(m) => {
                 // rustix's `clock_gettime` goes through VDSO, which is overwritten with our trampoline,
                 // which would end up trying to log and recurse.
