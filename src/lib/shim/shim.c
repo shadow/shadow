@@ -41,14 +41,6 @@ static ShMemBlock* _shim_process_shared_mem_blk() {
 }
 const ShimShmemProcess* shim_processSharedMem() { return _shim_process_shared_mem_blk()->p; }
 
-// Per-host state shared with Shadow.
-// Must remain valid for the lifetime of this process once initialized.
-static ShMemBlock* _shim_host_shared_mem_blk() {
-    static ShMemBlock block = {0};
-    return &block;
-}
-const ShimShmemHost* shim_hostSharedMem() { return _shim_host_shared_mem_blk()->p; }
-
 // Held from the time of starting to initialize _startThread, to being done with
 // it. i.e. ensure we don't try to start more than one thread at once.
 //
@@ -130,8 +122,7 @@ static void _shim_parent_init_manager_shm() {
 }
 
 static void _shim_parent_init_host_shm() {
-    *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(
-        shimshmem_getProcessHostShmem(shim_processSharedMem()));
+    _shim_set_host_shmem(shimshmem_getProcessHostShmem(shim_processSharedMem()));
     assert(shim_hostSharedMem());
 }
 

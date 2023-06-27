@@ -7,7 +7,7 @@ use core::ffi::CStr;
 use crate::tls::ShimTlsVar;
 
 use shadow_shim_helper_rs::ipc::IPCData;
-use shadow_shim_helper_rs::shim_shmem::{ManagerShmem, ThreadShmem};
+use shadow_shim_helper_rs::shim_shmem::{ManagerShmem, ThreadShmem, HostShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::{Serializer, ShMemBlockAlias, ShMemBlockSerialized};
 use vasi_sync::lazy_lock::LazyLock;
@@ -265,6 +265,51 @@ mod global_manager_shmem {
     }
 }
 
+mod global_host_shmem {
+    use super::*;
+
+    // This is set explicitly, so needs a Mutex.
+    static INITIALIZER: SelfContainedMutex<Option<ShMemBlockSerialized>> =
+        SelfContainedMutex::const_new(None);
+
+    // The actual block is in a `LazyLock`, which is much faster to access.
+    // It uses `INITIALIZER` to do its one-time init.
+    static SHMEM: LazyLock<ShMemBlockAlias<HostShmem>> = LazyLock::const_new(|| {
+        let serialized = INITIALIZER.lock().take().unwrap();
+        unsafe { Serializer::global().deserialize(&serialized) }
+    });
+
+    /// # Safety
+    ///
+    /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `HostShmem`.
+    /// The `ShMemBlock` must outlive this process.
+    pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        assert!(!SHMEM.initd());
+        assert!(INITIALIZER.lock().replace(*blk).is_none());
+        // Ensure that `try_get` returns true (without it having to take the
+        // `INITIALIZER` lock to check), and that we fail early if `SHMEM` can't
+        // actually be initialized.
+        SHMEM.force();
+    }
+
+    /// Panics if `set` hasn't been called yet.
+    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static
+    {
+        SHMEM.force()
+    }
+
+    pub fn try_get(
+    ) -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static>
+    {
+        if !SHMEM.initd() {
+            None
+        } else {
+            Some(get())
+        }
+    }
+}
+
+
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
 // https://github.com/rust-lang/cargo/issues/9391
@@ -479,7 +524,7 @@ pub mod export {
     /// # Safety
     ///
     /// `blk` must contained a serialized block of
-    /// type `ManagerShmem`, which outlives the current thread.
+    /// type `ManagerShmem`, which outlives the current process.
     #[no_mangle]
     pub unsafe extern "C" fn _shim_set_manager_shmem(shmem: *const ShMemBlockSerialized) {
         let shmem = unsafe { shmem.as_ref().unwrap() };
@@ -492,6 +537,30 @@ pub mod export {
         let rv = global_manager_shmem::try_get();
         rv.map(|x| {
             let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager = x.deref();
+            // We know this pointer will be live for the lifetime of the
+            // process, and that we never construct a mutable reference to the
+            // underlying data.
+            rv as *const _
+        })
+        .unwrap_or(core::ptr::null())
+    }
+
+    /// # Safety
+    ///
+    /// `blk` must contained a serialized block of
+    /// type `HostShmem`, which outlives the current process.
+    #[no_mangle]
+    pub unsafe extern "C" fn _shim_set_host_shmem(shmem: *const ShMemBlockSerialized) {
+        let shmem = unsafe { shmem.as_ref().unwrap() };
+        unsafe { global_host_shmem::set(shmem) };
+    }
+
+    #[no_mangle]
+    pub extern "C" fn shim_hostSharedMem(
+    ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost {
+        let rv = global_host_shmem::try_get();
+        rv.map(|x| {
+            let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost = x.deref();
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
