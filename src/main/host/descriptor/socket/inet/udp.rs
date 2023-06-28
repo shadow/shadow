@@ -915,6 +915,14 @@ impl UdpSocket {
                 // TODO: implement this, pkg.go.dev/net uses it
                 log::warn!("setsockopt SO_BROADCAST not yet implemented");
             }
+            (libc::IPPROTO_IP, libc::IP_TOS) => {
+                // this is used by linux to encode ecn
+                log::warn!("setsockopt IP_TOS not yet implemented");
+            }
+            (libc::IPPROTO_IP, libc::IP_RECVTOS) => {
+                // this is used by linux to decode ecn
+                log::warn!("setsockopt IP_RECVTOS not yet implemented");
+            }
             _ => {
                 log::debug!("setsockopt called with unsupported level {level} and opt {optname}");
                 return Err(Errno::ENOPROTOOPT.into());
