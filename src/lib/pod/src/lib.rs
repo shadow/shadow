@@ -21,7 +21,15 @@ use core::mem::MaybeUninit;
 ///
 /// # Safety
 ///
-/// Any pattern of bits must be a valid value of the given type.
+/// - Any pattern of bits must be a valid value of the given type.
+/// - The type must not contain an [`UnsafeCell`](core::cell::UnsafeCell), or any other structure
+///   that contains an `UnsafeCell` (for example [`Cell`](core::cell::Cell)). Otherwise the following
+///   code would have UB:
+///   ```ignore
+///   let x = Cell::new(0);
+///   let y = as_u8_slice(&x);
+///   x.set(1);
+///   ```
 pub unsafe trait Pod: Copy + 'static {}
 
 /// Convert to a slice of raw bytes.
