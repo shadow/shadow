@@ -51,3 +51,32 @@ jobs:
         export MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
         cargo miri test --workspace
+
+  # See <https://docs.rs/loom/latest/loom/>
+  loom:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        # Run on PR head instead of merge result. Running on the merge
+        # result can give confusing results, and we require PR to be up to
+        # date with target branch before merging, anyway.
+        # See https://github.com/shadow/shadow/issues/2166
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    - name: Test
+      run: |
+        cd src
+        # Currently only the vasi-sync crate is designed to work with loom.
+        # This is also the crate that benefits the most from loom testing, since
+        # it implements synchronization primitives.
+        #
+        # If this ever gets too slow, we can consider reducing `LOOM_MAX_PREEMPTIONS`
+        # to substantially speed it up, at the cost of losing some coverage of possible
+        # execution paths.
+        for PKG in vasi-sync
+        do
+          RUST_BACKTRACE=1 LOOM_MAX_PREEMPTIONS=3 RUSTFLAGS="--cfg loom" cargo test -p "$PKG"
+        done
