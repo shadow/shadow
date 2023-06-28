@@ -27,6 +27,9 @@ bindgen = { version = "0.66.1" }
 cbindgen = { version = "0.24.5" }
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common" }
+# Building the C code from this crate's build script requires
+# that these bindings have been generated.
+shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 system-deps = "6.1"
 
 [package.metadata.system-deps]

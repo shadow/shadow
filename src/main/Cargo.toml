@@ -72,6 +72,9 @@ bindgen = { version = "0.66.1" }
 cbindgen = { version = "0.24.5" }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.1"
+# Building the C code from this crate's build script requires
+# that these bindings have been generated.
+shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt
