@@ -5,12 +5,22 @@ use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
 #[derive(Debug)]
-pub struct Block<'alloc, T>
+pub struct Block<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     block: *mut crate::shmalloc_impl::Block,
-    phantom: core::marker::PhantomData<&'alloc T>,
+    phantom: core::marker::PhantomData<&'allocator T>,
+}
+
+impl<'allocator, T> Block<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    pub fn serialize(&self) {
+        let serialized = SHMALLOC.lock().internal.serialize(self.block);
+        println!("{:?}", serialized);
+    }
 }
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
@@ -47,6 +57,12 @@ where
             self.block = core::ptr::null_mut();
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[repr(transparent)]
+pub struct BlockSerialized {
+    internal: crate::shmalloc_impl::BlockSerialized,
 }
 
 lazy_static! {
@@ -113,10 +129,38 @@ impl<'alloc> Drop for SharedMemAllocator<'alloc> {
     }
 }
 
+unsafe impl Sync for GlobalAllocator {}
+unsafe impl Send for GlobalAllocator {}
+
+struct GlobalAllocator {
+}
+
+unsafe impl core::alloc::GlobalAlloc for GlobalAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        let block_p = SHMALLOC.lock().internal.alloc(layout.size(), layout.align());
+        let (p, _) = unsafe { (*block_p).get_mut_block_data_range() };
+        p
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
+        let block_p = crate::shmalloc_impl::rewind(ptr);
+        SHMALLOC.lock().internal.dealloc(block_p);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rand::Rng;
+
+    #[global_allocator]
+    static ALLOCATOR: GlobalAllocator = GlobalAllocator{};
+
+    #[test]
+    fn xx() {
+        let x: Box<u32> = Box::<u32>::new(8);
+        println!("{:?}", x);
+    }
 
     #[test]
     fn test_allocator_random() {
@@ -162,7 +206,8 @@ mod tests {
     fn foo() {
         let block = SHMALLOC.lock().alloc(5);
         println!("{:?}, {:?}", block, *block);
+        block.serialize();
         SHMALLOC.lock().free(block);
-        SHMALLOC.lock().internal.destruct();
+        // SHMALLOC.lock().internal.destruct();
     }
 }

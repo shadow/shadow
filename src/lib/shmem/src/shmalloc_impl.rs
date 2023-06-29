@@ -7,6 +7,8 @@ const PATH_MAX_NBYTES: usize = 255;
 const PATH_BUF_NBYTES: usize = PATH_MAX_NBYTES + 1;
 type PathBuf = [u8; PATH_BUF_NBYTES];
 
+use vasi::VirtualAddressSpaceIndependent;
+
 enum AllocError {}
 
 fn get_null_path_buf() -> PathBuf {
@@ -70,8 +72,7 @@ fn format_shmem_name(buf: &mut [u8]) {
     buf.iter_mut().zip(name_itr).for_each(|(x, y)| *x = *y);
 }
 
-const CHUNK_NBYTES: usize = 20971520;
-// const CHUNK_NBYTES: usize = 512;
+const CHUNK_NBYTES_DEFAULT: usize = 20971520;
 
 fn create_map_shared_memory<'a>(
     path_buf: &PathBuf,
@@ -128,6 +129,7 @@ struct Chunk {
     magic_front: MagicBuf,
     chunk_name: PathBuf,
     chunk_fd: i32,
+    chunk_nbytes: usize,
     data_cur: u32, // The current point at which the data starts from the start of the data segment
     next_chunk: *mut Chunk,
     magic_back: MagicBuf,
@@ -157,11 +159,16 @@ impl Magic for Chunk {
 
 fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i32> {
     let (p, fd) = create_map_shared_memory(path_buf, nbytes)?;
+
+    // Zero the memory so that we do not have to worry about junk between blocks.
+    unsafe { core::ptr::write_bytes::<u8>(p.as_mut_ptr(), 0x00, nbytes); }
+
     let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
 
     unsafe {
         (*chunk_meta).chunk_name = *path_buf;
         (*chunk_meta).chunk_fd = fd;
+        (*chunk_meta).chunk_nbytes = nbytes;
         (*chunk_meta).data_cur = 0;
         (*chunk_meta).next_chunk = core::ptr::null_mut();
         (*chunk_meta).magic_init();
@@ -182,8 +189,9 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
     }
 
     let path_buf = unsafe { (*chunk_meta).chunk_name };
+    let chunk_nbytes = unsafe { (*chunk_meta).chunk_nbytes };
 
-    munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, CHUNK_NBYTES) })
+    munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, chunk_nbytes) })
         .unwrap();
 
     unsafe {
@@ -204,7 +212,7 @@ pub(crate) struct Block {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 pub(crate) struct BlockSerialized {
     chunk_name: PathBuf,
     offset: isize,
@@ -252,7 +260,7 @@ impl Block {
         (data_begin, data_end)
     }
 
-    pub(self) fn get_mut_block_data_range(&self) -> (*mut u8, *mut u8) {
+    pub(crate) fn get_mut_block_data_range(&self) -> (*mut u8, *mut u8) {
         let (x, y) = self.get_block_data_range();
         (x as *mut u8, y as *mut u8)
     }
@@ -278,10 +286,51 @@ impl Block {
     }
 }
 
+fn seek_prv_aligned_ptr(p: *mut u8, alignment: usize) -> *mut u8 {
+    if p.align_offset(alignment) == 0 {
+        unsafe { p.offset(-(alignment as isize)) }
+    } else {
+        let offset = (p as usize) % alignment;
+        let p = unsafe { p.offset(-(offset as isize)) };
+        assert!(p.align_offset(alignment) == 0);
+        p
+    }
+}
+
+pub(crate) fn rewind(p: *mut u8) -> *mut Block {
+    // This logic could be simplified if we use the layout information that the allocator gets on
+    // free. We could stick the block header *behind* the block data in the first space it can fit.
+    // That would allow us to find the header deterministically versus using this scan.
+
+    // First, go to the first pointer offset that could possibly correspond to this block.
+
+    let mut block_p = unsafe { p.offset(-(BLOCK_STRUCT_NBYTES as isize)) };
+
+    if block_p.align_offset(BLOCK_STRUCT_ALIGNMENT) != 0 {
+        block_p = seek_prv_aligned_ptr(block_p, BLOCK_STRUCT_ALIGNMENT);
+    }
+
+    loop {
+        // Interpret block_p as a block. If the offset matches up, we are good to go.
+        let block_offset = unsafe { (*(block_p as *mut Block)).data_offset };
+        let real_offset = unsafe { p.offset_from(block_p) } as u32;
+
+        if real_offset == block_offset {
+            // `block_p` now points to a valid block.
+            break;
+        } else {
+            block_p = seek_prv_aligned_ptr(block_p, BLOCK_STRUCT_ALIGNMENT);
+        }
+    }
+
+    block_p as *mut Block
+}
+
 #[derive(Debug)]
 pub(crate) struct FreelistAllocator {
     first_chunk: *mut Chunk,
     next_free_block: *mut Block,
+    chunk_nbytes: usize,
 }
 
 impl FreelistAllocator {
@@ -289,6 +338,7 @@ impl FreelistAllocator {
         FreelistAllocator {
             first_chunk: core::ptr::null_mut(),
             next_free_block: core::ptr::null_mut(),
+            chunk_nbytes: CHUNK_NBYTES_DEFAULT,
         }
     }
 
@@ -301,7 +351,7 @@ impl FreelistAllocator {
         format_shmem_name(&mut path_buf);
 
         // TODO(rwails) Unwrap not safe here
-        let new_chunk = allocate_shared_chunk(&path_buf, CHUNK_NBYTES).unwrap();
+        let new_chunk = allocate_shared_chunk(&path_buf, self.chunk_nbytes).unwrap();
 
         unsafe {
             (*new_chunk).next_chunk = self.first_chunk;
@@ -357,7 +407,7 @@ impl FreelistAllocator {
         alloc_alignment: usize,
     ) -> *mut Block {
         let chunk_start = chunk as *mut Chunk as *mut u8;
-        let chunk_end = unsafe { chunk_start.add(CHUNK_NBYTES) };
+        let chunk_end = unsafe { chunk_start.add(chunk.chunk_nbytes) };
 
         let data_start = unsafe { chunk.get_mut_data_start().add(chunk.data_cur as usize) };
 
@@ -409,7 +459,8 @@ impl FreelistAllocator {
                 }
             }
 
-            assert!(block.align_offset(alloc_alignment) == 0);
+            let (p, _) = unsafe { (*block).get_block_data_range() };
+            assert!(p.align_offset(alloc_alignment) == 0);
             return block;
         }
 
@@ -446,7 +497,8 @@ impl FreelistAllocator {
         }
 
         assert!(!block.is_null());
-        assert!(block.align_offset(alloc_alignment) == 0);
+        let (p, _) = unsafe { (*block).get_block_data_range() };
+        assert!(p.align_offset(alloc_alignment) == 0);
 
         block
     }
@@ -481,7 +533,7 @@ impl FreelistAllocator {
                     (*chunk_to_check).magic_assert();
                 }
                 let data_start = unsafe { (*chunk_to_check).get_data_start() };
-                let data_end = unsafe { (chunk_to_check as *const u8).add(CHUNK_NBYTES) };
+                let data_end = unsafe { (chunk_to_check as *const u8).add(self.chunk_nbytes) };
 
                 // Now we just see if the block is in the range.
                 let block_p = block as *const u8;
@@ -544,13 +596,16 @@ const CHUNK_CAPACITY: usize = 128;
 pub(crate) struct FreelistDeserializer {
     chunks: [*mut Chunk; CHUNK_CAPACITY],
     nmapped_chunks: usize,
+    chunk_nbytes: usize,
 }
 
 impl FreelistDeserializer {
-    fn new() -> FreelistDeserializer {
+    #[no_mangle]
+    pub extern "C" fn new() -> FreelistDeserializer {
         FreelistDeserializer {
             chunks: [core::ptr::null_mut(); CHUNK_CAPACITY],
             nmapped_chunks: 0,
+            chunk_nbytes: CHUNK_NBYTES_DEFAULT,
         }
     }
 
@@ -568,19 +623,21 @@ impl FreelistDeserializer {
     }
 
     fn map_chunk(&mut self, chunk_name: &PathBuf) -> *mut Chunk {
-        if self.nmapped_chunks == CHUNK_CAPACITY {
-            panic!("Ran out of chunk slots.");
-        }
-
         // TODO(rwails) Fix unwrap on view shared chunk
-        let chunk = view_shared_chunk(chunk_name, CHUNK_NBYTES).unwrap();
-        self.chunks[self.nmapped_chunks] = chunk;
-        self.nmapped_chunks += 1;
+        let chunk = view_shared_chunk(chunk_name, self.chunk_nbytes).unwrap();
+
+        if self.nmapped_chunks == CHUNK_CAPACITY {
+            // Ran out of chunk slots -- we're going to leak the handle.
+        } else {
+            self.chunks[self.nmapped_chunks] = chunk;
+            self.nmapped_chunks += 1;
+        }
 
         chunk
     }
 
-    pub(crate) fn deserialize(&mut self, block_ser: &BlockSerialized) -> *mut Block {
+    #[no_mangle]
+    pub extern "C" fn deserialize(&mut self, block_ser: &BlockSerialized) -> *mut Block {
         let mut block_chunk = self.find_chunk(&block_ser.chunk_name);
 
         if block_chunk.is_null() {
@@ -663,6 +720,19 @@ mod tests {
         let b1 = alloc.alloc(10, 8);
         let b2 = alloc.alloc(20, 8);
         let b3 = alloc.alloc(30, 8);
+
+        let (p, _) = unsafe { (*b1).get_mut_block_data_range() };
+        let bk = rewind(p);
+        unsafe { println!("{:?} {:?}", *b1, *bk); }
+
+        let (p, _) = unsafe { (*b2).get_mut_block_data_range() };
+        let bk = rewind(p);
+        unsafe { println!("{:?} {:?}", *b2, *bk); }
+
+        let (p, _) = unsafe { (*b3).get_mut_block_data_range() };
+        let bk = rewind(p);
+        unsafe { println!("{:?} {:?}", *b3, *bk); }
+
         println!("{:?} {:?} {:?}", b1, b2, b3);
         alloc.dealloc(b3);
         alloc.dealloc(b2);
@@ -709,14 +779,5 @@ mod tests {
         unsafe {
             unlink(path_buf.as_ptr()).unwrap();
         }
-    }
-
-    #[test]
-    fn test_chunk() {
-        let mut path_buf = get_null_path_buf();
-        format_shmem_name(&mut path_buf);
-
-        let chunk = allocate_shared_chunk(&path_buf, 1000).unwrap();
-        deallocate_shared_chunk(chunk).unwrap();
     }
 }
