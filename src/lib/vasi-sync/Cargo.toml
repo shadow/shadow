@@ -16,7 +16,7 @@ rand = "0.8.5"
 rustix = { version = "0.37.19", default-features = false, features=["process"] }
 
 [target.'cfg(loom)'.dependencies]
-loom = "0.5"
+loom = "0.6"
 
 [target.'cfg(miri)'.dependencies]
 libc = { version ="0.2", default-features = false }
