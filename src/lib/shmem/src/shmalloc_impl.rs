@@ -70,8 +70,8 @@ fn format_shmem_name(buf: &mut [u8]) {
     buf.iter_mut().zip(name_itr).for_each(|(x, y)| *x = *y);
 }
 
-//const CHUNK_NBYTES: usize = 2097152;
-const CHUNK_NBYTES: usize = 512;
+const CHUNK_NBYTES: usize = 20971520;
+// const CHUNK_NBYTES: usize = 512;
 
 fn create_map_shared_memory<'a>(
     path_buf: &PathBuf,
@@ -100,10 +100,7 @@ fn create_map_shared_memory<'a>(
 }
 
 // Similar to `create_map_shared_memory` but no O_CREAT or O_EXCL and no ftruncate calls.
-fn view_shared_memory<'a>(
-    path_buf: &PathBuf,
-    nbytes: usize,
-) -> Result<(&'a mut [u8], i32), i32> {
+fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut [u8], i32), i32> {
     const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CLOEXEC;
     const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
     const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
@@ -127,16 +124,27 @@ fn view_shared_memory<'a>(
 
 #[repr(C)]
 #[derive(Debug)]
-struct ChunkMeta {
+struct Chunk {
     magic_front: MagicBuf,
     chunk_name: PathBuf,
     chunk_fd: i32,
-    data_start: *mut u8,
-    next_chunk: *mut ChunkMeta,
+    data_cur: u32, // The current point at which the data starts from the start of the data segment
+    next_chunk: *mut Chunk,
     magic_back: MagicBuf,
 }
 
-impl Magic for ChunkMeta {
+impl Chunk {
+    fn get_mut_data_start(&mut self) -> *mut u8 {
+        self.get_data_start() as *mut u8
+    }
+
+    fn get_data_start(&self) -> *const u8 {
+        let p = self as *const Self as *const u8;
+        unsafe { p.add(core::mem::size_of::<Self>()) }
+    }
+}
+
+impl Magic for Chunk {
     fn magic_init(&mut self) {
         self.magic_front = get_magic_buf();
         self.magic_back = get_magic_buf();
@@ -147,14 +155,14 @@ impl Magic for ChunkMeta {
     }
 }
 
-fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut ChunkMeta, i32> {
+fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i32> {
     let (p, fd) = create_map_shared_memory(path_buf, nbytes)?;
-    let chunk_meta: *mut ChunkMeta = p.as_mut_ptr() as *mut ChunkMeta;
+    let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
 
     unsafe {
         (*chunk_meta).chunk_name = *path_buf;
         (*chunk_meta).chunk_fd = fd;
-        (*chunk_meta).data_start = (chunk_meta as *mut u8).add(core::mem::size_of::<ChunkMeta>());
+        (*chunk_meta).data_cur = 0;
         (*chunk_meta).next_chunk = core::ptr::null_mut();
         (*chunk_meta).magic_init();
     }
@@ -162,13 +170,13 @@ fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk
     Ok(chunk_meta)
 }
 
-fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut ChunkMeta, i32> {
+fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i32> {
     let (p, _) = view_shared_memory(path_buf, nbytes)?;
-    let chunk_meta: *mut ChunkMeta = p.as_mut_ptr() as *mut ChunkMeta;
+    let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
     Ok(chunk_meta)
 }
 
-fn deallocate_shared_chunk(chunk_meta: *const ChunkMeta) -> Result<(), i32> {
+fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
     unsafe {
         (*chunk_meta).magic_assert();
     }
@@ -187,24 +195,25 @@ fn deallocate_shared_chunk(chunk_meta: *const ChunkMeta) -> Result<(), i32> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub(crate) struct BlockHdr {
+pub(crate) struct Block {
     magic_front: MagicBuf,
-    next_free_block: *mut BlockHdr,
-    data_start: *mut u8,
+    next_free_block: *mut Block, // This can't be a short pointer, because it may point across chunks.
+    alloc_nbytes: u32,           // What is the size of the block
+    data_offset: u32,            // From the start location of the block header
     magic_back: MagicBuf,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub(crate) struct BlockHdrSerialized {
+pub(crate) struct BlockSerialized {
     chunk_name: PathBuf,
     offset: isize,
 }
 
-const MEM_BLOCK_NBYTES: usize = core::mem::size_of::<BlockHdr>();
-const MEM_BLOCK_ALIGNMENT: usize = core::mem::align_of::<BlockHdr>();
+const BLOCK_STRUCT_NBYTES: usize = core::mem::size_of::<Block>();
+const BLOCK_STRUCT_ALIGNMENT: usize = core::mem::align_of::<Block>();
 
-impl Magic for BlockHdr {
+impl Magic for Block {
     fn magic_init(&mut self) {
         self.magic_front = get_magic_buf();
         self.magic_back = get_magic_buf();
@@ -215,7 +224,7 @@ impl Magic for BlockHdr {
     }
 }
 
-impl BlockHdr {
+impl Block {
     /// Gets the data corresponding to the block
     ///
     /// # Parameters
@@ -229,83 +238,57 @@ impl BlockHdr {
     /// # Pre
     ///
     /// `block` is not null and has an address correctly computed by the `init_block` function.
-    pub(self) fn get_mut_block_data_range(
-        &mut self,
-        alloc_nbytes: usize,
-        alloc_alignment: usize,
-    ) -> (*mut u8, *mut u8) {
-        let block: *mut BlockHdr = &mut *self;
+    pub(self) fn get_block_data_range(&self) -> (*const u8, *const u8) {
+        self.magic_assert();
 
+        let data_offset = self.data_offset;
+        let alloc_nbytes = self.alloc_nbytes;
+        let block = self as *const Block as *const u8;
         assert!(!block.is_null());
 
-        let block_end = unsafe { (block as *mut u8).add(MEM_BLOCK_NBYTES) };
-
-        let data_start_offset = block_end.align_offset(alloc_alignment);
-        let data_begin = unsafe { block_end.add(data_start_offset) };
-        let data_end = unsafe { data_begin.add(alloc_nbytes) };
+        let data_begin = unsafe { block.add(data_offset as usize) };
+        let data_end = unsafe { data_begin.add(alloc_nbytes as usize) };
 
         (data_begin, data_end)
     }
 
-    pub(self) fn get_block_data_range(
-        &self,
-        alloc_nbytes: usize,
-        alloc_alignment: usize,
-    ) -> (*const u8, *const u8) {
-        let block: *const BlockHdr = &*self;
-
-        assert!(!block.is_null());
-
-        let block_end = unsafe { (block as *const u8).add(MEM_BLOCK_NBYTES) };
-
-        let data_start_offset = block_end.align_offset(alloc_alignment);
-        let data_begin = unsafe { block_end.add(data_start_offset) };
-        let data_end = unsafe { data_begin.add(alloc_nbytes) };
-
-        (data_begin, data_end)
+    pub(self) fn get_mut_block_data_range(&self) -> (*mut u8, *mut u8) {
+        let (x, y) = self.get_block_data_range();
+        (x as *mut u8, y as *mut u8)
     }
 
-    pub(crate) fn get_mut_bytes(&mut self, nbytes: usize, alignment: usize) -> &mut [u8] {
-        let (begin_p, _) = self.get_mut_block_data_range(nbytes, alignment);
-        unsafe { core::slice::from_raw_parts_mut(begin_p, nbytes) }
+    pub(crate) fn get_mut_bytes(&mut self) -> &mut [u8] {
+        let (begin_p, _) = self.get_mut_block_data_range();
+        unsafe { core::slice::from_raw_parts_mut(begin_p, self.alloc_nbytes as usize) }
     }
 
-    pub(crate) fn get_mut_ref<T>(&mut self, nbytes: usize, alignment: usize) -> &mut [T] {
-        let (begin_p, end_p) = self.get_mut_block_data_range(nbytes, alignment);
+    pub(crate) fn get_ref<T>(&self) -> &[T] {
+        let (begin_p, end_p) = self.get_block_data_range();
         let block_len = unsafe { end_p.offset_from(begin_p) } as usize;
         assert!(block_len % core::mem::size_of::<T>() == 0);
         let nelems = block_len / core::mem::size_of::<T>();
-        unsafe { core::slice::from_raw_parts_mut(begin_p as *mut T, nelems) }
+        unsafe { core::slice::from_raw_parts(begin_p as *const T, nelems) }
     }
 
-    pub(crate) fn get_ref<T>(&self, nbytes: usize, alignment: usize) -> &[T] {
-        let (begin_p, end_p) = self.get_block_data_range(nbytes, alignment);
-        let block_len = unsafe { end_p.offset_from(begin_p) } as usize;
-        assert!(block_len % core::mem::size_of::<T>() == 0);
-        let nelems = block_len / core::mem::size_of::<T>();
-        unsafe { core::slice::from_raw_parts_mut(begin_p as *mut T, nelems) }
+    pub(crate) fn get_mut_ref<T>(&mut self) -> &mut [T] {
+        let x = self.get_ref();
+        let nelems = x.len();
+        let x_ptr: *const T = x.as_ptr();
+        unsafe { core::slice::from_raw_parts_mut(x_ptr as *mut T, nelems) }
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct UniformFreelistAllocator {
-    first_chunk: Option<*mut ChunkMeta>,
-    next_free_block: *mut BlockHdr,
-    alloc_nbytes: usize,
-    alloc_alignment: usize,
+pub(crate) struct FreelistAllocator {
+    first_chunk: *mut Chunk,
+    next_free_block: *mut Block,
 }
 
-impl UniformFreelistAllocator {
-    ///
-    /// # Parameters
-    ///
-    /// * `alloc_alignment` - Must be a power of two; leq than 4096.
-    pub fn new(alloc_nbytes: usize, alloc_alignment: usize) -> Self {
-        UniformFreelistAllocator {
-            first_chunk: None,
+impl FreelistAllocator {
+    pub const fn new() -> Self {
+        FreelistAllocator {
+            first_chunk: core::ptr::null_mut(),
             next_free_block: core::ptr::null_mut(),
-            alloc_nbytes,
-            alloc_alignment,
         }
     }
 
@@ -320,74 +303,184 @@ impl UniformFreelistAllocator {
         // TODO(rwails) Unwrap not safe here
         let new_chunk = allocate_shared_chunk(&path_buf, CHUNK_NBYTES).unwrap();
 
-        // This unwrap is safe, because we know the pointer is not NULL at this point.
-        let (first_block, last_block) = self.init_chunk(unsafe { new_chunk.as_ref().unwrap() });
-
-        if first_block.is_null() {
-            panic!();
-        }
-
-        // Now update our linked lists
-
         unsafe {
-            (*last_block).next_free_block = self.next_free_block;
+            (*new_chunk).next_chunk = self.first_chunk;
         }
 
-        if let Some(current_chunk) = self.first_chunk {
-            unsafe {
-                (*new_chunk).next_chunk = current_chunk;
-            }
-        }
-
-        self.first_chunk = Some(new_chunk);
-        self.next_free_block = first_block;
+        self.first_chunk = new_chunk;
 
         Ok(())
     }
 
-    pub fn alloc(&mut self) -> *mut BlockHdr {
-        if !self.next_free_block.is_null() {
-            // We just give the next block and update the free
-            // list.
-            let retval = self.next_free_block;
-            self.next_free_block = unsafe { (*retval).next_free_block };
-            unsafe {
-                (*retval).magic_assert();
-                retval
+    /// Returns the block and its predecessor (if it exists)
+    fn check_free_list_for_acceptable_block(
+        &mut self,
+        alloc_nbytes: usize,
+        alloc_alignment: usize,
+    ) -> (*mut Block, *mut Block) // (pred, block)
+    {
+        let mut block = self.next_free_block;
+        let mut pred: *mut Block = core::ptr::null_mut();
+
+        while !block.is_null() {
+            let (start_p, _) = unsafe { (*block).get_block_data_range() };
+
+            if unsafe { (*block).alloc_nbytes as usize == alloc_nbytes }
+                && start_p.align_offset(alloc_alignment) == 0
+            {
+                return (pred, block);
             }
-        } else {
-            // We need to allocate a new chunk
-            self.add_chunk().unwrap();
-            self.alloc()
+
+            pred = block;
+            unsafe {
+                block = (*block).next_free_block;
+            }
         }
+
+        (pred, core::ptr::null_mut())
     }
 
-    pub fn dealloc(&mut self, block: *mut BlockHdr) {
-        if !block.is_null() {
-            let mut block = unsafe { &mut *block };
-            block.magic_check();
-            block.next_free_block = self.next_free_block;
-            self.next_free_block = block;
-        } else {
-            panic!();
+    fn find_next_suitable_positions(
+        p: *mut u8,
+        alloc_nbytes: usize,
+        alloc_alignment: usize,
+    ) -> (*mut u8, *mut u8) {
+        let off = p.align_offset(alloc_alignment);
+        let start = unsafe { p.add(off) };
+        let end = unsafe { start.add(alloc_nbytes) };
+        (start, end)
+    }
+
+    fn try_creating_block_in_chunk(
+        chunk: &mut Chunk,
+        alloc_nbytes: usize,
+        alloc_alignment: usize,
+    ) -> *mut Block {
+        let chunk_start = chunk as *mut Chunk as *mut u8;
+        let chunk_end = unsafe { chunk_start.add(CHUNK_NBYTES) };
+
+        let data_start = unsafe { chunk.get_mut_data_start().add(chunk.data_cur as usize) };
+
+        let (block_struct_start, block_struct_end) = Self::find_next_suitable_positions(
+            data_start,
+            BLOCK_STRUCT_NBYTES,
+            BLOCK_STRUCT_ALIGNMENT,
+        );
+        let (block_data_start, block_data_end) =
+            Self::find_next_suitable_positions(block_struct_end, alloc_nbytes, alloc_alignment);
+
+        let data_offset = unsafe { block_data_start.offset_from(block_struct_start) };
+
+        assert!(data_offset > 0);
+
+        if block_data_end <= chunk_end {
+            // The block fits.
+            // Initialize the block
+            let block = block_struct_start as *mut Block;
+
+            unsafe {
+                (*block).magic_init();
+                (*block).next_free_block = core::ptr::null_mut();
+                (*block).alloc_nbytes = alloc_nbytes as u32;
+                (*block).data_offset = data_offset as u32;
+            }
+
+            return block;
         }
+
+        core::ptr::null_mut()
+    }
+
+    pub fn alloc(&mut self, alloc_nbytes: usize, alloc_alignment: usize) -> *mut Block {
+        // First, check the free list
+        let (mut pred, mut block) =
+            self.check_free_list_for_acceptable_block(alloc_nbytes, alloc_alignment);
+
+        if !block.is_null() {
+            // We found a hit off the free list, we can just return that.
+            // But first we update the free list.
+            if pred.is_null() {
+                // The block was the first element on the list.
+                self.next_free_block = unsafe { (*block).next_free_block };
+            } else {
+                // We can just update the predecessor
+                unsafe {
+                    (*pred).next_free_block = (*block).next_free_block;
+                }
+            }
+
+            assert!(block.align_offset(alloc_alignment) == 0);
+            return block;
+        }
+
+        // If nothing in the free list, then check if the current chunk can handle the allocation
+        block = Self::try_creating_block_in_chunk(
+            unsafe { &mut (*self.first_chunk) },
+            alloc_nbytes,
+            alloc_alignment,
+        );
+
+        if block.is_null() {
+            // Chunk didn't have enough capacity...
+            self.add_chunk().unwrap();
+        }
+
+        block = Self::try_creating_block_in_chunk(
+            unsafe { &mut (*self.first_chunk) },
+            alloc_nbytes,
+            alloc_alignment,
+        );
+
+        let block_p = block as *mut u8;
+
+        let block_end = unsafe {
+            let data_offset = (*block).data_offset;
+            assert!(data_offset > 0);
+            block_p.add(data_offset as usize).add(alloc_nbytes)
+        };
+
+        let chunk_p = self.first_chunk as *mut u8;
+        unsafe {
+            let data_cur = block_end.offset_from(chunk_p);
+            (*self.first_chunk).data_cur = data_cur as u32;
+        }
+
+        assert!(!block.is_null());
+        assert!(block.align_offset(alloc_alignment) == 0);
+
+        block
+    }
+
+    pub fn dealloc(&mut self, block: *mut Block) {
+        if block.is_null() {
+            return;
+        }
+
+        unsafe {
+            (*block).magic_assert();
+        }
+        let old_block = self.next_free_block;
+        unsafe {
+            (*block).next_free_block = old_block;
+        }
+        self.next_free_block = block;
     }
 
     // PRE: Block was allocated with this allocator
-    fn find_chunk(&self, block: *const BlockHdr) -> Option<*const ChunkMeta> {
+    fn find_chunk(&self, block: *const Block) -> Option<*const Chunk> {
         unsafe {
             (*block).magic_assert();
         }
 
-        if let Some(chunk) = self.first_chunk {
-            let mut chunk_to_check = chunk;
+        if !self.first_chunk.is_null() {
+            let mut chunk_to_check = self.first_chunk;
 
             while !chunk_to_check.is_null() {
                 // Safe to deref throughout this block because we checked for null above
                 unsafe {
                     (*chunk_to_check).magic_assert();
                 }
-                let data_start = unsafe { (*chunk_to_check).data_start };
+                let data_start = unsafe { (*chunk_to_check).get_data_start() };
                 let data_end = unsafe { (chunk_to_check as *const u8).add(CHUNK_NBYTES) };
 
                 // Now we just see if the block is in the range.
@@ -405,7 +498,7 @@ impl UniformFreelistAllocator {
     }
 
     // PRE: Block was allocated with this allocator
-    pub fn serialize(&self, block: *const BlockHdr) -> BlockHdrSerialized {
+    pub fn serialize(&self, block: *const Block) -> BlockSerialized {
         unsafe {
             (*block).magic_assert();
         }
@@ -416,7 +509,7 @@ impl UniformFreelistAllocator {
             let offset = unsafe { block_p.offset_from(chunk_p) };
             assert!(offset > 0);
 
-            BlockHdrSerialized {
+            BlockSerialized {
                 chunk_name: unsafe { (*chunk).chunk_name },
                 offset,
             }
@@ -425,58 +518,9 @@ impl UniformFreelistAllocator {
         }
     }
 
-    pub unsafe fn get_mut_bytes(&self, block: *mut BlockHdr) -> &mut [u8] {
-        if !block.is_null() {
-            let block = unsafe { &mut *block };
-            block.get_mut_bytes(self.alloc_nbytes, self.alloc_alignment)
-        } else {
-            panic!();
-        }
-    }
-
-    pub unsafe fn get_mut_ref<T>(&self, block: *mut BlockHdr) -> &mut [T] {
-        if !block.is_null() {
-            let block = unsafe { &mut *block };
-            let (begin_p, end_p) =
-                block.get_mut_block_data_range(self.alloc_nbytes, self.alloc_alignment);
-            let block_len = unsafe { end_p.offset_from(begin_p) } as usize;
-            assert!(block_len % core::mem::size_of::<T>() == 0);
-            let nelems = block_len / core::mem::size_of::<T>();
-            unsafe { core::slice::from_raw_parts_mut(begin_p as *mut T, nelems) }
-        } else {
-            panic!();
-        }
-    }
-
-    /// # Return Value
-    ///
-    /// Returns pointers to the first and last block that was allocated.
-    fn init_chunk(&self, chunk: &ChunkMeta) -> (*mut BlockHdr, *mut BlockHdr) {
-        let mut p = chunk.data_start;
-
-        let chunk_data_nbytes = CHUNK_NBYTES - core::mem::size_of::<ChunkMeta>();
-        let end_p = unsafe { chunk.data_start.add(chunk_data_nbytes) };
-
-        // Begin by trying to initialize the first block...
-        let first_block: *mut BlockHdr = self.init_block(core::ptr::null_mut(), p, end_p);
-        let mut block: *mut BlockHdr = first_block;
-        let mut last_block: *mut BlockHdr = core::ptr::null_mut();
-
-        while !block.is_null() {
-            unsafe {
-                (*block).magic_assert();
-                (_, p) = (*block).get_mut_block_data_range(self.alloc_nbytes, self.alloc_alignment);
-            }
-            last_block = block;
-            block = self.init_block(block, p, end_p);
-        }
-
-        (first_block, last_block)
-    }
-
     pub fn destruct(&mut self) {
-        if let Some(chunk) = self.first_chunk {
-            let mut chunk_to_dealloc = chunk;
+        if !self.first_chunk.is_null() {
+            let mut chunk_to_dealloc = self.first_chunk;
 
             while !chunk_to_dealloc.is_null() {
                 // Safe due to check above
@@ -488,72 +532,34 @@ impl UniformFreelistAllocator {
                 chunk_to_dealloc = tmp;
             }
 
-            self.first_chunk = None;
-        }
-    }
-
-    fn init_block(
-        &self,
-        prev_block: *mut BlockHdr,
-        current_p: *mut u8,
-        end_p: *mut u8,
-    ) -> *mut BlockHdr {
-        let block_start_offset = current_p.align_offset(MEM_BLOCK_ALIGNMENT);
-        let block_begin = unsafe { current_p.add(block_start_offset) };
-        let block_end = unsafe { block_begin.add(MEM_BLOCK_NBYTES) };
-
-        let (data_begin, data_end) = unsafe {
-            let block = block_begin as *mut BlockHdr;
-            (*block).get_mut_block_data_range(self.alloc_nbytes, self.alloc_alignment)
-        };
-
-        assert!(unsafe { block_end.offset_from(block_begin) } as usize == MEM_BLOCK_NBYTES);
-        assert!(unsafe { data_end.offset_from(data_begin) } as usize == self.alloc_nbytes);
-        assert!(block_begin.align_offset(MEM_BLOCK_ALIGNMENT) == 0);
-        assert!(data_begin.align_offset(self.alloc_alignment) == 0);
-        assert!(block_end > block_begin && data_begin >= block_end && data_end > data_begin);
-
-        if data_end < end_p {
-            let this_block = block_begin as *mut BlockHdr;
-            // Safe to unwrap here -- we validated above that this is a valid pointer.
-            let mut this_block = unsafe { this_block.as_mut().unwrap() };
-            this_block.magic_init();
-
-            this_block.next_free_block = core::ptr::null_mut();
-
-            if !prev_block.is_null() {
-                // Safe to unwrap here, we just checked for nullness above.
-                unsafe { prev_block.as_mut().unwrap().next_free_block = this_block };
-            }
-
-            block_begin as *mut BlockHdr
-        } else {
-            // Not enough room left in the chunk
-            core::ptr::null_mut()
+            self.first_chunk = core::ptr::null_mut();
         }
     }
 }
 
+const CHUNK_CAPACITY: usize = 128;
+
+#[repr(C)]
 #[derive(Debug)]
-pub(crate) struct UniformFreelistDeserializer<const ChunkCapacity: usize> {
-    chunks: [*mut ChunkMeta; ChunkCapacity],
+pub(crate) struct FreelistDeserializer {
+    chunks: [*mut Chunk; CHUNK_CAPACITY],
     nmapped_chunks: usize,
 }
 
-impl<const ChunkCapacity: usize> UniformFreelistDeserializer<ChunkCapacity> {
-    fn new() -> UniformFreelistDeserializer<ChunkCapacity> {
-        UniformFreelistDeserializer {
-            chunks: [core::ptr::null_mut(); ChunkCapacity],
+impl FreelistDeserializer {
+    fn new() -> FreelistDeserializer {
+        FreelistDeserializer {
+            chunks: [core::ptr::null_mut(); CHUNK_CAPACITY],
             nmapped_chunks: 0,
         }
     }
 
-    fn find_chunk(&self, chunk_name: PathBuf) -> *mut ChunkMeta {
+    fn find_chunk(&self, chunk_name: &PathBuf) -> *mut Chunk {
         for idx in 0..self.nmapped_chunks {
             let chunk = self.chunks[idx];
 
             // Safe here to deref because we are only checking within the allocated range.
-            if unsafe { (*chunk).chunk_name == chunk_name } {
+            if unsafe { (*chunk).chunk_name == *chunk_name } {
                 return chunk;
             }
         }
@@ -561,8 +567,37 @@ impl<const ChunkCapacity: usize> UniformFreelistDeserializer<ChunkCapacity> {
         core::ptr::null_mut()
     }
 
-    fn map_chunk(&mut self, chunk_name: PathBuf) {
+    fn map_chunk(&mut self, chunk_name: &PathBuf) -> *mut Chunk {
+        if self.nmapped_chunks == CHUNK_CAPACITY {
+            panic!("Ran out of chunk slots.");
+        }
+
+        // TODO(rwails) Fix unwrap on view shared chunk
+        let chunk = view_shared_chunk(chunk_name, CHUNK_NBYTES).unwrap();
+        self.chunks[self.nmapped_chunks] = chunk;
         self.nmapped_chunks += 1;
+
+        chunk
+    }
+
+    pub(crate) fn deserialize(&mut self, block_ser: &BlockSerialized) -> *mut Block {
+        let mut block_chunk = self.find_chunk(&block_ser.chunk_name);
+
+        if block_chunk.is_null() {
+            block_chunk = self.map_chunk(&block_ser.chunk_name);
+        }
+
+        let chunk_p = block_chunk as *mut u8;
+
+        assert!(block_ser.offset > 0);
+        let block_p = unsafe { chunk_p.add(block_ser.offset as usize) };
+
+        assert!(!block_p.is_null());
+        unsafe {
+            (*(block_p as *mut Block)).magic_assert();
+        };
+
+        block_p as *mut Block
     }
 }
 
@@ -571,15 +606,81 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_allocator() {
-        let mut v: Vec<*mut BlockHdr> = Default::default();
-
-        let mut alloc = UniformFreelistAllocator::new(32, 32);
+    fn test_serialize() {
+        let mut alloc = FreelistAllocator::new();
         alloc.init().unwrap();
 
-        for _ in 0..1000 {
-            v.push(alloc.alloc());
+        let b1 = alloc.alloc(8, 4);
+        unsafe {
+            (*b1).get_mut_ref::<u32>()[0] = 42;
         }
+        let b1_ser = alloc.serialize(b1);
+
+        let mut deserial = FreelistDeserializer::new();
+        let b1_2 = deserial.deserialize(&b1_ser);
+        unsafe {
+            (*b1_2).get_mut_ref::<u32>()[1] = 29;
+        }
+
+        println!("{:?} {:?}", b1, b1_2);
+
+        println!(
+            "{:?} {:?} {:?}",
+            unsafe { (*b1).get_ref::<u32>() },
+            b1_ser,
+            unsafe { (*b1_2).get_ref::<u32>() }
+        );
+    }
+
+    #[test]
+    fn test_allocator() {
+        let mut v: Vec<*mut Block> = Default::default();
+
+        let mut alloc = FreelistAllocator::new();
+        alloc.init().unwrap();
+
+        for _ in 0..10 {
+            v.push(alloc.alloc(32, 32));
+        }
+
+        let mut idx: u32 = 0;
+        for block in &v[..] {
+            unsafe {
+                let r = (**block).get_mut_ref::<u32>();
+                r[0] = idx;
+                idx += 1;
+                println!("{:?} {:?}", block, (**block));
+            }
+        }
+
+        for block in &v[..] {
+            unsafe {
+                let r = (**block).get_ref::<u32>();
+                println!("{:?}", r);
+            }
+        }
+
+        let b1 = alloc.alloc(10, 8);
+        let b2 = alloc.alloc(20, 8);
+        let b3 = alloc.alloc(30, 8);
+        println!("{:?} {:?} {:?}", b1, b2, b3);
+        alloc.dealloc(b3);
+        alloc.dealloc(b2);
+        alloc.dealloc(b1);
+
+        let b3 = alloc.alloc(30, 8);
+        let b2 = alloc.alloc(20, 8);
+        let b1 = alloc.alloc(10, 8);
+        println!("{:?} {:?} {:?}", b1, b2, b3);
+        println!("{:?}", alloc);
+        alloc.dealloc(b3);
+        println!("{:?}", alloc);
+        alloc.dealloc(b2);
+        alloc.dealloc(b1);
+
+        alloc.destruct();
+
+        /*
 
         for b in &v[..] {
             let serialized = alloc.serialize(*b);
@@ -589,6 +690,7 @@ mod tests {
         alloc.dealloc(v.remove(0));
 
         alloc.destruct();
+        */
     }
 
     #[test]

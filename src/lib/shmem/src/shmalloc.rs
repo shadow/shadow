@@ -1,22 +1,27 @@
 #![allow(dead_code)]
 
+use lazy_static::lazy_static;
 use vasi::VirtualAddressSpaceIndependent;
+use vasi_sync::scmutex::SelfContainedMutex;
 
 #[derive(Debug)]
 pub struct Block<'alloc, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
-    block_hdr: *mut crate::shmalloc_impl::BlockHdr,
+    block: *mut crate::shmalloc_impl::Block,
     phantom: core::marker::PhantomData<&'alloc T>,
 }
 
-impl<'allocator, T> Block<'allocator, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
+// SAFETY: T is already required to be Sync, and ShMemBlock only exposes
+// immutable references to the underlying data.
+unsafe impl<'allocator, T> Sync for Block<'allocator, T> where
+    T: Sync + VirtualAddressSpaceIndependent
 {
-    const T_NBYTES: usize = core::mem::size_of::<T>();
-    const T_ALIGNMENT: usize = core::mem::align_of::<T>();
+}
+unsafe impl<'allocator, T> Send for Block<'allocator, T> where
+    T: Send + Sync + VirtualAddressSpaceIndependent
+{
 }
 
 impl<'allocator, T> core::ops::Deref for Block<'allocator, T>
@@ -26,72 +31,83 @@ where
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        let block_hdr = unsafe { &*self.block_hdr };
-        &block_hdr.get_ref::<T>(Self::T_NBYTES, Self::T_ALIGNMENT)[0]
+        let block = unsafe { &*self.block };
+        &block.get_ref::<T>()[0]
     }
 }
 
-impl<'allocator, T> core::ops::DerefMut for Block<'allocator, T>
+impl<'allocator, T> core::ops::Drop for Block<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
-    fn deref_mut(&mut self) -> &mut T {
-        let block_hdr = unsafe { &mut *self.block_hdr };
-        &mut block_hdr.get_mut_ref::<T>(Self::T_NBYTES, Self::T_ALIGNMENT)[0]
+    fn drop(&mut self) {
+        if !self.block.is_null() {
+            // Guard here to prevent deadlock on free.
+            SHMALLOC.lock().internal.dealloc(self.block);
+            self.block = core::ptr::null_mut();
+        }
     }
 }
 
-struct SharedMemAllocator<'alloc, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    internal: crate::shmalloc_impl::UniformFreelistAllocator,
+lazy_static! {
+    pub static ref SHMALLOC: SelfContainedMutex<SharedMemAllocator<'static>> = {
+        let alloc = SharedMemAllocator::new();
+        SelfContainedMutex::new(alloc)
+    };
+}
+
+// lazy_static wants these.
+
+unsafe impl Send for SharedMemAllocator<'_> {}
+unsafe impl Sync for SharedMemAllocator<'_> {}
+
+pub struct SharedMemAllocator<'alloc> {
+    internal: crate::shmalloc_impl::FreelistAllocator,
     nallocs: isize,
-    phantom: core::marker::PhantomData<&'alloc T>,
+    phantom: core::marker::PhantomData<&'alloc ()>,
 }
 
-impl<'alloc, T> SharedMemAllocator<'alloc, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    const T_NBYTES: usize = core::mem::size_of::<T>();
-    const T_ALIGNMENT: usize = core::mem::align_of::<T>();
-
+impl<'alloc> SharedMemAllocator<'alloc> {
     fn new() -> Self {
+        let mut internal = crate::shmalloc_impl::FreelistAllocator::new();
+        internal.init().unwrap();
+
         Self {
-            internal: crate::shmalloc_impl::UniformFreelistAllocator::new(
-                Self::T_NBYTES,
-                Self::T_ALIGNMENT,
-            ),
+            internal,
             nallocs: 0,
             phantom: Default::default(),
         }
     }
 
-    fn alloc(&mut self) -> Block<'alloc, T> {
+    fn alloc<T: Sync + VirtualAddressSpaceIndependent>(&mut self, val: T) -> Block<'alloc, T> {
+        let t_nbytes: usize = core::mem::size_of::<T>();
+        let t_alignment: usize = core::mem::align_of::<T>();
+
+        let block = self.internal.alloc(t_nbytes, t_alignment);
+        unsafe {
+            (*block).get_mut_ref::<T>()[0] = val;
+        }
+
         self.nallocs += 1;
         Block::<'alloc, T> {
-            block_hdr: self.internal.alloc(),
+            block,
             phantom: Default::default(),
         }
     }
 
-    fn free(&mut self, block: Block<'alloc, T>) {
+    fn free<T: Sync + VirtualAddressSpaceIndependent>(&mut self, mut block: Block<'alloc, T>) {
         self.nallocs -= 1;
-        self.internal.dealloc(block.block_hdr);
+        block.block = core::ptr::null_mut();
+        self.internal.dealloc(block.block);
     }
 }
 
-impl<'alloc, T> Drop for SharedMemAllocator<'alloc, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
+impl<'alloc> Drop for SharedMemAllocator<'alloc> {
     fn drop(&mut self) {
         self.internal.destruct();
 
         if self.nallocs != 0 {
             // Memory leak! What do we want to do? Blow up?
-            println!("{:?}", self.nallocs);
             panic!();
         }
     }
@@ -104,16 +120,14 @@ mod tests {
 
     #[test]
     fn test_allocator_random() {
-        const NROUNDS: usize = 10;
+        const NROUNDS: usize = 100;
         let mut marked_blocks: Vec<(u32, Block<u32>)> = Default::default();
-        let mut allocator = SharedMemAllocator::<u32>::new();
         let mut rng = rand::thread_rng();
 
         let mut execute_round = || {
             // Some allocations
             for i in 0..255 {
-                let mut b = allocator.alloc();
-                *b = i;
+                let b = SHMALLOC.lock().alloc(i);
                 marked_blocks.push((i, b));
             }
 
@@ -123,7 +137,7 @@ mod tests {
             for _ in 0..n1 {
                 let last_marked_block = marked_blocks.pop().unwrap();
                 assert_eq!(last_marked_block.0, *last_marked_block.1);
-                allocator.free(last_marked_block.1);
+                SHMALLOC.lock().free(last_marked_block.1);
             }
 
             // Then check all blocks
@@ -138,10 +152,17 @@ mod tests {
 
         while marked_blocks.len() > 0 {
             let b = marked_blocks.pop().unwrap();
-            allocator.free(b.1);
+            SHMALLOC.lock().free(b.1);
         }
+
+        SHMALLOC.lock().internal.destruct();
     }
 
     #[test]
-    fn foo() {}
+    fn foo() {
+        let block = SHMALLOC.lock().alloc(5);
+        println!("{:?}, {:?}", block, *block);
+        SHMALLOC.lock().free(block);
+        SHMALLOC.lock().internal.destruct();
+    }
 }
