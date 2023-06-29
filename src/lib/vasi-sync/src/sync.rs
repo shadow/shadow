@@ -8,10 +8,15 @@
 #[cfg(not(loom))]
 pub use core::{
     sync::atomic,
-    sync::atomic::{AtomicI32, AtomicI8, AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicI8, AtomicU32, AtomicUsize, Ordering},
 };
 #[cfg(loom)]
 use std::collections::HashMap;
+
+#[cfg(not(loom))]
+pub use core::cell::Cell;
+#[cfg(loom)]
+pub use loom::cell::Cell;
 
 // Map a *virtual* address to a list of Condvars. This doesn't support mapping into multiple
 // processes, or into different virtual addresses in the same process, etc.
@@ -20,7 +25,7 @@ use loom::sync::{Condvar, Mutex};
 #[cfg(loom)]
 pub use loom::{
     sync::atomic,
-    sync::atomic::{AtomicI32, AtomicI8, AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicI8, AtomicU32, AtomicUsize, Ordering},
     sync::Arc,
 };
 #[cfg(not(loom))]
@@ -246,7 +251,7 @@ impl<T: ?Sized> ConstPtr<T> {
 #[cfg(loom)]
 pub use loom::cell::ConstPtr;
 
-// From https://docs.rs/loom/latest/loom/#handling-loom-api-differences
+/// From <https://docs.rs/loom/latest/loom/#handling-loom-api-differences>
 #[cfg(not(loom))]
 #[derive(Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
@@ -258,6 +263,9 @@ impl<T> UnsafeCell<T> {
         UnsafeCell(core::cell::UnsafeCell::new(data))
     }
 
+    /// Note that this has a different signature from the method
+    /// of the same name in `core::cell::UnsafeCell`.
+    /// See <https://docs.rs/loom/latest/loom/#handling-loom-api-differences>
     #[inline]
     pub fn get_mut(&self) -> MutPtr<T> {
         MutPtr(self.0.get())
