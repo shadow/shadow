@@ -204,7 +204,7 @@ impl<T> SelfContainedChannel<T> {
             )
             .unwrap();
         if prev.has_sleeper {
-            sync::futex_wake(&self.state.0).unwrap();
+            sync::futex_wake_one(&self.state.0).unwrap();
         }
     }
 
@@ -311,7 +311,7 @@ impl<T> SelfContainedChannel<T> {
             )
             .unwrap();
         if prev.has_sleeper {
-            sync::futex_wake(&self.state.0).unwrap();
+            sync::futex_wake_one(&self.state.0).unwrap();
         }
     }
 

@@ -38,6 +38,7 @@
 // https://github.com/shadow/shadow/issues/2919
 #![cfg_attr(not(loom), no_std)]
 
+pub mod lazy_lock;
 pub mod scchannel;
 pub mod scmutex;
 
