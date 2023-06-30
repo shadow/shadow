@@ -9,6 +9,9 @@ use core::mem::MaybeUninit;
 /// `Display` output of this object, and can be checked via the `truncated`
 /// method.
 ///
+/// The generic parameter `N` is the internal size of the buffer.  One byte is
+/// reserved for NULL to support conversion to `CStr`.
+///
 /// To format a message with Rust's formatting:
 /// ```
 /// # use formatting_nostd::FormatBuffer;
@@ -23,22 +26,33 @@ use core::mem::MaybeUninit;
 /// ```
 pub struct FormatBuffer<const N: usize> {
     buffer: [MaybeUninit<u8>; N],
+    /// Does *not* include NULL byte.
     used: usize,
     truncated: usize,
 }
 
 impl<const N: usize> FormatBuffer<N> {
+    const CAPACITY_INCLUDING_NULL: usize = N;
+    const CAPACITY: usize = N - 1;
+
     pub fn new() -> Self {
-        Self {
+        assert!(Self::CAPACITY_INCLUDING_NULL >= 1);
+        let mut res = Self {
             buffer: [MaybeUninit::uninit(); N],
             used: 0,
             truncated: 0,
-        }
+        };
+        res.null_terminate();
+        res
     }
 
     /// Remaining capacity in bytes.
     pub fn capacity_remaining(&self) -> usize {
-        N - self.used
+        Self::CAPACITY - self.used
+    }
+
+    pub fn capacity_remaining_including_null(&self) -> usize {
+        Self::CAPACITY_INCLUDING_NULL - self.used
     }
 
     /// How many bytes (not chars) have been truncated.
@@ -49,6 +63,10 @@ impl<const N: usize> FormatBuffer<N> {
         self.truncated
     }
 
+    fn null_terminate(&mut self) {
+        self.buffer[self.used].write(0);
+    }
+
     /// Reset to empty. This may be cheaper than assigning a fresh
     /// `FormatBuffer::new`, since the latter requires copying the uninitialized
     /// buffer. (Though such a copy could get optimized to the same cost
@@ -56,6 +74,23 @@ impl<const N: usize> FormatBuffer<N> {
     pub fn reset(&mut self) {
         self.used = 0;
         self.truncated = 0;
+        self.null_terminate();
+    }
+
+    // The initialized part of the internal buffer.
+    fn initd_buffer_including_null(&self) -> &[u8] {
+        let buffer: *const MaybeUninit<u8> = self.buffer.as_ptr();
+        // MaybeUninit<u8> is guaranteed to have the same ABI as u8.
+        let buffer: *const u8 = buffer as *const u8;
+        // SAFETY: We know this byte range is initialized.
+        let rv = unsafe { core::slice::from_raw_parts(buffer, self.used + 1) };
+        assert_eq!(rv.last(), Some(&0));
+        rv
+    }
+
+    fn initd_buffer_excluding_null(&self) -> &[u8] {
+        let res = self.initd_buffer_including_null();
+        &res[..(res.len() - 1)]
     }
 
     /// `str` representation of internal buffer.
@@ -63,13 +98,13 @@ impl<const N: usize> FormatBuffer<N> {
     /// If you'd like to render the buffer including any non-zero
     /// truncation count, use the `Display` attribute instead.
     pub fn as_str(&self) -> &str {
-        let buffer: *const MaybeUninit<u8> = self.buffer.as_ptr();
-        // MaybeUninit<u8> is guaranteed to have the same ABI as u8.
-        let buffer: *const u8 = buffer as *const u8;
-        // SAFETY: We know this byte range is initialized.
-        let buffer = unsafe { core::slice::from_raw_parts(buffer, self.used) };
         // SAFETY: We've ensured that only valid utf8 is appended to the buffer.
-        unsafe { core::str::from_utf8_unchecked(buffer) }
+        unsafe { core::str::from_utf8_unchecked(self.initd_buffer_excluding_null()) }
+    }
+
+    /// Returns `None` if the buffer has interior NULL bytes.
+    pub fn as_cstr(&self) -> Option<&CStr> {
+        CStr::from_bytes_with_nul(self.initd_buffer_including_null()).ok()
     }
 
     /// Appends the result of formatting `fmt` and `args`, following the conventions
@@ -136,6 +171,7 @@ impl<const N: usize> FormatBuffer<N> {
         // *after* the decoding loop to support writing as much as we can of the
         // current vsnprintf result before we start truncating.
         self.truncated += formatted_len - non_null_bytes_written;
+        self.null_terminate();
     }
 
     // Panics if the bytes don't fit.
@@ -151,6 +187,7 @@ impl<const N: usize> FormatBuffer<N> {
 
         unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len()) };
         self.used += src.len();
+        self.null_terminate();
     }
 }
 
@@ -219,11 +256,13 @@ extern "C" {
 mod test {
     use core::fmt::Write;
 
+    use std::ffi::CString;
+
     use super::*;
 
     #[test]
     fn test_format_buffer_write_str_exact() {
-        let mut buf = FormatBuffer::<3>::new();
+        let mut buf = FormatBuffer::<4>::new();
         assert!(buf.write_str("123").is_ok());
         assert_eq!(buf.as_str(), "123");
         assert_eq!(buf.truncated(), 0);
@@ -231,7 +270,7 @@ mod test {
 
     #[test]
     fn test_format_buffer_write_str_truncated() {
-        let mut buf = FormatBuffer::<2>::new();
+        let mut buf = FormatBuffer::<3>::new();
         assert!(buf.write_str("123").is_ok());
         assert_eq!(buf.as_str(), "12");
         assert_eq!(buf.truncated(), 1);
@@ -239,7 +278,7 @@ mod test {
 
     #[test]
     fn test_format_buffer_write_str_truncated_unicode() {
-        let mut buf = FormatBuffer::<2>::new();
+        let mut buf = FormatBuffer::<3>::new();
         // U+00A1 "inverted exclamation mark" is 2 bytes in utf8.
         // Ensure that both bytes are truncated, rather than splitting in the
         // middle.
@@ -257,18 +296,26 @@ mod test {
 
     #[test]
     fn test_format_buffer_display_truncated() {
-        let mut buf = FormatBuffer::<2>::new();
+        let mut buf = FormatBuffer::<3>::new();
         assert!(buf.write_str("123").is_ok());
         assert_eq!(format!("{buf}"), "12...<truncated 1>");
     }
 
     #[test]
     fn test_format_buffer_write_str_multiple() {
-        let mut buf = FormatBuffer::<6>::new();
+        let mut buf = FormatBuffer::<7>::new();
         assert!(buf.write_str("123").is_ok());
         assert_eq!(buf.as_str(), "123");
         assert!(buf.write_str("456").is_ok());
         assert_eq!(buf.as_str(), "123456");
+    }
+
+    #[test]
+    fn test_cstr_ok() {
+        let mut buf = FormatBuffer::<7>::new();
+        assert!(buf.write_str("123").is_ok());
+        let expected = CString::new("123").unwrap();
+        assert_eq!(buf.as_cstr(), Some(expected.as_c_str()));
     }
 }
 
@@ -338,12 +385,12 @@ mod sprintf_test {
     #[test]
     fn test_sprintf_truncated_partly_full() {
         let mut buf = FormatBuffer::<10>::new();
-        let fmt = CString::new("123456789").unwrap();
+        let fmt = CString::new("12345678").unwrap();
         unsafe { test_format_buffer_vararg(&mut buf, fmt.as_ptr()) };
-        assert_eq!(buf.as_str(), "123456789");
+        assert_eq!(buf.as_str(), "12345678");
         unsafe { test_format_buffer_vararg(&mut buf, fmt.as_ptr()) };
-        assert_eq!(buf.as_str(), "1234567891");
-        assert_eq!(buf.truncated(), 8);
+        assert_eq!(buf.as_str(), "123456781");
+        assert_eq!(buf.truncated(), 7);
     }
 
     #[test]
@@ -394,5 +441,17 @@ mod sprintf_test {
         unsafe { test_format_buffer_vararg(&mut buf, fmt.as_ptr()) };
         assert_eq!(buf.as_str(), "123456");
         assert_eq!(buf.truncated(), 0);
+    }
+
+    #[test]
+    fn test_sprintf_cstr_fail() {
+        let mut buf = FormatBuffer::<10>::new();
+        // Cause the formatted output to have an interior NULL byte.
+        let fmt = CString::new("1234%c56").unwrap();
+
+        // We have to cast 0 to `c_int` here, because the vararg ABI doesn't
+        // support passing a char. (i.e. casting to `c_char` fails to compile)
+        unsafe { test_format_buffer_vararg(&mut buf, fmt.as_ptr(), 0 as core::ffi::c_int) };
+        assert_eq!(buf.as_cstr(), None);
     }
 }
