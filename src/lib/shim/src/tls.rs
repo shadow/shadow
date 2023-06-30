@@ -13,7 +13,6 @@ use core::sync::atomic::{self, AtomicI8, AtomicUsize};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rustix::mm::{MapFlags, ProtFlags};
 use rustix::process::Pid;
-use shadow_pod::Pod;
 use vasi_sync::lazy_lock::{self, LazyLock};
 
 /// Modes of operation for this module.
@@ -174,18 +173,17 @@ impl ElfThreadPointer {
     }
 }
 
-/// This is `pub` for export to C, where we can allocate
-/// native thread local storage.
-//
 // The alignment we choose here becomes the max alignment we can support for
 // [`ShimTlsVar`]. 16 is enough for most types, and is e.g. the alignment of
 // pointers returned by glibc's `malloc`, but we can increase as needed.
 #[repr(C, align(16))]
-#[derive(Copy, Clone)]
-pub struct ShimThreadLocalStorage {
-    _bytes: [u8; BYTES_PER_THREAD],
+struct ShimThreadLocalStorage {
+    // Used as a backing store for instances of `ShimTlsVarStorage`. Must be
+    // initialized to zero so that the first time that a given range of bytes is
+    // interpreted as a `ShimTlsVarStorage`, `ShimTlsVarStorage::initd` is
+    // correctly `false`.
+    bytes: UnsafeCell<[u8; BYTES_PER_THREAD]>,
 }
-unsafe impl Pod for ShimThreadLocalStorage {}
 
 impl ShimThreadLocalStorage {
     /// # Safety
@@ -195,8 +193,8 @@ impl ShimThreadLocalStorage {
     /// * `alloc` must *only* be access through this function.
     pub unsafe fn from_static_lifetime_zeroed_allocation(
         alloc: *mut ShimThreadLocalStorageAllocation,
-    ) -> &'static UnsafeCell<Self> {
-        type Output = UnsafeCell<ShimThreadLocalStorage>;
+    ) -> &'static Self {
+        type Output = ShimThreadLocalStorage;
         static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, Output);
         static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, Output);
         unsafe { &*alloc.cast_const().cast::<Output>() }
@@ -396,8 +394,7 @@ mod global_storages {
     // The raw byte thread local storage for each thread. Indexes are obtained via
     // `FastThreadIds`.
     #[repr(transparent)]
-    struct StoragesType([UnsafeCell<ShimThreadLocalStorage>; TLS_FALLBACK_MAX_THREADS]);
-    static_assertions::assert_impl_all!(ShimThreadLocalStorage: Sync);
+    struct StoragesType([ShimThreadLocalStorage; TLS_FALLBACK_MAX_THREADS]);
     // SAFETY: normally the UnsafeCell forces this to be !Sync, but we ensure
     // only one thread ever has access to any given UnsafeCell.
     unsafe impl Sync for StoragesType {}
@@ -427,7 +424,6 @@ mod global_storages {
                 // but is tricky to do without causing a stack overflow in debug builds.
                 // See e.g.
                 // https://users.rust-lang.org/t/how-to-boxed-struct-with-large-size-without-stack-overflow/94961
-                static_assertions::assert_impl_all!(ShimThreadLocalStorage: shadow_pod::Pod);
                 unsafe { &*ptr }
             }
             #[cfg(miri)]
@@ -435,9 +431,9 @@ mod global_storages {
                 // We can't do dynamic memory allocation via `mmap` under miri, so just
                 // leak heap-allocated storage instead.
                 Box::leak(Box::new(StoragesType(core::array::from_fn(|_| {
-                    UnsafeCell::new(ShimThreadLocalStorage {
-                        _bytes: [0; BYTES_PER_THREAD],
-                    })
+                    ShimThreadLocalStorage {
+                        bytes: UnsafeCell::new([0; BYTES_PER_THREAD]),
+                    }
                 }))))
             }
         }
@@ -451,7 +447,7 @@ mod global_storages {
     });
 
     /// Get the storage associated with `idx`. The bytes are initially zero.
-    pub fn get(idx: usize) -> &'static UnsafeCell<ShimThreadLocalStorage> {
+    pub fn get(idx: usize) -> &'static ShimThreadLocalStorage {
         &STORAGES.force().0[idx]
     }
 
@@ -489,12 +485,9 @@ pub unsafe fn unregister_current_thread() {
     if let Some(position) = global_thread_ids::get_idx(current) {
         // Zero for the next thread.
         // TODO: Consider running drop impls?
-        let storage = global_storages::get(position).get();
-        let zeroes = ShimThreadLocalStorage {
-            _bytes: [0; BYTES_PER_THREAD],
-        };
+        let storage = global_storages::get(position);
         // SAFETY: We have exclusive access to this memory until calling `remove`, below.
-        unsafe { storage.write(zeroes) };
+        unsafe { storage.bytes.get().write([0; BYTES_PER_THREAD]) };
         global_thread_ids::remove(position);
     } else {
         // This thread was never registered.
@@ -503,7 +496,7 @@ pub unsafe fn unregister_current_thread() {
 
 /// Returns thread local storage for the current thread. The raw byte contents
 /// are initialized to zero.
-fn tls_storage() -> &'static UnsafeCell<ShimThreadLocalStorage> {
+fn tls_storage() -> &'static ShimThreadLocalStorage {
     match global_preferred_mode::get() {
         Mode::Disabled => panic!("Storage mode not set"),
         Mode::Native => {
@@ -697,25 +690,8 @@ where
     pub fn get(&self) -> TLSVarRef<T> {
         // SAFETY: We ensured `offset` is in bounds at construction time.
         let this_var_bytes: *mut u8 = {
-            // We need a mut pointer to the bytes, but can't create a mut
-            // reference to the whole storage object, since that may alias other
-            // active variables in this thread.
-            //
-            // We can't use a const pointer to the storage as a whole to get to
-            // the _bytes field, because we don't have another layer of
-            // UnsafeCell to opt into being allowed to get another mut reference
-            // from a const pointer.
-            //
-            // Instead we rely on the fact that the storage object is `repr[C]`
-            // and has `_bytes` as the first field, so the pointer to `_bytes`
-            // has the same value as the pointer to the enclosing object.
-            //
-            // TODO: Consider moving the `UnsafeCell` inside
-            // `ShimThreadLocalStorage`, and moving this logic into there.  This
-            // is tricky with the C bindings, but we could expose a fake "proxy"
-            // type to C for allocation purposes with the same size and
-            // alignment.
-            let storage: *mut u8 = tls_storage().get() as *mut u8;
+            let storage: *mut [u8; BYTES_PER_THREAD] = tls_storage().bytes.get();
+            let storage: *mut u8 = storage.cast();
             unsafe { storage.add(self.offset()) }
         };
 
