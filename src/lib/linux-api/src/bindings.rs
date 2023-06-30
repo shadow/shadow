@@ -1990,6 +1990,59 @@ fn bindgen_test_layout_sigaction() {
     );
 }
 #[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_sigaltstack {
+    pub ss_sp: *mut ::core::ffi::c_void,
+    pub ss_flags: ::core::ffi::c_int,
+    pub ss_size: linux___kernel_size_t,
+}
+#[test]
+fn bindgen_test_layout_sigaltstack() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_sigaltstack> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_sigaltstack>(),
+        24usize,
+        concat!("Size of: ", stringify!(linux_sigaltstack))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_sigaltstack>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_sigaltstack))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ss_sp) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigaltstack),
+            "::",
+            stringify!(ss_sp)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ss_flags) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigaltstack),
+            "::",
+            stringify!(ss_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ss_size) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigaltstack),
+            "::",
+            stringify!(ss_size)
+        )
+    );
+}
+pub type linux_stack_t = linux_sigaltstack;
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub union linux_sigval {
     pub sival_int: ::core::ffi::c_int,

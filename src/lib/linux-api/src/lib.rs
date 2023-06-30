@@ -83,4 +83,8 @@ mod const_conversions {
 
         val as i32
     }
+
+    pub const fn i32_from_u32_allowing_wraparound(val: u32) -> i32 {
+        val as i32
+    }
 }

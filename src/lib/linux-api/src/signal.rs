@@ -6,13 +6,8 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings::{self, linux_sigval};
 use crate::const_conversions;
+use crate::const_conversions::i32_from_u32_allowing_wraparound;
 use crate::errno::Errno;
-
-/// Definition is sometimes missing in the userspace headers.
-//
-// bindgen fails to bind this one.
-// Copied from linux's include/uapi/linux/signal.h.
-pub const LINUX_SS_AUTODISARM: i32 = 1 << 31;
 
 // signal names. This is a `struct` instead of an `enum` to support
 // realtime signals.
@@ -1390,6 +1385,59 @@ mod rt_sigaction_tests {
         // Restore previous signal action and mask.
         rt_sigprocmask(SigProcMaskAction::SIG_SETMASK, &old_mask, None).unwrap();
         unsafe { rt_sigaction(signal, &old_action, None) }.unwrap();
+    }
+}
+
+pub use bindings::linux_stack_t;
+#[allow(non_camel_case_types)]
+pub type stack_t = linux_stack_t;
+
+// bindgen fails to bind this one.
+// Copied from linux's include/uapi/linux/signal.h.
+pub const LINUX_SS_AUTODISARM: u32 = 1 << 31;
+bitflags::bitflags! {
+    // While the Linux header defines the only current value of this flag as
+    // u32, the field in `stack_t::ss_flags` where this type is used is i32.
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct SigAltStackFlags: i32 {
+        // The raw u32 value wraps around to a negative i32.
+        const SS_AUTODISARM = i32_from_u32_allowing_wraparound(LINUX_SS_AUTODISARM);
+    }
+}
+// SAFETY: bitflags guarantees the internal representation is effectively a i32.
+unsafe impl VirtualAddressSpaceIndependent for SigAltStackFlags {}
+
+/// # Safety
+///
+/// * `new_stack` must be dereferenceable or NULL.
+/// * `old_stack` must be dereferenceable or NULL.
+/// * See sigaltstack(2).
+pub unsafe fn sigaltstack_raw(
+    new_stack: *const stack_t,
+    old_stack: *mut stack_t,
+) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_sigaltstack, new_stack, old_stack) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// # Safety
+///
+/// See sigaltstack(2)
+pub unsafe fn sigaltstack(
+    new_stack: Option<&stack_t>,
+    old_stack: Option<&mut stack_t>,
+) -> Result<(), Errno> {
+    unsafe {
+        sigaltstack_raw(
+            new_stack
+                .map(|p| p as *const _)
+                .unwrap_or(core::ptr::null()),
+            old_stack
+                .map(|p| p as *mut _)
+                .unwrap_or(core::ptr::null_mut()),
+        )
     }
 }
 
