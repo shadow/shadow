@@ -16,6 +16,7 @@
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/shim.h"
+#include "lib/shim/shim_api.h"
 #include "lib/shim/shim_sys.h"
 #include "main/host/syscall_numbers.h"
 

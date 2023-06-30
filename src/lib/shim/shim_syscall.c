@@ -11,6 +11,7 @@
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/shim.h"
+#include "lib/shim/shim_api.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
@@ -22,7 +23,10 @@
 // Helper macro for calculating immediate offsets in asm.
 #define MCTX_REG_OFFSET(i) (offsetof(mcontext_t, gregs) + sizeof(uint64_t) * (i))
 
-static long _shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid,
+// The label inside the inline assembly causes a link error if this gets inlined,
+// due to the assembler then seeing the same label multiple times.
+// TODO: is there a way to generate the label in a way that avoids this?
+static long __attribute__ ((noinline)) _shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid,
                         pid_t* ctid, uint64_t newtls) {
     if (!child_stack) {
         panic("clone without a new stack not implemented");
@@ -126,6 +130,12 @@ static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
         uint64_t newtls = arg5;
         rv = _shim_clone(ctx, flags, child_stack, ptid, ctid, newtls);
     } else {
+        if (n == SYS_exit) {
+            // This thread is exiting. Arrange for its thread-local-storage and signal stack to be freed.
+            shim_tls_unregister_current_thread();
+            shim_freeSignalStack();
+        }
+
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register
         // variables](https://gcc.gnu.org/onlinedocs/gcc/Local-Register-Variables.html)
@@ -156,7 +166,7 @@ long shim_native_syscall(const ucontext_t* ctx, long n, ...) {
 static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
                                                const ShimEventToShadow* syscall_event) {
 
-    struct IPCData* ipc = shim_thisThreadEventIPC();
+    const struct IPCData* ipc = shim_thisThreadEventIPC();
 
     trace("sending syscall %ld event on %p",
           shimevent2shadow_getSyscallData(syscall_event)->syscall_args.number, ipc);
@@ -286,11 +296,6 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
 
 long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args) {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
-    if (n == SYS_exit) {
-        // This thread is exiting. Arrange for its signal stack to be freed.
-        shim_freeSignalStack();
-    }
 
     SysCallArgs ev_args;
     ev_args.number = n;

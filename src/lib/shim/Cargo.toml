@@ -12,15 +12,22 @@ crate-type = ["cdylib"]
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
 linux-api = { path = "../linux-api"}
+num_enum = { version = "0.6.1", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
 shadow_tsc = { path = "../tsc" }
 logger = { path = "../logger" }
 log = { version = "0.4.19", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
-rustix = { version = "0.37.20", default-features = false, features = ["thread", "time"] }
+rustix = { version = "0.37.20", default-features = false, features = ["process", "thread", "time", "mm"] }
 linux-raw-sys = { version = "0.4.3" }
+shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
+static_assertions = "1.1.0"
+
+[dev-dependencies]
+env_logger = "0.10.0"
+test-log = "0.2.12"
 
 [build-dependencies]
 bindgen = { version = "0.66.1" }

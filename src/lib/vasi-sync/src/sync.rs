@@ -8,7 +8,7 @@
 #[cfg(not(loom))]
 pub use core::{
     sync::atomic,
-    sync::atomic::{AtomicI32, AtomicU32, Ordering},
+    sync::atomic::{AtomicI32, AtomicI8, AtomicU32, Ordering},
 };
 #[cfg(loom)]
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ use loom::sync::{Condvar, Mutex};
 #[cfg(loom)]
 pub use loom::{
     sync::atomic,
-    sync::atomic::{AtomicI32, AtomicU32, Ordering},
+    sync::atomic::{AtomicI32, AtomicI8, AtomicU32, Ordering},
     sync::Arc,
 };
 #[cfg(not(loom))]
@@ -28,6 +28,15 @@ use vasi::VirtualAddressSpaceIndependent;
 #[cfg(loom)]
 loom::lazy_static! {
     pub static ref FUTEXES: Mutex<HashMap<usize, Arc<Condvar>>> = Mutex::new(HashMap::new());
+}
+
+#[cfg(not(loom))]
+pub fn sched_yield() {
+    rustix::process::sched_yield();
+}
+#[cfg(loom)]
+pub fn sched_yield() {
+    loom::thread::yield_now();
 }
 
 // Rustix doesn't define its `FutexOperation` type under miri, so we can't use it in
@@ -91,6 +100,7 @@ unsafe fn futex(
     }
 }
 
+#[inline]
 pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize> {
     // In "production" we use linux_syscall to avoid going through libc, and to
     // avoid touching libc's `errno` in particular.
@@ -125,7 +135,8 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize>
     }
 }
 
-pub fn futex_wake(futex_word: &AtomicU32) -> rustix::io::Result<()> {
+#[inline]
+pub fn futex_wake_one(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     #[cfg(not(loom))]
     {
         unsafe { futex(futex_word, FutexOperation::Wake, 1) }.map(|_| ())
@@ -142,6 +153,33 @@ pub fn futex_wake(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     }
 }
 
+#[inline]
+pub fn futex_wake_all(futex_word: &AtomicU32) -> rustix::io::Result<()> {
+    #[cfg(not(loom))]
+    {
+        // u32::MAX seems like it'd make sense here, but the man page says to use INT_MAX.
+        // Better to go with that than risk some unexpected behavior...
+        unsafe {
+            futex(
+                futex_word,
+                FutexOperation::Wake,
+                u32::try_from(i32::MAX).unwrap(),
+            )
+        }
+        .map(|_| ())
+    }
+    // loom doesn't understand syscalls; emulate via loom primitives.
+    #[cfg(loom)]
+    {
+        let hashmap = FUTEXES.lock().unwrap();
+        let Some(condvar) = hashmap.get(&(futex_word as *const _ as usize)) else {
+            return Ok(());
+        };
+        condvar.notify_all();
+        Ok(())
+    }
+}
+
 #[cfg(not(loom))]
 pub struct MutPtr<T: ?Sized>(*mut T);
 #[cfg(not(loom))]
@@ -149,11 +187,13 @@ impl<T: ?Sized> MutPtr<T> {
     /// # Safety
     ///
     /// See `loom::cell::MutPtr::deref`.
+    #[inline]
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn deref(&self) -> &mut T {
         unsafe { &mut *self.0 }
     }
 
+    #[inline]
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(*mut T) -> R,
@@ -167,11 +207,13 @@ impl<T: ?Sized> MutPtr<T> {
 pub struct MutPtr<T: ?Sized>(loom::cell::MutPtr<T>);
 #[cfg(loom)]
 impl<T: ?Sized> MutPtr<T> {
+    #[inline]
     #[allow(clippy::mut_from_ref)]
     pub unsafe fn deref(&self) -> &mut T {
         unsafe { self.0.deref() }
     }
 
+    #[inline]
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(*mut T) -> R,
@@ -182,6 +224,28 @@ impl<T: ?Sized> MutPtr<T> {
 
 unsafe impl<T: ?Sized> Send for MutPtr<T> where T: Send {}
 
+#[cfg(not(loom))]
+pub struct ConstPtr<T: ?Sized>(*const T);
+#[cfg(not(loom))]
+impl<T: ?Sized> ConstPtr<T> {
+    /// # Safety
+    ///
+    /// See `loom::cell::ConstPtr::deref`.
+    pub unsafe fn deref(&self) -> &T {
+        unsafe { &*self.0 }
+    }
+
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(*const T) -> R,
+    {
+        f(self.0)
+    }
+}
+
+#[cfg(loom)]
+pub use loom::cell::ConstPtr;
+
 // From https://docs.rs/loom/latest/loom/#handling-loom-api-differences
 #[cfg(not(loom))]
 #[derive(Debug, VirtualAddressSpaceIndependent)]
@@ -189,12 +253,19 @@ unsafe impl<T: ?Sized> Send for MutPtr<T> where T: Send {}
 pub struct UnsafeCell<T>(core::cell::UnsafeCell<T>);
 #[cfg(not(loom))]
 impl<T> UnsafeCell<T> {
-    pub fn new(data: T) -> UnsafeCell<T> {
+    #[inline]
+    pub const fn new(data: T) -> UnsafeCell<T> {
         UnsafeCell(core::cell::UnsafeCell::new(data))
     }
 
+    #[inline]
     pub fn get_mut(&self) -> MutPtr<T> {
         MutPtr(self.0.get())
+    }
+
+    #[inline]
+    pub fn get(&self) -> ConstPtr<T> {
+        ConstPtr(self.0.get())
     }
 }
 #[cfg(loom)]
@@ -202,12 +273,17 @@ impl<T> UnsafeCell<T> {
 pub struct UnsafeCell<T>(loom::cell::UnsafeCell<T>);
 #[cfg(loom)]
 impl<T> UnsafeCell<T> {
+    // TODO: make this `const` if and when loom's UnsafeCell supports a const new.
     pub fn new(data: T) -> UnsafeCell<T> {
         UnsafeCell(loom::cell::UnsafeCell::new(data))
     }
 
     pub fn get_mut(&self) -> MutPtr<T> {
         MutPtr(self.0.get_mut())
+    }
+
+    pub fn get(&self) -> ConstPtr<T> {
+        self.0.get()
     }
 }
 

@@ -9,8 +9,14 @@ use crate::sync;
 struct AtomicFutexWord(sync::atomic::AtomicU32);
 
 impl AtomicFutexWord {
+    // TODO: merge with `new` if and when loom's `AtomicU32` supports a const `new`.
+    #[cfg(not(loom))]
+    pub const fn const_new(val: FutexWord) -> Self {
+        Self(crate::sync::atomic::AtomicU32::new(val.to_u32()))
+    }
+
     pub fn new(val: FutexWord) -> Self {
-        Self(sync::atomic::AtomicU32::new(val.into()))
+        Self(crate::sync::atomic::AtomicU32::new(val.to_u32()))
     }
 
     pub fn inc_sleepers_and_fetch(&self, ord: sync::atomic::Ordering) -> FutexWord {
@@ -105,6 +111,12 @@ struct FutexWord {
     num_sleepers: u16,
 }
 
+impl FutexWord {
+    const fn to_u32(self) -> u32 {
+        ((self.lock_state as u32) << 16) | (self.num_sleepers as u32)
+    }
+}
+
 impl From<u32> for FutexWord {
     fn from(val: u32) -> Self {
         Self {
@@ -116,7 +128,7 @@ impl From<u32> for FutexWord {
 
 impl From<FutexWord> for u32 {
     fn from(val: FutexWord) -> Self {
-        ((val.lock_state as u32) << 16) | (val.num_sleepers as u32)
+        val.to_u32()
     }
 }
 
@@ -143,6 +155,18 @@ const LOCKED: u16 = 1;
 const LOCKED_DISCONNECTED: u16 = 2;
 
 impl<T> SelfContainedMutex<T> {
+    // TODO: merge with `new` when `AtomicFutexWord` supports a const `new`.
+    #[cfg(not(loom))]
+    pub const fn const_new(val: T) -> Self {
+        Self {
+            futex: AtomicFutexWord::const_new(FutexWord {
+                lock_state: UNLOCKED,
+                num_sleepers: 0,
+            }),
+            val: sync::UnsafeCell::new(val),
+        }
+    }
+
     pub fn new(val: T) -> Self {
         Self {
             futex: AtomicFutexWord::new(FutexWord {
@@ -240,7 +264,7 @@ impl<T> SelfContainedMutex<T> {
         // Only perform a FUTEX_WAKE operation if other threads are actually
         // sleeping on the lock.
         if current.num_sleepers > 0 {
-            sync::futex_wake(&self.futex.0).unwrap();
+            sync::futex_wake_one(&self.futex.0).unwrap();
         }
     }
 }
