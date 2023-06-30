@@ -6,21 +6,16 @@
 // Items in here may not end up being used by every test.
 #![allow(unused)]
 
-#[cfg(loom)]
 pub fn model<F>(f: F)
 where
     F: Fn() + Sync + Send + 'static,
 {
+    #[cfg(loom)]
     loom::model(move || {
         f();
         vasi_sync::sync::loom_reset();
     });
-}
-#[cfg(not(loom))]
-pub fn model<F>(f: F)
-where
-    F: Fn() + Sync + Send + 'static,
-{
+    #[cfg(not(loom))]
     f()
 }
 
