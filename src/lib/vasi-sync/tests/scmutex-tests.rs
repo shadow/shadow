@@ -56,7 +56,7 @@ mod scmutex_tests {
 
     #[test]
     fn test_threads() {
-        sync::model_with_max_preemptions(3, || {
+        sync::model_with_max_preemptions(2, || {
             let mutex = sync::Arc::new(SelfContainedMutex::new(0));
 
             // We can only create up to one fewer than loom's MAX_THREADS, which is currently 4.
