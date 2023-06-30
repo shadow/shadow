@@ -13,6 +13,7 @@ use core::sync::atomic::{self, AtomicI8, AtomicUsize};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rustix::mm::{MapFlags, ProtFlags};
 use rustix::process::Pid;
+use vasi_sync::atomic_tls_map;
 use vasi_sync::lazy_lock::{self, LazyLock};
 
 /// Modes of operation for this module.
@@ -182,7 +183,11 @@ struct ShimThreadLocalStorage {
     // initialized to zero so that the first time that a given range of bytes is
     // interpreted as a `ShimTlsVarStorage`, `ShimTlsVarStorage::initd` is
     // correctly `false`.
-    bytes: UnsafeCell<[u8; BYTES_PER_THREAD]>,
+    //
+    // `MaybeUninit` because after a given range starts to be used as
+    // `ShimTlsVarStorage<T>`, T may *uninitialize* some bytes e.g. due to
+    // padding or its own use of `MaybeUninit`.
+    bytes: UnsafeCell<[MaybeUninit<u8>; BYTES_PER_THREAD]>,
 }
 
 impl ShimThreadLocalStorage {
@@ -198,6 +203,13 @@ impl ShimThreadLocalStorage {
         static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, Output);
         static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, Output);
         unsafe { &*alloc.cast_const().cast::<Output>() }
+    }
+
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            bytes: UnsafeCell::new([MaybeUninit::new(0); BYTES_PER_THREAD]),
+        }
     }
 }
 
@@ -247,18 +259,6 @@ impl FastThreadId {
         }
     }
 
-    // We need this conversion for atomic operations. The value is opaque, but
-    // should preserve identity of `self`. i.e. `a == a` implies `usize::from(a) ==
-    // `usize::from(a)` and `a != b` implies `usize::from(a) != usize::from(b)`.
-    fn to_usize(value: Option<FastThreadId>) -> usize {
-        value
-            .map(|id| {
-                let res: NonZeroUsize = id.to_nonzero_usize();
-                res.get()
-            })
-            .unwrap_or(0)
-    }
-
     /// Id for the current thread.
     pub fn current() -> Self {
         #[cfg(not(miri))]
@@ -295,109 +295,16 @@ impl FastThreadId {
                 })
         }
     }
-
-    /// A quick naive hash to implement a simple hash table from an array of
-    /// size TLS_FALLBACK_MAX_THREADS. We try to place IDs as close to this
-    /// hash_idx as we can, and try to minimize collisions to the extent we can.
-    //
-    // TODO: Use a real hash function. stevenengler:
-    // > A multiplicative hash function would be pretty fast, or there's also
-    // the fxhash crate but I think it would essentially just multiply the
-    // value by 0x517cc1b727220a95.
-    pub fn hash_idx(&self) -> usize {
-        match self {
-            FastThreadId::ElfThreadPointer(ElfThreadPointer(fs)) =>
-            // `fs` is a user-space address to a Linux pthread_t structure,
-            // which has some alignment requirement. In C, the alignment can be
-            // at most 16. Rotating the bottom-most 4 bits to the MSBs gives us
-            // a better "hash", since some or all of these will always be zero.
-            {
-                fs.get().rotate_right(4) % TLS_FALLBACK_MAX_THREADS
-            }
-            FastThreadId::NativeTid(pid) => {
-                usize::try_from(pid.as_raw_nonzero().get()).unwrap() % TLS_FALLBACK_MAX_THREADS
-            }
-        }
-    }
-}
-
-/// Tracks the storage indexes for registered threads.
-///
-/// The `global_storages` storage for a given index is acquired for a thread
-/// with the given ID via `global_thread_ids::get_or_insert_idx`, and released
-/// via `global_thread_ids::remove`.
-mod global_thread_ids {
-    use super::*;
-
-    struct FastThreadIds([AtomicUsize; TLS_FALLBACK_MAX_THREADS]);
-    impl FastThreadIds {
-        /// Find the storage index of `id`, if it's already registered.
-        pub fn position(&self, id: FastThreadId) -> Option<usize> {
-            let start_pos = FastThreadId::hash_idx(&id);
-            let mut idxs = (start_pos..TLS_FALLBACK_MAX_THREADS).chain(0..start_pos);
-            let id_as_usize = id.to_nonzero_usize().get();
-            idxs.find(|idx| self.0[*idx].load(core::sync::atomic::Ordering::Relaxed) == id_as_usize)
-        }
-
-        /// Find a free storage index and assign it to `id`.
-        pub fn insert(&self, id: FastThreadId) -> usize {
-            let start_pos = FastThreadId::hash_idx(&id);
-            let mut idxs = (start_pos..TLS_FALLBACK_MAX_THREADS).chain(0..start_pos);
-            let none_as_usize = FastThreadId::to_usize(None);
-            let id_as_usize = id.to_nonzero_usize().get();
-            idxs.find(|idx| {
-                let res = self.0[*idx].compare_exchange(
-                    none_as_usize,
-                    id_as_usize,
-                    // Acquire the storage for this index, released in
-                    // `global_thread_ids::remove`.
-                    core::sync::atomic::Ordering::Acquire,
-                    core::sync::atomic::Ordering::Relaxed,
-                );
-                res.is_ok()
-            })
-            .unwrap()
-        }
-    }
-
-    static THREAD_IDS: FastThreadIds = {
-        #[allow(clippy::declare_interior_mutable_const)]
-        const ZERO: AtomicUsize = AtomicUsize::new(0);
-        FastThreadIds([ZERO; TLS_FALLBACK_MAX_THREADS])
-    };
-
-    /// Get the storage index for `id`.
-    pub(super) fn get_idx(id: FastThreadId) -> Option<usize> {
-        THREAD_IDS.position(id)
-    }
-
-    /// Get the storage index for `id`, allocating one if needed.
-    pub(super) fn get_or_insert_idx(tid: FastThreadId) -> usize {
-        let ids = &THREAD_IDS;
-        let idx = ids.position(tid);
-        idx.unwrap_or_else(|| ids.insert(tid))
-    }
-
-    /// Unregister the storage index `idx`.
-    pub fn remove(idx: usize) {
-        // Release storage corresponding to this `idx`, acquired in `FastThreadIds::insert`.
-        THREAD_IDS.0[idx].store(
-            FastThreadId::to_usize(None),
-            core::sync::atomic::Ordering::Release,
-        );
-    }
 }
 
 mod global_storages {
+    use vasi_sync::atomic_tls_map::{self, AtomicTlsMap};
+
     use super::*;
 
-    // The raw byte thread local storage for each thread. Indexes are obtained via
-    // `FastThreadIds`.
+    // The raw byte thread local storage for each thread.
     #[repr(transparent)]
-    struct StoragesType([ShimThreadLocalStorage; TLS_FALLBACK_MAX_THREADS]);
-    // SAFETY: normally the UnsafeCell forces this to be !Sync, but we ensure
-    // only one thread ever has access to any given UnsafeCell.
-    unsafe impl Sync for StoragesType {}
+    struct StoragesType(AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, ShimThreadLocalStorage>);
 
     impl StoragesType {
         pub fn alloc_new() -> &'static Self {
@@ -415,26 +322,16 @@ mod global_storages {
                 // Memory returned by mmap is page-aligned; typically 4096.
                 assert_eq!(ptr.align_offset(core::mem::align_of::<Self>()), 0);
                 let ptr: *mut Self = ptr.cast();
-                // Memory returned by anonymous mmap is already zeroed, which is a valid
-                // value for `ShimThreadLocalStorage`, which makes it also a valid value
-                // for `Self`.
-                //
-                // Explicitly initializing here would be a bit less fragile, and not
-                // that expensive since it's only done once per process,
-                // but is tricky to do without causing a stack overflow in debug builds.
-                // See e.g.
-                // https://users.rust-lang.org/t/how-to-boxed-struct-with-large-size-without-stack-overflow/94961
+                // `ptr` should be correct size and alignment.
+                unsafe { ptr.write(Self(AtomicTlsMap::new())) };
+                // `ptr` is now initialized.
                 unsafe { &*ptr }
             }
             #[cfg(miri)]
             {
                 // We can't do dynamic memory allocation via `mmap` under miri, so just
                 // leak heap-allocated storage instead.
-                Box::leak(Box::new(StoragesType(core::array::from_fn(|_| {
-                    ShimThreadLocalStorage {
-                        bytes: UnsafeCell::new([0; BYTES_PER_THREAD]),
-                    }
-                }))))
+                Box::leak(Box::new(Self(AtomicTlsMap::new())))
             }
         }
     }
@@ -446,27 +343,59 @@ mod global_storages {
         StoragesType::alloc_new()
     });
 
-    /// Get the storage associated with `idx`. The bytes are initially zero.
-    pub fn get(idx: usize) -> &'static ShimThreadLocalStorage {
-        &STORAGES.force().0[idx]
+    /// Get the storage associated with the current thread. The bytes are initially zero.
+    ///
+    /// # Safety
+    ///
+    /// All previous threads that have called `get_or_init_current` and
+    /// subsequently exited must have called `remove_current`.
+    pub(super) unsafe fn get_or_init_current(
+    ) -> atomic_tls_map::Ref<'static, ShimThreadLocalStorage> {
+        let id = FastThreadId::current();
+        // SAFETY: `id` is unique to this live thread, and caller guarantees
+        // any previous thread with this `id` has been removed.
+        let res = unsafe {
+            STORAGES
+                .force()
+                .0
+                .get_or_insert_with(id.to_nonzero_usize(), ShimThreadLocalStorage::new)
+        };
+        res
     }
 
-    /// Whether storage has been initialized.
-    pub fn initd() -> bool {
-        STORAGES.initd()
+    /// Panics if there are still any live references to this thread's storage.
+    ///
+    /// # Safety
+    ///
+    /// All previous threads that have accessed this module and have since
+    /// exited must have called `unregister_current_thread`.
+    pub(super) unsafe fn remove_current() {
+        if !STORAGES.initd() {
+            // Nothing to do. Even if another thread happens to be initializing
+            // concurrently, we know the *current* thread isn't registered.
+            return;
+        }
+
+        let id = FastThreadId::current();
+        // SAFETY: `id` is unique to this live thread, and caller guarantees
+        // any previous thread with this `id` has been removed.
+        unsafe { STORAGES.force().0.remove(id.to_nonzero_usize()) };
     }
 }
 
 /// Should be called by every thread that accesses thread local storage, before
 /// it makes the `exit` syscall and after it is done accessing thread local storage.
 ///
-/// This is a no-op when using native thread-local storage, but lets us reclaim memory
-/// otherwise, and is necessary for correctness when [`Mode::NativeTlsId`] is enabled.
+/// This is a no-op when using native thread-local storage, but is required for
+/// correctness otherwise, since thread IDs can be reused.
+///
+/// Panics if there are still any live references to this thread's [`ShimTlsVar`]s.
 ///
 /// # Safety
 ///
-/// This thread must not be holding any references to thread local storage nor
-/// access any thread local storage again before exiting.
+/// * All previous threads accessing thread local storage must have called this
+/// method before exiting.
+/// * This thread must not access any thread local storage again before exiting.
 //
 // TODO: make this safe(r) by exiting in this function. e.g.:
 // * `sigprocmask` to block all blockable signals.
@@ -475,28 +404,30 @@ mod global_storages {
 // * do the unregistration, deallocating storage
 // * call the `exit` syscall
 pub unsafe fn unregister_current_thread() {
-    if !global_storages::initd() {
-        // Nothing to do. Even if another thread happens to be initializing
-        // concurrently, we know the *current* thread isn't registered.
-        return;
-    }
+    // SAFETY: Caller guarantees all previous threads accessing thread local
+    // storage have called this method before exiting.
+    unsafe { global_storages::remove_current() }
+}
 
-    let current = FastThreadId::current();
-    if let Some(position) = global_thread_ids::get_idx(current) {
-        // Zero for the next thread.
-        // TODO: Consider running drop impls?
-        let storage = global_storages::get(position);
-        // SAFETY: We have exclusive access to this memory until calling `remove`, below.
-        unsafe { storage.bytes.get().write([0; BYTES_PER_THREAD]) };
-        global_thread_ids::remove(position);
-    } else {
-        // This thread was never registered.
+enum ShimThreadLocalStorageRef {
+    Native(&'static ShimThreadLocalStorage),
+    Mapped(atomic_tls_map::Ref<'static, ShimThreadLocalStorage>),
+}
+
+impl Deref for ShimThreadLocalStorageRef {
+    type Target = ShimThreadLocalStorage;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            ShimThreadLocalStorageRef::Native(n) => n,
+            ShimThreadLocalStorageRef::Mapped(m) => m,
+        }
     }
 }
 
 /// Returns thread local storage for the current thread. The raw byte contents
 /// are initialized to zero.
-fn tls_storage() -> &'static ShimThreadLocalStorage {
+fn tls_storage() -> ShimThreadLocalStorageRef {
     match global_preferred_mode::get() {
         Mode::Disabled => panic!("Storage mode not set"),
         Mode::Native => {
@@ -504,9 +435,9 @@ fn tls_storage() -> &'static ShimThreadLocalStorage {
                 // Native (libc) TLS seems to be set up properly. Use it.
                 let alloc: *mut ShimThreadLocalStorageAllocation =
                     unsafe { crate::bindings::shim_native_tls() };
-                return unsafe {
+                return ShimThreadLocalStorageRef::Native(unsafe {
                     ShimThreadLocalStorage::from_static_lifetime_zeroed_allocation(alloc)
-                };
+                });
             }
             // else fallthrough
         }
@@ -514,9 +445,7 @@ fn tls_storage() -> &'static ShimThreadLocalStorage {
         Mode::NativeTlsId | Mode::Gettid => (),
     }
     // Use our fallback mechanism.
-    let this_tid = FastThreadId::current();
-    let idx = global_thread_ids::get_or_insert_idx(this_tid);
-    global_storages::get(idx)
+    ShimThreadLocalStorageRef::Mapped(unsafe { global_storages::get_or_init_current() })
 }
 
 /// One of these is placed in each thread's thread-local-storage, for each
@@ -690,7 +619,7 @@ where
     pub fn get(&self) -> TLSVarRef<T> {
         // SAFETY: We ensured `offset` is in bounds at construction time.
         let this_var_bytes: *mut u8 = {
-            let storage: *mut [u8; BYTES_PER_THREAD] = tls_storage().bytes.get();
+            let storage: *mut [MaybeUninit<u8>; BYTES_PER_THREAD] = tls_storage().bytes.get();
             let storage: *mut u8 = storage.cast();
             unsafe { storage.add(self.offset()) }
         };

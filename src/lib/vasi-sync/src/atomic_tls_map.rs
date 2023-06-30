@@ -30,7 +30,7 @@ where
     refcounts: [Cell<usize>; N],
     build_hasher: H,
 }
-/// Override default of `UnsafeCell` and `Cell` not being `Sync`.  We
+/// Override default of `UnsafeCell`, `Cell`, and `V` not being `Sync`.  We
 /// synchronize access to these (if partly by requiring users to guarantee no
 /// parallel access to a given key from multiple threads).
 /// Likewise `V` only needs to be `Send`.
