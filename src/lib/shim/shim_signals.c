@@ -3,6 +3,7 @@
 #include "lib/linux-api/linux-api.h"
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
+#include "lib/shim/shim_api.h"
 
 #include <errno.h>
 #include <string.h>

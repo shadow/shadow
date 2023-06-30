@@ -10,11 +10,13 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .use_core()
         .header("shim.h")
         .allowlist_function("shim_.*")
+        .allowlist_function("_shim_.*")
         .header("shim_api_c.h")
         .allowlist_function("shimc_.*")
         .header("shim_sys.h")
         .allowlist_function("shim_sys_get_simtime_nanos")
         .header("shim_syscall.h")
+        .header("shim_tls.h")
         // get libc types from libc crate
         .blocklist_type("addrinfo")
         .raw_line("use libc::addrinfo;")
@@ -26,6 +28,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("ShimShmem.*")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::*;")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::*;")
+        .blocklist_type("ShimThreadLocalStorage")
+        .raw_line("use crate::tls::ShimThreadLocalStorage;")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.
@@ -50,11 +54,17 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "sys/types.h".into(),
             "netdb.h".into(),
         ],
-        includes: vec!["lib/log-c2rust/rustlogger.h".into()],
+        includes: vec![
+            "lib/log-c2rust/rustlogger.h".into(),
+            "lib/shmem/shmem_allocator.h".into(),
+            "lib/shadow-shim-helper-rs/shim_helper.h".into(),
+        ],
         after_includes: {
             let mut v = base_config.after_includes.clone().unwrap_or_default();
             // We have to manually create the vararg declaration.
             v.push_str("long shim_api_syscall(long n, ...);\n");
+            // We have to define the ALIGNED macro to support aligned structs.
+            v.push_str("#define ALIGNED(n) __attribute__((aligned(n)))\n");
             Some(v)
         },
         export: cbindgen::ExportConfig {
@@ -66,7 +76,12 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 // Manual declaration above
                 "shim_api_syscall".into(),
             ],
+            include: vec!["ShimThreadLocalStorage".into()],
             ..base_config.export.clone()
+        },
+        layout: cbindgen::LayoutConfig {
+            aligned_n: Some("ALIGNED".into()),
+            ..base_config.layout.clone()
         },
         include_guard: Some("shim_shim_api_h".into()),
         ..base_config

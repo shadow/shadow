@@ -31,26 +31,7 @@
 #include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
-#include "lib/shim/shim_tls.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
-
-// This thread's IPC block, for communication with Shadow.
-// Must remain valid for the lifetime of this process once initialized.
-static ShMemBlock* _shim_ipcDataBlk() {
-    static ShimTlsVar v = {0};
-    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
-}
-struct IPCData* shim_thisThreadEventIPC() {
-    return _shim_ipcDataBlk()->p;
-}
-
-// Per-thread state shared with Shadow.
-// Must remain valid for the lifetime of this process once initialized.
-static ShMemBlock* _shim_thread_shared_mem_blk() {
-    static ShimTlsVar v = {0};
-    return shimtlsvar_ptr(&v, sizeof(ShMemBlock));
-}
-const ShimShmemThread* shim_threadSharedMem() { return _shim_thread_shared_mem_blk()->p; }
 
 // Per-process state shared with Shadow.
 // Must remain valid for the lifetime of this process once initialized.
@@ -76,12 +57,6 @@ static ShMemBlock* _shim_manager_shared_mem_blk() {
 }
 const ShimShmemManager* shim_managerSharedMem() { return _shim_manager_shared_mem_blk()->p; }
 
-// We disable syscall interposition when this is > 0.
-static int* _shim_allowNativeSyscallsFlag() {
-    static ShimTlsVar v = {0};
-    return shimtlsvar_ptr(&v, sizeof(bool));
-}
-
 // Held from the time of starting to initialize _startThread, to being done with
 // it. i.e. ensure we don't try to start more than one thread at once.
 //
@@ -90,7 +65,7 @@ static int* _shim_allowNativeSyscallsFlag() {
 // clone itself until after the parent has woken up and released this lock.
 static shadow_spinlock_t _startThreadLock = SHADOW_SPINLOCK_STATICALLY_INITD;
 static struct {
-    ShMemBlock childIpcBlk;
+    ShMemBlockSerialized childIpcBlk;
     shadow_sem_t childInitd;
 } _startThread;
 
@@ -101,7 +76,7 @@ void shim_newThreadStart(const ShMemBlockSerialized* block) {
     if (shadow_sem_init(&_startThread.childInitd, 0, 0)) {
         panic("shadow_sem_init: %s", strerror(errno));
     }
-    _startThread.childIpcBlk = shmemserializer_globalBlockDeserialize(block);
+    _startThread.childIpcBlk = *block;
 }
 
 void shim_newThreadChildInitd() {
@@ -124,82 +99,6 @@ void shim_newThreadFinish() {
     // Release the global clone lock.
     if (shadow_spin_unlock(&_startThreadLock)) {
         panic("shadow_spin_unlock: %s", strerror(errno));
-    }
-}
-
-bool shim_swapAllowNativeSyscalls(bool new) {
-    bool old = *_shim_allowNativeSyscallsFlag();
-    *_shim_allowNativeSyscallsFlag() = new;
-    return old;
-}
-
-bool shim_interpositionEnabled() {
-    return !*_shim_allowNativeSyscallsFlag();
-}
-
-static void** _shim_signal_stack() {
-    static ShimTlsVar stack_var = {0};
-    void** stack = shimtlsvar_ptr(&stack_var, sizeof(*stack));
-    return stack;
-}
-
-// A signal stack waiting to be freed.
-static void* free_signal_stack = NULL;
-
-void shim_freeSignalStack() {
-    // We can't free the current thread's signal stack, since
-    // we may be running on it. Instead we save the pointer, so that
-    // it can be freed later by another thread.
-
-    if (free_signal_stack != NULL) {
-        // First free the pending stack.
-        if (free_signal_stack == *_shim_signal_stack()) {
-            panic("Tried to free the current thread's signal stack twice");
-        }
-        munmap(free_signal_stack, SHIM_SIGNAL_STACK_SIZE);
-    }
-    free_signal_stack = *_shim_signal_stack();
-}
-
-// Any signal handlers that the shim itself installs should be configured to
-// use this stack, using the `SA_ONSTACK` flag in the call to `sigaction`. This
-// prevents corrupting the stack in the presence of user-space threads, such as
-// goroutines.
-// See https://github.com/shadow/shadow/issues/1549.
-static void _shim_init_signal_stack() {
-    assert(!shim_interpositionEnabled());
-
-    // Use signed here so that we can easily detect underflow below.
-    ssize_t stack_sz = SHIM_SIGNAL_STACK_SIZE;
-
-    void* new_stack = mmap(NULL, stack_sz, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    if (new_stack == MAP_FAILED) {
-        panic("mmap: %s", strerror(errno));
-    }
-    if (*_shim_signal_stack() != NULL) {
-        panic("Allocated signal stack twice for current thread");
-    }
-    *_shim_signal_stack() = new_stack;
-
-    // Set up a guard page.
-    if (mprotect(new_stack, sysconf(_SC_PAGESIZE), PROT_NONE) != 0) {
-        int err = errno;
-        panic("mprotect: %s", strerror(err));
-    }
-
-    stack_t stack_descriptor = {
-        .ss_sp = new_stack,
-        .ss_size = stack_sz,
-        // Clear the alternate stack settings on entry to signal handler, and
-        // restore it on exit.  Otherwise a signal handler invoked while another
-        // is running on the same thread would clobber the first handler's stack.
-        // Instead we want the second handler to push a new frame on the alt
-        // stack that's already installed.
-        .ss_flags = LINUX_SS_AUTODISARM,
-    };
-
-    if (sigaltstack(&stack_descriptor, NULL) != 0) {
-        panic("sigaltstack: %s", strerror(errno));
     }
 }
 
@@ -243,17 +142,6 @@ static void _shim_parent_init_host_shm() {
     *_shim_host_shared_mem_blk() = shmemserializer_globalBlockDeserialize(
         shimshmem_getProcessHostShmem(shim_processSharedMem()));
     assert(shim_hostSharedMem());
-}
-
-static void _shim_parent_init_ipc() {
-    const char* ipc_blk_buf = getenv("SHADOW_IPC_BLK");
-    assert(ipc_blk_buf);
-    bool err = false;
-    ShMemBlockSerialized ipc_blk_serialized = shmemblockserialized_fromString(ipc_blk_buf, &err);
-    assert(!err);
-
-    *_shim_ipcDataBlk() = shmemserializer_globalBlockDeserialize(&ipc_blk_serialized);
-    assert(shim_thisThreadEventIPC());
 }
 
 static void _shim_parent_init_memory_manager_internal() {
@@ -302,9 +190,7 @@ static void _shim_parent_init_memory_manager() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-static void _shim_preload_only_child_init_ipc() {
-    *_shim_ipcDataBlk() = _startThread.childIpcBlk;
-}
+static void _shim_preload_only_child_init_ipc() { _shim_set_ipc(&_startThread.childIpcBlk); }
 
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
@@ -313,7 +199,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
 
     // We're returning control to the parent thread here, who is going to switch
     // back to their own TLS.
-    struct IPCData* ipc = shim_thisThreadEventIPC();
+    const struct IPCData* ipc = shim_thisThreadEventIPC();
 
     // Releases parent thread, who switches back to their own TLS.  i.e. Don't
     // use TLS between here and when we can switch back to our own after
@@ -329,8 +215,7 @@ static void _shim_preload_only_child_ipc_wait_for_start_event() {
     shimevent_recvEventFromShadow(ipc, &start_res);
     assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
 
-    *_shim_thread_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&thread_blk_serialized);
+    _shim_set_thread_shmem(&thread_blk_serialized);
 }
 
 static void _shim_ipc_wait_for_start_event() {
@@ -348,8 +233,7 @@ static void _shim_ipc_wait_for_start_event() {
     shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &start_res);
     assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
 
-    *_shim_thread_shared_mem_blk() =
-        shmemserializer_globalBlockDeserialize(&thread_blk_serialized);
+    _shim_set_thread_shmem(&thread_blk_serialized);
     *_shim_process_shared_mem_blk() =
         shmemserializer_globalBlockDeserialize(&process_blk_serialized);
 }
@@ -378,7 +262,7 @@ static void _shim_parent_set_working_dir() {
     }
 }
 
-static void _shim_parent_init_preload() {
+void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_parent_init_ipc();
@@ -399,7 +283,7 @@ static void _shim_parent_init_preload() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-static void _shim_child_init_preload() {
+void _shim_child_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_preload_only_child_init_ipc();
@@ -408,41 +292,6 @@ static void _shim_child_init_preload() {
     _shim_init_signal_stack();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-}
-
-void _shim_load() {
-    static bool did_global_pre_init = false;
-    if (!did_global_pre_init) {
-        // Early init; must not make any syscalls.
-
-        did_global_pre_init = true;
-
-        // Avoid logging until we've set up the shim logger.
-        logger_setLevel(logger_getDefault(), LOGLEVEL_WARNING);
-    }
-
-    // Now we can use thread-local storage.
-    static ShimTlsVar started_thread_init_var = {0};
-    bool* started_thread_init =
-        shimtlsvar_ptr(&started_thread_init_var, sizeof(*started_thread_init));
-    if (*started_thread_init) {
-        // Avoid deadlock when _shim_global_init's syscalls caused this function to be
-        // called recursively.  In the uninitialized state,
-        // `shim_interpositionEnabled` returns false, allowing _shim_global_init's
-        // syscalls to execute natively.
-        return;
-    }
-    *started_thread_init = true;
-
-    static bool did_global_init = false;
-    if (!did_global_init) {
-        _shim_parent_init_preload();
-        did_global_init = true;
-        trace("Finished shim parent init");
-    } else {
-        _shim_child_init_preload();
-        trace("Finished shim child init");
-    }
 }
 
 void shim_ensure_init() { _shim_load(); }

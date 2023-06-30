@@ -119,7 +119,7 @@ add_test(NAME rust-unit-tests
          )
 # Longer timeout here and run serially, since it's running a whole test suite,
 # and may end up rebuilding code if anything has changed.
-set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE)
+set_tests_properties(rust-unit-tests PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE)
 
 # We need a separate project to build the shim, for several reasons:
 # * We need to pass extra RUSTFLAGS that only make sense for this target
