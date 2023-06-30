@@ -87,7 +87,7 @@ mod scchannel_tests {
 
     #[test]
     fn test_writer_close_watchdog_with_write() {
-        sync::model(|| {
+        sync::model_with_max_preemptions(3, || {
             let channel = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let writer = {
                 let channel = channel.clone();
@@ -133,7 +133,7 @@ mod scchannel_tests {
     fn test_channel_reuse() {
         // Test reusing channels, using another channel to synchronize.
         // This is analagous to how shadow communicates with a plugin.
-        sync::model(|| {
+        sync::model_with_max_preemptions(3, || {
             let alpha_to_beta = sync::Arc::new(SelfContainedChannel::<u32>::new());
             let beta_to_alpha = sync::Arc::new(SelfContainedChannel::<u32>::new());
 

@@ -77,6 +77,5 @@ jobs:
         # to substantially speed it up, at the cost of losing some coverage of possible
         # execution paths.
         RUST_BACKTRACE=1 \
-          LOOM_MAX_PREEMPTIONS=3 \
           RUSTFLAGS="--cfg loom" \
           cargo test -p vasi-sync

@@ -7,7 +7,7 @@ use vasi_sync::scmutex::{SelfContainedMutex, SelfContainedMutexGuard};
 
 mod sync;
 
-mod tests {
+mod scmutex_tests {
     use super::*;
 
     #[test]
@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_threads() {
-        sync::model(|| {
+        sync::model_with_max_preemptions(3, || {
             let mutex = sync::Arc::new(SelfContainedMutex::new(0));
 
             // We can only create up to one fewer than loom's MAX_THREADS, which is currently 4.
