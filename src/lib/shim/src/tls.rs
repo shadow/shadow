@@ -187,6 +187,33 @@ pub struct ShimThreadLocalStorage {
 }
 unsafe impl Pod for ShimThreadLocalStorage {}
 
+impl ShimThreadLocalStorage {
+    /// # Safety
+    ///
+    /// * `alloc` must be dereferenceable and live for the lifetime of this process.
+    /// * `alloc` must be zeroed the first time it is passed to this function.
+    /// * `alloc` must *only* be access through this function.
+    pub unsafe fn from_static_lifetime_zeroed_allocation(
+        alloc: *mut ShimThreadLocalStorageAllocation,
+    ) -> &'static UnsafeCell<Self> {
+        type Output = UnsafeCell<ShimThreadLocalStorage>;
+        static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, Output);
+        static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, Output);
+        unsafe { &*alloc.cast_const().cast::<Output>() }
+    }
+}
+
+/// This is a "proxy" type to [`ShimThreadLocalStorage`] with the same size and alignment.
+/// Unlike [`ShimThreadLocalStorage`], it is exposed to C, that C code can provide
+/// a "thread-local allocator" that we delegate to in [`Mode::Native`].
+#[repr(C, align(16))]
+#[derive(Copy, Clone)]
+pub struct ShimThreadLocalStorageAllocation {
+    _bytes: [u8; BYTES_PER_THREAD],
+}
+static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, ShimThreadLocalStorage);
+static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, ShimThreadLocalStorage);
+
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
 /// *live* threads; in particular [`FastThreadId::ElfThreadPointer`] of a live
 /// thread can have the same value as a previously seen dead thread. See
@@ -482,13 +509,11 @@ fn tls_storage() -> &'static UnsafeCell<ShimThreadLocalStorage> {
         Mode::Native => {
             if ElfThreadPointer::current().is_some() {
                 // Native (libc) TLS seems to be set up properly. Use it.
-                let rv: *const ShimThreadLocalStorage =
+                let alloc: *mut ShimThreadLocalStorageAllocation =
                     unsafe { crate::bindings::shim_native_tls() };
-                // UnsafeCell has the same ABI as its inner type.
-                // TODO: Maybe we can do some trick in binding generation so that the Rust
-                // binding to this function already returns a pointer to UnsafeCell<_>
-                let rv = rv as *const UnsafeCell<ShimThreadLocalStorage>;
-                return unsafe { &*rv };
+                return unsafe {
+                    ShimThreadLocalStorage::from_static_lifetime_zeroed_allocation(alloc)
+                };
             }
             // else fallthrough
         }
