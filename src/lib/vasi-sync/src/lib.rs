@@ -34,10 +34,11 @@
 
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
-// no_std except when testing under loom.
+// no_std except when testing.
 // https://github.com/shadow/shadow/issues/2919
-#![cfg_attr(not(loom), no_std)]
+#![cfg_attr(all(not(test), not(loom)), no_std)]
 
+pub mod atomic_tls_map;
 pub mod lazy_lock;
 pub mod scchannel;
 pub mod scmutex;

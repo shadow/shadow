@@ -76,6 +76,9 @@ jobs:
         # If this ever gets too slow, we can consider reducing `LOOM_MAX_PREEMPTIONS`
         # to substantially speed it up, at the cost of losing some coverage of possible
         # execution paths.
+        #
+        # We use `--test-threads 1` as a workaround for
+        # <https://github.com/tokio-rs/loom/issues/316>
         RUST_BACKTRACE=1 \
           RUSTFLAGS="--cfg loom" \
-          cargo test -p vasi-sync
+          cargo test -p vasi-sync -- --test-threads 1

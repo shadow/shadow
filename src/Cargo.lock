@@ -1925,6 +1925,7 @@ dependencies = [
  "loom",
  "num_enum",
  "rand",
+ "rustc-hash",
  "rustix",
  "static_assertions",
  "vasi",

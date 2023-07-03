@@ -10,6 +10,7 @@ num_enum = { version = "0.6.1", default-features=false }
 rustix = { version = "0.37.19", default-features = false, features=["fs", "thread", "process"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
+rustc-hash = { version = "1.1.0", default-features=false }
 
 [dev-dependencies]
 criterion = "0.5.1"
