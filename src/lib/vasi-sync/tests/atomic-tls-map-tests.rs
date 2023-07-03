@@ -180,15 +180,16 @@ mod atomic_tls_map_tests {
         })
     }
 
+    // This test seems to cause mysterious crashes in loom itself when running tests
+    // with `--test-threads` > 1. Reducing max_preemptions or NTHREADS has
+    // temporarily fixed it in the past, and then adding or changing *some other
+    // test* brings the failure back.
+    // <https://github.com/tokio-rs/loom/issues/316>
     #[test]
     fn test_reuse_keys_after_thread_exit() {
         sync::model_with_max_preemptions(2, || {
-            // NTHREADS > 2 *crashes* loom. 2 should be sufficient for this test, though.
-            // e.g. test_get_and_remove_threaded should already cover concurrent insert +
-            // remove + lookup.
-            // <https://github.com/tokio-rs/loom/issues/316>
             #[cfg(loom)]
-            const NTHREADS: usize = 2;
+            const NTHREADS: usize = 3;
             #[cfg(not(loom))]
             const NTHREADS: usize = 100;
 
