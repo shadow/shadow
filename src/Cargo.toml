@@ -20,3 +20,16 @@ members = [
     "lib/vasi-macro",
     "lib/vasi-sync",
 ]
+
+[profile.dev]
+# Without this, the shim requires a relatively large stack, especially during
+# initialization.  Rust makes it difficult to avoid putting objects temporarily
+# on the stack, even if it'll ultimately live in heap or static memory, but
+# opt-level 1 is enough to optimize a lot of those away.
+# 
+# See https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
+#
+# In our test suite the main place we see failures without this is in the
+# `clone-shadow` test, but it could also affect golang or other environments
+# with "light" user-space threading.
+opt-level = 1 
