@@ -20,3 +20,11 @@ members = [
     "lib/vasi-macro",
     "lib/vasi-sync",
 ]
+
+[profile.dev]
+# shim/src/tls.rs, and maybe other places, needs this
+# to avoid smashing the stack with a large immediate temporary.
+# opt-level 1 is enough to optimize away the offending temporary.
+# 
+# See https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
+opt-level = 1 
