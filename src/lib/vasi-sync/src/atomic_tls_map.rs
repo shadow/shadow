@@ -219,6 +219,12 @@ impl<const N: usize, V, H> AtomicTlsMap<N, V, H>
 where
     H: BuildHasher + Default,
 {
+    // This `inline` is important when allocating large instances, since
+    // otherwise the compiler can't avoid create a temporary copy on the stack,
+    // which might not fit.
+    //
+    // See https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
+    #[inline]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::new_with_hasher(Default::default())
