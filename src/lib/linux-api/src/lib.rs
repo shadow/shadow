@@ -52,6 +52,7 @@
 mod bindings;
 
 pub mod errno;
+pub mod exit;
 pub mod fcntl;
 pub mod inet;
 pub mod ioctls;
