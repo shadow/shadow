@@ -24,6 +24,7 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+mod mmap_box;
 mod shimlogger;
 pub use shimlogger::export as shimlogger_export;
 
