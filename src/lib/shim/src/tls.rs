@@ -12,10 +12,11 @@ use core::sync::atomic::{self, AtomicI8, AtomicUsize};
 
 use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use rustix::mm::{MapFlags, ProtFlags};
 use rustix::process::Pid;
-use vasi_sync::atomic_tls_map;
+use vasi_sync::atomic_tls_map::{self, AtomicTlsMap};
 use vasi_sync::lazy_lock::{self, LazyLock};
+
+use crate::mmap_box::MmapBox;
 
 /// Modes of operation for this module.
 #[derive(Debug, Eq, PartialEq, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
@@ -299,8 +300,6 @@ impl FastThreadId {
 }
 
 mod global_storages {
-    use vasi_sync::atomic_tls_map::{self, AtomicTlsMap};
-
     use super::*;
 
     // The raw byte thread local storage for each thread.
@@ -317,31 +316,7 @@ mod global_storages {
         }
 
         pub fn alloc_new() -> &'static Self {
-            #[cfg(not(miri))]
-            {
-                let ptr = unsafe {
-                    rustix::mm::mmap_anonymous(
-                        core::ptr::null_mut(),
-                        core::mem::size_of::<StoragesType>(),
-                        ProtFlags::READ | ProtFlags::WRITE,
-                        MapFlags::PRIVATE,
-                    )
-                    .unwrap()
-                };
-                // Memory returned by mmap is page-aligned; typically 4096.
-                assert_eq!(ptr.align_offset(core::mem::align_of::<Self>()), 0);
-                let ptr: *mut Self = ptr.cast();
-                // `ptr` should be correct size and alignment.
-                unsafe { ptr.write(Self::new()) };
-                // `ptr` is now initialized.
-                unsafe { &*ptr }
-            }
-            #[cfg(miri)]
-            {
-                // We can't do dynamic memory allocation via `mmap` under miri, so just
-                // leak heap-allocated storage instead.
-                Box::leak(Box::new(Self::new()))
-            }
+            unsafe { &*MmapBox::leak(MmapBox::new(Self::new())) }
         }
     }
 
