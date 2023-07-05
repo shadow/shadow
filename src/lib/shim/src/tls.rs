@@ -305,9 +305,17 @@ mod global_storages {
 
     // The raw byte thread local storage for each thread.
     #[repr(transparent)]
-    struct StoragesType(AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, ShimThreadLocalStorage>);
+    struct StoragesType {
+        storages: AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, ShimThreadLocalStorage>,
+    }
 
     impl StoragesType {
+        pub fn new() -> Self {
+            Self {
+                storages: AtomicTlsMap::new(),
+            }
+        }
+
         pub fn alloc_new() -> &'static Self {
             #[cfg(not(miri))]
             {
@@ -324,7 +332,7 @@ mod global_storages {
                 assert_eq!(ptr.align_offset(core::mem::align_of::<Self>()), 0);
                 let ptr: *mut Self = ptr.cast();
                 // `ptr` should be correct size and alignment.
-                unsafe { ptr.write(Self(AtomicTlsMap::new())) };
+                unsafe { ptr.write(Self::new()) };
                 // `ptr` is now initialized.
                 unsafe { &*ptr }
             }
@@ -332,7 +340,7 @@ mod global_storages {
             {
                 // We can't do dynamic memory allocation via `mmap` under miri, so just
                 // leak heap-allocated storage instead.
-                Box::leak(Box::new(Self(AtomicTlsMap::new())))
+                Box::leak(Box::new(Self::new()))
             }
         }
     }
@@ -358,7 +366,7 @@ mod global_storages {
         let res = unsafe {
             STORAGES
                 .force()
-                .0
+                .storages
                 .get_or_insert_with(id.to_nonzero_usize(), ShimThreadLocalStorage::new)
         };
         res
@@ -380,7 +388,7 @@ mod global_storages {
         let id = FastThreadId::current();
         // SAFETY: `id` is unique to this live thread, and caller guarantees
         // any previous thread with this `id` has been removed.
-        unsafe { STORAGES.force().0.remove(id.to_nonzero_usize()) };
+        unsafe { STORAGES.force().storages.remove(id.to_nonzero_usize()) };
     }
 }
 
