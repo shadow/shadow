@@ -129,13 +129,12 @@ static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
         pid_t* ctid = (pid_t*)arg4;
         uint64_t newtls = arg5;
         rv = _shim_clone(ctx, flags, child_stack, ptid, ctid, newtls);
+    } else if (n == SYS_exit) {
+        // This thread is exiting. Arrange for its thread-local-storage and
+        // signal stack to be freed.
+        shim_freeSignalStack();
+        shim_tls_unregister_and_exit_current_thread(arg1);
     } else {
-        if (n == SYS_exit) {
-            // This thread is exiting. Arrange for its thread-local-storage and signal stack to be freed.
-            shim_tls_unregister_current_thread();
-            shim_freeSignalStack();
-        }
-
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register
         // variables](https://gcc.gnu.org/onlinedocs/gcc/Local-Register-Variables.html)

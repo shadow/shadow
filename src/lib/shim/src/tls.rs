@@ -10,6 +10,7 @@ use core::num::NonZeroUsize;
 use core::ops::Deref;
 use core::sync::atomic::{self, AtomicI8, AtomicUsize};
 
+use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rustix::mm::{MapFlags, ProtFlags};
 use rustix::process::Pid;
@@ -69,14 +70,14 @@ pub enum Mode {
     /// thread.  This seems like a fairly reasonable assumption, and seems to
     /// hold so far, but isn't guaranteed.
     /// * Requires that each thread using thread local storage from this module
-    /// calls [`unregister_current_thread`] before exiting, since the thread pointer
+    /// calls [`unregister_and_exit_current_thread`] before exiting, since the thread pointer
     /// may subsequently be used for another thread.
     ///
     /// [ELF-TLS]: "ELF Handling For Thread-Local Storage", by Ulrich Drepper.
     /// <https://www.akkadia.org/drepper/tls.pdf>
     ///
     /// SAFETY: Requires that each thread using this thread local storage
-    /// calls [`unregister_current_thread`] before exiting.
+    /// calls [`unregister_and_exit_current_thread`] before exiting.
     NativeTlsId,
     /// This mode is similar to `NativeTlsId`, but instead of using the ELF thread
     /// pointer to identify each thread, it uses the system thread ID as retrieved by
@@ -84,13 +85,13 @@ pub enum Mode {
     ///
     /// Unlike `NativeTlsId`, this approach doesn't rely on any assumptions about
     /// the implementation details of thread local storage in the managed process.
-    /// It also *usually* still works without calling [`unregister_current_thread`],
+    /// It also *usually* still works without calling [`ThreadLocalStorage::unregister_current_thread`],
     /// but technically still requires it to guarantee soundness, since thread
     ///
     /// Unfortunately this mode is *much* slower than the others.
     ///
     /// SAFETY: Each thread using this thread local storage must call
-    /// [`unregister_current_thread`] before exiting.
+    /// [`unregister_and_exit_current_thread`] before exiting.
     #[allow(unused)]
     Gettid,
 }
@@ -107,7 +108,7 @@ pub mod global_preferred_mode {
     /// # Safety
     ///
     /// There must not exist any live threads that have accessed Tls variables
-    /// and not yet called [`unregister_current_thread`].
+    /// and not yet called [`unregister_and_exit_current_thread`].
     #[cfg(test)]
     pub unsafe fn reset_for_testing() {
         PREFERRED_MODE.store(Mode::Disabled as i8, atomic::Ordering::Relaxed);
@@ -227,7 +228,7 @@ static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, ShimThreadL
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
 /// *live* threads; in particular [`FastThreadId::ElfThreadPointer`] of a live
 /// thread can have the same value as a previously seen dead thread. See
-/// [`unregister_current_thread`].
+/// [`unregister_and_exit_current_thread`].
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 enum FastThreadId {
     ElfThreadPointer(ElfThreadPointer),
@@ -368,7 +369,7 @@ mod global_storages {
     /// # Safety
     ///
     /// All previous threads that have accessed this module and have since
-    /// exited must have called `unregister_current_thread`.
+    /// exited must have called [`unregister_and_exit_current_thread`].
     pub(super) unsafe fn remove_current() {
         if !STORAGES.initd() {
             // Nothing to do. Even if another thread happens to be initializing
@@ -383,9 +384,24 @@ mod global_storages {
     }
 }
 
-/// Should be called by every thread that accesses thread local storage, before
-/// it makes the `exit` syscall and after it is done accessing thread local storage.
+/// Unit tests using `std::thread` should use this instead of
+/// `unregister_and_exit_current_thread`. The latter may have unintended side
+/// effects since it would bypass any of `std::thread`'s application-level
+/// cleanup.
 ///
+/// # Safety
+///
+/// The current thread must not access thread local storage again before exiting.
+#[cfg(test)]
+pub unsafe fn unregister_current_thread_for_test() {
+    // SAFETY: No code can access thread local storage in between deregistration
+    // and exit.
+    unsafe { global_storages::remove_current() }
+}
+
+/// Release this thread's thread local storage and exit the thread.
+///
+/// Should be called by every thread that accesses thread local storage.
 /// This is a no-op when using native thread-local storage, but is required for
 /// correctness otherwise, since thread IDs can be reused.
 ///
@@ -393,20 +409,25 @@ mod global_storages {
 ///
 /// # Safety
 ///
-/// * All previous threads accessing thread local storage must have called this
-/// method before exiting.
-/// * This thread must not access any thread local storage again before exiting.
-//
-// TODO: make this safe(r) by exiting in this function. e.g.:
-// * `sigprocmask` to block all blockable signals.
-// * validate that the current thread isn't holding any references (e.g. add a Cell
-//   counter to `ShimThreadLocalStorage`)
-// * do the unregistration, deallocating storage
-// * call the `exit` syscall
-pub unsafe fn unregister_current_thread() {
-    // SAFETY: Caller guarantees all previous threads accessing thread local
-    // storage have called this method before exiting.
+/// In the case that this function somehow panics, caller must not
+/// access thread local storage again from the current thread, e.g.
+/// using `std::panic::catch_unwind` or a custom panic hook.
+pub unsafe fn unregister_and_exit_current_thread(exit_status: i32) -> ! {
+    // Block all signals, to ensure a signal handler can't run and attempt to
+    // access thread local storage.
+    rt_sigprocmask(
+        SigProcMaskAction::SIG_BLOCK,
+        &linux_api::signal::sigset_t::FULL,
+        None,
+    )
+    .unwrap();
+
+    // SAFETY: No code can access thread local storage in between deregistration
+    // and exit.
     unsafe { global_storages::remove_current() }
+
+    linux_api::exit::exit_raw(exit_status).unwrap();
+    unreachable!()
 }
 
 enum ShimThreadLocalStorageRef {
@@ -476,7 +497,15 @@ struct ShimTlsVarStorage<T> {
 }
 
 impl<T> ShimTlsVarStorage<T> {
-    fn get_or_init(&self, initializer: impl FnOnce() -> T) -> TLSVarRef<T> {
+    fn get(&self) -> &T {
+        assert!(self.initd.get());
+
+        // SAFETY: We've ensured this value is initialized, and that
+        // there are no exclusive references created after initialization.
+        unsafe { (*self.value.get()).assume_init_ref() }
+    }
+
+    fn ensure_init(&self, initializer: impl FnOnce() -> T) {
         if !self.initd.get() {
             // Initialize the value.
 
@@ -487,16 +516,6 @@ impl<T> ShimTlsVarStorage<T> {
             let value: &mut MaybeUninit<T> = unsafe { &mut *self.value.get() };
             value.write(initializer());
             self.initd.set(true);
-        }
-
-        // SAFETY: We've ensured this value is initialized, and we know there
-        // are no exclusive references outside of the one-time initialization
-        // block above.
-        let val: &T = unsafe { (*self.value.get()).assume_init_ref() };
-
-        TLSVarRef {
-            val,
-            _phantom: core::marker::PhantomData,
         }
     }
 }
@@ -571,7 +590,7 @@ impl lazy_lock::Producer<usize> for OffsetInitializer {
 //
 // TODO: Consider changing API to only provide a `with` method instead of
 // allowing access to `'static` references. This would let us validate in
-// [`unregister_current_thread`] that no variables are currently being accessed
+// [`unregister_and_exit_current_thread`] that no variables are currently being accessed
 // and enforce that none are accessed afterwards, and potentially let us run
 // `Drop` impls (though I think we'd also need an allocator for the latter).
 pub struct ShimTlsVar<T, F = fn() -> T>
@@ -604,60 +623,83 @@ where
         }
     }
 
-    fn offset(&self) -> usize {
-        *self.offset.force()
-    }
-
     /// Access the inner value.
     ///
     /// The returned wrapper can't be sent to or shared with other threads,
     /// since the underlying storage is invalidated when the originating thread
-    /// calls [`unregister_current_thread`].
-    ///
-    /// Also note that the safety requirement of [`unregister_current_thread`]
-    /// requires that the reference returned here is not still alive.
+    /// calls [`ThreadLocalStorage::unregister_current_thread`].
     pub fn get(&self) -> TLSVarRef<T> {
-        // SAFETY: We ensured `offset` is in bounds at construction time.
-        let this_var_bytes: *mut u8 = {
-            let storage: *mut [MaybeUninit<u8>; BYTES_PER_THREAD] = tls_storage().bytes.get();
-            let storage: *mut u8 = storage.cast();
-            unsafe { storage.add(self.offset()) }
-        };
-
-        let this_var: &ShimTlsVarStorage<T> = {
-            let this_var: *const ShimTlsVarStorage<T> =
-                this_var_bytes as *const ShimTlsVarStorage<T>;
-            assert_eq!(
-                this_var.align_offset(core::mem::align_of::<ShimTlsVarStorage<T>>()),
-                0
-            );
-            // SAFETY: The TLS bytes for each thread are initialized to 0, and
-            // all-zeroes is a valid value of `ShimTlsVarStorage<T>`.
-            //
-            // We've ensure proper alignment when calculating the offset,
-            // and verified in the assertion just above.
-            let this_var: &ShimTlsVarStorage<T> = unsafe { &*this_var };
-            this_var
-        };
-
-        this_var.get_or_init(&self.f)
+        // SAFETY: This offset into TLS storage is a valid instance of
+        // `ShimTlsVarStorage<T>`. We've ensured the correct size and alignment,
+        // and the backing bytes have been initialized to 0.
+        unsafe { TLSVarRef::new(tls_storage(), *self.offset.force(), &self.f) }
     }
 }
 
 pub struct TLSVarRef<'a, T> {
-    val: &'a T,
+    storage: ShimThreadLocalStorageRef,
+    offset: usize,
 
     // Force to be !Sync and !Send.
     _phantom: core::marker::PhantomData<*mut T>,
+    // Defensively bind to lifetime of `TLSVar`.  Currently not technically
+    // required, since we don't "deallocate" the backing storage of a `TLSVar`
+    // that's uninitialized, and a no-op in "standard" usage since `TLSVar`s
+    // generally have a `'static` lifetime, but let's avoid a potential
+    // surprising lifetime extension that we shouldn't need.
+    _phantom_lifetime: core::marker::PhantomData<&'a ()>,
 }
 // Double check `!Send` and `!Sync`.
 static_assertions::assert_not_impl_any!(TLSVarRef<'static, ()>: Send, Sync);
+
+impl<'a, T> TLSVarRef<'a, T> {
+    /// # Safety
+    ///
+    /// There must be an initialized instance of `ShimTlsVarStorage<T> at the
+    /// address of `&storage.bytes[offset]`.
+    unsafe fn new(
+        storage: ShimThreadLocalStorageRef,
+        offset: usize,
+        initializer: impl FnOnce() -> T,
+    ) -> Self {
+        let this = Self {
+            storage,
+            offset,
+            _phantom: PhantomData,
+            _phantom_lifetime: PhantomData,
+        };
+        this.var_storage().ensure_init(initializer);
+        this
+    }
+
+    fn var_storage(&self) -> &ShimTlsVarStorage<T> {
+        // SAFETY: We ensured `offset` is in bounds at construction time.
+        let this_var_bytes: *mut u8 = {
+            let storage: *mut [MaybeUninit<u8>; BYTES_PER_THREAD] = self.storage.bytes.get();
+            let storage: *mut u8 = storage.cast();
+            unsafe { storage.add(self.offset) }
+        };
+
+        let this_var: *const ShimTlsVarStorage<T> = this_var_bytes as *const ShimTlsVarStorage<T>;
+        assert_eq!(
+            this_var.align_offset(core::mem::align_of::<ShimTlsVarStorage<T>>()),
+            0
+        );
+        // SAFETY: The TLS bytes for each thread are initialized to 0, and
+        // all-zeroes is a valid value of `ShimTlsVarStorage<T>`.
+        //
+        // We've ensure proper alignment when calculating the offset,
+        // and verified in the assertion just above.
+        let this_var: &ShimTlsVarStorage<T> = unsafe { &*this_var };
+        this_var
+    }
+}
 
 impl<'a, T> Deref for TLSVarRef<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.val
+        self.var_storage().get()
     }
 }
 
@@ -694,7 +736,7 @@ mod test {
         static MY_VAR: ShimTlsVar<u32> = ShimTlsVar::new(|| 0);
         test_each_mode(|| {
             assert_eq!(*MY_VAR.get(), 0);
-            unsafe { unregister_current_thread() };
+            unsafe { unregister_current_thread_for_test() };
         });
     }
 
@@ -705,7 +747,7 @@ mod test {
             assert_eq!(*MY_VAR.get().borrow(), 0);
             *MY_VAR.get().borrow_mut() = 42;
             assert_eq!(*MY_VAR.get().borrow(), 42);
-            unsafe { unregister_current_thread() };
+            unsafe { unregister_current_thread_for_test() };
         });
     }
 
@@ -718,13 +760,13 @@ mod test {
                     assert_eq!(*MY_VAR.get().borrow(), 0);
                     *MY_VAR.get().borrow_mut() = i;
                     assert_eq!(*MY_VAR.get().borrow(), i);
-                    unsafe { unregister_current_thread() };
+                    unsafe { unregister_current_thread_for_test() };
                 })
             });
             for t in threads {
                 t.join().unwrap();
             }
-            unsafe { unregister_current_thread() };
+            unsafe { unregister_current_thread_for_test() };
         });
     }
 
@@ -740,13 +782,13 @@ mod test {
                     assert_eq!(MY_VAR.get().load(atomic::Ordering::Relaxed), 0);
                     MY_VAR.get().store(i, atomic::Ordering::Relaxed);
                     assert_eq!(MY_VAR.get().load(atomic::Ordering::Relaxed), i);
-                    unsafe { unregister_current_thread() };
+                    unsafe { unregister_current_thread_for_test() };
                 })
             });
             for t in threads {
                 t.join().unwrap();
             }
-            unsafe { unregister_current_thread() };
+            unsafe { unregister_current_thread_for_test() };
         });
     }
 
@@ -771,13 +813,13 @@ mod test {
                     assert_eq!(MY_I16.get().load(atomic::Ordering::Relaxed), i as i16);
                     assert_eq!(MY_I32.get().load(atomic::Ordering::Relaxed), i as i32);
                     assert_eq!(MY_I8.get().load(atomic::Ordering::Relaxed), i as i8);
-                    unsafe { unregister_current_thread() };
+                    unsafe { unregister_current_thread_for_test() };
                 })
             });
             for t in threads {
                 t.join().unwrap();
             }
-            unsafe { unregister_current_thread() };
+            unsafe { unregister_current_thread_for_test() };
         });
     }
 }
@@ -785,17 +827,18 @@ mod test {
 mod export {
     use super::*;
 
-    /// Should be called by every thread that accesses thread local storage, before
-    /// it makes the `exit` syscall and after it is done accessing thread local storage.
+    /// Should be used to exit every thread that accesses thread local storage.
     ///
     /// This is a no-op when using native thread-local storage, but lets us reclaim memory
     /// otherwise, and is necessary for correctness when [`Mode::NativeTlsId`] is enabled.
     ///
     /// # Safety
     ///
-    /// This thread must not access thread local storage again before exiting.
+    /// In the case that this function somehow panics, caller must not
+    /// access thread local storage again from the current thread, e.g.
+    /// using `std::panic::catch_unwind` or a custom panic hook.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_tls_unregister_current_thread() {
-        unsafe { unregister_current_thread() }
+    pub extern "C" fn shim_tls_unregister_and_exit_current_thread(status: i32) {
+        unsafe { unregister_and_exit_current_thread(status) }
     }
 }
