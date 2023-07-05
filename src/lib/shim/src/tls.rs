@@ -305,7 +305,7 @@ mod global_storages {
     // The raw byte thread local storage for each thread.
     #[repr(transparent)]
     struct StoragesType {
-        storages: AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, ShimThreadLocalStorage>,
+        storages: AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>,
     }
 
     impl StoragesType {
@@ -334,7 +334,7 @@ mod global_storages {
     /// All previous threads that have called `get_or_init_current` and
     /// subsequently exited must have called `remove_current`.
     pub(super) unsafe fn get_or_init_current(
-    ) -> atomic_tls_map::Ref<'static, ShimThreadLocalStorage> {
+    ) -> atomic_tls_map::Ref<'static, MmapBox<ShimThreadLocalStorage>> {
         let id = FastThreadId::current();
         // SAFETY: `id` is unique to this live thread, and caller guarantees
         // any previous thread with this `id` has been removed.
@@ -342,7 +342,9 @@ mod global_storages {
             STORAGES
                 .force()
                 .storages
-                .get_or_insert_with(id.to_nonzero_usize(), ShimThreadLocalStorage::new)
+                .get_or_insert_with(id.to_nonzero_usize(), || {
+                    MmapBox::new(ShimThreadLocalStorage::new())
+                })
         };
         res
     }
@@ -415,7 +417,7 @@ pub unsafe fn unregister_and_exit_current_thread(exit_status: i32) -> ! {
 
 enum ShimThreadLocalStorageRef {
     Native(&'static ShimThreadLocalStorage),
-    Mapped(atomic_tls_map::Ref<'static, ShimThreadLocalStorage>),
+    Mapped(atomic_tls_map::Ref<'static, MmapBox<ShimThreadLocalStorage>>),
 }
 
 impl Deref for ShimThreadLocalStorageRef {
