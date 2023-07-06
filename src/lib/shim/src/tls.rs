@@ -317,25 +317,66 @@ mod global_storages {
     }
 
     // The raw byte thread local storage for each thread.
-    #[repr(transparent)]
-    struct StoragesType {
+    pub(super) struct StoragesType {
         // Allocate lazily via `mmap`, to avoid unnecessarily consuming
         // the memory in processes where we always use native thread local storage.
         storages: LazyLock<
             MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
             StoragesMapProducer,
         >,
+        // Next available offset to allocate within `storages`.
+        next_offset: AtomicUsize,
     }
 
     impl StoragesType {
         pub const fn new() -> Self {
             Self {
                 storages: LazyLock::const_new(StoragesMapProducer {}),
+                next_offset: AtomicUsize::new(0),
+            }
+        }
+
+        pub fn alloc_offset(&self, align: usize, size: usize) -> usize {
+            // The alignment we ensure here is an offset from the base of a [`ShimThreadLocalStorage`].
+            // It won't be meaningful if [`ShimThreadLocalStorage`] has a smaller alignment requirement
+            // than this variable.
+            assert!(align <= core::mem::align_of::<ShimThreadLocalStorage>());
+            let mut next_offset_val = self.next_offset.load(atomic::Ordering::Relaxed);
+            loop {
+                // Create a synthetic pointer just so we can call `align_offset`
+                // instead of doing the fiddly math ourselves.  This is sound, but
+                // causes miri to generate a warning.  We should use
+                // `core::ptr::invalid` here once stabilized to make our intent
+                // explicit that yes, really, we want to make an invalid pointer
+                // that we have no intention of dereferencing.
+                let fake: *const u8 = next_offset_val as *const u8;
+                let this_var_offset = next_offset_val + fake.align_offset(align);
+
+                let next_next_offset_val = this_var_offset + size;
+                if next_next_offset_val > BYTES_PER_THREAD {
+                    panic!("Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage");
+                }
+
+                match self.next_offset.compare_exchange(
+                    next_offset_val,
+                    next_next_offset_val,
+                    atomic::Ordering::Relaxed,
+                    atomic::Ordering::Relaxed,
+                ) {
+                    Ok(_) => return this_var_offset,
+                    Err(v) => {
+                        // We raced with another thread. This *shouldn't* happen in
+                        // the shadow shim, since only one thread is allowed to run
+                        // at a time, but handle it gracefully. Update the current
+                        // value of the atomic and try again.
+                        next_offset_val = v;
+                    }
+                }
             }
         }
     }
 
-    static STORAGES: StoragesType = StoragesType::new();
+    pub(super) static STORAGES: StoragesType = StoragesType::new();
 
     /// Get the storage associated with the current thread. The bytes are initially zero.
     ///
@@ -539,43 +580,7 @@ impl lazy_lock::Producer<usize> for OffsetInitializer {
     // thread-local-storage for a value of type `T`, initialized with function
     // `F`.
     fn initialize(self) -> usize {
-        // The alignment we ensure here is an offset from the base of a [`ShimThreadLocalStorage`].
-        // It won't be meaningful if [`ShimThreadLocalStorage`] has a smaller alignment requirement
-        // than this variable.
-        assert!(self.align <= core::mem::align_of::<ShimThreadLocalStorage>());
-        static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
-        let mut next_offset_val = NEXT_OFFSET.load(atomic::Ordering::Relaxed);
-        loop {
-            // Create a synthetic pointer just so we can call `align_offset`
-            // instead of doing the fiddly math ourselves.  This is sound, but
-            // causes miri to generate a warning.  We should use
-            // `core::ptr::invalid` here once stabilized to make our intent
-            // explicit that yes, really, we want to make an invalid pointer
-            // that we have no intention of dereferencing.
-            let fake: *const u8 = next_offset_val as *const u8;
-            let this_var_offset = next_offset_val + fake.align_offset(self.align);
-
-            let next_next_offset_val = this_var_offset + self.size;
-            if next_next_offset_val > BYTES_PER_THREAD {
-                panic!("Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage");
-            }
-
-            match NEXT_OFFSET.compare_exchange(
-                next_offset_val,
-                next_next_offset_val,
-                atomic::Ordering::Relaxed,
-                atomic::Ordering::Relaxed,
-            ) {
-                Ok(_) => return this_var_offset,
-                Err(v) => {
-                    // We raced with another thread. This *shouldn't* happen in
-                    // the shadow shim, since only one thread is allowed to run
-                    // at a time, but handle it gracefully. Update the current
-                    // value of the atomic and try again.
-                    next_offset_val = v;
-                }
-            }
-        }
+        global_storages::STORAGES.alloc_offset(self.align, self.size)
     }
 }
 
