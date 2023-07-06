@@ -205,14 +205,20 @@ mod tls_ipc {
 mod tls_thread_shmem {
     use super::*;
 
-    static THREAD_SHMEM: ShimTlsVar<RefCell<Option<ShMemBlockAlias<ThreadShmem>>>> =
-        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
+    // Set explicitly via `set`, and then used in the lazy initialization of
+    // `SHMEM`.
+    static INITIALIZER: ShimTlsVar<Cell<Option<ShMemBlockSerialized>>> =
+        ShimTlsVar::new(&SHIM_TLS, || Cell::new(None));
 
-    // Panics if not initialized yet.
-    pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
-        let thread = THREAD_SHMEM.get();
-        let thread = thread.borrow();
-        thread.as_ref().map(|block| f(block)).unwrap()
+    static SHMEM: ShimTlsVar<ShMemBlockAlias<ThreadShmem>> = ShimTlsVar::new(&SHIM_TLS, || {
+        let serialized = INITIALIZER.get().replace(None).unwrap();
+        unsafe { Serializer::global().deserialize(&serialized) }
+    });
+
+    /// Panics if `set` hasn't been called yet.
+    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ThreadShmem>> + 'static
+    {
+        SHMEM.get()
     }
 
     /// # Safety
@@ -220,8 +226,9 @@ mod tls_thread_shmem {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of
     /// type `ThreadShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
-        let blk: ShMemBlockAlias<ThreadShmem> = unsafe { Serializer::global().deserialize(blk) };
-        assert!(THREAD_SHMEM.get().replace(Some(blk)).is_none());
+        assert!(INITIALIZER.get().replace(Some(*blk)).is_none());
+        // Force initialization, for clearer debugging in case of failure.
+        get();
     }
 }
 
@@ -591,7 +598,9 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_threadSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
-        tls_thread_shmem::with(|shmem| shmem as *const _)
+        let rv = tls_thread_shmem::get();
+        let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread = rv.deref();
+        rv as *const _
     }
 
     #[no_mangle]
