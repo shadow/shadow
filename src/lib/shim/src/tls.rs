@@ -123,7 +123,7 @@ impl ElfThreadPointer {
 // [`ShimTlsVar`]. 16 is enough for most types, and is e.g. the alignment of
 // pointers returned by glibc's `malloc`, but we can increase as needed.
 #[repr(C, align(16))]
-struct ShimThreadLocalStorage {
+struct TLSOneThreadStorage {
     // Used as a backing store for instances of `ShimTlsVarStorage`. Must be
     // initialized to zero so that the first time that a given range of bytes is
     // interpreted as a `ShimTlsVarStorage`, `ShimTlsVarStorage::initd` is
@@ -135,18 +135,18 @@ struct ShimThreadLocalStorage {
     bytes: UnsafeCell<[MaybeUninit<u8>; BYTES_PER_THREAD]>,
 }
 
-impl ShimThreadLocalStorage {
+impl TLSOneThreadStorage {
     /// # Safety
     ///
     /// * `alloc` must be dereferenceable and live for the lifetime of this process.
-    /// * `alloc` must be zeroed the first time it is passed to this function.
-    /// * `alloc` must *only* be access through this function.
+    /// (A zeroed buffer is a valid dereferenceable instance of `Self`)
+    /// * `alloc` must *only* be accessed through this function.
     pub unsafe fn from_static_lifetime_zeroed_allocation(
-        alloc: *mut ShimThreadLocalStorageAllocation,
+        alloc: *mut TlsOneThreadStorageAllocation,
     ) -> &'static Self {
-        type Output = ShimThreadLocalStorage;
-        static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, Output);
-        static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, Output);
+        type Output = TLSOneThreadStorage;
+        static_assertions::assert_eq_align!(TlsOneThreadStorageAllocation, Output);
+        static_assertions::assert_eq_size!(TlsOneThreadStorageAllocation, Output);
         unsafe { &*alloc.cast_const().cast::<Output>() }
     }
 
@@ -158,16 +158,16 @@ impl ShimThreadLocalStorage {
     }
 }
 
-/// This is a "proxy" type to [`ShimThreadLocalStorage`] with the same size and alignment.
-/// Unlike [`ShimThreadLocalStorage`], it is exposed to C, that C code can provide
+/// This is a "proxy" type to `TlsOneThreadStorage` with the same size and alignment.
+/// Unlike `TlsOneThreadStorage`, it is exposed to C, that C code can provide
 /// a "thread-local allocator" that we delegate to in [`Mode::Native`].
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
-pub struct ShimThreadLocalStorageAllocation {
+pub struct TlsOneThreadStorageAllocation {
     _bytes: [u8; BYTES_PER_THREAD],
 }
-static_assertions::assert_eq_align!(ShimThreadLocalStorageAllocation, ShimThreadLocalStorage);
-static_assertions::assert_eq_size!(ShimThreadLocalStorageAllocation, ShimThreadLocalStorage);
+static_assertions::assert_eq_align!(TlsOneThreadStorageAllocation, TLSOneThreadStorage);
+static_assertions::assert_eq_size!(TlsOneThreadStorageAllocation, TLSOneThreadStorage);
 
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
 /// *live* threads; in particular [`FastThreadId::ElfThreadPointer`] of a live
@@ -242,26 +242,27 @@ impl FastThreadId {
     }
 }
 
-struct StoragesMapProducer {}
+struct TlsOneThreadStorageProducer {}
 impl
     lazy_lock::Producer<
-        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
-    > for StoragesMapProducer
+        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<TLSOneThreadStorage>>>,
+    > for TlsOneThreadStorageProducer
 {
     fn initialize(
         self,
-    ) -> MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>> {
+    ) -> MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<TLSOneThreadStorage>>> {
         MmapBox::new(AtomicTlsMap::new())
     }
 }
 
-// The raw byte thread local storage for each thread.
+/// Provider for thread local storage. For non-test usage, there should generally
+/// be a single process-wide instance.
 pub struct ThreadLocalStorage {
     // Allocate lazily via `mmap`, to avoid unnecessarily consuming
     // the memory in processes where we always use native thread local storage.
     storages: LazyLock<
-        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
-        StoragesMapProducer,
+        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<TLSOneThreadStorage>>>,
+        TlsOneThreadStorageProducer,
     >,
     // Next available offset to allocate within `storages`.
     next_offset: AtomicUsize,
@@ -278,17 +279,17 @@ impl ThreadLocalStorage {
     /// [`Self::unregister_current_thread`] before exiting.
     pub const unsafe fn new(preferred_mode: Mode) -> Self {
         Self {
-            storages: LazyLock::const_new(StoragesMapProducer {}),
+            storages: LazyLock::const_new(TlsOneThreadStorageProducer {}),
             next_offset: AtomicUsize::new(0),
             preferred_mode,
         }
     }
 
-    pub fn alloc_offset(&self, align: usize, size: usize) -> usize {
+    fn alloc_offset(&self, align: usize, size: usize) -> usize {
         // The alignment we ensure here is an offset from the base of a [`ShimThreadLocalStorage`].
         // It won't be meaningful if [`ShimThreadLocalStorage`] has a smaller alignment requirement
         // than this variable.
-        assert!(align <= core::mem::align_of::<ShimThreadLocalStorage>());
+        assert!(align <= core::mem::align_of::<TLSOneThreadStorage>());
         let mut next_offset_val = self.next_offset.load(atomic::Ordering::Relaxed);
         loop {
             // Create a synthetic pointer just so we can call `align_offset`
@@ -323,37 +324,17 @@ impl ThreadLocalStorage {
         }
     }
 
-    /// Get the storage associated with the current thread. The bytes are initially zero.
-    ///
-    /// # Safety
-    ///
-    /// All previous threads that have called `get_or_init_current` and
-    /// subsequently exited must have called `remove_current`.
-    unsafe fn get_or_init_current(&self) -> atomic_tls_map::Ref<MmapBox<ShimThreadLocalStorage>> {
-        let id = FastThreadId::current();
-        // SAFETY: `id` is unique to this live thread, and caller guarantees
-        // any previous thread with this `id` has been removed.
-        let res = unsafe {
-            self.storages
-                .deref()
-                .get_or_insert_with(id.to_nonzero_usize(), || {
-                    MmapBox::new(ShimThreadLocalStorage::new())
-                })
-        };
-        res
-    }
-
     /// Returns thread local storage for the current thread. The raw byte contents
     /// are initialized to zero.
-    fn tls_storage(&self) -> ShimThreadLocalStorageRef {
+    fn current_thread_storage(&self) -> TlsOneThreadBackingStoreRef {
         match self.preferred_mode {
             Mode::Native => {
                 if ElfThreadPointer::current().is_some() {
                     // Native (libc) TLS seems to be set up properly. Use it.
-                    let alloc: *mut ShimThreadLocalStorageAllocation =
+                    let alloc: *mut TlsOneThreadStorageAllocation =
                         unsafe { crate::bindings::shim_native_tls() };
-                    return ShimThreadLocalStorageRef::Native(unsafe {
-                        ShimThreadLocalStorage::from_static_lifetime_zeroed_allocation(alloc)
+                    return TlsOneThreadBackingStoreRef::Native(unsafe {
+                        TLSOneThreadStorage::from_static_lifetime_zeroed_allocation(alloc)
                     });
                 }
                 // else fallthrough
@@ -361,8 +342,19 @@ impl ThreadLocalStorage {
             // Fall through
             Mode::NativeTlsId | Mode::Gettid => (),
         }
+
         // Use our fallback mechanism.
-        ShimThreadLocalStorageRef::Mapped(unsafe { self.get_or_init_current() })
+        let id = FastThreadId::current();
+        // SAFETY: `id` is unique to this live thread, and caller guarantees
+        // any previous thread with this `id` has been removed.
+        let res = unsafe {
+            self.storages
+                .deref()
+                .get_or_insert_with(id.to_nonzero_usize(), || {
+                    MmapBox::new(TLSOneThreadStorage::new())
+                })
+        };
+        TlsOneThreadBackingStoreRef::Mapped(res)
     }
 
     /// Release this thread's thread local storage and exit the thread.
@@ -393,18 +385,18 @@ impl ThreadLocalStorage {
     }
 }
 
-enum ShimThreadLocalStorageRef<'tls> {
-    Native(&'static ShimThreadLocalStorage),
-    Mapped(atomic_tls_map::Ref<'tls, MmapBox<ShimThreadLocalStorage>>),
+enum TlsOneThreadBackingStoreRef<'tls> {
+    Native(&'static TLSOneThreadStorage),
+    Mapped(atomic_tls_map::Ref<'tls, MmapBox<TLSOneThreadStorage>>),
 }
 
-impl<'tls> Deref for ShimThreadLocalStorageRef<'tls> {
-    type Target = ShimThreadLocalStorage;
+impl<'tls> Deref for TlsOneThreadBackingStoreRef<'tls> {
+    type Target = TLSOneThreadStorage;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            ShimThreadLocalStorageRef::Native(n) => n,
-            ShimThreadLocalStorageRef::Mapped(m) => m,
+            TlsOneThreadBackingStoreRef::Native(n) => n,
+            TlsOneThreadBackingStoreRef::Mapped(m) => m,
         }
     }
 }
@@ -540,13 +532,19 @@ where
         // SAFETY: This offset into TLS storage is a valid instance of
         // `ShimTlsVarStorage<T>`. We've ensured the correct size and alignment,
         // and the backing bytes have been initialized to 0.
-        unsafe { TLSVarRef::new(self.tls.tls_storage(), *self.offset.force(), &self.f) }
+        unsafe {
+            TLSVarRef::new(
+                self.tls.current_thread_storage(),
+                *self.offset.force(),
+                &self.f,
+            )
+        }
     }
 }
 
 /// A reference to a single thread's instance of a TLS variable [`ShimTlsVar`].
 pub struct TLSVarRef<'tls, 'var, T> {
-    storage: ShimThreadLocalStorageRef<'tls>,
+    storage: TlsOneThreadBackingStoreRef<'tls>,
     offset: usize,
 
     // Force to be !Sync and !Send.
@@ -567,7 +565,7 @@ impl<'tls, 'var, T> TLSVarRef<'tls, 'var, T> {
     /// There must be an initialized instance of `ShimTlsVarStorage<T> at the
     /// address of `&storage.bytes[offset]`.
     unsafe fn new(
-        storage: ShimThreadLocalStorageRef<'tls>,
+        storage: TlsOneThreadBackingStoreRef<'tls>,
         offset: usize,
         initializer: impl FnOnce() -> T,
     ) -> Self {
