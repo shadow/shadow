@@ -118,7 +118,6 @@ fn main() {
             "shim_api_syscall.c",
             "shim_rdtsc.c",
             "shim_seccomp.c",
-            "shim_signals.c",
             "shim_sys.c",
             "shim_syscall.c",
             "shim_tls.c",
