@@ -1429,6 +1429,8 @@ bitflags::bitflags! {
     pub struct SigAltStackFlags: i32 {
         // The raw u32 value wraps around to a negative i32.
         const SS_AUTODISARM = i32_from_u32_allowing_wraparound(LINUX_SS_AUTODISARM);
+        const SS_ONSTACK = const_conversions::i32_from_u32(bindings::LINUX_SS_ONSTACK);
+        const SS_DISABLE= const_conversions::i32_from_u32(bindings::LINUX_SS_DISABLE);
     }
 }
 // SAFETY: bitflags guarantees the internal representation is effectively a i32.
