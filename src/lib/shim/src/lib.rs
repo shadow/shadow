@@ -26,11 +26,11 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-mod mmap_box;
-mod shimlogger;
-pub use shimlogger::export as shimlogger_export;
+pub mod mmap_box;
+pub mod shimlogger;
+pub mod tls;
 
-mod tls;
+pub use shimlogger::export as shimlogger_export;
 
 pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
