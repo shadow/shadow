@@ -133,7 +133,7 @@ static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
         // This thread is exiting. Arrange for its thread-local-storage and
         // signal stack to be freed.
         shim_freeSignalStack();
-        shim_tls_unregister_and_exit_current_thread(arg1);
+        shim_release_and_exit_current_thread(arg1);
     } else {
         // r8, r9, and r10 aren't supported as register-constraints in
         // extended asm templates. We have to use [local register

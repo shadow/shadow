@@ -8,9 +8,8 @@ use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::num::NonZeroUsize;
 use core::ops::Deref;
-use core::sync::atomic::{self, AtomicI8, AtomicUsize};
+use core::sync::atomic::{self, AtomicUsize};
 
-use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rustix::process::Pid;
 use vasi_sync::atomic_tls_map::{self, AtomicTlsMap};
@@ -22,13 +21,6 @@ use crate::mmap_box::MmapBox;
 #[derive(Debug, Eq, PartialEq, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(i8)]
 pub enum Mode {
-    /// The default before calling [`global_preferred_mode::set`]. While this
-    /// mode is set, trying to access any instances of [`ShimTlsVar`] will
-    /// panic.
-    //
-    // This is an explicit variant of `Mode` to facilitate storing in a global
-    // atomic.
-    Disabled,
     /// Delegate back to ELF native thread local storage. This is the fastest
     /// option, and simplest with respect to our own code, but is unsound.
     /// We should probably ultimately disable or remove it.
@@ -71,14 +63,14 @@ pub enum Mode {
     /// thread.  This seems like a fairly reasonable assumption, and seems to
     /// hold so far, but isn't guaranteed.
     /// * Requires that each thread using thread local storage from this module
-    /// calls [`unregister_and_exit_current_thread`] before exiting, since the thread pointer
+    /// calls [`ThreadLocalStorage::unregister_current_thread`] before exiting, since the thread pointer
     /// may subsequently be used for another thread.
     ///
     /// [ELF-TLS]: "ELF Handling For Thread-Local Storage", by Ulrich Drepper.
     /// <https://www.akkadia.org/drepper/tls.pdf>
     ///
     /// SAFETY: Requires that each thread using this thread local storage
-    /// calls [`unregister_and_exit_current_thread`] before exiting.
+    /// calls [`ThreadLocalStorage::unregister_current_thread`] before exiting.
     NativeTlsId,
     /// This mode is similar to `NativeTlsId`, but instead of using the ELF thread
     /// pointer to identify each thread, it uses the system thread ID as retrieved by
@@ -92,58 +84,9 @@ pub enum Mode {
     /// Unfortunately this mode is *much* slower than the others.
     ///
     /// SAFETY: Each thread using this thread local storage must call
-    /// [`unregister_and_exit_current_thread`] before exiting.
+    /// [`ThreadLocalStorage::unregister_current_thread`] before exiting.
     #[allow(unused)]
     Gettid,
-}
-
-/// Manipulates the process-global preferred mode of operation.
-pub mod global_preferred_mode {
-    use super::*;
-
-    static PREFERRED_MODE: AtomicI8 = AtomicI8::new(Mode::Disabled as i8);
-
-    /// Permits the mode to be set again. This allows us to more easily
-    /// test each mode.
-    ///
-    /// # Safety
-    ///
-    /// There must not exist any live threads that have accessed Tls variables
-    /// and not yet called [`unregister_and_exit_current_thread`].
-    #[cfg(test)]
-    pub unsafe fn reset_for_testing() {
-        PREFERRED_MODE.store(Mode::Disabled as i8, atomic::Ordering::Relaxed);
-    }
-
-    /// Sets the *preferred* [`Mode`]. Modes [`Mode::Native`] and [`Mode::NativeTlsId`],
-    /// will fall back to [`Mode::Gettid`] for any thread that doesn't appear to have
-    /// configured native ELF thread local storage (i.e. whose thread pointer
-    /// retrieved from `$fs:0` is `NULL`).
-    ///
-    /// Panics if thread local storage has already been set.
-    ///
-    /// # Safety
-    ///
-    /// See [`Mode`] for addititional requirements for each mode.
-    pub unsafe fn set(mode: Mode) {
-        PREFERRED_MODE
-            .compare_exchange(
-                Mode::Disabled.into(),
-                mode.into(),
-                atomic::Ordering::Relaxed,
-                atomic::Ordering::Relaxed,
-            )
-            .expect("Thread local storage mode cannot safely be changed.");
-    }
-
-    /// Get the current mode. After calling this method, the mode can't be
-    /// changed again.
-    pub(super) fn get() -> Mode {
-        PREFERRED_MODE
-            .load(atomic::Ordering::Relaxed)
-            .try_into()
-            .unwrap()
-    }
 }
 
 /// This needs to be big enough to store all thread-local variables for a single
@@ -313,7 +256,7 @@ impl
 }
 
 // The raw byte thread local storage for each thread.
-pub(super) struct StoragesType {
+pub struct ThreadLocalStorage {
     // Allocate lazily via `mmap`, to avoid unnecessarily consuming
     // the memory in processes where we always use native thread local storage.
     storages: LazyLock<
@@ -322,13 +265,22 @@ pub(super) struct StoragesType {
     >,
     // Next available offset to allocate within `storages`.
     next_offset: AtomicUsize,
+    preferred_mode: Mode,
 }
 
-impl StoragesType {
-    pub const fn new() -> Self {
+impl ThreadLocalStorage {
+    /// # Safety
+    ///
+    /// See [`Mode`] for detailed safety requirements. No matter the preferred
+    /// mode, we fall back to [`Mode::Gettid`] if native thread local storage
+    /// isn't set up for a given thread, so that mode's requirements must always
+    /// be met: each thread using this thread local storage must call
+    /// [`Self::unregister_current_thread`] before exiting.
+    pub const unsafe fn new(preferred_mode: Mode) -> Self {
         Self {
             storages: LazyLock::const_new(StoragesMapProducer {}),
             next_offset: AtomicUsize::new(0),
+            preferred_mode,
         }
     }
 
@@ -391,13 +343,41 @@ impl StoragesType {
         res
     }
 
-    /// Panics if there are still any live references to this thread's storage.
+    /// Returns thread local storage for the current thread. The raw byte contents
+    /// are initialized to zero.
+    fn tls_storage(&self) -> ShimThreadLocalStorageRef {
+        match self.preferred_mode {
+            Mode::Native => {
+                if ElfThreadPointer::current().is_some() {
+                    // Native (libc) TLS seems to be set up properly. Use it.
+                    let alloc: *mut ShimThreadLocalStorageAllocation =
+                        unsafe { crate::bindings::shim_native_tls() };
+                    return ShimThreadLocalStorageRef::Native(unsafe {
+                        ShimThreadLocalStorage::from_static_lifetime_zeroed_allocation(alloc)
+                    });
+                }
+                // else fallthrough
+            }
+            // Fall through
+            Mode::NativeTlsId | Mode::Gettid => (),
+        }
+        // Use our fallback mechanism.
+        ShimThreadLocalStorageRef::Mapped(unsafe { self.get_or_init_current() })
+    }
+
+    /// Release this thread's thread local storage and exit the thread.
+    ///
+    /// Should be called by every thread that accesses thread local storage.
+    /// This is a no-op when using native thread-local storage, but is required for
+    /// correctness otherwise, since thread IDs can be reused.
+    ///
+    /// Panics if there are still any live references to this thread's [`ShimTlsVar`]s.
     ///
     /// # Safety
     ///
-    /// All previous threads that have accessed this module and have since
-    /// exited must have called [`unregister_and_exit_current_thread`].
-    pub unsafe fn remove_current(&self) {
+    /// The calling thread must not access this [`ThreadLocalStorage`] again
+    /// before exiting.
+    pub unsafe fn unregister_current_thread(&self) {
         if !self.storages.initd() {
             // Nothing to do. Even if another thread happens to be initializing
             // concurrently, we know the *current* thread isn't registered.
@@ -413,60 +393,12 @@ impl StoragesType {
     }
 }
 
-static STORAGES: StoragesType = StoragesType::new();
-
-/// Unit tests using `std::thread` should use this instead of
-/// `unregister_and_exit_current_thread`. The latter may have unintended side
-/// effects since it would bypass any of `std::thread`'s application-level
-/// cleanup.
-///
-/// # Safety
-///
-/// The current thread must not access thread local storage again before exiting.
-#[cfg(test)]
-pub unsafe fn unregister_current_thread_for_test() {
-    // SAFETY: No code can access thread local storage in between deregistration
-    // and exit.
-    unsafe { STORAGES.remove_current() }
-}
-
-/// Release this thread's thread local storage and exit the thread.
-///
-/// Should be called by every thread that accesses thread local storage.
-/// This is a no-op when using native thread-local storage, but is required for
-/// correctness otherwise, since thread IDs can be reused.
-///
-/// Panics if there are still any live references to this thread's [`ShimTlsVar`]s.
-///
-/// # Safety
-///
-/// In the case that this function somehow panics, caller must not
-/// access thread local storage again from the current thread, e.g.
-/// using `std::panic::catch_unwind` or a custom panic hook.
-pub unsafe fn unregister_and_exit_current_thread(exit_status: i32) -> ! {
-    // Block all signals, to ensure a signal handler can't run and attempt to
-    // access thread local storage.
-    rt_sigprocmask(
-        SigProcMaskAction::SIG_BLOCK,
-        &linux_api::signal::sigset_t::FULL,
-        None,
-    )
-    .unwrap();
-
-    // SAFETY: No code can access thread local storage in between deregistration
-    // and exit.
-    unsafe { STORAGES.remove_current() }
-
-    linux_api::exit::exit_raw(exit_status).unwrap();
-    unreachable!()
-}
-
-enum ShimThreadLocalStorageRef {
+enum ShimThreadLocalStorageRef<'tls> {
     Native(&'static ShimThreadLocalStorage),
-    Mapped(atomic_tls_map::Ref<'static, MmapBox<ShimThreadLocalStorage>>),
+    Mapped(atomic_tls_map::Ref<'tls, MmapBox<ShimThreadLocalStorage>>),
 }
 
-impl Deref for ShimThreadLocalStorageRef {
+impl<'tls> Deref for ShimThreadLocalStorageRef<'tls> {
     type Target = ShimThreadLocalStorage;
 
     fn deref(&self) -> &Self::Target {
@@ -475,29 +407,6 @@ impl Deref for ShimThreadLocalStorageRef {
             ShimThreadLocalStorageRef::Mapped(m) => m,
         }
     }
-}
-
-/// Returns thread local storage for the current thread. The raw byte contents
-/// are initialized to zero.
-fn tls_storage() -> ShimThreadLocalStorageRef {
-    match global_preferred_mode::get() {
-        Mode::Disabled => panic!("Storage mode not set"),
-        Mode::Native => {
-            if ElfThreadPointer::current().is_some() {
-                // Native (libc) TLS seems to be set up properly. Use it.
-                let alloc: *mut ShimThreadLocalStorageAllocation =
-                    unsafe { crate::bindings::shim_native_tls() };
-                return ShimThreadLocalStorageRef::Native(unsafe {
-                    ShimThreadLocalStorage::from_static_lifetime_zeroed_allocation(alloc)
-                });
-            }
-            // else fallthrough
-        }
-        // Fall through
-        Mode::NativeTlsId | Mode::Gettid => (),
-    }
-    // Use our fallback mechanism.
-    ShimThreadLocalStorageRef::Mapped(unsafe { STORAGES.get_or_init_current() })
 }
 
 /// One of these is placed in each thread's thread-local-storage, for each
@@ -554,26 +463,28 @@ impl<T> ShimTlsVarStorage<T> {
 /// An initializer for internal use with `LazyLock`. We need an explicit type
 /// instead of just a closure so that we can name the type  in `ShimTlsVar`'s
 /// definition.
-struct OffsetInitializer {
+struct OffsetInitializer<'tls> {
+    tls: &'tls ThreadLocalStorage,
     align: usize,
     size: usize,
 }
 
-impl OffsetInitializer {
-    pub const fn new<T>() -> Self {
+impl<'tls> OffsetInitializer<'tls> {
+    pub const fn new<T>(tls: &'tls ThreadLocalStorage) -> Self {
         Self {
+            tls,
             align: core::mem::align_of::<ShimTlsVarStorage<T>>(),
             size: core::mem::size_of::<ShimTlsVarStorage<T>>(),
         }
     }
 }
 
-impl lazy_lock::Producer<usize> for OffsetInitializer {
+impl<'tls> lazy_lock::Producer<usize> for OffsetInitializer<'tls> {
     // Finds and assigns the next free and suitably aligned offset within
     // thread-local-storage for a value of type `T`, initialized with function
     // `F`.
     fn initialize(self) -> usize {
-        STORAGES.alloc_offset(self.align, self.size)
+        self.tls.alloc_offset(self.align, self.size)
     }
 }
 
@@ -588,21 +499,22 @@ impl lazy_lock::Producer<usize> for OffsetInitializer {
 // [`unregister_and_exit_current_thread`] that no variables are currently being accessed
 // and enforce that none are accessed afterwards, and potentially let us run
 // `Drop` impls (though I think we'd also need an allocator for the latter).
-pub struct ShimTlsVar<T, F = fn() -> T>
+pub struct ShimTlsVar<'tls, T, F = fn() -> T>
 where
     F: Fn() -> T,
 {
+    tls: &'tls ThreadLocalStorage,
     // We wrap in a lazy lock to support const initialization of `Self`.
-    offset: LazyLock<usize, OffsetInitializer>,
+    offset: LazyLock<usize, OffsetInitializer<'tls>>,
     f: F,
     _phantom: PhantomData<T>,
 }
 // SAFETY: Still `Sync` even if T is `!Sync`, since each thread gets its own
 // instance of the value. `F` must still be `Sync`, though, since that *is*
 // shared across threads.
-unsafe impl<T, F> Sync for ShimTlsVar<T, F> where F: Sync + Fn() -> T {}
+unsafe impl<'tls, T, F> Sync for ShimTlsVar<'tls, T, F> where F: Sync + Fn() -> T {}
 
-impl<T, F> ShimTlsVar<T, F>
+impl<'tls, T, F> ShimTlsVar<'tls, T, F>
 where
     F: Fn() -> T,
 {
@@ -610,9 +522,10 @@ where
     /// initialized with `f` on first access by each thread.
     ///
     /// Typically this should go in a `static`.
-    pub const fn new(f: F) -> Self {
+    pub const fn new(tls: &'tls ThreadLocalStorage, f: F) -> Self {
         Self {
-            offset: LazyLock::const_new(OffsetInitializer::new::<T>()),
+            tls,
+            offset: LazyLock::const_new(OffsetInitializer::new::<T>(tls)),
             f,
             _phantom: PhantomData,
         }
@@ -627,12 +540,13 @@ where
         // SAFETY: This offset into TLS storage is a valid instance of
         // `ShimTlsVarStorage<T>`. We've ensured the correct size and alignment,
         // and the backing bytes have been initialized to 0.
-        unsafe { TLSVarRef::new(tls_storage(), *self.offset.force(), &self.f) }
+        unsafe { TLSVarRef::new(self.tls.tls_storage(), *self.offset.force(), &self.f) }
     }
 }
 
-pub struct TLSVarRef<'a, T> {
-    storage: ShimThreadLocalStorageRef,
+/// A reference to a single thread's instance of a TLS variable [`ShimTlsVar`].
+pub struct TLSVarRef<'tls, 'var, T> {
+    storage: ShimThreadLocalStorageRef<'tls>,
     offset: usize,
 
     // Force to be !Sync and !Send.
@@ -642,18 +556,18 @@ pub struct TLSVarRef<'a, T> {
     // that's uninitialized, and a no-op in "standard" usage since `TLSVar`s
     // generally have a `'static` lifetime, but let's avoid a potential
     // surprising lifetime extension that we shouldn't need.
-    _phantom_lifetime: core::marker::PhantomData<&'a ()>,
+    _phantom_lifetime: core::marker::PhantomData<&'var ()>,
 }
 // Double check `!Send` and `!Sync`.
-static_assertions::assert_not_impl_any!(TLSVarRef<'static, ()>: Send, Sync);
+static_assertions::assert_not_impl_any!(TLSVarRef<'static, 'static, ()>: Send, Sync);
 
-impl<'a, T> TLSVarRef<'a, T> {
+impl<'tls, 'var, T> TLSVarRef<'tls, 'var, T> {
     /// # Safety
     ///
     /// There must be an initialized instance of `ShimTlsVarStorage<T> at the
     /// address of `&storage.bytes[offset]`.
     unsafe fn new(
-        storage: ShimThreadLocalStorageRef,
+        storage: ShimThreadLocalStorageRef<'tls>,
         offset: usize,
         initializer: impl FnOnce() -> T,
     ) -> Self {
@@ -690,7 +604,7 @@ impl<'a, T> TLSVarRef<'a, T> {
     }
 }
 
-impl<'a, T> Deref for TLSVarRef<'a, T> {
+impl<'tls, 'var, T> Deref for TLSVarRef<'tls, 'var, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -701,139 +615,148 @@ impl<'a, T> Deref for TLSVarRef<'a, T> {
 #[cfg(test)]
 mod test {
     use core::cell::RefCell;
-    use core::sync::atomic::AtomicI16;
-
-    use vasi_sync::sync::AtomicI32;
+    use core::sync::atomic::{self, AtomicI16, AtomicI32, AtomicI8};
 
     use super::*;
 
-    fn test_each_mode(f: impl Fn()) {
-        #[cfg(not(miri))]
-        let modes = [Mode::Native, Mode::NativeTlsId, Mode::Gettid];
+    #[cfg(miri)]
+    const MODES: &[Mode] = &[Mode::NativeTlsId, Mode::Gettid];
+    #[cfg(not(miri))]
+    const MODES: &[Mode] = &[Mode::Native, Mode::NativeTlsId, Mode::Gettid];
 
-        // miri can't use Native
-        #[cfg(miri)]
-        let modes = [Mode::NativeTlsId, Mode::Gettid];
+    #[cfg(not(miri))]
+    #[test_log::test]
+    fn test_compile_static_native() {
+        static TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(Mode::Native) };
+        static MY_VAR: ShimTlsVar<u32> = ShimTlsVar::new(&TLS, || 42);
+        assert_eq!(*MY_VAR.get(), 42);
+        unsafe { TLS.unregister_current_thread() };
+    }
 
-        // Run in each mode. We need to serialize here since the mode is global,
-        // and can't be safely changed while TLS from another mode is in use.
-        static MODE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        for mode in &modes {
-            let _lock = MODE_MUTEX.lock().unwrap();
-            unsafe { global_preferred_mode::set(*mode) };
-            f();
-            unsafe { global_preferred_mode::reset_for_testing() };
-        }
+    #[test_log::test]
+    fn test_compile_static_native_tls_id() {
+        static TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(Mode::NativeTlsId) };
+        static MY_VAR: ShimTlsVar<u32> = ShimTlsVar::new(&TLS, || 42);
+        assert_eq!(*MY_VAR.get(), 42);
+        unsafe { TLS.unregister_current_thread() };
+    }
+
+    #[test_log::test]
+    fn test_compile_static_gettid() {
+        static TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(Mode::Gettid) };
+        static MY_VAR: ShimTlsVar<u32> = ShimTlsVar::new(&TLS, || 42);
+        assert_eq!(*MY_VAR.get(), 42);
+        unsafe { TLS.unregister_current_thread() };
     }
 
     #[test_log::test]
     fn test_minimal() {
-        static MY_VAR: ShimTlsVar<u32> = ShimTlsVar::new(|| 0);
-        test_each_mode(|| {
-            assert_eq!(*MY_VAR.get(), 0);
-            unsafe { unregister_current_thread_for_test() };
-        });
+        for mode in MODES {
+            let tls = unsafe { ThreadLocalStorage::new(*mode) };
+            let var: ShimTlsVar<u32> = ShimTlsVar::new(&tls, || 0);
+            assert_eq!(*var.get(), 0);
+            unsafe { tls.unregister_current_thread() };
+        }
     }
 
     #[test_log::test]
     fn test_single_thread_mutate() {
-        static MY_VAR: ShimTlsVar<RefCell<u32>> = ShimTlsVar::new(|| RefCell::new(0));
-        test_each_mode(|| {
-            assert_eq!(*MY_VAR.get().borrow(), 0);
-            *MY_VAR.get().borrow_mut() = 42;
-            assert_eq!(*MY_VAR.get().borrow(), 42);
-            unsafe { unregister_current_thread_for_test() };
-        });
+        for mode in MODES {
+            let tls = unsafe { ThreadLocalStorage::new(*mode) };
+            let my_var: ShimTlsVar<RefCell<u32>> = ShimTlsVar::new(&tls, || RefCell::new(0));
+            assert_eq!(*my_var.get().borrow(), 0);
+            *my_var.get().borrow_mut() = 42;
+            assert_eq!(*my_var.get().borrow(), 42);
+            unsafe { tls.unregister_current_thread() };
+        }
     }
 
     #[test_log::test]
     fn test_multithread_mutate() {
-        static MY_VAR: ShimTlsVar<RefCell<i32>> = ShimTlsVar::new(|| RefCell::new(0));
-        test_each_mode(|| {
-            let threads = (0..10).map(|i| {
-                std::thread::spawn(move || {
-                    assert_eq!(*MY_VAR.get().borrow(), 0);
-                    *MY_VAR.get().borrow_mut() = i;
-                    assert_eq!(*MY_VAR.get().borrow(), i);
-                    unsafe { unregister_current_thread_for_test() };
-                })
+        for mode in MODES {
+            let tls = unsafe { ThreadLocalStorage::new(*mode) };
+            let my_var: ShimTlsVar<RefCell<i32>> = ShimTlsVar::new(&tls, || RefCell::new(0));
+            std::thread::scope(|scope| {
+                let tls = &tls;
+                let my_var = &my_var;
+                let threads = (0..10).map(|i| {
+                    scope.spawn(move || {
+                        assert_eq!(*my_var.get().borrow(), 0);
+                        *my_var.get().borrow_mut() = i;
+                        assert_eq!(*my_var.get().borrow(), i);
+                        unsafe { tls.unregister_current_thread() };
+                    })
+                });
+                for t in threads {
+                    t.join().unwrap();
+                }
+                unsafe { tls.unregister_current_thread() };
             });
-            for t in threads {
-                t.join().unwrap();
-            }
-            unsafe { unregister_current_thread_for_test() };
-        });
+        }
     }
 
     #[test_log::test]
     fn test_multithread_mutate_small_alignment() {
-        // Normally it'd make more sense to use cheaper interior mutability
-        // such as `RefCell` or `Cell`, but here we want to ensure the alignment is 1
-        // to validate that we don't overlap storage.
-        static MY_VAR: ShimTlsVar<AtomicI8> = ShimTlsVar::new(|| AtomicI8::new(0));
-        test_each_mode(|| {
-            let threads = (0..10).map(|i| {
-                std::thread::spawn(move || {
-                    assert_eq!(MY_VAR.get().load(atomic::Ordering::Relaxed), 0);
-                    MY_VAR.get().store(i, atomic::Ordering::Relaxed);
-                    assert_eq!(MY_VAR.get().load(atomic::Ordering::Relaxed), i);
-                    unsafe { unregister_current_thread_for_test() };
-                })
+        for mode in MODES {
+            let tls = unsafe { ThreadLocalStorage::new(*mode) };
+            // Normally it'd make more sense to use cheaper interior mutability
+            // such as `RefCell` or `Cell`, but here we want to ensure the alignment is 1
+            // to validate that we don't overlap storage.
+            let my_var: ShimTlsVar<AtomicI8> = ShimTlsVar::new(&tls, || AtomicI8::new(0));
+            std::thread::scope(|scope| {
+                let tls = &tls;
+                let my_var = &my_var;
+                let threads = (0..10).map(move |i| {
+                    scope.spawn(move || {
+                        assert_eq!(my_var.get().load(atomic::Ordering::Relaxed), 0);
+                        my_var.get().store(i, atomic::Ordering::Relaxed);
+                        assert_eq!(my_var.get().load(atomic::Ordering::Relaxed), i);
+                        unsafe { tls.unregister_current_thread() };
+                    })
+                });
+                for t in threads {
+                    t.join().unwrap();
+                }
+                unsafe { tls.unregister_current_thread() };
             });
-            for t in threads {
-                t.join().unwrap();
-            }
-            unsafe { unregister_current_thread_for_test() };
-        });
+        }
     }
 
     #[test_log::test]
     fn test_multithread_mutate_mixed_alignments() {
-        static MY_I8: ShimTlsVar<AtomicI8> = ShimTlsVar::new(|| AtomicI8::new(0));
-        static MY_I16: ShimTlsVar<AtomicI16> = ShimTlsVar::new(|| AtomicI16::new(0));
-        static MY_I32: ShimTlsVar<AtomicI32> = ShimTlsVar::new(|| AtomicI32::new(0));
-        test_each_mode(|| {
-            let threads = (0..10).map(|i| {
-                std::thread::spawn(move || {
-                    // Access out of alignment order
-                    assert_eq!(MY_I8.get().load(atomic::Ordering::Relaxed), 0);
-                    assert_eq!(MY_I32.get().load(atomic::Ordering::Relaxed), 0);
-                    assert_eq!(MY_I16.get().load(atomic::Ordering::Relaxed), 0);
+        for mode in MODES {
+            let tls = unsafe { ThreadLocalStorage::new(*mode) };
+            let my_i8: ShimTlsVar<AtomicI8> = ShimTlsVar::new(&tls, || AtomicI8::new(0));
+            let my_i16: ShimTlsVar<AtomicI16> = ShimTlsVar::new(&tls, || AtomicI16::new(0));
+            let my_i32: ShimTlsVar<AtomicI32> = ShimTlsVar::new(&tls, || AtomicI32::new(0));
+            std::thread::scope(|scope| {
+                let tls = &tls;
+                let my_i8 = &my_i8;
+                let my_i16 = &my_i16;
+                let my_i32 = &my_i32;
+                let threads = (0..10).map(|i| {
+                    scope.spawn(move || {
+                        // Access out of alignment order
+                        assert_eq!(my_i8.get().load(atomic::Ordering::Relaxed), 0);
+                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), 0);
+                        assert_eq!(my_i16.get().load(atomic::Ordering::Relaxed), 0);
 
-                    // Order shouldn't matter here, but change it from above anyway.
-                    MY_I32.get().store(i as i32, atomic::Ordering::Relaxed);
-                    MY_I8.get().store(i as i8, atomic::Ordering::Relaxed);
-                    MY_I16.get().store(i as i16, atomic::Ordering::Relaxed);
+                        // Order shouldn't matter here, but change it from above anyway.
+                        my_i32.get().store(i as i32, atomic::Ordering::Relaxed);
+                        my_i8.get().store(i as i8, atomic::Ordering::Relaxed);
+                        my_i16.get().store(i as i16, atomic::Ordering::Relaxed);
 
-                    assert_eq!(MY_I16.get().load(atomic::Ordering::Relaxed), i as i16);
-                    assert_eq!(MY_I32.get().load(atomic::Ordering::Relaxed), i as i32);
-                    assert_eq!(MY_I8.get().load(atomic::Ordering::Relaxed), i as i8);
-                    unsafe { unregister_current_thread_for_test() };
-                })
+                        assert_eq!(my_i16.get().load(atomic::Ordering::Relaxed), i as i16);
+                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), i as i32);
+                        assert_eq!(my_i8.get().load(atomic::Ordering::Relaxed), i as i8);
+                        unsafe { tls.unregister_current_thread() };
+                    })
+                });
+                for t in threads {
+                    t.join().unwrap();
+                }
+                unsafe { tls.unregister_current_thread() };
             });
-            for t in threads {
-                t.join().unwrap();
-            }
-            unsafe { unregister_current_thread_for_test() };
-        });
-    }
-}
-
-mod export {
-    use super::*;
-
-    /// Should be used to exit every thread that accesses thread local storage.
-    ///
-    /// This is a no-op when using native thread-local storage, but lets us reclaim memory
-    /// otherwise, and is necessary for correctness when [`Mode::NativeTlsId`] is enabled.
-    ///
-    /// # Safety
-    ///
-    /// In the case that this function somehow panics, caller must not
-    /// access thread local storage again from the current thread, e.g.
-    /// using `std::panic::catch_unwind` or a custom panic hook.
-    #[no_mangle]
-    pub extern "C" fn shim_tls_unregister_and_exit_current_thread(status: i32) {
-        unsafe { unregister_and_exit_current_thread(status) }
+        }
     }
 }
