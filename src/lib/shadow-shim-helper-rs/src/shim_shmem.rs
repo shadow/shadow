@@ -411,19 +411,6 @@ pub mod export {
     pub type ShimShmemProcess = ProcessShmem;
     pub type ShimShmemThread = ThreadShmem;
 
-    #[no_mangle]
-    pub extern "C" fn shimshmemhost_size() -> usize {
-        std::mem::size_of::<HostShmem>()
-    }
-
-    /// # Safety
-    ///
-    /// `host_mem` must be valid, and no references to `host_mem` may exist.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmemhost_destroy(host_mem: *mut ShimShmemHost) {
-        unsafe { std::ptr::drop_in_place(host_mem) };
-    }
-
     /// # Safety
     ///
     /// `host` must be valid. The returned pointer must not be accessed from other threads.
@@ -566,82 +553,6 @@ pub mod export {
         &process_mem.host_shmem
     }
 
-    /// Get the process's pending signal set.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessPendingSignals(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-    ) -> linux_sigset_t {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = process_mem.protected.borrow(&lock.root);
-        sigset_t::peel(protected.pending_signals)
-    }
-
-    /// Set the process's pending signal set.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setProcessPendingSignals(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        s: linux_sigset_t,
-    ) {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        protected.pending_signals = sigset_t::wrap(s);
-    }
-
-    /// Get the siginfo for the given signal number. Only valid when the signal
-    /// is pending for the process.
-    ///
-    /// # Safety
-    ///
-    /// Pointers in siginfo_t are only valid in their original virtual address space.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessSiginfo(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        sig: i32,
-    ) -> linux_siginfo_t {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = process_mem.protected.borrow(&lock.root);
-        unsafe {
-            siginfo_t::peel(
-                *protected
-                    .pending_standard_siginfo(Signal::try_from(sig).unwrap())
-                    .unwrap(),
-            )
-        }
-    }
-
-    /// Set the siginfo for the given signal number.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setProcessSiginfo(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        sig: i32,
-        info: *const linux_siginfo_t,
-    ) {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        let info = unsafe { siginfo_t::wrap_ref_assume_initd(info.as_ref().unwrap()) };
-        protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
-    }
-
     /// # Safety
     ///
     /// Pointer args must be safely dereferenceable.
@@ -717,31 +628,6 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         protected.pending_signals = sigset_t::wrap(s);
-    }
-
-    /// Get the siginfo for the given signal number. Only valid when the signal
-    /// is pending for the signal.
-    ///
-    /// # Safety
-    ///
-    /// Pointers in the returned siginfo_t must not be dereferenced except from the managed
-    /// process's virtual address space.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getThreadSiginfo(
-        lock: *const ShimShmemHostLock,
-        thread: *const ShimShmemThread,
-        sig: i32,
-    ) -> linux_siginfo_t {
-        let thread_mem = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = thread_mem.protected.borrow(&lock.root);
-        unsafe {
-            siginfo_t::peel(
-                *protected
-                    .pending_standard_siginfo(Signal::try_from(sig).unwrap())
-                    .unwrap(),
-            )
-        }
     }
 
     /// Set the siginfo for the given signal number.
@@ -825,32 +711,6 @@ pub mod export {
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         *unsafe { protected.sigaltstack_mut() } = stack;
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_takePendingUnblockedSignal(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        thread: *const ShimShmemThread,
-        info: *mut linux_siginfo_t,
-    ) -> i32 {
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let process = unsafe { process.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-
-        let res = take_pending_unblocked_signal(lock, process, thread);
-
-        if let Some((signal, info_res)) = res {
-            if !info.is_null() {
-                unsafe { info.write(siginfo_t::peel(info_res)) };
-            }
-            signal.into()
-        } else {
-            0
-        }
     }
 
     /// # Safety
