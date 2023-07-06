@@ -299,84 +299,77 @@ impl FastThreadId {
     }
 }
 
-mod global_storages {
-    use super::*;
+struct StoragesMapProducer {}
+impl
+    lazy_lock::Producer<
+        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
+    > for StoragesMapProducer
+{
+    fn initialize(
+        self,
+    ) -> MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>> {
+        MmapBox::new(AtomicTlsMap::new())
+    }
+}
 
-    struct StoragesMapProducer {}
-    impl
-        lazy_lock::Producer<
-            MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
-        > for StoragesMapProducer
-    {
-        fn initialize(
-            self,
-        ) -> MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>
-        {
-            MmapBox::new(AtomicTlsMap::new())
+// The raw byte thread local storage for each thread.
+pub(super) struct StoragesType {
+    // Allocate lazily via `mmap`, to avoid unnecessarily consuming
+    // the memory in processes where we always use native thread local storage.
+    storages: LazyLock<
+        MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
+        StoragesMapProducer,
+    >,
+    // Next available offset to allocate within `storages`.
+    next_offset: AtomicUsize,
+}
+
+impl StoragesType {
+    pub const fn new() -> Self {
+        Self {
+            storages: LazyLock::const_new(StoragesMapProducer {}),
+            next_offset: AtomicUsize::new(0),
         }
     }
 
-    // The raw byte thread local storage for each thread.
-    pub(super) struct StoragesType {
-        // Allocate lazily via `mmap`, to avoid unnecessarily consuming
-        // the memory in processes where we always use native thread local storage.
-        storages: LazyLock<
-            MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
-            StoragesMapProducer,
-        >,
-        // Next available offset to allocate within `storages`.
-        next_offset: AtomicUsize,
-    }
+    pub fn alloc_offset(&self, align: usize, size: usize) -> usize {
+        // The alignment we ensure here is an offset from the base of a [`ShimThreadLocalStorage`].
+        // It won't be meaningful if [`ShimThreadLocalStorage`] has a smaller alignment requirement
+        // than this variable.
+        assert!(align <= core::mem::align_of::<ShimThreadLocalStorage>());
+        let mut next_offset_val = self.next_offset.load(atomic::Ordering::Relaxed);
+        loop {
+            // Create a synthetic pointer just so we can call `align_offset`
+            // instead of doing the fiddly math ourselves.  This is sound, but
+            // causes miri to generate a warning.  We should use
+            // `core::ptr::invalid` here once stabilized to make our intent
+            // explicit that yes, really, we want to make an invalid pointer
+            // that we have no intention of dereferencing.
+            let fake: *const u8 = next_offset_val as *const u8;
+            let this_var_offset = next_offset_val + fake.align_offset(align);
 
-    impl StoragesType {
-        pub const fn new() -> Self {
-            Self {
-                storages: LazyLock::const_new(StoragesMapProducer {}),
-                next_offset: AtomicUsize::new(0),
+            let next_next_offset_val = this_var_offset + size;
+            if next_next_offset_val > BYTES_PER_THREAD {
+                panic!("Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage");
             }
-        }
 
-        pub fn alloc_offset(&self, align: usize, size: usize) -> usize {
-            // The alignment we ensure here is an offset from the base of a [`ShimThreadLocalStorage`].
-            // It won't be meaningful if [`ShimThreadLocalStorage`] has a smaller alignment requirement
-            // than this variable.
-            assert!(align <= core::mem::align_of::<ShimThreadLocalStorage>());
-            let mut next_offset_val = self.next_offset.load(atomic::Ordering::Relaxed);
-            loop {
-                // Create a synthetic pointer just so we can call `align_offset`
-                // instead of doing the fiddly math ourselves.  This is sound, but
-                // causes miri to generate a warning.  We should use
-                // `core::ptr::invalid` here once stabilized to make our intent
-                // explicit that yes, really, we want to make an invalid pointer
-                // that we have no intention of dereferencing.
-                let fake: *const u8 = next_offset_val as *const u8;
-                let this_var_offset = next_offset_val + fake.align_offset(align);
-
-                let next_next_offset_val = this_var_offset + size;
-                if next_next_offset_val > BYTES_PER_THREAD {
-                    panic!("Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage");
-                }
-
-                match self.next_offset.compare_exchange(
-                    next_offset_val,
-                    next_next_offset_val,
-                    atomic::Ordering::Relaxed,
-                    atomic::Ordering::Relaxed,
-                ) {
-                    Ok(_) => return this_var_offset,
-                    Err(v) => {
-                        // We raced with another thread. This *shouldn't* happen in
-                        // the shadow shim, since only one thread is allowed to run
-                        // at a time, but handle it gracefully. Update the current
-                        // value of the atomic and try again.
-                        next_offset_val = v;
-                    }
+            match self.next_offset.compare_exchange(
+                next_offset_val,
+                next_next_offset_val,
+                atomic::Ordering::Relaxed,
+                atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => return this_var_offset,
+                Err(v) => {
+                    // We raced with another thread. This *shouldn't* happen in
+                    // the shadow shim, since only one thread is allowed to run
+                    // at a time, but handle it gracefully. Update the current
+                    // value of the atomic and try again.
+                    next_offset_val = v;
                 }
             }
         }
     }
-
-    pub(super) static STORAGES: StoragesType = StoragesType::new();
 
     /// Get the storage associated with the current thread. The bytes are initially zero.
     ///
@@ -384,14 +377,12 @@ mod global_storages {
     ///
     /// All previous threads that have called `get_or_init_current` and
     /// subsequently exited must have called `remove_current`.
-    pub(super) unsafe fn get_or_init_current(
-    ) -> atomic_tls_map::Ref<'static, MmapBox<ShimThreadLocalStorage>> {
+    unsafe fn get_or_init_current(&self) -> atomic_tls_map::Ref<MmapBox<ShimThreadLocalStorage>> {
         let id = FastThreadId::current();
         // SAFETY: `id` is unique to this live thread, and caller guarantees
         // any previous thread with this `id` has been removed.
         let res = unsafe {
-            STORAGES
-                .storages
+            self.storages
                 .deref()
                 .get_or_insert_with(id.to_nonzero_usize(), || {
                     MmapBox::new(ShimThreadLocalStorage::new())
@@ -406,14 +397,14 @@ mod global_storages {
     ///
     /// All previous threads that have accessed this module and have since
     /// exited must have called [`unregister_and_exit_current_thread`].
-    pub(super) unsafe fn remove_current() {
-        if !STORAGES.storages.initd() {
+    pub unsafe fn remove_current(&self) {
+        if !self.storages.initd() {
             // Nothing to do. Even if another thread happens to be initializing
             // concurrently, we know the *current* thread isn't registered.
             return;
         }
 
-        let storages = STORAGES.storages.force();
+        let storages = self.storages.force();
 
         let id = FastThreadId::current();
         // SAFETY: `id` is unique to this live thread, and caller guarantees
@@ -421,6 +412,8 @@ mod global_storages {
         unsafe { storages.remove(id.to_nonzero_usize()) };
     }
 }
+
+static STORAGES: StoragesType = StoragesType::new();
 
 /// Unit tests using `std::thread` should use this instead of
 /// `unregister_and_exit_current_thread`. The latter may have unintended side
@@ -434,7 +427,7 @@ mod global_storages {
 pub unsafe fn unregister_current_thread_for_test() {
     // SAFETY: No code can access thread local storage in between deregistration
     // and exit.
-    unsafe { global_storages::remove_current() }
+    unsafe { STORAGES.remove_current() }
 }
 
 /// Release this thread's thread local storage and exit the thread.
@@ -462,7 +455,7 @@ pub unsafe fn unregister_and_exit_current_thread(exit_status: i32) -> ! {
 
     // SAFETY: No code can access thread local storage in between deregistration
     // and exit.
-    unsafe { global_storages::remove_current() }
+    unsafe { STORAGES.remove_current() }
 
     linux_api::exit::exit_raw(exit_status).unwrap();
     unreachable!()
@@ -504,7 +497,7 @@ fn tls_storage() -> ShimThreadLocalStorageRef {
         Mode::NativeTlsId | Mode::Gettid => (),
     }
     // Use our fallback mechanism.
-    ShimThreadLocalStorageRef::Mapped(unsafe { global_storages::get_or_init_current() })
+    ShimThreadLocalStorageRef::Mapped(unsafe { STORAGES.get_or_init_current() })
 }
 
 /// One of these is placed in each thread's thread-local-storage, for each
@@ -580,7 +573,7 @@ impl lazy_lock::Producer<usize> for OffsetInitializer {
     // thread-local-storage for a value of type `T`, initialized with function
     // `F`.
     fn initialize(self) -> usize {
-        global_storages::STORAGES.alloc_offset(self.align, self.size)
+        STORAGES.alloc_offset(self.align, self.size)
     }
 }
 
