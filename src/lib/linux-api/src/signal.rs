@@ -1396,6 +1396,28 @@ pub use bindings::linux_stack_t;
 #[allow(non_camel_case_types)]
 pub type stack_t = linux_stack_t;
 
+impl stack_t {
+    pub fn new(sp: *mut core::ffi::c_void, flags: SigAltStackFlags, size: usize) -> Self {
+        Self {
+            ss_sp: sp,
+            ss_flags: flags.bits(),
+            ss_size: size.try_into().unwrap(),
+        }
+    }
+
+    pub fn flags_retain(&self) -> SigAltStackFlags {
+        SigAltStackFlags::from_bits_retain(self.ss_flags)
+    }
+
+    pub fn sp(&self) -> *mut core::ffi::c_void {
+        self.ss_sp
+    }
+
+    pub fn size(&self) -> usize {
+        self.ss_size.try_into().unwrap()
+    }
+}
+
 // bindgen fails to bind this one.
 // Copied from linux's include/uapi/linux/signal.h.
 pub const LINUX_SS_AUTODISARM: u32 = 1 << 31;
