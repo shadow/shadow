@@ -200,7 +200,11 @@ where
     /// The value at `key`, if any, must have been inserted by the current thread.
     pub unsafe fn remove(&self, key: NonZeroUsize) -> Option<V> {
         let idx = self.idx(key)?;
-        assert_eq!(self.refcounts[idx].get(), 0);
+        assert_eq!(
+            self.refcounts[idx].get(),
+            0,
+            "Removed key while references still held: {key:?}"
+        );
         let value = self.values[idx].get_mut().with(|value| {
             let value = unsafe { &mut *value };
             unsafe { value.assume_init_read() }

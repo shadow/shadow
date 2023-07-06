@@ -657,6 +657,16 @@ mod test {
         }
     }
 
+    #[test]
+    #[should_panic(expected = "Removed key while references still held")]
+    fn test_panic() {
+        let tls = unsafe { ThreadLocalStorage::new(Mode::Gettid) };
+        let var: ShimTlsVar<u32> = ShimTlsVar::new(&tls, || 0);
+        let _var_ref = var.get();
+        // This should panic since we still have a reference
+        unsafe { tls.unregister_current_thread() };
+    }
+
     #[test_log::test]
     fn test_single_thread_mutate() {
         for mode in MODES {
