@@ -302,30 +302,40 @@ impl FastThreadId {
 mod global_storages {
     use super::*;
 
+    struct StoragesMapProducer {}
+    impl
+        lazy_lock::Producer<
+            MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
+        > for StoragesMapProducer
+    {
+        fn initialize(
+            self,
+        ) -> MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>
+        {
+            MmapBox::new(AtomicTlsMap::new())
+        }
+    }
+
     // The raw byte thread local storage for each thread.
     #[repr(transparent)]
     struct StoragesType {
-        storages: AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>,
+        // Allocate lazily via `mmap`, to avoid unnecessarily consuming
+        // the memory in processes where we always use native thread local storage.
+        storages: LazyLock<
+            MmapBox<AtomicTlsMap<TLS_FALLBACK_MAX_THREADS, MmapBox<ShimThreadLocalStorage>>>,
+            StoragesMapProducer,
+        >,
     }
 
     impl StoragesType {
-        pub fn new() -> Self {
+        pub const fn new() -> Self {
             Self {
-                storages: AtomicTlsMap::new(),
+                storages: LazyLock::const_new(StoragesMapProducer {}),
             }
-        }
-
-        pub fn alloc_new() -> &'static Self {
-            unsafe { &*MmapBox::leak(MmapBox::new(Self::new())) }
         }
     }
 
-    // Allocate lazily via `mmap`, to avoid unnecessarily consuming
-    // the memory in processes where we always use native thread local storage.
-    static STORAGES: LazyLock<&'static StoragesType> = LazyLock::const_new(|| {
-        log::debug!("Allocating fallback thread-local storage");
-        StoragesType::alloc_new()
-    });
+    static STORAGES: StoragesType = StoragesType::new();
 
     /// Get the storage associated with the current thread. The bytes are initially zero.
     ///
@@ -340,8 +350,8 @@ mod global_storages {
         // any previous thread with this `id` has been removed.
         let res = unsafe {
             STORAGES
-                .force()
                 .storages
+                .deref()
                 .get_or_insert_with(id.to_nonzero_usize(), || {
                     MmapBox::new(ShimThreadLocalStorage::new())
                 })
@@ -356,16 +366,18 @@ mod global_storages {
     /// All previous threads that have accessed this module and have since
     /// exited must have called [`unregister_and_exit_current_thread`].
     pub(super) unsafe fn remove_current() {
-        if !STORAGES.initd() {
+        if !STORAGES.storages.initd() {
             // Nothing to do. Even if another thread happens to be initializing
             // concurrently, we know the *current* thread isn't registered.
             return;
         }
 
+        let storages = STORAGES.storages.force();
+
         let id = FastThreadId::current();
         // SAFETY: `id` is unique to this live thread, and caller guarantees
         // any previous thread with this `id` has been removed.
-        unsafe { STORAGES.force().storages.remove(id.to_nonzero_usize()) };
+        unsafe { storages.remove(id.to_nonzero_usize()) };
     }
 }
 

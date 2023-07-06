@@ -45,9 +45,7 @@ impl<T> MmapBox<T> {
         #[cfg(miri)]
         {
             Self {
-                ptr: Some(NonNull::new(std::boxed::Box::into_raw(
-                    std::boxed::Box::new(x),
-                )).unwrap()),
+                ptr: Some(NonNull::new(Box::into_raw(Box::new(x))).unwrap()),
             }
         }
     }
