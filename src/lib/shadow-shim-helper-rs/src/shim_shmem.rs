@@ -1,5 +1,4 @@
-use libc::stack_t;
-use linux_api::signal::{sigaction, siginfo_t, sigset_t, Signal};
+use linux_api::signal::{sigaction, siginfo_t, sigset_t, stack_t, Signal};
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
@@ -396,7 +395,9 @@ pub mod export {
     use std::sync::atomic::Ordering;
 
     use bytemuck::TransparentWrapper;
-    use linux_api::signal::{linux_sigaction, linux_siginfo_t, linux_sigset_t, siginfo_t};
+    use linux_api::signal::{
+        linux_sigaction, linux_siginfo_t, linux_sigset_t, linux_stack_t, siginfo_t,
+    };
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
@@ -802,7 +803,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-    ) -> stack_t {
+    ) -> linux_stack_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
@@ -818,7 +819,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_setSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-        stack: stack_t,
+        stack: linux_stack_t,
     ) {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
