@@ -198,6 +198,26 @@ where
     }
 }
 
+/// We only implement Deref outside of Loom, since Loom requires an intermediate
+/// object to catch invalid accesses to our internal `UnsafeCell`s.
+#[cfg(not(loom))]
+impl<T, Init> core::ops::Deref for LazyLock<T, Init>
+where
+    Init: Producer<T>,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.force();
+        let ptr: *mut MaybeUninit<T> = self.value.untracked_get();
+        // SAFETY: Pointer is valid and no mutable refs exist after
+        // initialization.
+        let ptr = unsafe { ptr.as_ref().unwrap() };
+        // SAFETY: `force` ensured initialization.
+        unsafe { ptr.assume_init_ref() }
+    }
+}
+
 impl<T, Init> Drop for LazyLock<T, Init> {
     fn drop(&mut self) {
         // `Acquire` pairs with `Release` in `init`.
