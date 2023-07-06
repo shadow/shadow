@@ -1104,6 +1104,10 @@ impl sigaction {
         SigActionFlags::from_bits_retain(self.0.lsa_flags)
     }
 
+    pub fn mask(&self) -> sigset_t {
+        sigset_t::wrap(self.0.lsa_mask)
+    }
+
     /// # Safety
     ///
     /// The functions in `SignalHandler::Action` or `SignalHandler::Handler` are
