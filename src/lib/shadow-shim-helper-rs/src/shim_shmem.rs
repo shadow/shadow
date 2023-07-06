@@ -377,6 +377,21 @@ unsafe impl Send for StackWrapper {}
 // except from the original virtual address space: in the shim.
 unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
 
+/// Take the next unblocked thread- *or* process-directed signal.
+pub fn take_pending_unblocked_signal(
+    lock: &HostShmemProtected,
+    process: &ProcessShmem,
+    thread: &ThreadShmem,
+) -> Option<(Signal, siginfo_t)> {
+    let mut thread_protected = thread.protected.borrow_mut(&lock.root);
+    thread_protected
+        .take_pending_unblocked_signal()
+        .or_else(|| {
+            let mut process_protected = process.protected.borrow_mut(&lock.root);
+            process_protected.take_pending_unblocked_signal(&thread_protected)
+        })
+}
+
 pub mod export {
     use std::sync::atomic::Ordering;
 
@@ -821,19 +836,11 @@ pub mod export {
         thread: *const ShimShmemThread,
         info: *mut linux_siginfo_t,
     ) -> i32 {
-        let thread = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
-        let mut thread_protected = thread.protected.borrow_mut(&lock.root);
+        let process = unsafe { process.as_ref().unwrap() };
+        let thread = unsafe { thread.as_ref().unwrap() };
 
-        let res = {
-            if let Some(r) = thread_protected.take_pending_unblocked_signal() {
-                Some(r)
-            } else {
-                let process = unsafe { process.as_ref().unwrap() };
-                let mut process_protected = process.protected.borrow_mut(&lock.root);
-                process_protected.take_pending_unblocked_signal(&thread_protected)
-            }
-        };
+        let res = take_pending_unblocked_signal(lock, process, thread);
 
         if let Some((signal, info_res)) = res {
             if !info.is_null() {
