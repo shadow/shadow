@@ -194,9 +194,9 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
                 // Process any signals, which may have resulted from the syscall itself
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
-                ShimShmemHostLock* host_lock = shimshmemhost_lock(shim_hostSharedMem());
-                const bool allSigactionsHadSaRestart = shim_process_signals(host_lock, NULL);
-                shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
+                //
+                // FIXME: is there a reason we don't pass `ctx` here?
+                const bool allSigactionsHadSaRestart = shim_process_signals(NULL);
 
                 // Check whether a blocking syscall was interrupted by a signal.
                 // Note that handlers don't usually return -EINTR directly;

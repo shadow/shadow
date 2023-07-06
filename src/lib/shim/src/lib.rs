@@ -34,6 +34,8 @@ pub mod tls;
 
 pub use shimlogger::export as shimlogger_export;
 
+pub mod signals;
+
 pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
 }
