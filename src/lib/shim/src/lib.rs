@@ -168,8 +168,8 @@ mod tls_ipc {
 
     /// # Safety
     ///
-    /// `blk` must contained a serialized block of
-    /// type `IPCData`, which outlives the current thread.
+    /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `IPCData`.
+    /// The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
         let blk: ShMemBlockAlias<IPCData> = unsafe { Serializer::global().deserialize(blk) };
         assert!(IPC_DATA_BLOCK.get().replace(Some(blk)).is_none());
@@ -211,8 +211,8 @@ mod tls_thread_shmem {
 
     /// # Safety
     ///
-    /// `blk` must contained a serialized block of
-    /// type `ThreadShmem`, which outlives the current thread.
+    /// `blk` must contained a serialized block referencing a `ShMemBlock` of
+    /// type `ThreadShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
         let blk: ShMemBlockAlias<ThreadShmem> = unsafe { Serializer::global().deserialize(blk) };
         assert!(THREAD_SHMEM.get().replace(Some(blk)).is_none());
