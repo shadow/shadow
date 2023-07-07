@@ -1210,6 +1210,12 @@ pub const LINUX_TIOCPKT_NOSTOP: u32 = 16;
 pub const LINUX_TIOCPKT_DOSTOP: u32 = 32;
 pub const LINUX_TIOCPKT_IOCTL: u32 = 64;
 pub const LINUX_TIOCSER_TEMT: u32 = 1;
+pub const LINUX_FP_XSTATE_MAGIC1: u32 = 1179670611;
+pub const LINUX_FP_XSTATE_MAGIC2: u32 = 1179670597;
+pub const LINUX_X86_FXSR_MAGIC: u32 = 0;
+pub const LINUX_UC_FP_XSTATE: u32 = 1;
+pub const LINUX_UC_SIGCONTEXT_SS: u32 = 2;
+pub const LINUX_UC_STRICT_RESTORE_SS: u32 = 4;
 pub type linux___u16 = ::core::ffi::c_ushort;
 pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___u64 = ::core::ffi::c_ulonglong;
@@ -2912,3 +2918,694 @@ fn bindgen_test_layout_siginfo() {
     );
 }
 pub type linux_siginfo_t = linux_siginfo;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux__fpx_sw_bytes {
+    pub magic1: linux___u32,
+    pub extended_size: linux___u32,
+    pub xfeatures: linux___u64,
+    pub xstate_size: linux___u32,
+    pub padding: [linux___u32; 7usize],
+}
+#[test]
+fn bindgen_test_layout__fpx_sw_bytes() {
+    const UNINIT: ::core::mem::MaybeUninit<linux__fpx_sw_bytes> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux__fpx_sw_bytes>(),
+        48usize,
+        concat!("Size of: ", stringify!(linux__fpx_sw_bytes))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux__fpx_sw_bytes>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux__fpx_sw_bytes))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).magic1) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpx_sw_bytes),
+            "::",
+            stringify!(magic1)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).extended_size) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpx_sw_bytes),
+            "::",
+            stringify!(extended_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).xfeatures) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpx_sw_bytes),
+            "::",
+            stringify!(xfeatures)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).xstate_size) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpx_sw_bytes),
+            "::",
+            stringify!(xstate_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).padding) as usize - ptr as usize },
+        20usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpx_sw_bytes),
+            "::",
+            stringify!(padding)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct linux__fpstate_64 {
+    pub cwd: linux___u16,
+    pub swd: linux___u16,
+    pub twd: linux___u16,
+    pub fop: linux___u16,
+    pub rip: linux___u64,
+    pub rdp: linux___u64,
+    pub mxcsr: linux___u32,
+    pub mxcsr_mask: linux___u32,
+    pub st_space: [linux___u32; 32usize],
+    pub xmm_space: [linux___u32; 64usize],
+    pub reserved2: [linux___u32; 12usize],
+    pub l__bindgen_anon_1: linux__fpstate_64__bindgen_ty_1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union linux__fpstate_64__bindgen_ty_1 {
+    pub reserved3: [linux___u32; 12usize],
+    pub sw_reserved: linux__fpx_sw_bytes,
+}
+#[test]
+fn bindgen_test_layout__fpstate_64__bindgen_ty_1() {
+    const UNINIT: ::core::mem::MaybeUninit<linux__fpstate_64__bindgen_ty_1> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux__fpstate_64__bindgen_ty_1>(),
+        48usize,
+        concat!("Size of: ", stringify!(linux__fpstate_64__bindgen_ty_1))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux__fpstate_64__bindgen_ty_1>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux__fpstate_64__bindgen_ty_1))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).reserved3) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64__bindgen_ty_1),
+            "::",
+            stringify!(reserved3)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sw_reserved) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64__bindgen_ty_1),
+            "::",
+            stringify!(sw_reserved)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout__fpstate_64() {
+    const UNINIT: ::core::mem::MaybeUninit<linux__fpstate_64> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux__fpstate_64>(),
+        512usize,
+        concat!("Size of: ", stringify!(linux__fpstate_64))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux__fpstate_64>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux__fpstate_64))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cwd) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(cwd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).swd) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(swd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).twd) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(twd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).fop) as usize - ptr as usize },
+        6usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(fop)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rip) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(rip)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rdp) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(rdp)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).mxcsr) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(mxcsr)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).mxcsr_mask) as usize - ptr as usize },
+        28usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(mxcsr_mask)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_space) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(st_space)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).xmm_space) as usize - ptr as usize },
+        160usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(xmm_space)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).reserved2) as usize - ptr as usize },
+        416usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux__fpstate_64),
+            "::",
+            stringify!(reserved2)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct linux_sigcontext {
+    pub r8: linux___u64,
+    pub r9: linux___u64,
+    pub r10: linux___u64,
+    pub r11: linux___u64,
+    pub r12: linux___u64,
+    pub r13: linux___u64,
+    pub r14: linux___u64,
+    pub r15: linux___u64,
+    pub rdi: linux___u64,
+    pub rsi: linux___u64,
+    pub rbp: linux___u64,
+    pub rbx: linux___u64,
+    pub rdx: linux___u64,
+    pub rax: linux___u64,
+    pub rcx: linux___u64,
+    pub rsp: linux___u64,
+    pub rip: linux___u64,
+    pub eflags: linux___u64,
+    pub cs: linux___u16,
+    pub gs: linux___u16,
+    pub fs: linux___u16,
+    pub l__bindgen_anon_1: linux_sigcontext__bindgen_ty_1,
+    pub err: linux___u64,
+    pub trapno: linux___u64,
+    pub oldmask: linux___u64,
+    pub cr2: linux___u64,
+    pub fpstate: *mut linux__fpstate_64,
+    pub reserved1: [linux___u64; 8usize],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union linux_sigcontext__bindgen_ty_1 {
+    pub ss: linux___u16,
+    pub l__pad0: linux___u16,
+}
+#[test]
+fn bindgen_test_layout_sigcontext__bindgen_ty_1() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_sigcontext__bindgen_ty_1> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_sigcontext__bindgen_ty_1>(),
+        2usize,
+        concat!("Size of: ", stringify!(linux_sigcontext__bindgen_ty_1))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_sigcontext__bindgen_ty_1>(),
+        2usize,
+        concat!("Alignment of ", stringify!(linux_sigcontext__bindgen_ty_1))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ss) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext__bindgen_ty_1),
+            "::",
+            stringify!(ss)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l__pad0) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext__bindgen_ty_1),
+            "::",
+            stringify!(l__pad0)
+        )
+    );
+}
+#[test]
+fn bindgen_test_layout_sigcontext() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_sigcontext> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_sigcontext>(),
+        256usize,
+        concat!("Size of: ", stringify!(linux_sigcontext))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_sigcontext>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_sigcontext))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r8) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r8)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r9) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r9)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r10) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r10)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r11) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r11)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r12) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r12)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r13) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r13)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r14) as usize - ptr as usize },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r14)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).r15) as usize - ptr as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(r15)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rdi) as usize - ptr as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rdi)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rsi) as usize - ptr as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rsi)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rbp) as usize - ptr as usize },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rbp)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rbx) as usize - ptr as usize },
+        88usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rbx)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rdx) as usize - ptr as usize },
+        96usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rdx)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rax) as usize - ptr as usize },
+        104usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rax)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rcx) as usize - ptr as usize },
+        112usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rcx)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rsp) as usize - ptr as usize },
+        120usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rsp)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rip) as usize - ptr as usize },
+        128usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(rip)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).eflags) as usize - ptr as usize },
+        136usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(eflags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cs) as usize - ptr as usize },
+        144usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(cs)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).gs) as usize - ptr as usize },
+        146usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(gs)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).fs) as usize - ptr as usize },
+        148usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(fs)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).err) as usize - ptr as usize },
+        152usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(err)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).trapno) as usize - ptr as usize },
+        160usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(trapno)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).oldmask) as usize - ptr as usize },
+        168usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(oldmask)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).cr2) as usize - ptr as usize },
+        176usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(cr2)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).fpstate) as usize - ptr as usize },
+        184usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(fpstate)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).reserved1) as usize - ptr as usize },
+        192usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_sigcontext),
+            "::",
+            stringify!(reserved1)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct linux_ucontext {
+    pub uc_flags: ::core::ffi::c_ulong,
+    pub uc_link: *mut linux_ucontext,
+    pub uc_stack: linux_stack_t,
+    pub uc_mcontext: linux_sigcontext,
+    pub uc_sigmask: linux_sigset_t,
+}
+#[test]
+fn bindgen_test_layout_ucontext() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_ucontext> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_ucontext>(),
+        304usize,
+        concat!("Size of: ", stringify!(linux_ucontext))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_ucontext>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_ucontext))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).uc_flags) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ucontext),
+            "::",
+            stringify!(uc_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).uc_link) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ucontext),
+            "::",
+            stringify!(uc_link)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).uc_stack) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ucontext),
+            "::",
+            stringify!(uc_stack)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).uc_mcontext) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ucontext),
+            "::",
+            stringify!(uc_mcontext)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).uc_sigmask) as usize - ptr as usize },
+        296usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ucontext),
+            "::",
+            stringify!(uc_sigmask)
+        )
+    );
+}

@@ -14,3 +14,5 @@
 #include <linux/unistd.h>
 
 #include <asm/ioctls.h>
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
