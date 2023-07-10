@@ -1,33 +1,68 @@
+use core::cell::Cell;
+
 use linux_api::signal::{
     defaultaction, sigaction, siginfo_t, sigset_t, stack_t, SigActionFlags, SigAltStackFlags,
     Signal, SignalHandler,
 };
-use log::{debug, trace, warn};
+use linux_api::ucontext::ucontext;
+use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
+use crate::tls::ShimTlsVar;
 use crate::{global_allow_native_syscalls, global_host_shmem, tls_thread_shmem};
 
-/// Calls the given signal handler. We sometimes call this function via
-/// `libc::swapcontext`, so it needs to be `extern "C"`.
-///
-/// # Safety
-///
-/// `action` and `siginfo` must be safely dereferenceable. `ucontext` must be
-/// safely dereferenceable or NULL.
-unsafe extern "C" fn call_signal_handler(
-    action: *const sigaction,
-    signal: Signal,
-    siginfo: *mut siginfo_t,
-    ucontext: *mut libc::ucontext_t,
-) {
+/// Information passed through to the SIGUSR1 signal handler. Contains the info
+/// needed to call a managed code signal handler.
+struct Sigusr1Info {
+    native_sigaltstack: Option<stack_t>,
+    siginfo: siginfo_t,
+    action: sigaction,
+    // May be NULL, in the case that we didn't get here in the context of an
+    // earlier signal handler (e.g. seccomp).
+
+    // We don't copy by value in case additional fields are added to the stuct
+    // definition, and because we currently accept a libc::ucontext_t in our C
+    // API, which *does* have extra fields at the end.
+    ctx: *mut ucontext,
+}
+static SIGUSR1_SIGINFO: ShimTlsVar<Cell<Option<Sigusr1Info>>> =
+    ShimTlsVar::new(&crate::SHIM_TLS, || Cell::new(None));
+
+extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core::ffi::c_void) {
+    let mut info = SIGUSR1_SIGINFO.get().take().unwrap();
+    let signo = info.siginfo.signal().unwrap().as_i32();
     assert!(crate::global_allow_native_syscalls::swap(false));
-    let action = unsafe { action.as_ref().unwrap() };
-    match unsafe { action.handler() } {
-        linux_api::signal::SignalHandler::Handler(handler_fn) => unsafe {
-            handler_fn(signal.into())
-        },
+    // SAFETY: Should have been initialized correctly in `process_signals`.
+    let handler = unsafe { info.action.handler() };
+
+    if let Some(stack) = &info.native_sigaltstack {
+        // We temporarily switched the sigaltstack so that this handler would
+        // run on the specified stack. Now switch back to the native sigaltstack (i.e.
+        // the one Shadow originally configured for *it's* signal handling).
+        unsafe { linux_api::signal::sigaltstack(Some(stack), None) }.unwrap();
+    }
+
+    // SAFETY: Not particularly. We're calling a handler provided by managed code, which
+    // we don't attempt to analyze or sandbox. A "well behaved" handler should be safe to
+    // call here, but it could do anything including things that are unsound in Rust.
+    match handler {
+        linux_api::signal::SignalHandler::Handler(handler_fn) => unsafe { handler_fn(signo) },
         linux_api::signal::SignalHandler::Action(action_fn) => unsafe {
-            action_fn(signal.into(), siginfo, ucontext as *mut core::ffi::c_void)
+            // If there's an "earlier" context, we use it. This might be important e.g.
+            // when handling a signal like SIGSEGV, where the handler might actually
+            // inspect individual register values.
+            //
+            // Otherwise, use the the context that the kernel gave us for *this* signal
+            // handler.  The register values won't make much sense to the handler, but
+            // it should WAI with functionality like `swapcontext`, which might be done
+            // in an implementation of user-space threads.
+            let ctx: *mut ucontext = if info.ctx.is_null() {
+                log::warn!("Passing a synthetic context to managed code signal handler");
+                ctx.cast()
+            } else {
+                info.ctx
+            };
+            action_fn(signo, &mut info.siginfo, ctx.cast::<core::ffi::c_void>())
         },
         linux_api::signal::SignalHandler::SigIgn | linux_api::signal::SignalHandler::SigDfl => {
             panic!("No handler")
@@ -56,7 +91,16 @@ fn die_with_fatal_signal(sig: Signal) -> ! {
 
 /// Handle pending unblocked signals, and return whether *all* corresponding
 /// signal actions had the SA_RESTART flag set.
-pub fn process_signals(mut ucontext: Option<&mut libc::ucontext_t>) -> bool {
+///
+/// `ucontext` may be NULL.
+///
+/// # Safety
+///
+/// `ucontext` must be dereferenceable if not NULL.
+///
+/// Configured handlers for all pending unblocked signals must be safe to call. (Which
+/// we basically can't ensure).
+pub unsafe fn process_signals(ucontext: *mut ucontext) -> bool {
     let mut host = crate::global_host_shmem::get();
     let mut process = crate::global_process_shmem::get();
     let mut thread = crate::tls_thread_shmem::get();
@@ -64,10 +108,9 @@ pub fn process_signals(mut ucontext: Option<&mut libc::ucontext_t>) -> bool {
 
     let mut restartable = true;
 
-    while let Some((sig, mut siginfo)) =
+    while let Some((sig, siginfo)) =
         shim_shmem::take_pending_unblocked_signal(&host_lock, &process, &thread)
     {
-        let blocked_signals = thread.protected.borrow(&host_lock.root).blocked_signals;
         let action = *unsafe { process.protected.borrow(&host_lock.root).signal_action(sig) };
 
         if matches!(unsafe { action.handler() }, SignalHandler::SigIgn) {
@@ -89,14 +132,21 @@ pub fn process_signals(mut ucontext: Option<&mut libc::ucontext_t>) -> bool {
 
         trace!("Handling emulated signal {sig:?}");
 
-        let handler_mask = {
-            let mut m = action.mask() | blocked_signals;
+        let (sigaltstack_orig_emu, mask_orig_emu): (stack_t, sigset_t) = {
+            let t = thread.protected.borrow(&host_lock.root);
+            // SAFETY: Pointers in the sigaltstack are valid in the managed process.
+            let stack = unsafe { t.sigaltstack() };
+            (*stack, t.blocked_signals)
+        };
+
+        let mask_emu_during_handler = {
+            let mut m = action.mask() | mask_orig_emu;
             if !action.flags_retain().contains(SigActionFlags::SA_NODEFER) {
                 m.add(sig)
             }
             m
         };
-        thread.protected.borrow_mut(&host_lock.root).blocked_signals = handler_mask;
+        thread.protected.borrow_mut(&host_lock.root).blocked_signals = mask_emu_during_handler;
 
         if action.flags_retain().contains(SigActionFlags::SA_RESETHAND) {
             // SAFETY: The handler (`SigDfl`) is sound.
@@ -116,35 +166,35 @@ pub fn process_signals(mut ucontext: Option<&mut libc::ucontext_t>) -> bool {
             restartable = false;
         }
 
-        // SAFETY: Pointers in the sigaltstack should are valid in the managed process.
-        let ss_original = *unsafe { thread.protected.borrow(&host_lock.root).sigaltstack() };
-        if action.flags_retain().contains(SigActionFlags::SA_ONSTACK)
-            && !ss_original
+        let sigaltstack_orig_native = if action.flags_retain().contains(SigActionFlags::SA_ONSTACK)
+            && !sigaltstack_orig_emu
                 .flags_retain()
                 .contains(SigAltStackFlags::SS_DISABLE)
         {
             // Call the handler on the configured stack.
 
-            if ss_original
+            if sigaltstack_orig_emu
                 .flags_retain()
                 .contains(SigAltStackFlags::SS_ONSTACK)
             {
+                // The specified stack is already in use.
+                //
                 // Documentation is unclear what should happen, but switching to
                 // the already-in-use stack would almost certainly go badly.
                 panic!("Alternate stack already in use.")
             }
 
             // Update the signal-stack configuration while the handler is being run.
-            let ss_during_handler = if ss_original
+            let sigaltstack_emu_during_handler = if sigaltstack_orig_emu
                 .flags_retain()
                 .contains(SigAltStackFlags::SS_AUTODISARM)
             {
                 stack_t::new(core::ptr::null_mut(), SigAltStackFlags::SS_DISABLE, 0)
             } else {
                 stack_t::new(
-                    ss_original.sp(),
-                    ss_original.flags_retain() | SigAltStackFlags::SS_ONSTACK,
-                    ss_original.size(),
+                    sigaltstack_orig_emu.sp(),
+                    sigaltstack_orig_emu.flags_retain() | SigAltStackFlags::SS_ONSTACK,
+                    sigaltstack_orig_emu.size(),
                 )
             };
             // SAFETY: stack pointer in the assigned stack (if any) is valid in
@@ -153,105 +203,106 @@ pub fn process_signals(mut ucontext: Option<&mut libc::ucontext_t>) -> bool {
                 *thread
                     .protected
                     .borrow_mut(&host_lock.root)
-                    .sigaltstack_mut() = ss_during_handler
+                    .sigaltstack_mut() = sigaltstack_emu_during_handler
             };
 
-            // Set up a context that uses the configured signal stack.
-            let mut orig_ctx: libc::ucontext_t = unsafe { core::mem::zeroed() };
-            let mut handler_ctx: libc::ucontext_t = unsafe { core::mem::zeroed() };
-            unsafe { libc::getcontext(&mut handler_ctx) };
-            handler_ctx.uc_link = &mut orig_ctx;
-            handler_ctx.uc_stack.ss_sp = ss_original.ss_sp;
-            handler_ctx.uc_stack.ss_size = ss_original.ss_size.try_into().unwrap();
-            // If a context was provided by the caller, we pass that through
-            // to the signal handler; it's the caller's responsibility to swap
-            // back to that context.
-            //
-            // Otherwise we pass the pre-stack-switch context we're creating
-            // here.  It'll be swapped-back-to when `swapcontext` returns.
-            let mut ctx = match &mut ucontext {
-                Some(c) => c,
-                None => &mut orig_ctx,
-            };
-            // We have to transmute this function to the signature expected by
-            // `makecontext`.
-            let func = unsafe {
-                core::mem::transmute::<
-                    unsafe extern "C" fn(
-                        *const sigaction,
-                        Signal,
-                        *mut siginfo_t,
-                        *mut libc::ucontext_t,
-                    ),
-                    extern "C" fn(),
-                >(call_signal_handler)
-            };
+            let mut sigaltstack_orig_native =
+                stack_t::new(core::ptr::null_mut(), SigAltStackFlags::empty(), 0);
+            // Set the *native* sigaltstack to the *emulated* sigaltstack,
+            // letting the kernel do the stack switch for us.
             unsafe {
-                libc::makecontext(
-                    &mut handler_ctx,
-                    func,
-                    4,
-                    &action as *const _,
-                    sig,
-                    &mut siginfo as *mut _,
-                    &mut ctx as *mut _,
+                linux_api::signal::sigaltstack(
+                    Some(&stack_t::new(
+                        sigaltstack_orig_emu.sp(),
+                        SigAltStackFlags::SS_AUTODISARM,
+                        sigaltstack_orig_emu.size(),
+                    )),
+                    Some(&mut sigaltstack_orig_native),
                 )
-            };
-
-            // Call the handler on the configured signal stack.
-            drop(host_lock);
-            drop(host);
-            drop(process);
-            drop(thread);
-
-            if unsafe { libc::swapcontext(&mut orig_ctx, &handler_ctx) } != 0 {
-                panic!("libc::swapcontext");
             }
-
-            host = crate::global_host_shmem::get();
-            process = crate::global_process_shmem::get();
-            thread = crate::tls_thread_shmem::get();
-            host_lock = host.protected().lock();
-
-            // SAFETY: Pointers are valid in managed process.
-            unsafe {
-                *thread
-                    .protected
-                    .borrow_mut(&host_lock.root)
-                    .sigaltstack_mut() = ss_original
-            };
+            .unwrap();
+            Some(sigaltstack_orig_native)
         } else {
-            let ctx: *mut libc::ucontext_t = ucontext
-                .as_mut()
-                .map(|c| *c as *mut _)
-                .unwrap_or(core::ptr::null_mut());
-            if ctx.is_null() {
-                // To handle this case we might be able to use `makecontext`
-                // and `swapcontext` as in the sigaltstack case, but we'd need
-                // a stack to use for the new context. We could try to partition
-                // the current stack, but that's a bit tricky.
-                //
-                // So far we don't know of any real-world cases that get here
-                // and actually dereference the context in the handler.
-                debug!("Passing NULL ucontext_t to handler for signal {sig:?}");
-            }
+            None
+        };
 
-            // Call the handler on the configured signal stack.
-            drop(host_lock);
-            drop(host);
-            drop(process);
-            drop(thread);
+        // Package up what our native signal handler will need to invoke the
+        // managed code syscall handler for the emulated signal.
+        let prev = SIGUSR1_SIGINFO.get().replace(Some(Sigusr1Info {
+            native_sigaltstack: sigaltstack_orig_native,
+            siginfo,
+            action,
+            ctx: ucontext,
+        }));
+        assert!(prev.is_none());
 
-            unsafe { call_signal_handler(&action, sig, &mut siginfo, ctx) };
+        // Drop locks and references, since the handler could do ~anything,
+        // including exit, recurse to here again, or `swapcontext` and never
+        // return.
+        drop(host_lock);
+        drop(host);
+        drop(process);
+        drop(thread);
 
-            host = crate::global_host_shmem::get();
-            process = crate::global_process_shmem::get();
-            thread = crate::tls_thread_shmem::get();
-            host_lock = host.protected().lock();
+        // We raise a signal natively to let the kernel create a ucontext for us
+        // and switch stacks. We invoke the managed code's signal handler from our
+        // signal handler.
+        //
+        // We could potentially skip this if the managed code signal handler isn't
+        // configured to switch stacks and either doesn't need a context or we already
+        // have one. But that'd mean another code path to maintain, and signal
+        // handling shouldn't be on the hot path of performance for most
+        // applications. (We could also consider implementing the stack switch
+        // and/or creation of a ucontext ourselves, but again that would be more
+        // complex code to maintain).
+
+        // We install the signal handler every time, so that we can decide
+        // whether to set `SA_ONSTACK` or not based on whether we actually need
+        // to switch stacks.
+        let flags = SigActionFlags::SA_SIGINFO
+            | SigActionFlags::SA_NODEFER
+            | SigActionFlags::SA_RESETHAND
+            | if sigaltstack_orig_native.is_some() {
+                SigActionFlags::SA_ONSTACK
+            } else {
+                SigActionFlags::empty()
+            };
+        // SAFETY: `handle_sigusr1` is sound, if the handler we're calling is.
+        unsafe {
+            linux_api::signal::rt_sigaction(
+                Signal::SIGUSR1,
+                &sigaction::new_with_default_restorer(
+                    SignalHandler::Action(handle_sigusr1),
+                    flags,
+                    sigset_t::EMPTY,
+                ),
+                None,
+            )
         }
+        .unwrap();
 
-        // Restore mask
-        thread.protected.borrow_mut(&host_lock.root).blocked_signals = blocked_signals;
+        let pid = rustix::process::getpid();
+        let tid = rustix::thread::gettid();
+        linux_api::signal::tgkill(pid.as_raw_nonzero(), tid.as_raw_nonzero(), Signal::SIGUSR1)
+            .unwrap();
+
+        // Reacquire locks and references.
+        host = crate::global_host_shmem::get();
+        process = crate::global_process_shmem::get();
+        thread = crate::tls_thread_shmem::get();
+        host_lock = host.protected().lock();
+
+        // Restore mask and stack
+        {
+            let mut thread = thread.protected.borrow_mut(&host_lock.root);
+            thread.blocked_signals = mask_orig_emu;
+            // SAFETY: Pointers are valid in managed process.
+            unsafe { *thread.sigaltstack_mut() = sigaltstack_orig_emu };
+            if let Some(s) = sigaltstack_orig_native {
+                // SAFETY: We're restoring the previous, presumably valid, stack.
+                unsafe { linux_api::signal::sigaltstack(Some(&s), None) }.unwrap();
+            }
+        }
     }
     restartable
 }
@@ -288,9 +339,9 @@ extern "C" fn handle_hardware_error_signal(
         }
     }
 
-    let ctx = ctx.cast::<libc::ucontext_t>();
-    let ctx = unsafe { ctx.as_mut() };
-    process_signals(ctx);
+    let ctx = ctx.cast::<ucontext>();
+    // SAFETY: The kernel should have given us a valid `ucontext` here.
+    unsafe { process_signals(ctx) };
 
     global_allow_native_syscalls::swap(old_native_syscall_flag);
 }
@@ -336,11 +387,21 @@ mod export {
     ///
     /// # Safety
     ///
-    /// FIXME
+    /// `ucontext` must be dereferenceable if not NULL.
+    ///
+    /// Configured handlers for all pending unblocked signals must be safe to call. (Which
+    /// we basically can't ensure).
     #[no_mangle]
     pub unsafe extern "C" fn shim_process_signals(ucontext: *mut libc::ucontext_t) -> bool {
-        let ucontext = unsafe { ucontext.as_mut() };
-        process_signals(ucontext)
+        // `libc::ucontext_t` appears to be safe to cast to a kernel `ucontext`; as
+        // verified experimentally and by manual inspection of the definitions.
+        //
+        // The libc definition has some extra fields at the end, but we're
+        // careful not to copy the ucontext so they shouldn't hurt anything.
+        let ucontext: *mut ucontext = ucontext.cast();
+
+        // SAFETY: ensured by caller.
+        unsafe { process_signals(ucontext) }
     }
 
     /// Install signal handlers for signals that can be generated by hardware errors.
