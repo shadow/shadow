@@ -528,22 +528,16 @@ where
     /// The returned wrapper can't be sent to or shared with other threads,
     /// since the underlying storage is invalidated when the originating thread
     /// calls [`ThreadLocalStorage::unregister_current_thread`].
-    pub fn get(&self) -> TLSVarRef<T> {
+    pub fn get<'var>(&'var self) -> TLSVarRef<'tls, 'var, T, F> {
         // SAFETY: This offset into TLS storage is a valid instance of
         // `ShimTlsVarStorage<T>`. We've ensured the correct size and alignment,
         // and the backing bytes have been initialized to 0.
-        unsafe {
-            TLSVarRef::new(
-                self.tls.current_thread_storage(),
-                *self.offset.force(),
-                &self.f,
-            )
-        }
+        unsafe { TLSVarRef::new(self) }
     }
 }
 
 /// A reference to a single thread's instance of a TLS variable [`ShimTlsVar`].
-pub struct TLSVarRef<'tls, 'var, T> {
+pub struct TLSVarRef<'tls, 'var, T, F: Fn() -> T> {
     storage: TlsOneThreadBackingStoreRef<'tls>,
     offset: usize,
 
@@ -554,28 +548,26 @@ pub struct TLSVarRef<'tls, 'var, T> {
     // that's uninitialized, and a no-op in "standard" usage since `TLSVar`s
     // generally have a `'static` lifetime, but let's avoid a potential
     // surprising lifetime extension that we shouldn't need.
-    _phantom_lifetime: core::marker::PhantomData<&'var ()>,
+    _phantom_lifetime: core::marker::PhantomData<&'var ShimTlsVar<'tls, T, F>>,
 }
 // Double check `!Send` and `!Sync`.
-static_assertions::assert_not_impl_any!(TLSVarRef<'static, 'static, ()>: Send, Sync);
+static_assertions::assert_not_impl_any!(TLSVarRef<'static, 'static, (), fn() -> ()>: Send, Sync);
 
-impl<'tls, 'var, T> TLSVarRef<'tls, 'var, T> {
+impl<'tls, 'var, T, F: Fn() -> T> TLSVarRef<'tls, 'var, T, F> {
     /// # Safety
     ///
     /// There must be an initialized instance of `ShimTlsVarStorage<T> at the
     /// address of `&storage.bytes[offset]`.
-    unsafe fn new(
-        storage: TlsOneThreadBackingStoreRef<'tls>,
-        offset: usize,
-        initializer: impl FnOnce() -> T,
-    ) -> Self {
+    unsafe fn new(var: &'var ShimTlsVar<'tls, T, F>) -> Self {
+        let storage = var.tls.current_thread_storage();
+        let offset = *var.offset.force();
         let this = Self {
             storage,
             offset,
             _phantom: PhantomData,
             _phantom_lifetime: PhantomData,
         };
-        this.var_storage().ensure_init(initializer);
+        this.var_storage().ensure_init(&var.f);
         this
     }
 
@@ -602,7 +594,7 @@ impl<'tls, 'var, T> TLSVarRef<'tls, 'var, T> {
     }
 }
 
-impl<'tls, 'var, T> Deref for TLSVarRef<'tls, 'var, T> {
+impl<'tls, 'var, T, F: Fn() -> T> Deref for TLSVarRef<'tls, 'var, T, F> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
