@@ -6,10 +6,12 @@ use core::ffi::CStr;
 
 use crate::tls::ShimTlsVar;
 
+use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::{Serializer, ShMemBlockAlias, ShMemBlockSerialized};
+use tls::ThreadLocalStorage;
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scmutex::SelfContainedMutex;
 
@@ -24,10 +26,11 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-mod shimlogger;
-pub use shimlogger::export as shimlogger_export;
+pub mod mmap_box;
+pub mod shimlogger;
+pub mod tls;
 
-mod tls;
+pub use shimlogger::export as shimlogger_export;
 
 pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
@@ -36,7 +39,8 @@ pub fn simtime() -> Option<SimulationTime> {
 mod global_allow_native_syscalls {
     use super::*;
 
-    static ALLOW_NATIVE_SYSCALLS: ShimTlsVar<Cell<bool>> = ShimTlsVar::new(|| Cell::new(false));
+    static ALLOW_NATIVE_SYSCALLS: ShimTlsVar<Cell<bool>> =
+        ShimTlsVar::new(&SHIM_TLS, || Cell::new(false));
 
     pub fn get() -> bool {
         ALLOW_NATIVE_SYSCALLS.get().get()
@@ -55,7 +59,7 @@ mod tls_thread_signal_stack {
     use super::*;
 
     static THREAD_SIGNAL_STACK: ShimTlsVar<Cell<*mut core::ffi::c_void>> =
-        ShimTlsVar::new(|| Cell::new(core::ptr::null_mut()));
+        ShimTlsVar::new(&SHIM_TLS, || Cell::new(core::ptr::null_mut()));
 
     // Shouldn't need to make this very large, but needs to be big enough to run the
     // managed process's signal handlers as well - possibly recursively.
@@ -157,7 +161,7 @@ mod tls_thread_signal_stack {
 mod tls_ipc {
     use super::*;
     static IPC_DATA_BLOCK: ShimTlsVar<RefCell<Option<ShMemBlockAlias<IPCData>>>> =
-        ShimTlsVar::new(|| RefCell::new(None));
+        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
 
     // Panics if this thread's IPC hasn't been initialized yet.
     pub fn with<O>(f: impl FnOnce(&IPCData) -> O) -> O {
@@ -200,7 +204,7 @@ mod tls_thread_shmem {
     use super::*;
 
     static THREAD_SHMEM: ShimTlsVar<RefCell<Option<ShMemBlockAlias<ThreadShmem>>>> =
-        ShimTlsVar::new(|| RefCell::new(None));
+        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
 
     // Panics if not initialized yet.
     pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
@@ -363,16 +367,44 @@ extern crate shadow_shim_helper_rs;
 extern crate shadow_shmem;
 extern crate shadow_tsc;
 
-fn load() {
-    // First ensure thread local storage is initialized.
-    // TODO: Make the preferred mode configurable at runtime.
-    static TLS_INIT_DONE: LazyLock<()> = LazyLock::const_new(||
-        // SAFETY: LazyLock ensures this is only called once.
-        unsafe { tls::global_preferred_mode::set(tls::Mode::Native) });
-    TLS_INIT_DONE.force();
+/// Global instance of thread local storage for use in the shim.
+///
+/// SAFETY: We ensure that every thread unregisters itself before exiting,
+/// via [`release_and_exit_current_thread`].
+static SHIM_TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(tls::Mode::Native) };
 
+/// Release this thread's shim thread local storage and exit the thread.
+///
+/// Should be called by every thread that accesses thread local storage.
+///
+/// Panics if there are still any live references to this thread's [`ShimTlsVar`]s.
+///
+/// # Safety
+///
+/// In the case that this function somehow panics, caller must not
+/// access thread local storage again from the current thread, e.g.
+/// using `std::panic::catch_unwind` or a custom panic hook.
+pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
+    // Block all signals, to ensure a signal handler can't run and attempt to
+    // access thread local storage.
+    rt_sigprocmask(
+        SigProcMaskAction::SIG_BLOCK,
+        &linux_api::signal::sigset_t::FULL,
+        None,
+    )
+    .unwrap();
+
+    // SAFETY: No code can access thread local storage in between deregistration
+    // and exit, unless `unregister_curren_thread` itself panics.
+    unsafe { SHIM_TLS.unregister_current_thread() }
+
+    linux_api::exit::exit_raw(exit_status).unwrap();
+    unreachable!()
+}
+
+fn load() {
     static STARTED_THREAD_INIT: ShimTlsVar<LazyLock<()>> =
-        ShimTlsVar::new(|| LazyLock::const_new(|| ()));
+        ShimTlsVar::new(&SHIM_TLS, || LazyLock::const_new(|| ()));
     if STARTED_THREAD_INIT.get().initd() {
         // Avoid recursion in initialization.
         //
@@ -384,7 +416,7 @@ fn load() {
 
     // Once-per-thread initialization. We use a `LazyLock` object to cheaply
     // ensure this runs at most once.
-    static THREAD_INIT: ShimTlsVar<LazyLock<()>> = ShimTlsVar::new(|| {
+    static THREAD_INIT: ShimTlsVar<LazyLock<()>> = ShimTlsVar::new(&SHIM_TLS, || {
         // Flag to check whether we've initialized *any* thread in the current
         // process.  The first thread initialized in the process has to do some
         // extra initialization, but isn't quite a pure superset of later
@@ -563,6 +595,18 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn _shim_load() {
         load();
+    }
+
+    /// Should be used to exit every thread in the shim.
+    ///
+    /// # Safety
+    ///
+    /// In the case that this function somehow panics, caller must not
+    /// access thread local storage again from the current thread, e.g.
+    /// using `std::panic::catch_unwind` or a custom panic hook.
+    #[no_mangle]
+    pub unsafe extern "C" fn shim_release_and_exit_current_thread(status: i32) {
+        unsafe { release_and_exit_current_thread(status) }
     }
 
     /// # Safety

@@ -50,6 +50,27 @@ mod lazylock_tests {
         })
     }
 
+    /// Test the `deref` method, which isn't testable under loom.
+    #[cfg(not(loom))]
+    #[test]
+    fn test_multithread_deref() {
+        let my_static = sync::Arc::new(LazyLock::new(|| 42));
+        let nthreads = 100;
+
+        let threads: Vec<_> = (0..nthreads)
+            .map(|_| {
+                let my_static = my_static.clone();
+                sync::thread::spawn(move || {
+                    assert_eq!(**my_static, 42);
+                })
+            })
+            .collect();
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
+    }
+
     #[cfg(not(loom))]
     #[test]
     fn test_multithread_slow_init() {

@@ -30,7 +30,7 @@ where
     refcounts: [Cell<usize>; N],
     build_hasher: H,
 }
-/// Override default of `UnsafeCell` and `Cell` not being `Sync`.  We
+/// Override default of `UnsafeCell`, `Cell`, and `V` not being `Sync`.  We
 /// synchronize access to these (if partly by requiring users to guarantee no
 /// parallel access to a given key from multiple threads).
 /// Likewise `V` only needs to be `Send`.
@@ -200,7 +200,11 @@ where
     /// The value at `key`, if any, must have been inserted by the current thread.
     pub unsafe fn remove(&self, key: NonZeroUsize) -> Option<V> {
         let idx = self.idx(key)?;
-        assert_eq!(self.refcounts[idx].get(), 0);
+        assert_eq!(
+            self.refcounts[idx].get(),
+            0,
+            "Removed key while references still held: {key:?}"
+        );
         let value = self.values[idx].get_mut().with(|value| {
             let value = unsafe { &mut *value };
             unsafe { value.assume_init_read() }
@@ -219,6 +223,12 @@ impl<const N: usize, V, H> AtomicTlsMap<N, V, H>
 where
     H: BuildHasher + Default,
 {
+    // This `inline` is important when allocating large instances, since
+    // otherwise the compiler can't avoid create a temporary copy on the stack,
+    // which might not fit.
+    //
+    // See https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
+    #[inline]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::new_with_hasher(Default::default())

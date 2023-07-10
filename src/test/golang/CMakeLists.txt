@@ -91,4 +91,6 @@ add_shadow_tests(
     ARGS
       --strace-logging-mode off
     PROPERTIES
+      # This test can take a bit longer in debug builds
+      TIMEOUT 40
       LABELS golang)

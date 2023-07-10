@@ -28,8 +28,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("ShimShmem.*")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::*;")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::*;")
-        .blocklist_type("ShimThreadLocalStorage")
-        .raw_line("use crate::tls::ShimThreadLocalStorage;")
+        .blocklist_type("TlsOneThreadStorageAllocation")
+        .raw_line("use crate::tls::TlsOneThreadStorageAllocation;")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.
@@ -76,7 +76,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 // Manual declaration above
                 "shim_api_syscall".into(),
             ],
-            include: vec!["ShimThreadLocalStorage".into()],
+            include: vec!["TlsOneThreadStorageAllocation".into()],
             ..base_config.export.clone()
         },
         layout: cbindgen::LayoutConfig {

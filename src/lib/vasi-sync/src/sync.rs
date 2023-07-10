@@ -275,6 +275,15 @@ impl<T> UnsafeCell<T> {
     pub fn get(&self) -> ConstPtr<T> {
         ConstPtr(self.0.get())
     }
+
+    /// This is analogous to `core::UnsafeCell::get` in that it returns
+    /// a raw pointer instead of an object.
+    ///
+    /// We can't provide this method under loom without giving up some of loom's
+    /// analysis.
+    pub fn untracked_get(&self) -> *mut T {
+        self.0.get()
+    }
 }
 #[cfg(loom)]
 #[derive(Debug)]

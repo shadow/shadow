@@ -221,7 +221,8 @@ static char* _regularfile_getAbsolutePath(RegularFile* dir, const char* pathname
 #define CHECK_FLAG(flag)                                                                           \
     if (flags & flag) {                                                                            \
         if (!flag_str) {                                                                           \
-            asprintf(&flag_str, #flag);                                                            \
+            int rv = asprintf(&flag_str, #flag);                                                   \
+            utility_alwaysAssert(rv >= 0);                                                         \
         } else {                                                                                   \
             char* str = _regularfile_getConcatStr(flag_str, '|', #flag);                           \
             free(flag_str);                                                                        \
@@ -248,7 +249,8 @@ static void _regularfile_print_flags(int flags) {
     CHECK_FLAG(O_TMPFILE);
     CHECK_FLAG(O_TRUNC);
     if (!flag_str) {
-        asprintf(&flag_str, "0");
+        int rv = asprintf(&flag_str, "0");
+        utility_alwaysAssert(rv >= 0);
     }
     trace("Found flags: %s", flag_str);
     if (flag_str) {
