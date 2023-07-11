@@ -8,6 +8,10 @@
 //! At that point `logger` can be merged into this crate and simplified.
 //!
 //! TODO: This crate should be `no_std`.
+
+// https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 
