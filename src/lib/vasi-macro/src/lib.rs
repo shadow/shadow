@@ -1,3 +1,6 @@
+// https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
