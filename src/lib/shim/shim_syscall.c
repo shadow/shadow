@@ -25,8 +25,8 @@
 // The label inside the inline assembly causes a link error if this gets inlined,
 // due to the assembler then seeing the same label multiple times.
 // TODO: is there a way to generate the label in a way that avoids this?
-static long __attribute__ ((noinline)) _shim_clone(const ucontext_t* ctx, int32_t flags, void* child_stack, pid_t* ptid,
-                        pid_t* ctid, uint64_t newtls) {
+static long __attribute__((noinline)) _shim_clone(ucontext_t* ctx, int32_t flags, void* child_stack,
+                                                  pid_t* ptid, pid_t* ctid, uint64_t newtls) {
     if (!child_stack) {
         panic("clone without a new stack not implemented");
     }
@@ -112,7 +112,7 @@ static long __attribute__ ((noinline)) _shim_clone(const ucontext_t* ctx, int32_
     return rv;
 }
 
-static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
+static long _shim_native_syscallv(ucontext_t* ctx, long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
     long arg3 = va_arg(args, long);
@@ -153,7 +153,7 @@ static long _shim_native_syscallv(const ucontext_t* ctx, long n, va_list args) {
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.
-long shim_native_syscall(const ucontext_t* ctx, long n, ...) {
+long shim_native_syscall(ucontext_t* ctx, long n, ...) {
     va_list args;
     va_start(args, n);
     long rv = _shim_native_syscallv(ctx, n, args);
@@ -161,7 +161,7 @@ long shim_native_syscall(const ucontext_t* ctx, long n, ...) {
     return rv;
 }
 
-static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
+static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
                                                const ShimEventToShadow* syscall_event) {
 
     const struct IPCData* ipc = shim_thisThreadEventIPC();
@@ -193,9 +193,7 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
                 // Process any signals, which may have resulted from the syscall itself
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
-                //
-                // FIXME: is there a reason we don't pass `ctx` here?
-                const bool allSigactionsHadSaRestart = shim_process_signals(NULL);
+                const bool allSigactionsHadSaRestart = shim_process_signals(ctx);
 
                 // Check whether a blocking syscall was interrupted by a signal.
                 // Note that handlers don't usually return -EINTR directly;
@@ -292,7 +290,7 @@ static SysCallReg _shim_emulated_syscall_event(const ucontext_t* ctx,
     }
 }
 
-long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args) {
+long shim_emulated_syscallv(ucontext_t* ctx, long n, va_list args) {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     SysCallArgs ev_args;
@@ -311,7 +309,7 @@ long shim_emulated_syscallv(const ucontext_t* ctx, long n, va_list args) {
     return retval.as_i64;
 }
 
-long shim_emulated_syscall(const ucontext_t* ctx, long n, ...) {
+long shim_emulated_syscall(ucontext_t* ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
     long rv = shim_emulated_syscallv(ctx, n, args);
@@ -319,7 +317,7 @@ long shim_emulated_syscall(const ucontext_t* ctx, long n, ...) {
     return rv;
 }
 
-long shim_syscallv(const ucontext_t* ctx, long n, va_list args) {
+long shim_syscallv(ucontext_t* ctx, long n, va_list args) {
     shim_ensure_init();
 
     long rv;
@@ -346,7 +344,7 @@ long shim_syscallv(const ucontext_t* ctx, long n, va_list args) {
     return rv;
 }
 
-long shim_syscall(const ucontext_t* ctx, long n, ...) {
+long shim_syscall(ucontext_t* ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
     long rv = shim_syscallv(ctx, n, args);
