@@ -6,17 +6,12 @@ add_linux_tests(BASENAME clone COMMAND test_clone)
 
 add_shadow_tests(
     BASENAME clone
-    # Shim-side logging and strace-logging use libc functions that assume native
-    # thread-local-storage is set up. We disable most logging to try to avoid resulting
-    # segfaults.
-    LOGLEVEL warning
+    # Shim-side strace-logging use libc functions that assume native
+    # thread-local-storage is set up. It *usually* works in practice, but is a
+    # potential source of hard-to-debug errors.
+    #
+    # See https://github.com/shadow/shadow/issues/2919
     ARGS --strace-logging-mode=off
-    PROPERTIES
-        # There are nonetheless stills sometimes segfaults when running in CI,
-        # but I haven't been able to reproduce them locally.
-        # https://github.com/shadow/shadow/issues/1559
-        LABELS flaky
-        CONFIGURATIONS extra
 )
 
 # The clone test exercises some corner cases in memory management, particularly
@@ -24,15 +19,10 @@ add_shadow_tests(
 # the memory manager (really the MemoryMapper) enabled.
 add_shadow_tests(
     BASENAME clone-nomm
-    # Shim-side logging and strace-logging use libc functions that assume native
-    # thread-local-storage is set up. We disable most logging to try to avoid resulting
-    # segfaults.
-    LOGLEVEL warning
+    # Shim-side strace-logging use libc functions that assume native
+    # thread-local-storage is set up. It *usually* works in practice, but is a
+    # potential source of hard-to-debug errors.
+    #
+    # See https://github.com/shadow/shadow/issues/2919
     ARGS --strace-logging-mode=off
-    PROPERTIES
-        # There are nonetheless stills sometimes segfaults when running in CI,
-        # but I haven't been able to reproduce them locally.
-        # https://github.com/shadow/shadow/issues/1559
-        LABELS flaky
-        CONFIGURATIONS extra
 )
