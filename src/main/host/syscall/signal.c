@@ -264,8 +264,9 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
     UntypedForeignPtr old_ss_ptr = args->args[1].as_ptr;
     trace("sigaltstack(%p, %p)", (void*)ss_ptr.val, (void*)old_ss_ptr.val);
 
-    stack_t old_ss = shimshmem_getSigAltStack(host_getShimShmemLock(_syscallhandler_getHost(sys)),
-                                              thread_sharedMem(_syscallhandler_getThread(sys)));
+    linux_stack_t old_ss =
+        shimshmem_getSigAltStack(host_getShimShmemLock(_syscallhandler_getHost(sys)),
+                                 thread_sharedMem(_syscallhandler_getThread(sys)));
 
     if (ss_ptr.val) {
         if (old_ss.ss_flags & SS_ONSTACK) {
@@ -274,7 +275,7 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
             return syscallreturn_makeDoneErrno(EPERM);
         }
 
-        stack_t new_ss;
+        linux_stack_t new_ss;
         int rv = process_readPtr(_syscallhandler_getProcess(sys), &new_ss, ss_ptr, sizeof(new_ss));
         if (rv != 0) {
             return syscallreturn_makeDoneErrno(-rv);
@@ -283,7 +284,7 @@ SyscallReturn syscallhandler_sigaltstack(SysCallHandler* sys, const SysCallArgs*
             // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
             // as SS_DISABLE.  In this case, the kernel ignores any other flags
             // in ss.ss_flags and the remaining fields in ss.
-            new_ss = (stack_t){.ss_flags = SS_DISABLE};
+            new_ss = (linux_stack_t){.ss_flags = SS_DISABLE};
         }
         int unrecognized_flags = new_ss.ss_flags & ~(SS_DISABLE | LINUX_SS_AUTODISARM);
         if (unrecognized_flags) {

@@ -1104,6 +1104,10 @@ impl sigaction {
         SigActionFlags::from_bits_retain(self.0.lsa_flags)
     }
 
+    pub fn mask(&self) -> sigset_t {
+        sigset_t::wrap(self.0.lsa_mask)
+    }
+
     /// # Safety
     ///
     /// The functions in `SignalHandler::Action` or `SignalHandler::Handler` are
@@ -1392,6 +1396,28 @@ pub use bindings::linux_stack_t;
 #[allow(non_camel_case_types)]
 pub type stack_t = linux_stack_t;
 
+impl stack_t {
+    pub fn new(sp: *mut core::ffi::c_void, flags: SigAltStackFlags, size: usize) -> Self {
+        Self {
+            ss_sp: sp,
+            ss_flags: flags.bits(),
+            ss_size: size.try_into().unwrap(),
+        }
+    }
+
+    pub fn flags_retain(&self) -> SigAltStackFlags {
+        SigAltStackFlags::from_bits_retain(self.ss_flags)
+    }
+
+    pub fn sp(&self) -> *mut core::ffi::c_void {
+        self.ss_sp
+    }
+
+    pub fn size(&self) -> usize {
+        self.ss_size.try_into().unwrap()
+    }
+}
+
 // bindgen fails to bind this one.
 // Copied from linux's include/uapi/linux/signal.h.
 pub const LINUX_SS_AUTODISARM: u32 = 1 << 31;
@@ -1403,6 +1429,8 @@ bitflags::bitflags! {
     pub struct SigAltStackFlags: i32 {
         // The raw u32 value wraps around to a negative i32.
         const SS_AUTODISARM = i32_from_u32_allowing_wraparound(LINUX_SS_AUTODISARM);
+        const SS_ONSTACK = const_conversions::i32_from_u32(bindings::LINUX_SS_ONSTACK);
+        const SS_DISABLE= const_conversions::i32_from_u32(bindings::LINUX_SS_DISABLE);
     }
 }
 // SAFETY: bitflags guarantees the internal representation is effectively a i32.

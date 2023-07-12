@@ -1,5 +1,4 @@
-use libc::stack_t;
-use linux_api::signal::{sigaction, siginfo_t, sigset_t, Signal};
+use linux_api::signal::{sigaction, siginfo_t, sigset_t, stack_t, Signal};
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
@@ -377,11 +376,28 @@ unsafe impl Send for StackWrapper {}
 // except from the original virtual address space: in the shim.
 unsafe impl VirtualAddressSpaceIndependent for StackWrapper {}
 
+/// Take the next unblocked thread- *or* process-directed signal.
+pub fn take_pending_unblocked_signal(
+    lock: &HostShmemProtected,
+    process: &ProcessShmem,
+    thread: &ThreadShmem,
+) -> Option<(Signal, siginfo_t)> {
+    let mut thread_protected = thread.protected.borrow_mut(&lock.root);
+    thread_protected
+        .take_pending_unblocked_signal()
+        .or_else(|| {
+            let mut process_protected = process.protected.borrow_mut(&lock.root);
+            process_protected.take_pending_unblocked_signal(&thread_protected)
+        })
+}
+
 pub mod export {
     use std::sync::atomic::Ordering;
 
     use bytemuck::TransparentWrapper;
-    use linux_api::signal::{linux_sigaction, linux_siginfo_t, linux_sigset_t, siginfo_t};
+    use linux_api::signal::{
+        linux_sigaction, linux_siginfo_t, linux_sigset_t, linux_stack_t, siginfo_t,
+    };
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
@@ -394,19 +410,6 @@ pub mod export {
     pub type ShimShmemHostLock = HostShmemProtected;
     pub type ShimShmemProcess = ProcessShmem;
     pub type ShimShmemThread = ThreadShmem;
-
-    #[no_mangle]
-    pub extern "C" fn shimshmemhost_size() -> usize {
-        std::mem::size_of::<HostShmem>()
-    }
-
-    /// # Safety
-    ///
-    /// `host_mem` must be valid, and no references to `host_mem` may exist.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmemhost_destroy(host_mem: *mut ShimShmemHost) {
-        unsafe { std::ptr::drop_in_place(host_mem) };
-    }
 
     /// # Safety
     ///
@@ -550,82 +553,6 @@ pub mod export {
         &process_mem.host_shmem
     }
 
-    /// Get the process's pending signal set.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessPendingSignals(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-    ) -> linux_sigset_t {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = process_mem.protected.borrow(&lock.root);
-        sigset_t::peel(protected.pending_signals)
-    }
-
-    /// Set the process's pending signal set.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setProcessPendingSignals(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        s: linux_sigset_t,
-    ) {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        protected.pending_signals = sigset_t::wrap(s);
-    }
-
-    /// Get the siginfo for the given signal number. Only valid when the signal
-    /// is pending for the process.
-    ///
-    /// # Safety
-    ///
-    /// Pointers in siginfo_t are only valid in their original virtual address space.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessSiginfo(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        sig: i32,
-    ) -> linux_siginfo_t {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = process_mem.protected.borrow(&lock.root);
-        unsafe {
-            siginfo_t::peel(
-                *protected
-                    .pending_standard_siginfo(Signal::try_from(sig).unwrap())
-                    .unwrap(),
-            )
-        }
-    }
-
-    /// Set the siginfo for the given signal number.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setProcessSiginfo(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        sig: i32,
-        info: *const linux_siginfo_t,
-    ) {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = process_mem.protected.borrow_mut(&lock.root);
-        let info = unsafe { siginfo_t::wrap_ref_assume_initd(info.as_ref().unwrap()) };
-        protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
-    }
-
     /// # Safety
     ///
     /// Pointer args must be safely dereferenceable.
@@ -703,31 +630,6 @@ pub mod export {
         protected.pending_signals = sigset_t::wrap(s);
     }
 
-    /// Get the siginfo for the given signal number. Only valid when the signal
-    /// is pending for the signal.
-    ///
-    /// # Safety
-    ///
-    /// Pointers in the returned siginfo_t must not be dereferenced except from the managed
-    /// process's virtual address space.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getThreadSiginfo(
-        lock: *const ShimShmemHostLock,
-        thread: *const ShimShmemThread,
-        sig: i32,
-    ) -> linux_siginfo_t {
-        let thread_mem = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = thread_mem.protected.borrow(&lock.root);
-        unsafe {
-            siginfo_t::peel(
-                *protected
-                    .pending_standard_siginfo(Signal::try_from(sig).unwrap())
-                    .unwrap(),
-            )
-        }
-    }
-
     /// Set the siginfo for the given signal number.
     ///
     /// # Safety
@@ -787,7 +689,7 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_getSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-    ) -> stack_t {
+    ) -> linux_stack_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let protected = thread_mem.protected.borrow(&lock.root);
@@ -803,46 +705,12 @@ pub mod export {
     pub unsafe extern "C" fn shimshmem_setSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
-        stack: stack_t,
+        stack: linux_stack_t,
     ) {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         let lock = unsafe { lock.as_ref().unwrap() };
         let mut protected = thread_mem.protected.borrow_mut(&lock.root);
         *unsafe { protected.sigaltstack_mut() } = stack;
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_takePendingUnblockedSignal(
-        lock: *const ShimShmemHostLock,
-        process: *const ShimShmemProcess,
-        thread: *const ShimShmemThread,
-        info: *mut linux_siginfo_t,
-    ) -> i32 {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut thread_protected = thread.protected.borrow_mut(&lock.root);
-
-        let res = {
-            if let Some(r) = thread_protected.take_pending_unblocked_signal() {
-                Some(r)
-            } else {
-                let process = unsafe { process.as_ref().unwrap() };
-                let mut process_protected = process.protected.borrow_mut(&lock.root);
-                process_protected.take_pending_unblocked_signal(&thread_protected)
-            }
-        };
-
-        if let Some((signal, info_res)) = res {
-            if !info.is_null() {
-                unsafe { info.write(siginfo_t::peel(info_res)) };
-            }
-            signal.into()
-        } else {
-            0
-        }
     }
 
     /// # Safety

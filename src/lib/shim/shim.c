@@ -28,7 +28,6 @@
 #include "lib/shim/shim_api.h"
 #include "lib/shim/shim_rdtsc.h"
 #include "lib/shim/shim_seccomp.h"
-#include "lib/shim/shim_signals.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
