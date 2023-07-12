@@ -11,12 +11,6 @@ add_shadow_tests(
     # segfaults.
     LOGLEVEL warning
     ARGS --strace-logging-mode=off
-    PROPERTIES
-        # There are nonetheless stills sometimes segfaults when running in CI,
-        # but I haven't been able to reproduce them locally.
-        # https://github.com/shadow/shadow/issues/1559
-        LABELS flaky
-        CONFIGURATIONS extra
 )
 
 # The clone test exercises some corner cases in memory management, particularly
@@ -29,10 +23,4 @@ add_shadow_tests(
     # segfaults.
     LOGLEVEL warning
     ARGS --strace-logging-mode=off
-    PROPERTIES
-        # There are nonetheless stills sometimes segfaults when running in CI,
-        # but I haven't been able to reproduce them locally.
-        # https://github.com/shadow/shadow/issues/1559
-        LABELS flaky
-        CONFIGURATIONS extra
 )
