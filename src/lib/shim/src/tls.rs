@@ -96,7 +96,7 @@ pub const BYTES_PER_THREAD: usize = 1024;
 // Max threads for our slow TLS fallback mechanism.  We support recycling
 // storage of exited threads, so this is the max *concurrent* threads per
 // process.
-const TLS_FALLBACK_MAX_THREADS: usize = 1000;
+const TLS_FALLBACK_MAX_THREADS: usize = 100;
 
 /// An ELF thread pointer, as specified in
 /// <https://www.akkadia.org/drepper/tls.pdf)>
