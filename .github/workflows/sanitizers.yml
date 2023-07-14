@@ -23,15 +23,14 @@ jobs:
         # See https://github.com/shadow/shadow/issues/2166
         ref: ${{ github.event.pull_request.head.sha }}
 
-    # From https://github.com/rust-lang/miri#running-miri-on-ci
+    - name: Set Rust toolchain
+      run: ln -s ci/rust-toolchain-nightly.toml rust-toolchain.toml
+
+    # See https://github.com/rust-lang/miri#running-miri-on-ci
     - name: Install miri
       run: |
-          # Must be a version built with miri; check
-          # https://rust-lang.github.io/rustup-components-history/
-          TOOLCHAIN=nightly-2023-05-31
-          rustup toolchain install ${TOOLCHAIN} --component miri
-          rustup override set ${TOOLCHAIN}
-          cargo miri setup
+        rustup component add miri
+        cargo miri setup
 
     # No need to fully build shadow, but we need to run cmake to generate shd-config.h,
     # which is required for some of the rust modules' build scripts that compile C code.
@@ -65,6 +64,9 @@ jobs:
         # date with target branch before merging, anyway.
         # See https://github.com/shadow/shadow/issues/2166
         ref: ${{ github.event.pull_request.head.sha }}
+
+    - name: Set Rust toolchain
+      run: ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
 
     - name: Test
       run: |

@@ -1,5 +1,10 @@
-# This file overrides rustup's default toolchain, but can itself be overridden
-# locally if desired.
+# This file can be used to pin the rust toolchain to the "stable" version used by shadow CI.
+#
+# ```sh
+# ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
+# ```
+#
+# See
 # https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file
 #
 # After updating this version, it's a good idea to re-build the base images for
