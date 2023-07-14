@@ -169,6 +169,8 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
+# build the shim after shadow (cargo already parallelizes the build)
+add_dependencies(rust-shadow-shim-project rust-workspace-project)
 add_library(shadow-shim SHARED IMPORTED GLOBAL)
 add_dependencies(shadow-shim rust-shadow-shim-project)
 set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so)
