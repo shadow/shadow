@@ -134,7 +134,7 @@ version = "0.66.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.3",
  "cexpr",
  "clang-sys",
  "lazy_static",
@@ -159,9 +159,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.1"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6776fc96284a0bb647b615056fc496d1fe1644a7ab01829818a6d91cae888b84"
+checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
 
 [[package]]
 name = "bumpalo"
@@ -541,7 +541,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "libc",
- "rustix",
+ "rustix 0.38.4",
  "shadow-build-common",
  "va_list",
 ]
@@ -627,9 +627,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
+checksum = "443144c8cdadd93ebf52ddb4056d257f5b52c04d3c804e657d19eb73fc33668b"
 
 [[package]]
 name = "humantime"
@@ -662,7 +662,7 @@ version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eae7b9aee968036d54dce06cebaefd919e4472e753296daccd6d344e3e2df0c2"
 dependencies = [
- "hermit-abi 0.3.1",
+ "hermit-abi 0.3.2",
  "libc",
  "windows-sys",
 ]
@@ -673,9 +673,9 @@ version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
- "hermit-abi 0.3.1",
+ "hermit-abi 0.3.2",
  "io-lifetimes",
- "rustix",
+ "rustix 0.37.20",
  "windows-sys",
 ]
 
@@ -726,9 +726,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.146"
+version = "0.2.147"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f92be4933c13fd498862a9e02a3055f8a8d9c039ce33db97306fd5a6caa7f29b"
+checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 
 [[package]]
 name = "libloading"
@@ -744,7 +744,7 @@ dependencies = [
 name = "linux-api"
 version = "0.1.0"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.3",
  "bytemuck",
  "cbindgen",
  "linux-errno",
@@ -753,7 +753,7 @@ dependencies = [
  "memoffset 0.9.0",
  "naked-function",
  "num_enum",
- "rustix",
+ "rustix 0.38.4",
  "shadow-build-common",
  "shadow-pod",
  "static_assertions",
@@ -1318,6 +1318,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustix"
+version = "0.38.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a962918ea88d644592894bc6dc55acc6c0956488adcebbfb6e273506b7fd6e5"
+dependencies = [
+ "bitflags 2.3.3",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.3",
+ "windows-sys",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1463,7 +1476,7 @@ dependencies = [
  "atomic_refcell",
  "backtrace",
  "bindgen",
- "bitflags 2.3.1",
+ "bitflags 2.3.3",
  "bytemuck",
  "bytes",
  "cbindgen",
@@ -1524,7 +1537,7 @@ dependencies = [
  "log-c2rust",
  "logger",
  "num_enum",
- "rustix",
+ "rustix 0.38.4",
  "shadow-build-common",
  "shadow-pod",
  "shadow-shim-helper-rs",
@@ -1714,7 +1727,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall",
- "rustix",
+ "rustix 0.37.20",
  "windows-sys",
 ]
 
@@ -1733,7 +1746,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e6bf6f19e9f8ed8d4048dc22981458ebcf406d67e94cd422e5ecd73d63b3237"
 dependencies = [
- "rustix",
+ "rustix 0.37.20",
  "windows-sys",
 ]
 
@@ -1938,7 +1951,7 @@ dependencies = [
  "num_enum",
  "rand",
  "rustc-hash",
- "rustix",
+ "rustix 0.38.4",
  "static_assertions",
  "vasi",
 ]

@@ -22,7 +22,7 @@ linux-errno = "1.0.1"
 naked-function = "0.1.5"
 
 [dev-dependencies]
-rustix = { version = "0.37.20", features = ["thread", "process", "time"] }
+rustix = { version = "0.38.4", features = ["thread", "process", "time"] }
 
 [build-dependencies]
 shadow-build-common = { path = "../shadow-build-common" }

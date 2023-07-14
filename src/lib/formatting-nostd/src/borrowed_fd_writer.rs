@@ -14,7 +14,7 @@ use rustix::fd::BorrowedFd;
 /// # use formatting_nostd::BorrowedFdWriter;
 /// use rustix::fd::AsFd;
 /// use core::fmt::Write;
-/// let (_reader_fd, writer_fd) = rustix::io::pipe().unwrap();
+/// let (_reader_fd, writer_fd) = rustix::pipe::pipe().unwrap();
 /// let mut writer = BorrowedFdWriter::new(writer_fd.as_fd());
 /// let x = 42;
 /// write!(&mut writer, "{x}").unwrap();
@@ -58,7 +58,7 @@ mod test {
 
     #[test]
     fn test_write() {
-        let (reader, writer) = rustix::io::pipe().unwrap();
+        let (reader, writer) = rustix::pipe::pipe().unwrap();
 
         BorrowedFdWriter::new(writer.as_fd())
             .write_str("123")
