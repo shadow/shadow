@@ -25,9 +25,8 @@ jobs:
             body:
           `The Shadow CI environment has hard-coded versions of some tools. These versions should be periodically updated, and any compatibility issues fixed.
 
-          - rust default stable version (\`rust-toolchain.toml\`)
-          - rust nightly version for coverage builds (\`ci/container_scripts/install_extra_deps.sh\` — \`RUST_TOOLCHAIN\`)
-          - rust nightly version for miri tests (\`.github/workflows/sanitizers.yml\`)
+          - rust default stable version (\`ci/rust-toolchain-stable.toml\`)
+          - rust default nightly version (\`ci/rust-toolchain-nightly.toml\`)
           - python version for the python lint (\`.github/workflows/lint.yml\`)
           - tor and tgen versions for the tor tests (\`.github/workflows/extra_tests.yml\`)
 

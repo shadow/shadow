@@ -6,3 +6,6 @@
 **/.git
 **/build
 **/target
+# local selection of rust toolchain
+rust-toolchain.toml
+

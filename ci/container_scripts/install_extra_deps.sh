@@ -59,10 +59,12 @@ esac
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal
 source "$HOME/.cargo/env"
 
+# Pin the Rust toolchain to either our pinned nightly or stable version.
 if [ "${BUILDTYPE:-}" = coverage ]
 then
-  # Add a directory override, which overrides rust-toolchain.toml
-  rustup override set nightly-2023-05-31
+  ln -s ci/rust-toolchain-nightly.toml rust-toolchain.toml
+else
+  ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
 fi
 
 # This forces installation of the toolchain required in Shadow's
