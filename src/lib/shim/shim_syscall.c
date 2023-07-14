@@ -122,12 +122,7 @@ static long _shim_native_syscallv(ucontext_t* ctx, long n, va_list args) {
     long rv;
 
     if (n == SYS_clone) {
-        int32_t flags = (int32_t)arg1;
-        void* child_stack = (void*)arg2;
-        pid_t* ptid = (pid_t*)arg3;
-        pid_t* ctid = (pid_t*)arg4;
-        uint64_t newtls = arg5;
-        rv = _shim_clone(ctx, flags, child_stack, ptid, ctid, newtls);
+        panic("Shouldn't get here. Should have gone through ShimEventAddThreadReq");
     } else if (n == SYS_exit) {
         // This thread is exiting. Arrange for its thread-local-storage and
         // signal stack to be freed.
@@ -285,8 +280,14 @@ static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
                 const ShimEventAddThreadReq* add_thread_req =
                     shimevent2shim_getAddThreadReqData(&res);
                 shim_newThreadStart(&add_thread_req->ipc_block);
+
+                long rv =
+                    _shim_clone(ctx, add_thread_req->flags, (void*)add_thread_req->child_stack.val,
+                                (pid_t*)add_thread_req->ptid.val, (pid_t*)add_thread_req->ctid.val,
+                                add_thread_req->newtls);
+
                 ShimEventToShadow res;
-                shimevent2shadow_initAddThreadParentRes(&res);
+                shimevent2shadow_initAddThreadParentRes(&res, rv);
                 shimevent_sendEventToShadow(ipc, &res);
                 break;
             }
