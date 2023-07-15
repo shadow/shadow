@@ -18,10 +18,8 @@ foreach(DEFINITION IN LISTS COMPILE_DEFINITIONS)
   set(RUST_CXXFLAGS "${RUST_CXXFLAGS} -D${DEFINITION}")
 endforeach()
 
+# don't build unit tests since they'll have to be rebuilt when we run the 'rust-unit-tests' test anyways
 set(RUST_TARGETS "--lib --bins")
-if(SHADOW_TEST STREQUAL ON)
-  set(RUST_TARGETS "${RUST_TARGETS} --tests")
-endif()
 
 if(SHADOW_COVERAGE STREQUAL ON)
     # https://github.com/shadow/shadow/issues/1236
