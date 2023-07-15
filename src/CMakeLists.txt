@@ -59,7 +59,8 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c " \
+    BUILD_COMMAND echo "Building workspace..."
+    COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
         --workspace --exclude shadow-tests --exclude shadow-shim \
@@ -69,7 +70,10 @@ ExternalProject_Add(
         --target-dir \"${TARGETDIR}\" \
         --features \"${RUST_FEATURES}\" \
         "
-    # always build shadow-tests with the debug profile, even when shadow is built in release mode.
+    COMMAND echo "Building shadow-tests..."
+    # Always build shadow-tests with the debug profile, even when shadow is built in release mode.
+    # TODO: we should build tests without optimizations, which are automatically enabled for
+    # debug builds due to the 'opt-level' option in the workspace.
     # Omit RUST_FEATURES, since the shadow-tests package doesn't define any of the optional features
     # that we trigger via this wrapper.
     COMMAND bash -c " \
