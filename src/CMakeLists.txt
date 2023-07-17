@@ -18,10 +18,8 @@ foreach(DEFINITION IN LISTS COMPILE_DEFINITIONS)
   set(RUST_CXXFLAGS "${RUST_CXXFLAGS} -D${DEFINITION}")
 endforeach()
 
+# don't build unit tests since they'll have to be rebuilt when we run the 'rust-unit-tests' test anyways
 set(RUST_TARGETS "--lib --bins")
-if(SHADOW_TEST STREQUAL ON)
-  set(RUST_TARGETS "${RUST_TARGETS} --tests")
-endif()
 
 if(SHADOW_COVERAGE STREQUAL ON)
     # https://github.com/shadow/shadow/issues/1236
@@ -61,7 +59,8 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND bash -c " \
+    BUILD_COMMAND echo "Building workspace..."
+    COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
         --workspace --exclude shadow-tests --exclude shadow-shim \
@@ -71,7 +70,10 @@ ExternalProject_Add(
         --target-dir \"${TARGETDIR}\" \
         --features \"${RUST_FEATURES}\" \
         "
-    # always build shadow-tests with the debug profile, even when shadow is built in release mode.
+    COMMAND echo "Building shadow-tests..."
+    # Always build shadow-tests with the debug profile, even when shadow is built in release mode.
+    # TODO: we should build tests without optimizations, which are automatically enabled for
+    # debug builds due to the 'opt-level' option in the workspace.
     # Omit RUST_FEATURES, since the shadow-tests package doesn't define any of the optional features
     # that we trigger via this wrapper.
     COMMAND bash -c " \
@@ -169,6 +171,8 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
+# build the shim after shadow (cargo already parallelizes the build)
+add_dependencies(rust-shadow-shim-project rust-workspace-project)
 add_library(shadow-shim SHARED IMPORTED GLOBAL)
 add_dependencies(shadow-shim rust-shadow-shim-project)
 set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so)
