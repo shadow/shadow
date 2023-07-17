@@ -1,3 +1,5 @@
+use core::num::NonZeroI32;
+
 use bytemuck::TransparentWrapper;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
@@ -1467,6 +1469,16 @@ pub unsafe fn sigaltstack(
                 .unwrap_or(core::ptr::null_mut()),
         )
     }
+}
+
+pub fn tgkill_raw(tgid: i32, tid: i32, signo: i32) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_tgkill, tgid, tid, signo) }
+        .check()
+        .map_err(Errno::from)
+}
+
+pub fn tgkill(tgid: NonZeroI32, tid: NonZeroI32, signal: Signal) -> Result<(), Errno> {
+    tgkill_raw(tgid.get(), tid.get(), signal.as_i32())
 }
 
 mod export {

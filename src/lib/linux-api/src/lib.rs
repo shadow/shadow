@@ -63,6 +63,7 @@ pub mod sched;
 pub mod signal;
 pub mod sysinfo;
 pub mod time;
+pub mod ucontext;
 
 // Internally we often end up needing to convert from types that bindgen inferred, in const
 // contexts.

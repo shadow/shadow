@@ -11,8 +11,12 @@ use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::unistd;
 use once_cell::sync::OnceCell;
+use rustix::thread::NanosleepRelativeResult;
+use rustix::time::Timespec;
 use signal_hook::low_level::channel::Channel as SignalSafeChannel;
+use test_utils::running_in_shadow;
 use test_utils::set;
+use test_utils::setitimer;
 use test_utils::ShadowTest;
 use test_utils::TestEnvironment as TestEnv;
 
@@ -1067,6 +1071,166 @@ fn test_hardware_error_signals() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct DoSetcontextHandlerResult {
+    // The value of rax seen by the signal handler.
+    ctx_rax: i64,
+}
+static mut DO_SETCONTEXT_RES: Option<DoSetcontextHandlerResult> = None;
+
+extern "C" fn do_setcontext(
+    _signal: i32,
+    info: *mut libc::siginfo_t,
+    voidctx: *mut std::ffi::c_void,
+) {
+    assert!(!info.is_null());
+    assert!(!voidctx.is_null());
+    let ctx = unsafe { &mut *voidctx.cast::<libc::ucontext_t>() };
+
+    // Verify that the signal was received while blocked in a syscall.
+    let rip = ctx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8;
+    assert!(!rip.is_null());
+    const SYSCALL_INSN: [u8; 2] = [0x0f, 0x05];
+    // The instruction pointer that we *expect* to be pointing to a syscall insn.
+    // If it was some other instruction we could end up with a pointer to the
+    // middle of an instruction, but that's ok.
+    let interrupted_ip = unsafe { rip.sub(SYSCALL_INSN.len()) };
+    let interrupted_insn =
+        unsafe { std::slice::from_raw_parts(interrupted_ip, SYSCALL_INSN.len()) };
+    assert_eq!(interrupted_insn, &SYSCALL_INSN);
+
+    // We don't know here the expected value of RAX; propagate it back to the test function.
+    unsafe {
+        DO_SETCONTEXT_RES = Some(DoSetcontextHandlerResult {
+            ctx_rax: ctx.uc_mcontext.gregs[libc::REG_RAX as usize],
+        })
+    };
+
+    // *jump* back via setcontext.
+    unsafe { libc::setcontext(ctx) };
+    unreachable!()
+}
+
+// golang and perhaps other language runtimes can inspect and use the `ucontext`
+// to transfer control between user-space threads.
+//
+// The golang runtime definitely inspects the context provided to the signal
+// handler to help determine whether it was executing at a point that's safe to
+// preempt.  I'm unclear whether it ever uses `setcontext` or `swapcontext`
+// directly with that context object, but testing that doing so works seems like
+// a fairly strong test that the provided context is "valid".
+fn test_validate_context() -> Result<(), Box<dyn Error>> {
+    // This is the signal that itimer generates.
+    let sig = signal::SIGALRM;
+
+    // Ensure signal isn't blocked
+    let mut sigset = signal::SigSet::empty();
+    sigset.add(sig);
+    signal::sigprocmask(signal::SigmaskHow::SIG_UNBLOCK, Some(&sigset), None)?;
+
+    // Install handler
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(do_setcontext),
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )?
+    };
+
+    // Schedule a one-shot signal via itimer
+    let timer = libc::itimerval {
+        it_interval: libc::timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        },
+        it_value: libc::timeval {
+            tv_sec: 0,
+            tv_usec: 100_000,
+        },
+    };
+    setitimer(libc::ITIMER_REAL, &timer).unwrap();
+
+    // sleep, which should get interrupted.
+    let rv = unsafe { libc::usleep(1_000_000) };
+    if !running_in_shadow() {
+        // setcontext sets RAX to 0 rather than restoring the original value.
+        // This gets interpreted as the interrupted syscall return value, ultimately
+        // resulting in a return value of 0 from usleep.
+        assert_eq!(rv, 0);
+        // The signal handler sees the syscall return value stored in RAX.
+        assert_eq!(
+            unsafe { DO_SETCONTEXT_RES.take() },
+            Some(DoSetcontextHandlerResult {
+                ctx_rax: -(libc::EINTR as i64)
+            })
+        );
+    } else {
+        // In shadow, setcontext swapped to the *synthetic* context in the shim's
+        // signal handling. From there we return normally, ultimately returning
+        // the "correct" syscall result that the syscall was interrupted.
+        //
+        // This isn't ideal since it's a deviation from the native behavior, but
+        // go ahead and test for the current-expected behavior.
+        //
+        // The only practical way I can think of to remove this deviation is to
+        // force all syscalls through the seccomp path. This would mean not
+        // using the libc-preload "fast path", and changing the patched vdso
+        // functions to execute syscalls instead of calling the shim's syscall
+        // functions. The former can already be opted into with
+        // `--use-preload-libc=false`. This fix is fairly easy, but gives up
+        // some performance.
+        assert_eq!(rv, -1);
+        assert_eq!(unsafe { *libc::__errno_location() }, libc::EINTR);
+        // Similarly, the synthetic context won't have the RAX value corresponding
+        // to the return value of the interrupted syscall.
+        //
+        // We probably *could* patch this particular register into the synthetic
+        // context, but it's unclear that just "fixing" that register without
+        // fixing the others would have much point. Don't assert anything about it;
+        // just clear it.
+        unsafe { DO_SETCONTEXT_RES.take() };
+    }
+
+    // Same thing again, but sleep using a direct syscall, which will be
+    // intercepted via seccomp. shadow has the syscall callsite context to provide
+    // to the signal handler in this case, so we should end up jumping all the way
+    // back to the original syscall site, with setcontext setting the return value to 0,
+    // which will get interpreted as the syscall succeeding.
+    setitimer(libc::ITIMER_REAL, &timer).unwrap();
+    let res = rustix::thread::nanosleep(&Timespec {
+        tv_sec: 1,
+        tv_nsec: 0,
+    });
+    // setcontext sets RAX to 0, which gets interpreted as the clock_nanosleep
+    // syscall succeeding, which propagates back to success here.
+    assert!(matches!(res, NanosleepRelativeResult::Ok));
+    // The signal handler sees the original syscall return value stored in RAX.
+    assert_eq!(
+        unsafe { DO_SETCONTEXT_RES.take() },
+        Some(DoSetcontextHandlerResult {
+            ctx_rax: -(libc::EINTR as i64)
+        })
+    );
+
+    // Restore default action
+    unsafe {
+        signal::sigaction(
+            sig,
+            &signal::SigAction::new(
+                signal::SigHandler::SigDfl,
+                signal::SaFlags::empty(),
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -1190,8 +1354,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "hardware error signals",
             test_hardware_error_signals,
-            all_envs,
+            all_envs.clone(),
         ),
+        ShadowTest::new("validate context", test_validate_context, all_envs),
     ];
 
     if filter_shadow_passing {

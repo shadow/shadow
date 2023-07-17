@@ -190,6 +190,14 @@ static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
                     return rv;
                 }
 
+                if (ctx != NULL) {
+                    // Set the syscall return value now, before potentially
+                    // invoking signal handlers. This appears to be the behavior
+                    // in the kernel; i.e. a handler for a signal that
+                    // interrupted a blocking syscall
+                    ctx->uc_mcontext.gregs[REG_RAX] = rv.as_i64;
+                }
+
                 // Process any signals, which may have resulted from the syscall itself
                 // (e.g. `kill(getpid(), signo)`), or may have been sent by another thread
                 // while this one was blocked in a syscall.
