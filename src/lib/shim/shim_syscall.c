@@ -19,99 +19,6 @@
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_numbers.h"
 
-// Helper macro for calculating immediate offsets in asm.
-#define MCTX_REG_OFFSET(i) (offsetof(mcontext_t, gregs) + sizeof(uint64_t) * (i))
-
-// The label inside the inline assembly causes a link error if this gets inlined,
-// due to the assembler then seeing the same label multiple times.
-// TODO: is there a way to generate the label in a way that avoids this?
-static long __attribute__((noinline)) _shim_clone(ucontext_t* ctx, int32_t flags, void* child_stack,
-                                                  pid_t* ptid, pid_t* ctid, uint64_t newtls) {
-    if (!child_stack) {
-        panic("clone without a new stack not implemented");
-    }
-    // x86-64 calling conventions require a 16-byte aligned stack
-    if ((uintptr_t)child_stack % 16 != 0) {
-        panic("clone with unaligned new stack not implemented");
-    }
-    // Copy to top of the child stack
-    child_stack -= sizeof(ctx->uc_mcontext);
-    memcpy(child_stack, &ctx->uc_mcontext, sizeof(ctx->uc_mcontext));
-    if ((uintptr_t)child_stack % 16 != 0) {
-        panic("Unimplemented: use padding to realign stack");
-    }
-
-    // Make the clone syscall, and then in the child thread initialize the shim's state,
-    // and then *jump* to the instruction after the original clone syscall instruction.
-    //
-    // Forcing the thread initialization to happen here instead of doing it
-    // lazily ensures that we don't try to install the sigaltstack from
-    // inside the seccomp signal handler. Doing so "works" without error,
-    // but is reverted when the signal handler returns.
-    long rv = 0;
-    register pid_t* r10 __asm__("r10") = ctid;
-    register long r8 __asm__("r8") = newtls;
-    __asm__ __volatile__(
-        "syscall\n"
-        // If in the parent, done with asm.
-        "cmp $0, %%rax\n"
-        "jne shim_native_syscallv_out\n"
-        // Initialize state for this thread
-        "call shim_ensure_init\n"
-        // Restore general purpose registers
-        "mov %c[REG_R8_offset](%%rsp), %%r8\n"
-        "mov %c[REG_R9_offset](%%rsp), %%r9\n"
-        "mov %c[REG_R10_offset](%%rsp), %%r10\n"
-        "mov %c[REG_R11_offset](%%rsp), %%r11\n"
-        "mov %c[REG_R12_offset](%%rsp), %%r12\n"
-        "mov %c[REG_R13_offset](%%rsp), %%r13\n"
-        "mov %c[REG_R14_offset](%%rsp), %%r14\n"
-        "mov %c[REG_R15_offset](%%rsp), %%r15\n"
-        "mov %c[REG_RSI_offset](%%rsp), %%rsi\n"
-        "mov %c[REG_RDI_offset](%%rsp), %%rdi\n"
-        "mov %c[REG_RBX_offset](%%rsp), %%rbx\n"
-        "mov %c[REG_RDX_offset](%%rsp), %%rdx\n"
-        "mov %c[REG_RCX_offset](%%rsp), %%rcx\n"
-        "mov %c[REG_RBP_offset](%%rsp), %%rbp\n"
-        // Save in RAX, to be pushed after
-        // restoring rsp
-        "mov %c[REG_RIP_offset](%%rsp), %%rax\n"
-        // "Free" ctx from the stack
-        "add %[CTX_SIZE], %%rsp\n"
-        // Push original RIP onto the stack.
-        "push %%rax\n"
-        // Not restored:
-        // - RAX: stores the result of the syscall, which we set below.
-        // - Floating point and other special registers: hopefully not needed.
-
-        // Set return value of clone
-        "movq $0, %%rax\n"
-        // Ret to original RIP.
-        "ret\n"
-        "shim_native_syscallv_out:\n"
-        : "=a"(rv)
-        : "a"(SYS_clone), "D"(flags), "S"(child_stack), "d"(ptid), "r"(r10),
-          "r"(r8), [REG_RIP_offset] "i"(MCTX_REG_OFFSET(REG_RIP)),
-          [CTX_SIZE] "i"(sizeof(ctx->uc_mcontext)), [REG_R8_offset] "i"(MCTX_REG_OFFSET(REG_R8)),
-          [REG_R9_offset] "i"(MCTX_REG_OFFSET(REG_R9)),
-          [REG_R10_offset] "i"(MCTX_REG_OFFSET(REG_R10)),
-          [REG_R11_offset] "i"(MCTX_REG_OFFSET(REG_R11)),
-          [REG_R12_offset] "i"(MCTX_REG_OFFSET(REG_R12)),
-          [REG_R13_offset] "i"(MCTX_REG_OFFSET(REG_R13)),
-          [REG_R14_offset] "i"(MCTX_REG_OFFSET(REG_R14)),
-          [REG_R15_offset] "i"(MCTX_REG_OFFSET(REG_R15)),
-          [REG_RSI_offset] "i"(MCTX_REG_OFFSET(REG_RSI)),
-          [REG_RDI_offset] "i"(MCTX_REG_OFFSET(REG_RDI)),
-          [REG_RBX_offset] "i"(MCTX_REG_OFFSET(REG_RBX)),
-          [REG_RDX_offset] "i"(MCTX_REG_OFFSET(REG_RDX)),
-          [REG_RCX_offset] "i"(MCTX_REG_OFFSET(REG_RCX)),
-          [REG_RBP_offset] "i"(MCTX_REG_OFFSET(REG_RBP))
-        : "rcx", "r11", "memory");
-    // Wait for child to initialize itself.
-    shim_newThreadFinish();
-    return rv;
-}
-
 static long _shim_native_syscallv(ucontext_t* ctx, long n, va_list args) {
     long arg1 = va_arg(args, long);
     long arg2 = va_arg(args, long);
@@ -282,7 +189,7 @@ static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
                 shim_newThreadStart(&add_thread_req->ipc_block);
 
                 long rv =
-                    _shim_clone(ctx, add_thread_req->flags, (void*)add_thread_req->child_stack.val,
+                    shim_do_clone(ctx, add_thread_req->flags, (void*)add_thread_req->child_stack.val,
                                 (pid_t*)add_thread_req->ptid.val, (pid_t*)add_thread_req->ctid.val,
                                 add_thread_req->newtls);
 

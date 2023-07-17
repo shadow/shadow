@@ -28,6 +28,7 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+pub mod clone;
 pub mod mmap_box;
 pub mod shimlogger;
 pub mod tls;
