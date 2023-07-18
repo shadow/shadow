@@ -186,7 +186,6 @@ static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
             case SHIM_EVENT_TO_SHIM_ADD_THREAD_REQ: {
                 const ShimEventAddThreadReq* add_thread_req =
                     shimevent2shim_getAddThreadReqData(&res);
-                shim_newThreadStart(&add_thread_req->ipc_block);
 
                 long rv = shim_do_clone(ctx, add_thread_req);
 

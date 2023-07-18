@@ -1,5 +1,6 @@
 use linux_api::ucontext::{sigcontext, ucontext};
 use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
+use shadow_shmem::allocator::ShMemBlockSerialized;
 
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
@@ -8,6 +9,24 @@ fn sigcontext_offset_of(base: &sigcontext, field: &u64) -> usize {
     let base = base as *const _ as usize;
     let field = field as *const _ as usize;
     field - base
+}
+
+/// Round `ptr` down to a value that has alignment `align`. Useful when
+/// allocating on a stack that grows downward.
+///
+/// Panics if `align` isn't a power of 2.
+///
+/// # Safety
+///
+/// The resulting aligned pointer must be part of the same allocation as `ptr`.
+/// e.g. the stack that `ptr` points into must have enough room remaining to do
+/// the alignment.
+unsafe fn align_down(ptr: *mut u8, align: usize) -> *mut u8 {
+    assert!(align.is_power_of_two());
+    // Mask off enough low-order bits to ensure proper alignment.
+    let ptr = ptr as usize;
+    let ptr = ptr & !(align - 1);
+    ptr as *mut u8
 }
 
 /// Helper for `do_clone`. Restores all general purpose registers, stack pointer,
@@ -80,6 +99,23 @@ unsafe extern "C" fn set_context(ctx: &sigcontext) -> ! {
     };
 }
 
+/// `extern "C"` wrapper for `crate::tls_ipc::set`, which we can call from
+/// assembly.
+///
+/// # Safety
+///
+/// `blk` must contained a serialized block of
+/// type `IPCData`, which outlives the current thread.
+unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
+    let blk = unsafe { blk.as_ref().unwrap() };
+    let prev = crate::global_allow_native_syscalls::swap(true);
+
+    // SAFETY: ensured by caller
+    unsafe { crate::tls_ipc::set(blk) };
+
+    crate::global_allow_native_syscalls::swap(prev);
+}
+
 /// Execute a native `clone` syscall. The newly created child thread will
 /// resume execution from `ctx`, which should be the point where the managed
 /// code originally made a `clone` syscall (but was intercepted by seccomp).
@@ -113,16 +149,8 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
     // Copy ctx to top of the child stack.
     // SAFETY: Should still point within stack, assuming it fits.
     let child_current_rsp = unsafe { child_stack.sub(core::mem::size_of::<sigcontext>()) };
-    assert_eq!(
-        child_current_rsp.align_offset(16),
-        0,
-        "realignment not implemented"
-    );
-    assert_eq!(
-        child_current_rsp.align_offset(core::mem::align_of::<sigcontext>()),
-        0,
-        "realignment not implemented"
-    );
+    let child_current_rsp =
+        unsafe { align_down(child_current_rsp, core::mem::align_of::<sigcontext>()) };
     let child_sigcontext = child_current_rsp.cast::<sigcontext>();
     unsafe { core::ptr::write(child_sigcontext, ctx.uc_mcontext) };
 
@@ -130,11 +158,39 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
     let child_sigctx = unsafe { child_sigcontext.as_mut().unwrap() };
     child_sigctx.rsp = child_stack as u64;
 
+    // Copy child's IPC block to child's stack
+    let child_current_rsp =
+        unsafe { child_current_rsp.sub(core::mem::size_of::<ShMemBlockSerialized>()) };
+    let child_current_rsp = unsafe {
+        align_down(
+            child_current_rsp,
+            core::mem::align_of::<ShMemBlockSerialized>(),
+        )
+    };
+    let child_ipc_blk = child_current_rsp.cast::<ShMemBlockSerialized>();
+    unsafe { core::ptr::write(child_ipc_blk, event.ipc_block) };
+
+    // Ensure stack is 16-aligned so that we can safely make function calls.
+    let child_current_rsp = unsafe { align_down(child_current_rsp, 16) };
+
     let rv: i64;
     // SAFETY:
-    // * There's currently no way to tell Rust than an asm block "returns twice",
-    //   so the child does not return from this asm block. It instead *jumps*
-    //   to the point where the clone syscall war originally made.
+    //
+    // This block makes the clone syscall, which is tricky because Rust currently
+    // doesn't have a way to tell the compiler that a block or function "returns twice".
+    // <https://github.com/rust-lang/libc/issues/1596>
+    //
+    // We work around this by using a single asm block to:
+    // * Make the `clone` syscall
+    // * Do the required per-thread shim initialization
+    // * Restore CPU state and *jump* to the point where the managed code was
+    // originally trying to make the syscall.
+    //
+    // The point we jump to should already be a point that was expecting to make
+    // the clone syscall, so should already correctly handle that both the
+    // parent and child thread resume execution there. (The parent thread
+    // resumes execution there after returning from the seccomp signal handler
+    // normally).
     unsafe {
         core::arch::asm!(
             // Make the clone syscall
@@ -143,6 +199,10 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
             // `2`). https://doc.rust-lang.org/rust-by-example/unsafe/asm.html#labels
             "cmp rax, 0",
             "jne 2f",
+
+            // Initialize the IPC block for this thread
+            "mov rdi, {blk}",
+            "call {tls_ipc_set}",
 
             // Initialize state for this thread
             "call {shim_ensure_init}",
@@ -164,13 +224,14 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
             in("r10") ctid,
             // clone syscall arg5
             in("r8") newtls,
+            blk = in(reg) child_ipc_blk,
+            tls_ipc_set = sym tls_ipc_set,
             shim_ensure_init = sym crate::bindings::shim_ensure_init,
             // callee-saved register
             in("r12") child_sigcontext as * const _,
             set_context = sym set_context,
         )
     }
-    unsafe { crate::bindings::shim_newThreadFinish() };
     rv
 }
 

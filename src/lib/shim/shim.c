@@ -32,51 +32,6 @@
 #include "lib/shim/shim_syscall.h"
 #include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
-// Held from the time of starting to initialize _startThread, to being done with
-// it. i.e. ensure we don't try to start more than one thread at once.
-//
-// For example, this prevents the child thread, after having initialized itself
-// and released the parent via the childInitd semaphore, from starting another
-// clone itself until after the parent has woken up and released this lock.
-static shadow_spinlock_t _startThreadLock = SHADOW_SPINLOCK_STATICALLY_INITD;
-static struct {
-    ShMemBlockSerialized childIpcBlk;
-    shadow_sem_t childInitd;
-} _startThread;
-
-void shim_newThreadStart(const ShMemBlockSerialized* block) {
-    if (shadow_spin_lock(&_startThreadLock)) {
-        panic("shadow_spin_lock: %s", strerror(errno));
-    };
-    if (shadow_sem_init(&_startThread.childInitd, 0, 0)) {
-        panic("shadow_sem_init: %s", strerror(errno));
-    }
-    _startThread.childIpcBlk = *block;
-}
-
-void shim_newThreadChildInitd() {
-    if (shadow_sem_post(&_startThread.childInitd)) {
-        panic("shadow_sem_post: %s", strerror(errno));
-    }
-}
-
-void shim_newThreadFinish() {
-    // Wait for child to initialize itself.
-    while (shadow_sem_trywait(&_startThread.childInitd)) {
-        if (errno != EAGAIN) {
-            panic("shadow_sem_trywait: %s", strerror(errno));
-        }
-        if (shim_native_syscall(NULL, SYS_sched_yield)) {
-            panic("shim_native_syscall(SYS_sched_yield): %s", strerror(errno));
-        }
-    }
-
-    // Release the global clone lock.
-    if (shadow_spin_unlock(&_startThreadLock)) {
-        panic("shadow_spin_unlock: %s", strerror(errno));
-    }
-}
-
 static void _shim_parent_init_logging() {
     int level = shimshmem_getLogLevel(shim_hostSharedMem());
 
@@ -163,21 +118,12 @@ static void _shim_parent_init_memory_manager() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-static void _shim_preload_only_child_init_ipc() { _shim_set_ipc(&_startThread.childIpcBlk); }
-
 static void _shim_preload_only_child_ipc_wait_for_start_event() {
     assert(shim_thisThreadEventIPC());
 
     trace("waiting for start event on %p", shim_thisThreadEventIPC());
 
-    // We're returning control to the parent thread here, who is going to switch
-    // back to their own TLS.
     const struct IPCData* ipc = shim_thisThreadEventIPC();
-
-    // Releases parent thread, who switches back to their own TLS.  i.e. Don't
-    // use TLS between here and when we can switch back to our own after
-    // receiving the start event.
-    shim_newThreadChildInitd();
 
     ShMemBlockSerialized thread_blk_serialized;
     ShimEventToShadow start_req;
@@ -258,7 +204,6 @@ void _shim_parent_init_preload() {
 void _shim_child_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
-    _shim_preload_only_child_init_ipc();
     _shim_preload_only_child_ipc_wait_for_start_event();
 
     _shim_init_signal_stack();
