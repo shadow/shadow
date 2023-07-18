@@ -448,7 +448,13 @@ fn init_process() {
 // called from outside of the shim needs to be exported from the Rust code. We
 // wrap some C implementations here.
 pub mod export {
+    use core::mem::MaybeUninit;
     use core::ops::Deref;
+
+    use shadow_shim_helper_rs::shim_event::{
+        ShimEventStartReq, ShimEventToShadow, ShimEventToShim,
+    };
+    use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
     use super::*;
 
@@ -686,5 +692,30 @@ pub mod export {
             rv as *const _
         })
         .unwrap_or(core::ptr::null())
+    }
+
+    /// Wait for start event from shadow, from a newly spawned thread.
+    #[no_mangle]
+    pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
+        log::trace!("waiting for start event");
+
+        let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+        let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
+            thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(
+                thread_blk_serialized.as_mut_ptr(),
+            ),
+            process_shmem_block_to_init: ForeignPtr::null(),
+        });
+        let res = tls_ipc::with(|ipc| {
+            ipc.to_shadow().send(start_req);
+            ipc.from_shadow().receive().unwrap()
+        });
+        assert!(matches!(res, ShimEventToShim::StartRes));
+
+        // SAFETY: shadow should have initialized
+        let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
+
+        // SAFETY: blk should be of the correct type and outlive this thread.
+        unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
     }
 }
