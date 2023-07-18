@@ -268,7 +268,7 @@ impl ProcessShmemProtected {
 #[repr(C)]
 pub struct ThreadShmem {
     pub host_id: HostId,
-    tid: libc::pid_t,
+    pub tid: libc::pid_t,
 
     pub protected: RootedRefCell<ThreadShmemProtected>,
 }

@@ -1546,6 +1546,7 @@ dependencies = [
  "static_assertions",
  "system-deps",
  "test-log",
+ "va_list",
  "vasi-sync",
 ]
 

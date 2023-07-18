@@ -31,6 +31,7 @@ mod bindings {
 pub mod clone;
 pub mod mmap_box;
 pub mod shimlogger;
+pub mod syscall;
 pub mod tls;
 
 pub use shimlogger::export as shimlogger_export;
