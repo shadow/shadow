@@ -1,4 +1,5 @@
 use linux_api::ucontext::{sigcontext, ucontext};
+use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
 
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
@@ -90,14 +91,13 @@ unsafe extern "C" fn set_context(ctx: &sigcontext) -> ! {
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
-pub unsafe fn do_clone(
-    ctx: &ucontext,
-    flags: i32,
-    child_stack: *mut u8,
-    ptid: *mut i32,
-    ctid: *mut i32,
-    newtls: u64,
-) -> i64 {
+pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
+    let flags = event.flags;
+    let ptid: *mut i32 = event.ptid.cast::<i32>().into_raw_mut();
+    let ctid: *mut i32 = event.ctid.cast::<i32>().into_raw_mut();
+    let child_stack: *mut u8 = event.child_stack.cast::<u8>().into_raw_mut();
+    let newtls = event.newtls;
+
     assert!(
         !child_stack.is_null(),
         "clone without a new stack not implemented"
@@ -191,11 +191,7 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_do_clone(
         ctx: *const libc::ucontext_t,
-        flags: i32,
-        child_stack: *mut u8,
-        ptid: *mut i32,
-        ctid: *mut i32,
-        newtls: u64,
+        event: *const ShimEventAddThreadReq,
     ) -> i64 {
         assert!(
             !ctx.is_null(),
@@ -206,6 +202,8 @@ pub mod export {
         let ctx = ctx.cast::<linux_api::ucontext::ucontext>();
         let ctx = unsafe { ctx.as_ref().unwrap() };
 
-        unsafe { do_clone(ctx, flags, child_stack, ptid, ctid, newtls) }
+        let event = unsafe { event.as_ref().unwrap() };
+
+        unsafe { do_clone(ctx, event) }
     }
 }

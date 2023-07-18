@@ -188,10 +188,7 @@ static SysCallReg _shim_emulated_syscall_event(ucontext_t* ctx,
                     shimevent2shim_getAddThreadReqData(&res);
                 shim_newThreadStart(&add_thread_req->ipc_block);
 
-                long rv =
-                    shim_do_clone(ctx, add_thread_req->flags, (void*)add_thread_req->child_stack.val,
-                                (pid_t*)add_thread_req->ptid.val, (pid_t*)add_thread_req->ctid.val,
-                                add_thread_req->newtls);
+                long rv = shim_do_clone(ctx, add_thread_req);
 
                 ShimEventToShadow res;
                 shimevent2shadow_initAddThreadParentRes(&res, rv);
