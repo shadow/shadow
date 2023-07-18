@@ -65,6 +65,6 @@ fn main() {
 
     build_common
         .cc_build()
-        .files(&["shadow_sem.c", "shadow_spinlock.c"])
+        .files(&["shadow_sem.c"])
         .compile("shim_c");
 }
