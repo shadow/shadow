@@ -718,4 +718,34 @@ pub mod export {
         // SAFETY: blk should be of the correct type and outlive this thread.
         unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
     }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_ipc_wait_for_start_event() {
+        log::trace!("waiting for start event");
+        let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+        let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+        let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
+            thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(
+                thread_blk_serialized.as_mut_ptr(),
+            ),
+            process_shmem_block_to_init: ForeignPtr::from_raw_ptr(
+                process_blk_serialized.as_mut_ptr(),
+            ),
+        });
+        let res = tls_ipc::with(|ipc| {
+            ipc.to_shadow().send(start_req);
+            ipc.from_shadow().receive().unwrap()
+        });
+        assert!(matches!(res, ShimEventToShim::StartRes));
+
+        // SAFETY: shadow should have initialized
+        let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
+        let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
+
+        // SAFETY: blk should be of the correct type and outlive this thread.
+        unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
+
+        // SAFETY: blk should be of the correct type and outlive this process.
+        unsafe { global_process_shmem::set(&process_blk_serialized) };
+    }
 }
