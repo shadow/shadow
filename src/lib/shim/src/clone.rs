@@ -1,5 +1,4 @@
 use linux_api::ucontext::{sigcontext, ucontext};
-use static_assertions::const_assert_eq;
 
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
@@ -43,40 +42,43 @@ pub unsafe fn do_clone(
 
     // Copy ctx to top of the child stack.
     // SAFETY: Should still point within stack, assuming it fits.
-    let child_stack = unsafe { child_stack.sub(core::mem::size_of::<sigcontext>()) };
+    let child_current_rsp = unsafe { child_stack.sub(core::mem::size_of::<sigcontext>()) };
     assert_eq!(
-        child_stack.align_offset(16),
+        child_current_rsp.align_offset(16),
         0,
         "realignment not implemented"
     );
     assert_eq!(
-        child_stack.align_offset(core::mem::align_of::<sigcontext>()),
+        child_current_rsp.align_offset(core::mem::align_of::<sigcontext>()),
         0,
         "realignment not implemented"
     );
-    unsafe { core::ptr::write(child_stack.cast::<sigcontext>(), ctx.uc_mcontext) };
+    let child_sigcontext = child_current_rsp.cast::<sigcontext>();
+    unsafe { core::ptr::write(child_sigcontext, ctx.uc_mcontext) };
 
-    let sigctx = &ctx.uc_mcontext;
+    // Update child's copy of context to use the child's stack.
+    let child_sigctx = unsafe { child_sigcontext.as_mut().unwrap() };
+    child_sigctx.rsp = child_stack as u64;
+
     // These offsets are hard-coded into the asm format string below.
     // TODO: turn these into const parameters to the asm block when const
     // asm parameters are stabilized.
     // https://github.com/rust-lang/rust/issues/93332
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r8), 0);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r9), 0x8);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r10), 0x10);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r11), 0x18);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r12), 0x20);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r13), 0x28);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r14), 0x30);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.r15), 0x38);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rsi), 0x48);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rdi), 0x40);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rbx), 0x58);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rdx), 0x60);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rbp), 0x50);
-    debug_assert_eq!(sigcontext_offset_of(sigctx, &sigctx.rip), 0x80);
-
-    const_assert_eq!(core::mem::size_of::<sigcontext>(), 0x100);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r8), 0);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r9), 0x8);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r10), 0x10);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r11), 0x18);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r12), 0x20);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r13), 0x28);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r14), 0x30);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.r15), 0x38);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rsi), 0x48);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rdi), 0x40);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rbx), 0x58);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rdx), 0x60);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rbp), 0x50);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rip), 0x80);
+    debug_assert_eq!(sigcontext_offset_of(child_sigctx, &child_sigctx.rsp), 0x78);
 
     let rv: i64;
     // SAFETY:
@@ -111,8 +113,8 @@ pub unsafe fn do_clone(
             // Store `rip` in `rax`, to be pushed after
             // restoring `rsp`
             "mov rax, [rsp+0x80]",
-            // "Free" ctx from the stack
-            "add rsp, 0x100",
+            // Set rsp last
+            "mov rsp, [rsp+0x78]",
             // Push original `rip` onto the stack
             "push rax",
             // Not restored:
@@ -129,7 +131,7 @@ pub unsafe fn do_clone(
             // clone syscall arg1
             in("rdi") flags,
             // clone syscall arg2
-            in("rsi") child_stack,
+            in("rsi") child_current_rsp,
             // clone syscall arg3
             in("rdx") ptid,
             // clone syscall arg4
