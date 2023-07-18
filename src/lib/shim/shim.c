@@ -21,7 +21,6 @@
 #include "lib/log-c2rust/log-c2rust.h"
 #include "lib/log-c2rust/rustlogger.h"
 #include "lib/logger/logger.h"
-#include "lib/shadow-shim-helper-rs/shadow_sem.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/patch_vdso.h"
 #include "lib/shim/shim_api.h"
