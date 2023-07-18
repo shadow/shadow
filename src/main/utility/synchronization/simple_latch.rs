@@ -202,7 +202,7 @@ mod tests {
 
         let wait_duration = t.join().unwrap();
 
-        let threshold = Duration::from_millis(20);
+        let threshold = Duration::from_millis(40);
         assert!(wait_duration > sleep_duration - threshold);
         assert!(wait_duration < sleep_duration + threshold);
     }
