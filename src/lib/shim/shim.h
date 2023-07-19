@@ -19,18 +19,6 @@
 // * `libshadow_libc`'s syscall wrappers.
 void shim_ensure_init();
 
-// To be called in parent thread before making the `clone` syscall.
-// It sets up data for the new thread.
-void shim_newThreadStart(const ShMemBlockSerialized* block);
-
-// To be called in parent thread after making the `clone` syscall.
-// It doesn't return until after the child has initialized itself.
-void shim_newThreadFinish();
-
-// To be called from a new *child* thread after clone, to notify
-// the parent thread that it is now initialized.
-void shim_newThreadChildInitd();
-
 const ShimShmemThread* shim_threadSharedMem();
 const ShimShmemProcess* shim_processSharedMem();
 const ShimShmemHost* shim_hostSharedMem();

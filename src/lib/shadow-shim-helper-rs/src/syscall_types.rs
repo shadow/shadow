@@ -99,6 +99,22 @@ impl<T> ForeignPtr<T> {
         let val = self.val;
         Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
     }
+
+    /// Convert to a raw pointer. "safe" in itself, but keep in mind that it
+    /// isn't dereferenceable if it originated from a different virtual address
+    /// space.
+    #[inline]
+    pub fn into_raw(self) -> *const T {
+        self.val as *const T
+    }
+
+    /// Convert to a raw pointer. "safe" in itself, but keep in mind that it
+    /// isn't dereferenceable if it originated from a different virtual address
+    /// space.
+    #[inline]
+    pub fn into_raw_mut(self) -> *mut T {
+        self.val as *mut T
+    }
 }
 
 impl<T> From<ForeignPtr<T>> for usize {

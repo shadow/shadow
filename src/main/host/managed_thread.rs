@@ -9,8 +9,8 @@ use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
-    ShimEventToShim,
+    ShimEventAddThreadParentRes, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
+    ShimEventToShadow, ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
 use shadow_shmem::allocator::ShMemBlock;
@@ -260,7 +260,7 @@ impl ManagedThread {
                     }
                 }
                 e @ ShimEventToShadow::SyscallComplete(_)
-                | e @ ShimEventToShadow::AddThreadParentRes => panic!("Unexpected event: {e:?}"),
+                | e @ ShimEventToShadow::AddThreadParentRes(_) => panic!("Unexpected event: {e:?}"),
             };
             assert!(self.is_running());
         }
@@ -315,31 +315,24 @@ impl ManagedThread {
         };
 
         // Send the IPC block for the new mthread to use.
-        match self.continue_plugin(
+        let clone_res: i64 = match self.continue_plugin(
             ctx.host,
             &ShimEventToShim::AddThreadReq(ShimEventAddThreadReq {
                 ipc_block: child_ipc_shmem.serialize(),
+                flags,
+                child_stack,
+                ptid: ptid.cast::<()>(),
+                ctid: ctid.cast::<()>(),
+                newtls,
             }),
         ) {
-            ShimEventToShadow::AddThreadParentRes => (),
+            ShimEventToShadow::AddThreadParentRes(ShimEventAddThreadParentRes { clone_res }) => {
+                clone_res
+            }
             r => panic!("Unexpected result: {r:?}"),
         };
-
-        // Create the new managed thread.
-        let child_native_tid = libc::pid_t::from(syscall::raw_return_value_to_result(
-            self.native_syscall(
-                ctx,
-                libc::SYS_clone,
-                &[
-                    flags.into(),
-                    child_stack.into(),
-                    ptid.into(),
-                    ctid.into(),
-                    newtls.into(),
-                ],
-            )
-            .into(),
-        )?);
+        let clone_res: SysCallReg = syscall::raw_return_value_to_result(clone_res)?;
+        let child_native_tid = libc::pid_t::from(clone_res);
         trace!("native clone treated tid {child_native_tid}");
 
         trace!(

@@ -1,7 +1,7 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
+use crate::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg, UntypedForeignPtr};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -25,6 +25,23 @@ pub struct ShimEventSyscallComplete {
 #[repr(C)]
 pub struct ShimEventAddThreadReq {
     pub ipc_block: ShMemBlockSerialized,
+    /// clone flags.
+    pub flags: libc::c_ulong,
+    /// clone stack. u8 pointer in shim's memory
+    pub child_stack: UntypedForeignPtr,
+    /// clone ptid. pid_t pointer in shim's memory
+    pub ptid: UntypedForeignPtr,
+    /// clone ctid. pid_t pointer in shim's memory
+    pub ctid: UntypedForeignPtr,
+    /// clone tls.
+    pub newtls: libc::c_ulong,
+}
+
+/// Data for [`ShimEventToShadow::AddThreadParentRes`]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[repr(C)]
+pub struct ShimEventAddThreadParentRes {
+    pub clone_res: i64,
 }
 
 /// Data for [`ShimEventToShadow::StartReq`]
@@ -58,7 +75,7 @@ pub enum ShimEventToShadow {
     /// Response to ShimEventToShim::Syscall
     SyscallComplete(ShimEventSyscallComplete),
     /// Response to `ShimEventToShim::AddThreadReq`
-    AddThreadParentRes,
+    AddThreadParentRes(ShimEventAddThreadParentRes),
 }
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
@@ -238,26 +255,18 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn shimevent2shadow_initAddThreadParentRes(dst: *mut ShimEventToShadow) {
-        let event = ShimEventToShadow::AddThreadParentRes;
+    pub unsafe extern "C" fn shimevent2shadow_initAddThreadParentRes(
+        dst: *mut ShimEventToShadow,
+        clone_res: i64,
+    ) {
+        let event =
+            ShimEventToShadow::AddThreadParentRes(ShimEventAddThreadParentRes { clone_res });
         unsafe { dst.write(event) };
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn shimevent_initSyscallDoNative(dst: *mut ShimEventToShim) {
         let event = ShimEventToShim::SyscallDoNative;
-        unsafe { dst.write(event) };
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn shimevent_initAddThreadReq(
-        dst: *mut ShimEventToShim,
-        ipc_block: *const ShMemBlockSerialized,
-    ) {
-        let ipc_block = unsafe { ipc_block.as_ref().unwrap() };
-        let event = ShimEventToShim::AddThreadReq(ShimEventAddThreadReq {
-            ipc_block: *ipc_block,
-        });
         unsafe { dst.write(event) };
     }
 }

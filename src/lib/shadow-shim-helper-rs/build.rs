@@ -62,9 +62,4 @@ fn main() {
     let build_common = ShadowBuildCommon::new(Path::new("../../.."), Some(deps));
 
     run_cbindgen(&build_common);
-
-    build_common
-        .cc_build()
-        .files(&["shadow_sem.c", "shadow_spinlock.c"])
-        .compile("shim_c");
 }
