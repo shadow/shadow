@@ -414,40 +414,33 @@ pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
     unreachable!()
 }
 
-fn load() {
-    static STARTED_THREAD_INIT: ShimTlsVar<LazyLock<()>> =
-        ShimTlsVar::new(&SHIM_TLS, || LazyLock::const_new(|| ()));
-    if STARTED_THREAD_INIT.get().initd() {
+/// Perform once-per-thread initialization for the shim.
+///
+/// Unlike `init_process` this must only be called once - we do so explicitly
+/// when creating a new managed thread.
+///
+/// Uses C ABI so that we can call from `asm`.
+extern "C" fn init_thread() {
+    unsafe { bindings::_shim_child_init_preload() };
+    log::trace!("Finished shim thread init");
+}
+
+/// Ensure once-per-process init for the shim is done.
+///
+/// Safe and cheap to call repeatedly; e.g. from API entry points.
+fn init_process() {
+    static STARTED_INIT: LazyLock<()> = LazyLock::const_new(|| ());
+    if STARTED_INIT.initd() {
         // Avoid recursion in initialization.
         //
         // TODO: This shouldn't be necessary once we've gotten rid of all
         // calls to libc from the shim's initialization.
         return;
     }
-    STARTED_THREAD_INIT.get().force();
+    STARTED_INIT.force();
 
-    // Once-per-thread initialization. We use a `LazyLock` object to cheaply
-    // ensure this runs at most once.
-    static THREAD_INIT: ShimTlsVar<LazyLock<()>> = ShimTlsVar::new(&SHIM_TLS, || {
-        // Flag to check whether we've initialized *any* thread in the current
-        // process.  The first thread initialized in the process has to do some
-        // extra initialization, but isn't quite a pure superset of later
-        // initialization.
-        // TODO: See if we can reorg to more cleanly separate "process
-        // initialization" from "thread initialization".
-        LazyLock::const_new(|| {
-            static GLOBAL_INIT: LazyLock<()> = LazyLock::const_new(|| ());
-            if !GLOBAL_INIT.initd() {
-                GLOBAL_INIT.force();
-                unsafe { bindings::_shim_parent_init_preload() };
-                log::trace!("Finished shim global init");
-            } else {
-                unsafe { bindings::_shim_child_init_preload() };
-                log::trace!("Finished shim thread init");
-            }
-        })
-    });
-    THREAD_INIT.get().force();
+    unsafe { bindings::_shim_parent_init_preload() };
+    log::trace!("Finished shim global init");
 }
 
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
@@ -608,7 +601,7 @@ pub mod export {
 
     #[no_mangle]
     pub extern "C" fn _shim_load() {
-        load();
+        init_process();
     }
 
     /// Should be used to exit every thread in the shim.

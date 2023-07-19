@@ -205,7 +205,7 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
             "call {tls_ipc_set}",
 
             // Initialize state for this thread
-            "call {shim_ensure_init}",
+            "call {shim_init_thread}",
 
             // Set CPU state from ctx
             "mov rdi, r12",
@@ -226,7 +226,7 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
             in("r8") newtls,
             blk = in(reg) child_ipc_blk,
             tls_ipc_set = sym tls_ipc_set,
-            shim_ensure_init = sym crate::bindings::shim_ensure_init,
+            shim_init_thread = sym crate::init_thread,
             // callee-saved register
             in("r12") child_sigcontext as * const _,
             set_context = sym set_context,
