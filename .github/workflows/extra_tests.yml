@@ -53,6 +53,8 @@ jobs:
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      - name: Set Rust toolchain
+        run: ln -s shadow/ci/rust-toolchain-stable.toml rust-toolchain.toml
       - name: Install dependencies
         run: |
           cd shadow
