@@ -213,6 +213,7 @@ static EpollWatch* _epollwatch_new(Epoll* epoll, int fd, EpollWatchTypes type,
     watch->listener = statuslistener_new(
         (StatusCallbackFunc)_epoll_fileStatusChanged, epoll, NULL, key, g_free, host);
 
+    worker_count_allocation(EpollWatch);
     return watch;
 }
 
@@ -229,6 +230,7 @@ static void _epollwatch_free(EpollWatch* watch) {
 
     statuslistener_unref(watch->listener);
 
+    worker_count_deallocation(EpollWatch);
     MAGIC_CLEAR(watch);
     g_free(watch);
 }
