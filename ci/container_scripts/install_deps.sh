@@ -80,6 +80,8 @@ case "$CONTAINER" in
     ubuntu:*|debian:*)
         sed -i '/deb-src/s/^# //' /etc/apt/sources.list
         DEBIAN_FRONTEND=noninteractive apt-get update
+        # We *want* word splitting
+        # shellcheck disable=2086
         DEBIAN_FRONTEND=noninteractive apt-get install -y $APT_PACKAGES $APT_CI_PACKAGES
 
         # Handle dict ordering of src/tools/convert.py and allow diff on its tests
@@ -94,6 +96,8 @@ case "$CONTAINER" in
         fi
         ;;
     fedora:*)
+        # We *want* word splitting
+        # shellcheck disable=2086
         dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
         ;;
     *)
@@ -103,4 +107,6 @@ case "$CONTAINER" in
 esac
 
 
+# We *want* word splitting
+# shellcheck disable=2086
 python3 -m pip install $PYTHON_PACKAGES

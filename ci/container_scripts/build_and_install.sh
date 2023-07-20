@@ -34,5 +34,7 @@ case "$BUILDTYPE" in
         ;;
 esac
 
+# We *want* word splitting
+# shellcheck disable=2086
 ./setup build -j4 --test --extra --werror $OPTIONS
 ./setup install
