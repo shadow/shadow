@@ -5,13 +5,16 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
+use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
 
 use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use shadow_shim_helper_rs::ipc::IPCData;
+use shadow_shim_helper_rs::shim_event::{ShimEventStartReq, ShimEventToShadow, ShimEventToShim};
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use shadow_shmem::allocator::{Serializer, ShMemBlockAlias, ShMemBlockSerialized};
 use tls::ThreadLocalStorage;
 use vasi_sync::lazy_lock::LazyLock;
@@ -31,6 +34,7 @@ mod bindings {
 pub mod clone;
 pub mod mmap_box;
 pub mod shimlogger;
+pub mod syscall;
 pub mod tls;
 
 pub use shimlogger::export as shimlogger_export;
@@ -443,6 +447,40 @@ fn init_process() {
     log::trace!("Finished shim global init");
 }
 
+/// Wait for "start" event from Shadow, use it to initialize the thread shared
+/// memory block, and optionally to initialize the process shared memory block.
+fn wait_for_start_event(init_process: bool) {
+    log::trace!("waiting for start event");
+
+    let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+    let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+    let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
+        thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_blk_serialized.as_mut_ptr()),
+        process_shmem_block_to_init: ForeignPtr::from_raw_ptr(if init_process {
+            process_blk_serialized.as_mut_ptr()
+        } else {
+            core::ptr::null_mut()
+        }),
+    });
+    let res = tls_ipc::with(|ipc| {
+        ipc.to_shadow().send(start_req);
+        ipc.from_shadow().receive().unwrap()
+    });
+    assert!(matches!(res, ShimEventToShim::StartRes));
+
+    // SAFETY: shadow should have initialized
+    let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
+    // SAFETY: blk should be of the correct type and outlive this thread.
+    unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
+
+    if init_process {
+        // SAFETY: shadow should have initialized
+        let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
+        // SAFETY: blk should be of the correct type and outlive this process.
+        unsafe { global_process_shmem::set(&process_blk_serialized) };
+    }
+}
+
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
 // points, and the symbols those recursively used, to be used. i.e. any function
 // called from outside of the shim needs to be exported from the Rust code. We
@@ -556,16 +594,6 @@ pub mod export {
         unsafe { tls_ipc::set_from_env() };
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `IPCData`, which outlives the current thread.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_ipc(ipc: *const ShMemBlockSerialized) {
-        let ipc = unsafe { ipc.as_ref().unwrap() };
-        unsafe { tls_ipc::set(ipc) };
-    }
-
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
     ///
     /// # Safety
@@ -574,16 +602,6 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_thisThreadEventIPC() -> *const IPCData {
         tls_ipc::with(|ipc| ipc as *const _)
-    }
-
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ThreadShmem`, which outlives the current thread.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_thread_shmem(thread_shmem: *const ShMemBlockSerialized) {
-        let thread_shmem = unsafe { thread_shmem.as_ref().unwrap() };
-        unsafe { tls_thread_shmem::set(thread_shmem) };
     }
 
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
@@ -616,16 +634,6 @@ pub mod export {
         unsafe { release_and_exit_current_thread(status) }
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ManagerShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_manager_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_manager_shmem::set(shmem) };
-    }
-
     #[no_mangle]
     pub extern "C" fn shim_managerSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager {
@@ -638,16 +646,6 @@ pub mod export {
             rv as *const _
         })
         .unwrap_or(core::ptr::null())
-    }
-
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `HostShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_host_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_host_shmem::set(shmem) };
     }
 
     #[no_mangle]
@@ -664,16 +662,6 @@ pub mod export {
         .unwrap_or(core::ptr::null())
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ProcessShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_process_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_process_shmem::set(shmem) };
-    }
-
     #[no_mangle]
     pub extern "C" fn shim_processSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
@@ -686,5 +674,26 @@ pub mod export {
             rv as *const _
         })
         .unwrap_or(core::ptr::null())
+    }
+
+    /// Wait for start event from shadow, from a newly spawned thread.
+    #[no_mangle]
+    pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
+        wait_for_start_event(false);
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_ipc_wait_for_start_event() {
+        wait_for_start_event(true);
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_init_manager_shm() {
+        unsafe { global_manager_shmem::set(&global_host_shmem::get().manager_shmem) }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_init_host_shm() {
+        unsafe { global_host_shmem::set(&global_process_shmem::get().host_shmem) }
     }
 }

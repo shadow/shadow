@@ -6,7 +6,6 @@
 #include <sys/ucontext.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "lib/shmem/shmem_allocator.h"
 #include "main/core/support/definitions.h"
 
 // Ensures that the shim is initialized for the current thread. Ok and cheap to

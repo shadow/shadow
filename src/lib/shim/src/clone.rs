@@ -234,37 +234,3 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
     }
     rv
 }
-
-pub mod export {
-    use super::*;
-
-    /// Execute a native `clone` syscall. The newly created child thread will
-    /// resume execution from `ctx`, which should be the point where the managed
-    /// code originally made a `clone` syscall (but was intercepted by seccomp).
-    ///
-    /// # Safety
-    ///
-    /// * `ctx` must be dereferenceable, and must be safe for the newly spawned
-    /// child thread to restore.
-    /// * Other pointers, if non-null, must be safely dereferenceable.
-    /// * `child_stack` must be "sufficiently big" for the child thread to run on.
-    /// * `tls` if provided must point to correctly initialized thread local storage.
-    #[no_mangle]
-    pub unsafe extern "C" fn shim_do_clone(
-        ctx: *const libc::ucontext_t,
-        event: *const ShimEventAddThreadReq,
-    ) -> i64 {
-        assert!(
-            !ctx.is_null(),
-            "clone without signal ucontext unimplemented"
-        );
-        // Cast from libc to linux kernel context. These are compatible in practice.
-        // TODO: Change calling code to use linux kernel context.
-        let ctx = ctx.cast::<linux_api::ucontext::ucontext>();
-        let ctx = unsafe { ctx.as_ref().unwrap() };
-
-        let event = unsafe { event.as_ref().unwrap() };
-
-        unsafe { do_clone(ctx, event) }
-    }
-}

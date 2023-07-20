@@ -24,6 +24,7 @@ linux-raw-sys = { version = "0.4.3" }
 shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
 static_assertions = "1.1.0"
+va_list = { version = "0.1.4", default-features = false }
 
 [dev-dependencies]
 env_logger = "0.10.0"

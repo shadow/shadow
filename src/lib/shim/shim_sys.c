@@ -9,9 +9,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"

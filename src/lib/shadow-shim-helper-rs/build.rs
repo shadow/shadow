@@ -12,7 +12,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         includes: vec![
             "lib/linux-api/linux-api.h".into(),
             "lib/logger/logger.h".into(),
-            "lib/shmem/shmem_allocator.h".into(),
         ],
         // We typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust, but cbindgen won't generate
         // bindings for `ForeignPtr<()>` so we need to write our own. This must have the same size,
@@ -26,8 +25,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         export: cbindgen::ExportConfig {
             include: vec![
                 "shd_kernel_sigaction".into(),
-                "ShimEventToShadow".into(),
-                "ShimEventToShim".into(),
                 "HostId".into(),
                 "SysCallArgs".into(),
                 "SysCallReg".into(),

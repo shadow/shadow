@@ -60,16 +60,6 @@ static void _shim_parent_init_death_signal() {
     }
 }
 
-static void _shim_parent_init_manager_shm() {
-    _shim_set_manager_shmem(shimshmem_getHostManagerShmem(shim_hostSharedMem()));
-    assert(shim_managerSharedMem());
-}
-
-static void _shim_parent_init_host_shm() {
-    _shim_set_host_shmem(shimshmem_getProcessHostShmem(shim_processSharedMem()));
-    assert(shim_hostSharedMem());
-}
-
 static void _shim_parent_init_memory_manager_internal() {
     syscall(SYS_shadow_init_memory_manager);
 }
@@ -114,44 +104,6 @@ static void _shim_parent_init_memory_manager() {
     }
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-}
-
-static void _shim_preload_only_child_ipc_wait_for_start_event() {
-    assert(shim_thisThreadEventIPC());
-
-    trace("waiting for start event on %p", shim_thisThreadEventIPC());
-
-    const struct IPCData* ipc = shim_thisThreadEventIPC();
-
-    ShMemBlockSerialized thread_blk_serialized;
-    ShimEventToShadow start_req;
-    shimevent2shadow_initStartReq(&start_req, &thread_blk_serialized, NULL);
-    shimevent_sendEventToShadow(ipc, &start_req);
-
-    ShimEventToShim start_res;
-    shimevent_recvEventFromShadow(ipc, &start_res);
-    assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
-
-    _shim_set_thread_shmem(&thread_blk_serialized);
-}
-
-static void _shim_ipc_wait_for_start_event() {
-    assert(shim_thisThreadEventIPC());
-
-    trace("waiting for start event on %p", shim_thisThreadEventIPC());
-
-    ShMemBlockSerialized thread_blk_serialized;
-    ShMemBlockSerialized process_blk_serialized;
-    ShimEventToShadow start_req;
-    shimevent2shadow_initStartReq(&start_req, &thread_blk_serialized, &process_blk_serialized);
-    shimevent_sendEventToShadow(shim_thisThreadEventIPC(), &start_req);
-
-    ShimEventToShim start_res;
-    shimevent_recvEventFromShadow(shim_thisThreadEventIPC(), &start_res);
-    assert(shimevent2shim_getId(&start_res) == SHIM_EVENT_TO_SHIM_START_RES);
-
-    _shim_set_thread_shmem(&thread_blk_serialized);
-    _shim_set_process_shmem(&process_blk_serialized);
 }
 
 static void _shim_parent_init_seccomp() {

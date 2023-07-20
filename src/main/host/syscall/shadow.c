@@ -12,7 +12,6 @@
 #include <strings.h>
 
 #include "lib/logger/logger.h"
-#include "lib/shmem/shmem_allocator.h"
 #include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/syscall/protected.h"

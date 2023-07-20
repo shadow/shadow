@@ -56,7 +56,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         ],
         includes: vec![
             "lib/log-c2rust/rustlogger.h".into(),
-            "lib/shmem/shmem_allocator.h".into(),
             "lib/shadow-shim-helper-rs/shim_helper.h".into(),
         ],
         after_includes: {

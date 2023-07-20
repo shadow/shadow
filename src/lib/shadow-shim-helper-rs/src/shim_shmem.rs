@@ -268,7 +268,7 @@ impl ProcessShmemProtected {
 #[repr(C)]
 pub struct ThreadShmem {
     pub host_id: HostId,
-    tid: libc::pid_t,
+    pub tid: libc::pid_t,
 
     pub protected: RootedRefCell<ThreadShmemProtected>,
 }
@@ -527,30 +527,6 @@ pub mod export {
     ) -> libc::c_int {
         let process_mem = unsafe { process.as_ref().unwrap() };
         process_mem.strace_fd.unwrap_or(-1)
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The returned pointer is
-    /// borrowed from `host`.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getHostManagerShmem(
-        host: *const ShimShmemHost,
-    ) -> *const ShMemBlockSerialized {
-        let host = unsafe { host.as_ref().unwrap() };
-        &host.manager_shmem
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The returned pointer is
-    /// borrowed from `process`.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessHostShmem(
-        process: *const ShimShmemProcess,
-    ) -> *const ShMemBlockSerialized {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        &process_mem.host_shmem
     }
 
     /// # Safety
