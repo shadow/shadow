@@ -60,16 +60,6 @@ static void _shim_parent_init_death_signal() {
     }
 }
 
-static void _shim_parent_init_manager_shm() {
-    _shim_set_manager_shmem(shimshmem_getHostManagerShmem(shim_hostSharedMem()));
-    assert(shim_managerSharedMem());
-}
-
-static void _shim_parent_init_host_shm() {
-    _shim_set_host_shmem(shimshmem_getProcessHostShmem(shim_processSharedMem()));
-    assert(shim_hostSharedMem());
-}
-
 static void _shim_parent_init_memory_manager_internal() {
     syscall(SYS_shadow_init_memory_manager);
 }

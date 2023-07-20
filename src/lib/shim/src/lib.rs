@@ -563,16 +563,6 @@ pub mod export {
         unsafe { tls_ipc::set_from_env() };
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `IPCData`, which outlives the current thread.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_ipc(ipc: *const ShMemBlockSerialized) {
-        let ipc = unsafe { ipc.as_ref().unwrap() };
-        unsafe { tls_ipc::set(ipc) };
-    }
-
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
     ///
     /// # Safety
@@ -581,16 +571,6 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_thisThreadEventIPC() -> *const IPCData {
         tls_ipc::with(|ipc| ipc as *const _)
-    }
-
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ThreadShmem`, which outlives the current thread.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_thread_shmem(thread_shmem: *const ShMemBlockSerialized) {
-        let thread_shmem = unsafe { thread_shmem.as_ref().unwrap() };
-        unsafe { tls_thread_shmem::set(thread_shmem) };
     }
 
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
@@ -623,16 +603,6 @@ pub mod export {
         unsafe { release_and_exit_current_thread(status) }
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ManagerShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_manager_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_manager_shmem::set(shmem) };
-    }
-
     #[no_mangle]
     pub extern "C" fn shim_managerSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager {
@@ -647,16 +617,6 @@ pub mod export {
         .unwrap_or(core::ptr::null())
     }
 
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `HostShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_host_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_host_shmem::set(shmem) };
-    }
-
     #[no_mangle]
     pub extern "C" fn shim_hostSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost {
@@ -669,16 +629,6 @@ pub mod export {
             rv as *const _
         })
         .unwrap_or(core::ptr::null())
-    }
-
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block of
-    /// type `ProcessShmem`, which outlives the current process.
-    #[no_mangle]
-    pub unsafe extern "C" fn _shim_set_process_shmem(shmem: *const ShMemBlockSerialized) {
-        let shmem = unsafe { shmem.as_ref().unwrap() };
-        unsafe { global_process_shmem::set(shmem) };
     }
 
     #[no_mangle]
@@ -748,5 +698,15 @@ pub mod export {
 
         // SAFETY: blk should be of the correct type and outlive this process.
         unsafe { global_process_shmem::set(&process_blk_serialized) };
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_init_manager_shm() {
+        unsafe { global_manager_shmem::set(&global_host_shmem::get().manager_shmem) }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_init_host_shm() {
+        unsafe { global_host_shmem::set(&global_process_shmem::get().host_shmem) }
     }
 }

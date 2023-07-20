@@ -15,7 +15,6 @@
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
-#include "lib/shmem/shmem_allocator.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall_numbers.h"
 

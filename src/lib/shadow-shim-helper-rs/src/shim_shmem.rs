@@ -531,30 +531,6 @@ pub mod export {
 
     /// # Safety
     ///
-    /// Pointer args must be safely dereferenceable. The returned pointer is
-    /// borrowed from `host`.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getHostManagerShmem(
-        host: *const ShimShmemHost,
-    ) -> *const ShMemBlockSerialized {
-        let host = unsafe { host.as_ref().unwrap() };
-        &host.manager_shmem
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The returned pointer is
-    /// borrowed from `process`.
-    #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessHostShmem(
-        process: *const ShimShmemProcess,
-    ) -> *const ShMemBlockSerialized {
-        let process_mem = unsafe { process.as_ref().unwrap() };
-        &process_mem.host_shmem
-    }
-
-    /// # Safety
-    ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     pub unsafe extern "C" fn shimshmem_getSignalAction(
