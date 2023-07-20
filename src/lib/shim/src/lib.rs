@@ -5,13 +5,16 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
+use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
 
 use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
 use shadow_shim_helper_rs::ipc::IPCData;
+use shadow_shim_helper_rs::shim_event::{ShimEventStartReq, ShimEventToShadow, ShimEventToShim};
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use shadow_shmem::allocator::{Serializer, ShMemBlockAlias, ShMemBlockSerialized};
 use tls::ThreadLocalStorage;
 use vasi_sync::lazy_lock::LazyLock;
@@ -444,18 +447,46 @@ fn init_process() {
     log::trace!("Finished shim global init");
 }
 
+/// Wait for "start" event from Shadow, use it to initialize the thread shared
+/// memory block, and optionally to initialize the process shared memory block.
+fn wait_for_start_event(init_process: bool) {
+    log::trace!("waiting for start event");
+
+    let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+    let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
+    let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
+        thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_blk_serialized.as_mut_ptr()),
+        process_shmem_block_to_init: ForeignPtr::from_raw_ptr(if init_process {
+            process_blk_serialized.as_mut_ptr()
+        } else {
+            core::ptr::null_mut()
+        }),
+    });
+    let res = tls_ipc::with(|ipc| {
+        ipc.to_shadow().send(start_req);
+        ipc.from_shadow().receive().unwrap()
+    });
+    assert!(matches!(res, ShimEventToShim::StartRes));
+
+    // SAFETY: shadow should have initialized
+    let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
+    // SAFETY: blk should be of the correct type and outlive this thread.
+    unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
+
+    if init_process {
+        // SAFETY: shadow should have initialized
+        let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
+        // SAFETY: blk should be of the correct type and outlive this process.
+        unsafe { global_process_shmem::set(&process_blk_serialized) };
+    }
+}
+
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
 // points, and the symbols those recursively used, to be used. i.e. any function
 // called from outside of the shim needs to be exported from the Rust code. We
 // wrap some C implementations here.
 pub mod export {
-    use core::mem::MaybeUninit;
     use core::ops::Deref;
-
-    use shadow_shim_helper_rs::shim_event::{
-        ShimEventStartReq, ShimEventToShadow, ShimEventToShim,
-    };
-    use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
     use super::*;
 
@@ -648,56 +679,12 @@ pub mod export {
     /// Wait for start event from shadow, from a newly spawned thread.
     #[no_mangle]
     pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
-        log::trace!("waiting for start event");
-
-        let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
-        let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
-            thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(
-                thread_blk_serialized.as_mut_ptr(),
-            ),
-            process_shmem_block_to_init: ForeignPtr::null(),
-        });
-        let res = tls_ipc::with(|ipc| {
-            ipc.to_shadow().send(start_req);
-            ipc.from_shadow().receive().unwrap()
-        });
-        assert!(matches!(res, ShimEventToShim::StartRes));
-
-        // SAFETY: shadow should have initialized
-        let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
-
-        // SAFETY: blk should be of the correct type and outlive this thread.
-        unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
+        wait_for_start_event(false);
     }
 
     #[no_mangle]
     pub extern "C" fn _shim_ipc_wait_for_start_event() {
-        log::trace!("waiting for start event");
-        let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
-        let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
-        let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
-            thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(
-                thread_blk_serialized.as_mut_ptr(),
-            ),
-            process_shmem_block_to_init: ForeignPtr::from_raw_ptr(
-                process_blk_serialized.as_mut_ptr(),
-            ),
-        });
-        let res = tls_ipc::with(|ipc| {
-            ipc.to_shadow().send(start_req);
-            ipc.from_shadow().receive().unwrap()
-        });
-        assert!(matches!(res, ShimEventToShim::StartRes));
-
-        // SAFETY: shadow should have initialized
-        let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };
-        let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
-
-        // SAFETY: blk should be of the correct type and outlive this thread.
-        unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
-
-        // SAFETY: blk should be of the correct type and outlive this process.
-        unsafe { global_process_shmem::set(&process_blk_serialized) };
+        wait_for_start_event(true);
     }
 
     #[no_mangle]
