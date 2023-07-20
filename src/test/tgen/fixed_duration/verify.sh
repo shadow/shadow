@@ -4,9 +4,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-printf "TGen configuration: network=$1 client=$2\n"
 network=$1
 client=$2
+echo "TGen configuration: network=$network client=$client"
 
 # read speed of server is the effective write speed of client
 # read speed of client is the effective write speed of server

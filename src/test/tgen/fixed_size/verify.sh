@@ -4,9 +4,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-printf "TGen configuration: network=$1 client=$2\n"
 network=$1
 client=$2
+echo "TGen configuration: network=$network client=$client"
 
 # make sure all of the fixed-size transfers were successful
 expected_count="$(echo ${client} | cut -d'_' -f3 | cut -d'x' -f1)"
