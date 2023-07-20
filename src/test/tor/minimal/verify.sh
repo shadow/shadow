@@ -38,6 +38,6 @@ check_host fileserver 30 30
 # Only require half of the streams to succeed, to mitigate
 # https://github.com/shadow/shadow/issues/2544
 check_host torhiddenclient 5 10
-check_host torhiddenserver 5 10
+check_host hiddenserver 5 10
 
 printf "Verification ${GREEN}succeeded${NC}: Yay :)\n"
