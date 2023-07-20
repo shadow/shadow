@@ -13,7 +13,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
-use crate::utility::{HostTreePointer, IsSend, IsSync};
+use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
 
 pub mod descriptor_table;
 pub mod eventfd;
@@ -502,6 +502,7 @@ impl std::fmt::Debug for FileRefMut<'_> {
 #[derive(Clone, Debug)]
 pub struct OpenFile {
     inner: Arc<OpenFileInner>,
+    _counter: ObjectCounter,
 }
 
 // will not compile if `OpenFile` is not Send + Sync
@@ -529,7 +530,8 @@ impl OpenFile {
         }
 
         Self {
-            inner: Arc::new(OpenFileInner { file: Some(file) }),
+            inner: Arc::new(OpenFileInner::new(file)),
+            _counter: ObjectCounter::new("OpenFile"),
         }
     }
 
@@ -541,7 +543,7 @@ impl OpenFile {
     /// behaviour is the same as simply dropping this `OpenFile` object, but allows you to pass an
     /// event queue and get the return value of the close operation.
     pub fn close(self, cb_queue: &mut CallbackQueue) -> Option<Result<(), SyscallError>> {
-        let OpenFile { inner } = self;
+        let OpenFile { inner, _counter } = self;
 
         // if this is the last reference, call close() on the file
         Arc::into_inner(inner).map(|inner| inner.close(cb_queue))
@@ -551,9 +553,17 @@ impl OpenFile {
 #[derive(Clone, Debug)]
 struct OpenFileInner {
     file: Option<File>,
+    _counter: ObjectCounter,
 }
 
 impl OpenFileInner {
+    pub fn new(file: File) -> Self {
+        Self {
+            file: Some(file),
+            _counter: ObjectCounter::new("OpenFileInner"),
+        }
+    }
+
     pub fn close(mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         self.close_helper(cb_queue)
     }
@@ -583,6 +593,7 @@ pub struct Descriptor {
     file: CompatFile,
     /// Descriptor flags.
     flags: DescriptorFlags,
+    _counter: ObjectCounter,
 }
 
 // will not compile if `Descriptor` is not Send + Sync
@@ -594,6 +605,7 @@ impl Descriptor {
         Self {
             file,
             flags: DescriptorFlags::empty(),
+            _counter: ObjectCounter::new("Descriptor"),
         }
     }
 
@@ -629,6 +641,7 @@ impl Descriptor {
         Self {
             file: self.file.clone(),
             flags,
+            _counter: ObjectCounter::new("Descriptor"),
         }
     }
 
