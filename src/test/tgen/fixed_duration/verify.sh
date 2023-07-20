@@ -26,8 +26,8 @@ client_Bps_read="$(grep -r --include="tgen.*.stdout" "driver-heartbeat" ./hosts/
     | sort -n \
     | tail -1)"
 
-printf "Server bytes per second=${server_Bps_read}\n"
-printf "Client bytes per second=${client_Bps_read}\n"
+echo "Server bytes per second=${server_Bps_read}"
+echo "Client bytes per second=${client_Bps_read}"
 
 # Test passes if tgen application achieves >= 85% of configured speed, allowing
 # for TCP overhead. We use a 89% threshold since it's the highest that allowed
@@ -47,15 +47,15 @@ elif [[ "${network}" == "100mbit"* ]]; then
 elif [[ "${network}" == "1gbit"* ]]; then
     expected=106250000
 else
-    printf "Verification ${RED}failed${NC}: unable to determine expected connection speed\n"
+    printf "Verification %bfailed%b: unable to determine expected connection speed\n" "$RED" "$NC"
     exit 1
 fi
 
 result="${network} net expected ${expected} got client=${client_Bps_read} server=${server_Bps_read}"
 if [[ ${client_Bps_read} < ${expected} || ${server_Bps_read} < ${expected} ]]; then
-    printf "Verification ${RED}failed${NC}: ${result}\n"
+    printf "Verification %bfailed%b: ${result}\n" "$RED" "$NC"
     exit 1
 else
-    printf "Verification ${GREEN}succeeded${NC}: ${result}; Yay :)\n"
+    printf "Verification %bsucceeded%b: ${result}; Yay :)\n" "$GREEN" "$NC"
     exit 0
 fi

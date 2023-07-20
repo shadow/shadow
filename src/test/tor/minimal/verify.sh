@@ -8,9 +8,9 @@ NC='\033[0m' # No Color
 
 EXPECTED_BOOTSTRAP_COUNT=11
 bootstrapped_count="$(grep -r --include="tor.*.stdout" "Bootstrapped 100" | wc -l)"
-printf "Bootstrapped count: ${bootstrapped_count}/$EXPECTED_BOOTSTRAP_COUNT\n"
+echo "Bootstrapped count: ${bootstrapped_count}/$EXPECTED_BOOTSTRAP_COUNT"
 if [ "${bootstrapped_count}" != "$EXPECTED_BOOTSTRAP_COUNT" ]; then
-    printf "Verification ${RED}failed${NC}: Not all tor processes bootstrapped :(\n"
+    printf "Verification %bfailed%b: Not all tor processes bootstrapped :(\n" "$RED" "$NC"
     exit 1
 fi
 
@@ -25,7 +25,7 @@ check_host () {
     stream_count=$(grep -c stream-success hosts/$NAME/tgen.*.stdout)
     printf "Successful $NAME stream count: ${stream_count}/$TOTAL_STREAMS (minimum $MINIMUM_STREAMS)\n"
     if [ "${stream_count}" -lt "$MINIMUM_STREAMS" ]; then
-        printf "Verification ${RED}failed${NC}: Not enough $NAME streams were successful :(\n"
+        printf "Verification %bfailed%b: Not enough $NAME streams were successful :(\n" "$RED" "$NC"
         exit 1
     fi
 }
@@ -40,4 +40,4 @@ check_host fileserver 30 30
 check_host torhiddenclient 5 10
 check_host hiddenserver 5 10
 
-printf "Verification ${GREEN}succeeded${NC}: Yay :)\n"
+printf "Verification %bsucceeded%b: Yay :)\n" "$GREEN" "$NC"

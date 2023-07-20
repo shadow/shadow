@@ -12,11 +12,11 @@ client=$2
 expected_count="$(echo ${client} | cut -d'_' -f3 | cut -d'x' -f1)"
 actual_count="$(grep -r --include="tgen.*.stdout" "stream-success" ./hosts/client/ | wc -l)"
 
-printf "Successful tgen stream count: ${actual_count}/${expected_count}\n"
+echo "Successful tgen stream count: ${actual_count}/${expected_count}"
 
 if [[ "${actual_count}" != "${expected_count}" ]]; then
-    printf "Verification ${RED}failed${NC}: Not all tgen streams were successful :(\n"
+    printf "Verification %bfailed%b: Not all tgen streams were successful :(\n" "$RED" "$NC"
     exit 1
 fi
 
-printf "Verification ${GREEN}succeeded${NC}: Yay :)\n"
+printf "Verification %bsucceeded%b: Yay :)\n" "$GREEN" "$NC"
