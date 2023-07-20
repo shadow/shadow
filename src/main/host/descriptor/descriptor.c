@@ -270,14 +270,6 @@ void legacyfile_removeFlags(LegacyFile* descriptor, gint flags) {
     descriptor->flags &= ~flags;
 }
 
-void legacyfile_shutdownHelper(LegacyFile* legacyDesc) {
-    MAGIC_ASSERT(legacyDesc);
-
-    if (legacyDesc->type == DT_EPOLL) {
-        epoll_clearWatchListeners((Epoll*)legacyDesc);
-    }
-}
-
 bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc) {
     switch (legacyDesc->type) {
         case DT_TCPSOCKET:
