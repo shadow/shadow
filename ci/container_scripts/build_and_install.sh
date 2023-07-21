@@ -20,13 +20,13 @@ esac
 
 case "$BUILDTYPE" in
     "release")
-        OPTIONS=""
+        OPTIONS=()
         ;;
     "debug")
-        OPTIONS="--debug"
+        OPTIONS=(--debug)
         ;;
     "coverage")
-        OPTIONS="--debug --coverage"
+        OPTIONS=(--debug --coverage)
         ;;
     *)
         echo "Unknown BUILDTYPE $BUILDTYPE"
@@ -34,7 +34,5 @@ case "$BUILDTYPE" in
         ;;
 esac
 
-# We *want* word splitting
-# shellcheck disable=2086
-./setup build -j4 --test --extra --werror $OPTIONS
+./setup build -j4 --test --extra --werror "${OPTIONS[@]}"
 ./setup install
