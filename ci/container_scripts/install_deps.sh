@@ -86,7 +86,7 @@ case "$CONTAINER" in
 
         # Handle dict ordering of src/tools/convert.py and allow diff on its tests
         # Before Python3.6, dict ordering was not predictable
-        if [[ `python3 --version` == *" 3.5"* ]]; then
+        if [[ $(python3 --version) == *" 3.5"* ]]; then
           apt-get install -y software-properties-common
           add-apt-repository -y ppa:deadsnakes/ppa
           apt-get update
