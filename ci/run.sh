@@ -145,7 +145,7 @@ EOF
     # them here allows tests to pass in cases where new system dependencies have
     # been added without having to rebuild the base images. In the common case
     # where nothing new is installed they are usually fairly fast no-ops.
-    CONTAINER_ID=$(docker create ${DOCKER_CREATE_FLAGS[@]} "${TAG}" /bin/bash -c \
+    CONTAINER_ID=$(docker create "${DOCKER_CREATE_FLAGS[@]}" "${TAG}" /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \

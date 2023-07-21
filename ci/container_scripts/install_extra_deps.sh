@@ -8,10 +8,10 @@ set -euo pipefail
 install_packages () {
     case "$CONTAINER" in
         ubuntu:*|debian:*)
-            DEBIAN_FRONTEND=noninteractive apt-get install -y $@
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -- "$@"
             ;;
         fedora:*)
-            dnf install --best -y $@
+            dnf install --best -y "$@"
             ;;
         *)
             echo "Unhandled container $CONTAINER"
