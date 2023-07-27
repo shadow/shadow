@@ -361,4 +361,33 @@ mod tests {
             assert_eq!(*block, 42);
         }
     }
+
+    #[test]
+    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn mutations() {
+        register_teardown();
+
+        println!("{:?}", SHMALLOC.lock().internal);
+        println!("{:?}", SHDESERIALIZER.lock().internal);
+
+        type T = AtomicI32;
+        let original_block = SHMALLOC.lock().alloc(AtomicI32::new(0));
+
+        let serialized_block = original_block.serialize();
+        let deserialized_block = SHDESERIALIZER.lock().deserialize::<T>(&serialized_block);
+
+        assert_eq!(original_block.load(Ordering::SeqCst), 0);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 0);
+
+        // Mutate through original
+        original_block.store(10, Ordering::SeqCst);
+        assert_eq!(original_block.load(Ordering::SeqCst), 10);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 10);
+
+        // Mutate through deserialized
+        deserialized_block.store(20, Ordering::SeqCst);
+        assert_eq!(original_block.load(Ordering::SeqCst), 20);
+        assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
+    }
 }
