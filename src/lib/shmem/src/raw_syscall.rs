@@ -8,7 +8,14 @@
 //! matches the x86_64 ABI:
 //! <https://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/>
 
-use core::arch::asm;
+use core::result::Result;
+
+use linux_syscall::*;
+
+pub const S_IRUSR: u32 = 0o400;
+pub const S_IWUSR: u32 = 0o200;
+pub const S_IRGRP: u32 = S_IRUSR >> 3;
+pub const S_IWGRP: u32 = S_IWUSR >> 3;
 
 fn convert_i32_rv_to_rv_errno(rv: i32) -> Result<i32, i32> {
     if rv < -1 {
@@ -18,46 +25,8 @@ fn convert_i32_rv_to_rv_errno(rv: i32) -> Result<i32, i32> {
     }
 }
 
-fn x86_64_syscall(
-    syscall_number: u64,
-    arg1: u64,
-    arg2: u64,
-    arg3: u64,
-    arg4: u64,
-    arg5: u64,
-    arg6: u64,
-) -> u64 {
-    let result: u64;
-
-    unsafe {
-        asm!(
-            "syscall",
-            inlateout("rax") syscall_number => result,
-            inlateout("rdi") arg1 => _,
-            inlateout("rsi") arg2 => _,
-            inlateout("rdx") arg3 => _,
-            inlateout("r10") arg4 => _,
-            inlateout("r8") arg5 => _,
-            inlateout("r9") arg6 => _,
-            lateout("rcx") _,
-            lateout("r11") _,
-        );
-    }
-
-    result
-}
-
 fn open_impl(filename: *const char, flags: i32, mode: u32) -> i32 {
-    const SYS_OPEN: u64 = 2;
-    x86_64_syscall(
-        SYS_OPEN,
-        filename as u64,
-        flags as u64,
-        mode as u64,
-        0,
-        0,
-        0,
-    ) as i32
+    unsafe { syscall!(SYS_open, filename, flags, mode).as_u64_unchecked() as i32 }
 }
 
 pub unsafe fn open(filename: *const u8, flags: i32, mode: u32) -> Result<i32, i32> {
@@ -69,13 +38,11 @@ pub unsafe fn open(filename: *const u8, flags: i32, mode: u32) -> Result<i32, i3
 }
 
 pub fn close(fd: i32) -> Result<i32, i32> {
-    const SYS_CLOSE: u64 = 3;
-    convert_i32_rv_to_rv_errno(x86_64_syscall(SYS_CLOSE, fd as u64, 0, 0, 0, 0, 0) as i32)
+    unsafe { convert_i32_rv_to_rv_errno(syscall!(SYS_close, fd).as_u64_unchecked() as i32) }
 }
 
 fn unlink_impl(filename: *const char) -> i32 {
-    const SYS_UNLINK: u64 = 87;
-    x86_64_syscall(SYS_UNLINK, filename as u64, 0, 0, 0, 0, 0) as i32
+    unsafe { syscall!(SYS_unlink, filename).as_u64_unchecked() as i32 }
 }
 
 pub unsafe fn unlink(filename: *const u8) -> Result<i32, i32> {
@@ -85,8 +52,7 @@ pub unsafe fn unlink(filename: *const u8) -> Result<i32, i32> {
 }
 
 fn mmap_impl(addr: u64, len: u64, prot: u64, flags: u64, fd: u64, off: u64) -> u64 {
-    const SYS_MMAP: u64 = 9;
-    x86_64_syscall(SYS_MMAP, addr, len, prot, flags, fd, off)
+    unsafe { syscall!(SYS_mmap, addr, len, prot, flags, fd, off).as_u64_unchecked() }
 }
 
 pub unsafe fn mmap<'a>(
@@ -116,8 +82,7 @@ pub unsafe fn mmap<'a>(
 }
 
 fn munmap_impl(addr: u64, nbytes: u64) -> i32 {
-    const SYS_MUNMAP: u64 = 11;
-    x86_64_syscall(SYS_MUNMAP, addr, nbytes, 0, 0, 0, 0) as i32
+    unsafe { syscall!(SYS_munmap, addr, nbytes).as_u64_unchecked() as i32 }
 }
 
 pub fn munmap(bytes: &mut [u8]) -> Result<(), (&mut [u8], i32)> {
@@ -133,21 +98,21 @@ pub fn munmap(bytes: &mut [u8]) -> Result<(), (&mut [u8], i32)> {
 }
 
 pub fn ftruncate(fd: i32, nbytes: u64) -> Result<i32, i32> {
-    const SYS_FTRUNCATE: u64 = 77;
-    convert_i32_rv_to_rv_errno(x86_64_syscall(SYS_FTRUNCATE, fd as u64, nbytes, 0, 0, 0, 0) as i32)
+    convert_i32_rv_to_rv_errno(unsafe {
+        syscall!(SYS_ftruncate, fd, nbytes).as_u64_unchecked() as i32
+    })
 }
 
-fn clock_gettime_impl(clockid: libc::clockid_t, ts: *mut libc::timespec) -> i32 {
-    const SYS_CLOCK_GETTIME: u64 = 228;
-    x86_64_syscall(SYS_CLOCK_GETTIME, clockid as u64, ts as u64, 0, 0, 0, 0) as i32
+fn clock_gettime_impl(clockid: i32, ts: *mut linux_api::time::timespec) -> i32 {
+    unsafe { syscall!(SYS_clock_gettime, clockid, ts).as_u64_unchecked() as i32 }
 }
 
-pub fn clock_gettime() -> Result<libc::timespec, i32> {
-    let mut ts = libc::timespec {
+pub fn clock_gettime() -> Result<linux_api::time::timespec, i32> {
+    let mut ts = linux_api::time::timespec {
         tv_sec: 0,
         tv_nsec: 0,
     };
-    let rv = clock_gettime_impl(libc::CLOCK_MONOTONIC, &mut ts);
+    let rv = clock_gettime_impl(linux_api::time::ClockId::CLOCK_MONOTONIC.into(), &mut ts);
 
     if rv == 0 {
         Ok(ts)
@@ -157,8 +122,7 @@ pub fn clock_gettime() -> Result<libc::timespec, i32> {
 }
 
 pub fn getpid() -> i32 {
-    const SYS_GETPID: u64 = 39;
-    x86_64_syscall(SYS_GETPID, 0, 0, 0, 0, 0, 0) as i32
+    unsafe { syscall!(SYS_getpid).as_u64_unchecked() as i32 }
 }
 
 #[cfg(test)]
@@ -182,27 +146,33 @@ mod tests {
 
     #[test]
     fn test_all() {
-        const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC;
-        const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
-        const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
-        const MAP_FLAGS: i32 = libc::MAP_SHARED;
+        use linux_api::fcntl::OFlag;
+        use linux_api::mman::{MapFlags, ProtFlags};
 
-        let path = "/dev/shm/foo";
+        let open_flags: i32 =
+            (OFlag::O_RDWR | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_CLOEXEC).bits();
+
+        const MODE: u32 = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+
+        let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
+        let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
+
+        let path = "/dev/shm/bar";
         let nbytes = 100;
 
         let mut buf: [u8; 32] = [0; 32];
         let mut csr = Cursor::new(&mut buf[..]);
         csr.write(&path.as_bytes()[..]).unwrap();
 
-        let fd = unsafe { open(buf.as_ptr(), OPEN_FLAGS, MODE).unwrap() };
+        let fd = unsafe { open(buf.as_ptr(), open_flags, MODE).unwrap() };
         ftruncate(fd, nbytes.try_into().unwrap()).unwrap();
 
         let data = unsafe {
             mmap(
                 std::ptr::null_mut(),
                 nbytes.try_into().unwrap(),
-                PROT,
-                MAP_FLAGS,
+                prot,
+                map_flags,
                 fd,
                 0,
             )

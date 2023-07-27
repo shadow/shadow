@@ -4,8 +4,8 @@ use crate::raw_syscall::*;
 use numtoa::NumToA;
 
 const PATH_MAX_NBYTES: usize = 255;
-const PATH_BUF_NBYTES: usize = PATH_MAX_NBYTES + 1;
-type PathBuf = [u8; PATH_BUF_NBYTES];
+pub(crate) const PATH_BUF_NBYTES: usize = PATH_MAX_NBYTES + 1;
+pub(crate) type PathBuf = [u8; PATH_BUF_NBYTES];
 
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -78,20 +78,26 @@ fn create_map_shared_memory<'a>(
     path_buf: &PathBuf,
     nbytes: usize,
 ) -> Result<(&'a mut [u8], i32), i32> {
-    const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC;
-    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
-    const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
-    const MAP_FLAGS: i32 = libc::MAP_SHARED;
+    use linux_api::fcntl::OFlag;
+    use linux_api::mman::{MapFlags, ProtFlags};
 
-    let fd = unsafe { open(path_buf.as_ptr(), OPEN_FLAGS, MODE)? };
+    const MODE: u32 = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+
+    let open_flags: i32 =
+        (OFlag::O_RDWR | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_CLOEXEC).bits();
+
+    let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
+    let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
+
+    let fd = unsafe { open(path_buf.as_ptr(), open_flags, MODE)? };
     ftruncate(fd, nbytes.try_into().unwrap())?;
 
     let retval = unsafe {
         mmap(
             core::ptr::null_mut(),
             nbytes.try_into().unwrap(),
-            PROT,
-            MAP_FLAGS,
+            prot,
+            map_flags,
             fd,
             0,
         )?
@@ -102,19 +108,22 @@ fn create_map_shared_memory<'a>(
 
 // Similar to `create_map_shared_memory` but no O_CREAT or O_EXCL and no ftruncate calls.
 fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut [u8], i32), i32> {
-    const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_CLOEXEC;
-    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
-    const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
-    const MAP_FLAGS: i32 = libc::MAP_SHARED;
+    use linux_api::fcntl::OFlag;
+    use linux_api::mman::{MapFlags, ProtFlags};
 
-    let fd = unsafe { open(path_buf.as_ptr(), OPEN_FLAGS, MODE)? };
+    let open_flags: i32 = (OFlag::O_RDWR | OFlag::O_CLOEXEC).bits();
+    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
+    let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
+    let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
+
+    let fd = unsafe { open(path_buf.as_ptr(), open_flags, MODE)? };
 
     let retval = unsafe {
         mmap(
             core::ptr::null_mut(),
             nbytes.try_into().unwrap(),
-            PROT,
-            MAP_FLAGS,
+            prot,
+            map_flags,
             fd,
             0,
         )?
@@ -161,7 +170,9 @@ fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk
     let (p, fd) = create_map_shared_memory(path_buf, nbytes)?;
 
     // Zero the memory so that we do not have to worry about junk between blocks.
-    unsafe { core::ptr::write_bytes::<u8>(p.as_mut_ptr(), 0x00, nbytes); }
+    unsafe {
+        core::ptr::write_bytes::<u8>(p.as_mut_ptr(), 0x00, nbytes);
+    }
 
     let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
 
@@ -214,8 +225,8 @@ pub(crate) struct Block {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 pub(crate) struct BlockSerialized {
-    chunk_name: PathBuf,
-    offset: isize,
+    pub(crate) chunk_name: PathBuf,
+    pub(crate) offset: isize,
 }
 
 const BLOCK_STRUCT_NBYTES: usize = core::mem::size_of::<Block>();
@@ -443,7 +454,7 @@ impl FreelistAllocator {
 
     pub fn alloc(&mut self, alloc_nbytes: usize, alloc_alignment: usize) -> *mut Block {
         // First, check the free list
-        let (mut pred, mut block) =
+        let (pred, mut block) =
             self.check_free_list_for_acceptable_block(alloc_nbytes, alloc_alignment);
 
         if !block.is_null() {
@@ -600,8 +611,7 @@ pub(crate) struct FreelistDeserializer {
 }
 
 impl FreelistDeserializer {
-    #[no_mangle]
-    pub extern "C" fn new() -> FreelistDeserializer {
+    pub fn new() -> FreelistDeserializer {
         FreelistDeserializer {
             chunks: [core::ptr::null_mut(); CHUNK_CAPACITY],
             nmapped_chunks: 0,
@@ -636,8 +646,7 @@ impl FreelistDeserializer {
         chunk
     }
 
-    #[no_mangle]
-    pub extern "C" fn deserialize(&mut self, block_ser: &BlockSerialized) -> *mut Block {
+    pub fn deserialize(&mut self, block_ser: &BlockSerialized) -> *mut Block {
         let mut block_chunk = self.find_chunk(&block_ser.chunk_name);
 
         if block_chunk.is_null() {
@@ -687,6 +696,8 @@ mod tests {
             b1_ser,
             unsafe { (*b1_2).get_ref::<u32>() }
         );
+
+        alloc.destruct();
     }
 
     #[test]
@@ -723,15 +734,21 @@ mod tests {
 
         let (p, _) = unsafe { (*b1).get_mut_block_data_range() };
         let bk = rewind(p);
-        unsafe { println!("{:?} {:?}", *b1, *bk); }
+        unsafe {
+            println!("{:?} {:?}", *b1, *bk);
+        }
 
         let (p, _) = unsafe { (*b2).get_mut_block_data_range() };
         let bk = rewind(p);
-        unsafe { println!("{:?} {:?}", *b2, *bk); }
+        unsafe {
+            println!("{:?} {:?}", *b2, *bk);
+        }
 
         let (p, _) = unsafe { (*b3).get_mut_block_data_range() };
         let bk = rewind(p);
-        unsafe { println!("{:?} {:?}", *b3, *bk); }
+        unsafe {
+            println!("{:?} {:?}", *b3, *bk);
+        }
 
         println!("{:?} {:?} {:?}", b1, b2, b3);
         alloc.dealloc(b3);
