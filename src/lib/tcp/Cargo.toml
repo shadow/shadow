@@ -1,0 +1,14 @@
+[package]
+name = "tcp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.3.2"
+# custom version of the bytes crate required to make the 'try_unsplit' method public
+# issue: https://github.com/tokio-rs/bytes/issues/287
+# pr: https://github.com/tokio-rs/bytes/pull/513
+bytes = { git = "https://github.com/shadow/bytes", rev = "c48bd4439e7e043300521925524ecdcce7ff6bcc" }
+enum_dispatch = "0.3.11"
+slotmap = "1.0.6"
+static_assertions = "1.1.0"

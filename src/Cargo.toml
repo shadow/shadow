@@ -15,6 +15,7 @@ members = [
     "lib/shim",
     "lib/std-util",
     "lib/syscall-logger",
+    "lib/tcp",
     "lib/tsc",
     "lib/vasi",
     "lib/vasi-macro",
