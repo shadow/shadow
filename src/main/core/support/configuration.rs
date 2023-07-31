@@ -460,6 +460,12 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("log_errors_to_tty").unwrap().as_str())]
     pub log_errors_to_tty: Option<bool>,
+
+    /// Use the rust TCP implementation
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("use_new_tcp").unwrap().as_str())]
+    pub use_new_tcp: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -509,6 +515,7 @@ impl Default for ExperimentalOptions {
             strace_logging_mode: Some(StraceLoggingMode::Off),
             scheduler: Some(Scheduler::ThreadPerCore),
             log_errors_to_tty: Some(true),
+            use_new_tcp: Some(false),
         }
     }
 }

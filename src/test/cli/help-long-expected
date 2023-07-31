@@ -148,6 +148,9 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
           Use the MemoryManager. It can be useful to disable for debugging, but will hurt
           performance in most cases [default: true]
 
+      --use-new-tcp <bool>
+          Use the rust TCP implementation [default: false]
+
       --use-object-counters <bool>
           Count object allocations and deallocations. If disabled, we will not be able to detect
           object memory leaks [default: true]

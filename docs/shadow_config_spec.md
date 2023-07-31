@@ -89,6 +89,7 @@ hosts:
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
 - [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
+- [`experimental.use_new_tcp`](#experimentaluse_new_tcp)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
 - [`experimental.use_preload_libc`](#experimentaluse_preload_libc)
 - [`experimental.use_preload_openssl_crypto`](#experimentaluse_preload_openssl_crypto)
@@ -470,6 +471,13 @@ Type: Bool
 
 Use the MemoryManager. It can be useful to disable for debugging, but will hurt
 performance in most cases.
+
+#### `experimental.use_new_tcp`
+
+Default: false  
+Type: Bool
+
+Use the rust TCP implementation.
 
 #### `experimental.use_object_counters`
 

@@ -78,6 +78,7 @@ pub struct HostParameters {
     pub unblocked_vdso_latency: SimulationTime,
     pub strace_logging_options: Option<FmtOptions>,
     pub shim_log_level: LogLevel,
+    pub use_new_tcp: bool,
 }
 
 use super::cpu::Cpu;
