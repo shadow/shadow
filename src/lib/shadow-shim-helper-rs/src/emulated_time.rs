@@ -11,7 +11,9 @@ use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 /// An instant in time (analagous to std::time::Instant) in the Shadow
 /// simulation.
 // Internally represented as Duration since the Unix Epoch.
-#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, VirtualAddressSpaceIndependent)]
+#[derive(
+    Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash, VirtualAddressSpaceIndependent,
+)]
 #[repr(C)]
 pub struct EmulatedTime(CEmulatedTime);
 
@@ -142,6 +144,41 @@ impl std::ops::Sub<EmulatedTime> for EmulatedTime {
 
     fn sub(self, other: EmulatedTime) -> Self::Output {
         self.duration_since(&other)
+    }
+}
+
+impl std::ops::SubAssign<SimulationTime> for EmulatedTime {
+    fn sub_assign(&mut self, rhs: SimulationTime) {
+        *self = self.checked_sub(rhs).unwrap();
+    }
+}
+
+impl tcp::util::time::Instant for EmulatedTime {
+    type Duration = SimulationTime;
+
+    #[inline]
+    fn duration_since(&self, earlier: Self) -> Self::Duration {
+        self.duration_since(&earlier)
+    }
+
+    #[inline]
+    fn saturating_duration_since(&self, earlier: Self) -> Self::Duration {
+        self.saturating_duration_since(&earlier)
+    }
+
+    #[inline]
+    fn checked_duration_since(&self, earlier: Self) -> Option<Self::Duration> {
+        self.checked_duration_since(&earlier)
+    }
+
+    #[inline]
+    fn checked_add(&self, duration: Self::Duration) -> Option<Self> {
+        self.checked_add(duration)
+    }
+
+    #[inline]
+    fn checked_sub(&self, duration: Self::Duration) -> Option<Self> {
+        self.checked_sub(duration)
     }
 }
 

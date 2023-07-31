@@ -1569,6 +1569,7 @@ dependencies = [
  "shadow_shmem",
  "static_assertions",
  "system-deps",
+ "tcp",
  "vasi",
  "vasi-sync",
 ]
