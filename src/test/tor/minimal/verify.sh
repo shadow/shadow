@@ -21,10 +21,10 @@ check_host () {
     # Careful to declare the local separately from assigning the value;
     # otherwise we miss errors from `grep` such as if the files don't exist.
     # https://unix.stackexchange.com/a/343259
-    local stream_count
-    stream_count=$(grep -c stream-success hosts/"$NAME"/tgen.*.stdout)
-    echo "Successful $NAME stream count: ${stream_count}/$TOTAL_STREAMS (minimum $MINIMUM_STREAMS)"
-    if [ "${stream_count}" -lt "$MINIMUM_STREAMS" ]; then
+    local stream_success_count
+    stream_success_count=$(grep -c stream-success hosts/"$NAME"/tgen.*.stdout)
+    echo "Successful $NAME stream count: ${stream_success_count}/$TOTAL_STREAMS (minimum $MINIMUM_STREAMS)"
+    if [ "${stream_success_count}" -lt "$MINIMUM_STREAMS" ]; then
         printf "Verification %bfailed%b: Not enough $NAME streams were successful :(\n" "$RED" "$NC"
         exit 1
     fi
