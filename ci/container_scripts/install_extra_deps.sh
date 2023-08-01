@@ -8,10 +8,10 @@ set -euo pipefail
 install_packages () {
     case "$CONTAINER" in
         ubuntu:*|debian:*)
-            DEBIAN_FRONTEND=noninteractive apt-get install -y $@
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -- "$@"
             ;;
         fedora:*)
-            dnf install --best -y $@
+            dnf install --best -y "$@"
             ;;
         *)
             echo "Unhandled container $CONTAINER"
@@ -57,6 +57,8 @@ case "$CC" in
 esac
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain none --profile minimal
+# We don't need shellcheck to validate this file.
+# shellcheck disable=1091
 source "$HOME/.cargo/env"
 
 # Pin the Rust toolchain to either our pinned nightly or stable version.

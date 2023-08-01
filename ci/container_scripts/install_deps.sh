@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-APT_PACKAGES="
+APT_PACKAGES=(
   cmake
   findutils
   golang-go
@@ -17,36 +17,30 @@ APT_PACKAGES="
   python3-pip
   xz-utils
   util-linux
-  "
+  )
 
 case "$CONTAINER" in
   # We need to force a newer-than-default version of libclang
   # on some platforms. Some older versions have trouble finding
   # compiler header files in bindgen, when compiling with gcc.
   ubuntu:18*)
-    APT_PACKAGES+="
-      libclang-9-dev
-    "
+    APT_PACKAGES+=(libclang-9-dev)
     ;;
   debian:10*)
-    APT_PACKAGES+="
-      libclang-13-dev
-    "
+    APT_PACKAGES+=(libclang-13-dev)
     ;;
   *)
-    APT_PACKAGES+="
-      libclang-dev
-    "
+    APT_PACKAGES+=(libclang-dev)
     ;;
 esac
 
 # packages that are only required for our CI environment
-APT_CI_PACKAGES="
+APT_CI_PACKAGES=(
   curl
   rsync
-  "
+  )
 
-RPM_PACKAGES="
+RPM_PACKAGES=(
   clang-devel
   cmake
   findutils
@@ -63,28 +57,28 @@ RPM_PACKAGES="
   diffutils
   util-linux
   glibc-static
-  "
+  )
 
 # packages that are only required for our CI environment
-RPM_CI_PACKAGES="
+RPM_CI_PACKAGES=(
   curl
   rsync
-  "
+  )
 
-PYTHON_PACKAGES="
+PYTHON_PACKAGES=(
   PyYaml
-  networkx>=2.5
-  "
+  "networkx>=2.5"
+  )
 
 case "$CONTAINER" in
     ubuntu:*|debian:*)
         sed -i '/deb-src/s/^# //' /etc/apt/sources.list
         DEBIAN_FRONTEND=noninteractive apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y $APT_PACKAGES $APT_CI_PACKAGES
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -- "${APT_PACKAGES[@]}" "${APT_CI_PACKAGES[@]}"
 
         # Handle dict ordering of src/tools/convert.py and allow diff on its tests
         # Before Python3.6, dict ordering was not predictable
-        if [[ `python3 --version` == *" 3.5"* ]]; then
+        if [[ $(python3 --version) == *" 3.5"* ]]; then
           apt-get install -y software-properties-common
           add-apt-repository -y ppa:deadsnakes/ppa
           apt-get update
@@ -94,7 +88,7 @@ case "$CONTAINER" in
         fi
         ;;
     fedora:*)
-        dnf install --best -y $RPM_PACKAGES $RPM_CI_PACKAGES
+        dnf install --best -y -- "${RPM_PACKAGES[@]}" "${RPM_CI_PACKAGES[@]}"
         ;;
     *)
         echo "Unhandled container $CONTAINER"
@@ -103,4 +97,4 @@ case "$CONTAINER" in
 esac
 
 
-python3 -m pip install $PYTHON_PACKAGES
+python3 -m pip install -- "${PYTHON_PACKAGES[@]}"

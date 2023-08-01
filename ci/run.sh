@@ -10,7 +10,7 @@ PUSH=0
 NOCACHE=
 REPO=shadowsim/shadow-ci
 
-CONTAINER=ubuntu:18.04
+CONTAINER=ubuntu:20.04
 CC=gcc
 BUILDTYPE=debug
 
@@ -71,7 +71,7 @@ run_one () {
     TAG="$REPO:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
 
     if [ "${DRYTAG}" == "1" ]; then
-        echo $TAG
+        echo "$TAG"
         return 0
     fi
 
@@ -98,14 +98,14 @@ run_one () {
         COPY ci/container_scripts/install_extra_deps.sh /root/install_extra_deps.sh
         # Set the default rust toolchain to be installed by the script.
         #
-        # Copying just this config file before we copy the whole shadow source
+        # Copying just these config files before we copy the whole shadow source
         # allows us to reuse this image layer when iterating locally,
         # saving us from necessarily reinstalling the rust toolchain.
         #
         # In an incremental build with an updated rust-toolchain.toml, the
         # specified rust version will still correctly be installed and used
         # at run-time.
-        COPY rust-toolchain.toml /
+        COPY ci/rust-toolchain-*.toml ci/
         RUN /root/install_extra_deps.sh
         ENV PATH /root/.cargo/bin:\$PATH
 
@@ -145,7 +145,7 @@ EOF
     # them here allows tests to pass in cases where new system dependencies have
     # been added without having to rebuild the base images. In the common case
     # where nothing new is installed they are usually fairly fast no-ops.
-    CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
+    CONTAINER_ID=$(docker create "${DOCKER_CREATE_FLAGS[@]}" "${TAG}" /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
@@ -153,7 +153,7 @@ EOF
          && ci/container_scripts/install_deps.sh \
          && ci/container_scripts/install_extra_deps.sh \
          && ci/container_scripts/build_and_install.sh \
-         && ci/container_scripts/test.sh")"
+         && ci/container_scripts/test.sh")
 
     # Start the container (build, install, and test)
     RV=0
