@@ -1168,7 +1168,6 @@ impl Process {
 
         {
             let mut descriptor_table = runnable.desc_table.borrow_mut();
-            descriptor_table.shutdown_helper();
             let descriptors = descriptor_table.remove_all();
             crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
                 CallbackQueue::queue_and_run(|cb_queue| {

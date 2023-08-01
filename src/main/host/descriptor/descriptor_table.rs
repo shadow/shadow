@@ -2,8 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use log::*;
 
-use crate::cshadow as c;
-use crate::host::descriptor::{CompatFile, Descriptor};
+use crate::host::descriptor::Descriptor;
 
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;
@@ -176,20 +175,6 @@ impl DescriptorTable {
         self.available_indices.insert(fd.val());
         self.trim_tail();
         maybe_descriptor
-    }
-
-    /// This is a helper function that handles some corner cases where some
-    /// descriptors are linked to each other and we must remove that link in
-    /// order to ensure that the reference count reaches zero and they are properly
-    /// freed. Otherwise the circular reference will prevent the free operation.
-    /// TODO: remove this once the TCP layer is better designed.
-    pub fn shutdown_helper(&mut self) {
-        for descriptor in self.descriptors.values() {
-            match descriptor.file() {
-                CompatFile::New(_) => continue,
-                CompatFile::Legacy(f) => unsafe { c::legacyfile_shutdownHelper(f.ptr()) },
-            };
-        }
     }
 
     /// Remove and return all descriptors.

@@ -74,16 +74,6 @@ void legacyfile_addListener(LegacyFile* descriptor, StatusListener* listener);
  * transitions (bit flips). */
 void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener);
 
-/* This is a helper function that handles some corner cases where some
- * descriptors are linked to each other and we must remove that link in
- * order to ensure that the reference count reaches zero and they are properly
- * freed. Otherwise the circular reference will prevent the free operation.
- * TODO: remove this once the TCP layer is better designed.
- *
- * Intended to be called only from descriptor_table.rs.
- */
-void legacyfile_shutdownHelper(LegacyFile* legacyDesc);
-
 /* Whether the descriptor's operations are restartable in conjunction with
  * SA_RESTART. See signal(7).
  */
