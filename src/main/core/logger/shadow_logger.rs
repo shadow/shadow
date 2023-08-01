@@ -186,7 +186,19 @@ impl ShadowLogger {
                 }
             };
             toflush -= 1;
-            write!(stdout, "{record}")?;
+
+            if record.level <= Level::Error {
+                // Send to both stdout and stderr.
+                let stderr_unlocked = std::io::stderr();
+                let stderr_locked = stderr_unlocked.lock();
+                let mut stderr = std::io::BufWriter::new(stderr_locked);
+
+                let line = format!("{record}");
+                write!(stdout, "{line}")?;
+                write!(stderr, "{line}")?;
+            } else {
+                write!(stdout, "{record}")?;
+            }
         }
         if let Some(done_sender) = done_sender {
             // We can't log from this thread without risking deadlock, so in the
