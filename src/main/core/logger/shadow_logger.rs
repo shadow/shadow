@@ -174,6 +174,7 @@ impl ShadowLogger {
         let stdout_unlocked = std::io::stdout();
         let stdout_locked = stdout_unlocked.lock();
         let mut stdout = std::io::BufWriter::new(stdout_locked);
+
         while toflush > 0 {
             let record = match self.records.pop() {
                 Some(r) => r,
@@ -185,63 +186,7 @@ impl ShadowLogger {
                 }
             };
             toflush -= 1;
-            {
-                let parts = TimeParts::from_nanos(record.wall_time.as_nanos());
-                write!(
-                    stdout,
-                    "{:02}:{:02}:{:02}.{:06}",
-                    parts.hours,
-                    parts.mins,
-                    parts.secs,
-                    parts.nanos / 1000
-                )?;
-            }
-            write!(stdout, " [{}:{}]", record.thread_id, record.thread_name)?;
-            if let Some(emu_time) = record.emu_time {
-                let sim_time = emu_time.duration_since(&EmulatedTime::SIMULATION_START);
-                let parts = TimeParts::from_nanos(sim_time.as_nanos());
-                write!(
-                    stdout,
-                    " {:02}:{:02}:{:02}.{:09}",
-                    parts.hours, parts.mins, parts.secs, parts.nanos
-                )?;
-            } else {
-                write!(stdout, " n/a")?;
-            }
-            write!(stdout, " [{level}]", level = record.level)?;
-            if let Some(host) = record.host_info {
-                write!(
-                    stdout,
-                    " [{hostname}:{ip}]",
-                    hostname = host.name,
-                    ip = host.default_ip,
-                )?;
-            } else {
-                write!(stdout, " [n/a]",)?;
-            }
-            write!(
-                stdout,
-                " [{file}:",
-                file = record
-                    .file
-                    .map(|f| if let Some(sep_pos) = f.rfind('/') {
-                        &f[(sep_pos + 1)..]
-                    } else {
-                        f
-                    })
-                    .unwrap_or("n/a"),
-            )?;
-            if let Some(line) = record.line {
-                write!(stdout, "{line}", line = line)?;
-            } else {
-                write!(stdout, "n/a")?;
-            }
-            writeln!(
-                stdout,
-                "] [{module}] {msg}",
-                module = record.module_path.unwrap_or("n/a"),
-                msg = record.message
-            )?;
+            write!(stdout, "{record}")?;
         }
         if let Some(done_sender) = done_sender {
             // We can't log from this thread without risking deadlock, so in the
@@ -403,6 +348,69 @@ struct ShadowLogRecord {
     thread_name: String,
     thread_id: nix::unistd::Pid,
     host_info: Option<Arc<HostInfo>>,
+}
+
+impl std::fmt::Display for ShadowLogRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        {
+            let parts = TimeParts::from_nanos(self.wall_time.as_nanos());
+            write!(
+                f,
+                "{:02}:{:02}:{:02}.{:06}",
+                parts.hours,
+                parts.mins,
+                parts.secs,
+                parts.nanos / 1000
+            )?;
+        }
+        write!(f, " [{}:{}]", self.thread_id, self.thread_name)?;
+        if let Some(emu_time) = self.emu_time {
+            let sim_time = emu_time.duration_since(&EmulatedTime::SIMULATION_START);
+            let parts = TimeParts::from_nanos(sim_time.as_nanos());
+            write!(
+                f,
+                " {:02}:{:02}:{:02}.{:09}",
+                parts.hours, parts.mins, parts.secs, parts.nanos
+            )?;
+        } else {
+            write!(f, " n/a")?;
+        }
+        write!(f, " [{level}]", level = self.level)?;
+        if let Some(host) = &self.host_info {
+            write!(
+                f,
+                " [{hostname}:{ip}]",
+                hostname = host.name,
+                ip = host.default_ip,
+            )?;
+        } else {
+            write!(f, " [n/a]",)?;
+        }
+        write!(
+            f,
+            " [{file}:",
+            file = self
+                .file
+                .map(|f| if let Some(sep_pos) = f.rfind('/') {
+                    &f[(sep_pos + 1)..]
+                } else {
+                    f
+                })
+                .unwrap_or("n/a"),
+        )?;
+        if let Some(line) = self.line {
+            write!(f, "{line}", line = line)?;
+        } else {
+            write!(f, "n/a")?;
+        }
+        writeln!(
+            f,
+            "] [{module}] {msg}",
+            module = self.module_path.unwrap_or("n/a"),
+            msg = self.message
+        )?;
+        Ok(())
+    }
 }
 
 enum LoggerCommand {
