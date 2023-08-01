@@ -174,23 +174,3 @@ Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host)
 
     utility_panic("Invalid CompatSocket type");
 }
-
-void compatsocket_updatePacketHeader(const CompatSocket* socket, const Host* host, Packet* packet) {
-    switch (socket->type) {
-        case CST_LEGACY_SOCKET: {
-            LegacySocket* legacySocket = socket->object.as_legacy_socket;
-
-            if (legacysocket_getProtocol(legacySocket) == PTCP) {
-                TCP* tcp = (TCP*)legacySocket;
-                tcp_networkInterfaceIsAboutToSendPacket(tcp, host, packet);
-            }
-
-            return;
-        }
-        case CST_INET_SOCKET:
-            return inetsocket_updatePacketHeader(socket->object.as_inet_socket, packet);
-        case CST_NONE: utility_panic("Unexpected CompatSocket type");
-    }
-
-    utility_panic("Invalid CompatSocket type");
-}

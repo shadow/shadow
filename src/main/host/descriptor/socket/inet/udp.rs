@@ -199,10 +199,6 @@ impl UdpSocket {
         !self.send_buffer.is_empty()
     }
 
-    pub fn update_packet_header(&self, _packet: &mut PacketRc) {
-        // do nothing for UDP
-    }
-
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
         let mut addr = self
             .bound_addr

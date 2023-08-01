@@ -50,6 +50,5 @@ bool compatsocket_hasDataToSend(const CompatSocket* socket);
 void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet,
                                CEmulatedTime recvTime);
 Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);
-void compatsocket_updatePacketHeader(const CompatSocket* socket, const Host* host, Packet* packet);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_COMPAT_SOCKET_H_ */

@@ -237,9 +237,6 @@ impl InetSocketRef<'_> {
     enum_passthrough!(self, (), LegacyTcp, Udp;
         pub fn has_data_to_send(&self) -> bool
     );
-    enum_passthrough!(self, (packet), LegacyTcp, Udp;
-        pub fn update_packet_header(&self, packet: &mut PacketRc)
-    );
 }
 
 // file functions
@@ -344,9 +341,6 @@ impl InetSocketRefMut<'_> {
     );
     enum_passthrough!(self, (), LegacyTcp, Udp;
         pub fn has_data_to_send(&self) -> bool
-    );
-    enum_passthrough!(self, (packet), LegacyTcp, Udp;
-        pub fn update_packet_header(&self, packet: &mut PacketRc)
     );
 }
 
@@ -548,17 +542,6 @@ mod export {
     pub extern "C" fn inetsocket_hasDataToSend(socket: *const InetSocket) -> bool {
         let socket = unsafe { socket.as_ref() }.unwrap();
         socket.borrow().has_data_to_send()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn inetsocket_updatePacketHeader(
-        socket: *const InetSocket,
-        packet: *mut c::Packet,
-    ) {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        let mut packet = PacketRc::from_raw(packet);
-        socket.borrow().update_packet_header(&mut packet);
-        packet.into_inner();
     }
 
     /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
