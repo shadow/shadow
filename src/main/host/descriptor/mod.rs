@@ -587,7 +587,7 @@ impl std::ops::Drop for OpenFileInner {
 
 /// A file descriptor that reference an open file. Also contains flags that change the behaviour of
 /// this file descriptor.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Descriptor {
     /// The file that this descriptor points to.
     file: CompatFile,
