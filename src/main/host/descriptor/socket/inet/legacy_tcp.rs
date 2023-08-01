@@ -155,6 +155,11 @@ impl LegacyTcpSocket {
             return None;
         }
 
+        Worker::with_active_host(|host| unsafe {
+            c::tcp_networkInterfaceIsAboutToSendPacket(self.as_legacy_tcp(), host, packet);
+        })
+        .unwrap();
+
         Some(PacketRc::from_raw(packet))
     }
 
@@ -176,17 +181,6 @@ impl LegacyTcpSocket {
 
     pub fn has_data_to_send(&self) -> bool {
         self.peek_packet().is_some()
-    }
-
-    pub fn update_packet_header(&self, packet: &mut PacketRc) {
-        Worker::with_active_host(|host| unsafe {
-            c::tcp_networkInterfaceIsAboutToSendPacket(
-                self.as_legacy_tcp(),
-                host,
-                packet.borrow_inner(),
-            );
-        })
-        .unwrap();
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {

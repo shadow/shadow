@@ -256,8 +256,6 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
         /* we're returning the socket, so we must ref it */
         *socketOut = compatsocket_refAs(&socket);
 
-        compatsocket_updatePacketHeader(&socket, host, packet);
-
         if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
             rrsocketqueue_push(&interface->rrQueue, &socket);
@@ -298,8 +296,6 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         /* we're returning the socket, so we must ref it */
         *socketOut = compatsocket_refAs(&socket);
-
-        compatsocket_updatePacketHeader(&socket, host, packet);
 
         if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
