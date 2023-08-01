@@ -453,6 +453,12 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "name")]
     #[clap(help = EXP_HELP.get("scheduler").unwrap().as_str())]
     pub scheduler: Option<Scheduler>,
+
+    /// When true, log error-level log messages to stderr in addition to stdout.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("log_errors_to_stderr").unwrap().as_str())]
+    pub log_errors_to_stderr: Option<bool>,
 }
 
 impl ExperimentalOptions {
@@ -501,6 +507,7 @@ impl Default for ExperimentalOptions {
             ))),
             strace_logging_mode: Some(StraceLoggingMode::Off),
             scheduler: Some(Scheduler::ThreadPerCore),
+            log_errors_to_stderr: Some(true),
         }
     }
 }

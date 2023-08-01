@@ -30,8 +30,9 @@ const MIN_FLUSH_FREQUENCY: Duration = Duration::from_secs(10);
 static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(ShadowLogger::new);
 
 /// Initialize the Shadow logger.
-pub fn init(max_log_level: LevelFilter) -> Result<(), SetLoggerError> {
+pub fn init(max_log_level: LevelFilter, log_errors_to_stderr: bool) -> Result<(), SetLoggerError> {
     SHADOW_LOGGER.set_max_level(max_log_level);
+    SHADOW_LOGGER.set_log_errors_to_stderr(log_errors_to_stderr);
 
     log::set_logger(&*SHADOW_LOGGER)?;
 
@@ -93,6 +94,9 @@ pub struct ShadowLogger {
 
     // The maximum log level, unless overridden by a host-specific log level.
     max_log_level: OnceCell<LevelFilter>,
+
+    // Whether to log errors to stderr in addition to stdout.
+    log_errors_to_stderr: OnceCell<bool>,
 }
 
 thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = RefCell::new(None));
@@ -137,6 +141,7 @@ impl ShadowLogger {
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
             max_log_level: OnceCell::new(),
+            log_errors_to_stderr: OnceCell::new(),
         }
     }
 
@@ -187,7 +192,7 @@ impl ShadowLogger {
             };
             toflush -= 1;
 
-            if record.level <= Level::Error {
+            if record.level <= Level::Error && *self.log_errors_to_stderr.get().unwrap() {
                 // Send to both stdout and stderr.
                 let stderr_unlocked = std::io::stderr();
                 let stderr_locked = stderr_unlocked.lock();
@@ -235,6 +240,14 @@ impl ShadowLogger {
     /// be called from `init()`. Will panic if called more than once.
     fn set_max_level(&self, level: LevelFilter) {
         self.max_log_level.set(level).unwrap()
+    }
+
+    /// Set whether to log errors to stderr in addition to stdout.
+    ///
+    /// Is only intended to be called from `init()`. Will panic if called more
+    /// than once.
+    fn set_log_errors_to_stderr(&self, val: bool) {
+        self.log_errors_to_stderr.set(val).unwrap()
     }
 
     // Send a flush command to the logger thread.
