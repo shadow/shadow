@@ -118,6 +118,7 @@ macro(add_shadow_tests)
       && ${INVERT_ERROR_CODE} ${CMAKE_BINARY_DIR}/src/main/shadow \
       --data-directory=${SHADOW_TEST_NAME}.data \
       --log-level=${SHADOW_TEST_LOGLEVEL} \
+      --log-errors-to-stderr=false \
       ${SHADOW_TEST_ARGS} \
       ${SHADOW_TEST_SHADOW_CONFIG} \
       && (${POST_CMD}) \
