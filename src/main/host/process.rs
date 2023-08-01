@@ -1167,18 +1167,6 @@ impl Process {
             runnable.total_run_time.get()
         );
 
-        {
-            let mut descriptor_table = runnable.desc_table.borrow_mut();
-            let descriptors = descriptor_table.remove_all();
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|cb_queue| {
-                    for desc in descriptors {
-                        desc.close(host, cb_queue);
-                    }
-                })
-            });
-        }
-
         use nix::sys::wait::WaitStatus;
         let exit_status = match (
             killed_by_shadow,
