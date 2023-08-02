@@ -93,13 +93,13 @@ impl BlockSerialized {
     }
 
     fn from_string_buf(string_buf: &StringBuf) -> Self {
-        const NEEDLE: u8 = 59; // Decimal value of ;
+        const DELIM: u8 = 59; // Decimal value of ;
 
         let lhs_itr = string_buf.iter();
         let mut rhs_itr = string_buf.iter();
-        rhs_itr.find(|x| **x == NEEDLE);
+        rhs_itr.find(|x| **x == DELIM);
 
-        let offset_itr = lhs_itr.take_while(|x| **x != NEEDLE);
+        let offset_itr = lhs_itr.take_while(|x| **x != DELIM);
 
         let mut offset_buf = [0u8; 32];
         offset_buf
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn test_allocator_random() {
+    fn allocator_random_allocations() {
         register_teardown();
 
         const NROUNDS: usize = 100;
@@ -332,24 +332,6 @@ mod tests {
             let b = marked_blocks.pop().unwrap();
             SHMALLOC.lock().free(b.1);
         }
-    }
-
-    #[test]
-    fn foo() {
-        register_teardown();
-
-        let block = SHMALLOC.lock().alloc(5u32);
-        println!("{:?}, {:?}", block, *block);
-        let s = block.serialize();
-        let sb = s.to_string_buf();
-        println!("{:?} {:?}", s, sb);
-
-        BlockSerialized::from_string_buf(&sb);
-
-        let block2: Block<u32> = unsafe { SHDESERIALIZER.lock().deserialize(&s) };
-        println!("{:?}, {:?}", block2, *block2);
-
-        SHMALLOC.lock().free(block);
     }
 
     #[cfg_attr(miri, ignore)]
