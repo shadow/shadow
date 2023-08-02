@@ -64,8 +64,8 @@ where
     }
 }
 
-// A path is up to 256 bytes; a isize is 20 bytes; and one byte for delimiter.
-const STRING_BUF_NBYTES: usize = 256 + 20 + 1;
+// A path is up to 256 bytes; an isize is 20 bytes; and one byte for delimiter and null terminator.
+const STRING_BUF_NBYTES: usize = 256 + 20 + 1 + 1;
 type StringBuf = [u8; STRING_BUF_NBYTES];
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
@@ -112,6 +112,7 @@ impl BlockSerialized {
 
         path_buf.iter_mut().zip(rhs_itr).for_each(|(x, y)| *x = *y);
 
+        // Unwraps safe here.
         let end = offset_buf.iter().position(|&x| x == 0).unwrap();
 
         let offset = unsafe {
@@ -193,8 +194,7 @@ impl<'alloc> SharedMemAllocator<'alloc> {
         self.internal.destruct();
 
         if self.nallocs != 0 {
-            // Memory leak! What do we want to do? Blow up?
-            // panic!();
+            crate::shmalloc_impl::log_error(crate::shmalloc_impl::AllocError::Leak, None);
         }
     }
 }
@@ -346,6 +346,8 @@ mod tests {
             let block = unsafe { SHDESERIALIZER.lock().deserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }
+
+        SHMALLOC.lock().free(original_block);
     }
 
     #[test]
@@ -374,6 +376,8 @@ mod tests {
         deserialized_block.store(20, Ordering::SeqCst);
         assert_eq!(original_block.load(Ordering::SeqCst), 20);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
+
+        SHMALLOC.lock().free(original_block);
     }
 
     // Validate our guarantee that the data pointer doesn't move, even if the block does.
@@ -385,12 +389,12 @@ mod tests {
         register_teardown();
 
         type T = u32;
-        let block: Block<T> = SHMALLOC.lock().alloc(0);
+        let original_block: Block<T> = SHMALLOC.lock().alloc(0);
 
-        let block_addr = &block as *const Block<T>;
-        let data_addr = *block as *const T;
+        let block_addr = &original_block as *const Block<T>;
+        let data_addr = *original_block as *const T;
 
-        let block = Some(block);
+        let block = Some(original_block);
 
         // Validate that the block itself actually moved.
         let new_block_addr = block.as_ref().unwrap() as *const Block<T>;
@@ -399,6 +403,8 @@ mod tests {
         // Validate that the data referenced by the block *hasn't* moved.
         let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
+
+        SHMALLOC.lock().free(block.unwrap());
     }
 
     // Validate our guarantee that the data pointer doesn't move, even if the block does.
@@ -428,5 +434,7 @@ mod tests {
         // Validate that the data referenced by the block *hasn't* moved.
         let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
+
+        SHMALLOC.lock().free(alloced_block);
     }
 }

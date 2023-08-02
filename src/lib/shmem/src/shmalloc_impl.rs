@@ -9,8 +9,6 @@ pub(crate) type PathBuf = [u8; PATH_BUF_NBYTES];
 
 use vasi::VirtualAddressSpaceIndependent;
 
-enum AllocError {}
-
 fn get_null_path_buf() -> PathBuf {
     [0; PATH_BUF_NBYTES]
 }
@@ -44,6 +42,59 @@ trait Canary {
     fn canary_assert(&self) {}
 }
 
+pub(crate) enum AllocError {
+    Clock,
+    Open,
+    FTruncate,
+    MMap,
+    MUnmap,
+    Unlink,
+    WrongAllocator,
+    Leak,
+}
+
+pub(crate) fn log_error(error: AllocError, errno: Option<i32>) {
+    const STDERR_FD: i32 = 2;
+    let mut errno_buf = [0u8; 32];
+
+    let err: &[u8] = match error {
+        AllocError::Clock => b"[shadow:shmalloc] [CRITICAL] Error calling clock_gettime().\n",
+        AllocError::Open => b"[shadow:shmalloc] [CRITICAL] Error calling open().\n",
+        AllocError::FTruncate => b"[shadow:shmalloc] [CRITICAL] Error calling ftruncate().\n",
+        AllocError::MMap => b"[shadow:shmalloc] [CRITICAL] Error calling mmap().\n",
+        AllocError::MUnmap => b"[shadow:shmalloc] [WARNING] Error calling munmap().\n",
+        AllocError::Unlink => b"[shadow:shmalloc] [WARNING] Error calling unlink().\n",
+        AllocError::WrongAllocator => b"[shadow:shmalloc] [ERROR] Block was passed to incorrect allocator.\n",
+        AllocError::Leak => b"[shadow:shmalloc] [ERROR] Allocator destroyed but not all blocks are deallocated first.\n",
+    };
+
+    unsafe {
+        write(STDERR_FD, err.as_ptr() as *const _, err.len());
+    }
+
+    if let Some(e) = errno {
+        let errno_buf = e.numtoa(10, &mut errno_buf);
+
+        const PREAMBLE: &[u8; 44] = b"[shadow:shmalloc] [WARNING] Last error num: ";
+
+        unsafe {
+            write(STDERR_FD, PREAMBLE.as_ptr() as *const _, PREAMBLE.len());
+        }
+        unsafe {
+            write(STDERR_FD, errno_buf.as_ptr() as *const _, errno_buf.len());
+        }
+        unsafe {
+            write(STDERR_FD, b"\n".as_ptr() as *const _, 1);
+        }
+    }
+}
+
+pub(crate) fn log_error_and_exit(error: AllocError, errno: Option<i32>) -> ! {
+    log_error(error, errno);
+    let _ = kill(0, linux_api::signal::Signal::SIGABRT.into());
+    unreachable!()
+}
+
 fn format_shmem_name(buf: &mut [u8]) {
     static PREFIX: &str = "/dev/shm/shadow_shmemfile_";
 
@@ -55,7 +106,12 @@ fn format_shmem_name(buf: &mut [u8]) {
 
     let mut sec_buf = [0u8; 32];
     let mut nsec_buf = [0u8; 32];
-    let ts = clock_gettime().unwrap();
+
+    let ts = match clock_gettime() {
+        Ok(ts) => ts,
+        Err(errno) => log_error_and_exit(AllocError::Clock, Some(errno)),
+    };
+
     let sec_buf = ts.tv_sec.numtoa(10, &mut sec_buf);
     let nsec_buf = ts.tv_nsec.numtoa(10, &mut nsec_buf);
 
@@ -72,12 +128,9 @@ fn format_shmem_name(buf: &mut [u8]) {
     buf.iter_mut().zip(name_itr).for_each(|(x, y)| *x = *y);
 }
 
-const CHUNK_NBYTES_DEFAULT: usize = 20971520;
+const CHUNK_NBYTES_DEFAULT: usize = 8 * 1024 * 1024; // 8 MiB
 
-fn create_map_shared_memory<'a>(
-    path_buf: &PathBuf,
-    nbytes: usize,
-) -> Result<(&'a mut [u8], i32), i32> {
+fn create_map_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i32) {
     use linux_api::fcntl::OFlag;
     use linux_api::mman::{MapFlags, ProtFlags};
 
@@ -89,10 +142,17 @@ fn create_map_shared_memory<'a>(
     let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
     let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
 
-    let fd = unsafe { open(path_buf.as_ptr(), open_flags, MODE)? };
-    ftruncate(fd, nbytes.try_into().unwrap())?;
+    let fd = match unsafe { open(path_buf.as_ptr(), open_flags, MODE) } {
+        Ok(fd) => fd,
+        Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
+    };
 
-    let retval = unsafe {
+    // u64 into usize should be safe to unwrap.
+    if let Err(errno) = ftruncate(fd, nbytes.try_into().unwrap()) {
+        log_error_and_exit(AllocError::FTruncate, Some(errno))
+    };
+
+    let retval = match unsafe {
         mmap(
             core::ptr::null_mut(),
             nbytes.try_into().unwrap(),
@@ -100,14 +160,17 @@ fn create_map_shared_memory<'a>(
             map_flags,
             fd,
             0,
-        )?
+        )
+    } {
+        Ok(retval) => retval,
+        Err(errno) => log_error_and_exit(AllocError::MMap, Some(errno)),
     };
 
-    Ok((retval, fd))
+    (retval, fd)
 }
 
 // Similar to `create_map_shared_memory` but no O_CREAT or O_EXCL and no ftruncate calls.
-fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut [u8], i32), i32> {
+fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i32) {
     use linux_api::fcntl::OFlag;
     use linux_api::mman::{MapFlags, ProtFlags};
 
@@ -116,9 +179,12 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut 
     let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
     let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
 
-    let fd = unsafe { open(path_buf.as_ptr(), open_flags, MODE)? };
+    let fd = match unsafe { open(path_buf.as_ptr(), open_flags, MODE) } {
+        Ok(fd) => fd,
+        Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
+    };
 
-    let retval = unsafe {
+    let retval = match unsafe {
         mmap(
             core::ptr::null_mut(),
             nbytes.try_into().unwrap(),
@@ -126,10 +192,13 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut 
             map_flags,
             fd,
             0,
-        )?
+        )
+    } {
+        Ok(retval) => retval,
+        Err(errno) => log_error_and_exit(AllocError::MMap, Some(errno)),
     };
 
-    Ok((retval, fd))
+    (retval, fd)
 }
 
 #[repr(C)]
@@ -166,8 +235,8 @@ impl Canary for Chunk {
     }
 }
 
-fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i32> {
-    let (p, fd) = create_map_shared_memory(path_buf, nbytes)?;
+fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> *mut Chunk {
+    let (p, fd) = create_map_shared_memory(path_buf, nbytes);
 
     // Zero the memory so that we do not have to worry about junk between blocks.
     unsafe {
@@ -185,16 +254,16 @@ fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk
         (*chunk_meta).canary_init();
     }
 
-    Ok(chunk_meta)
+    chunk_meta
 }
 
-fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i32> {
-    let (p, _) = view_shared_memory(path_buf, nbytes)?;
+fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> *mut Chunk {
+    let (p, _) = view_shared_memory(path_buf, nbytes);
     let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
-    Ok(chunk_meta)
+    chunk_meta
 }
 
-fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
+fn deallocate_shared_chunk(chunk_meta: *const Chunk) {
     unsafe {
         (*chunk_meta).canary_assert();
     }
@@ -202,14 +271,17 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
     let path_buf = unsafe { (*chunk_meta).chunk_name };
     let chunk_nbytes = unsafe { (*chunk_meta).chunk_nbytes };
 
-    munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, chunk_nbytes) })
-        .unwrap();
-
-    unsafe {
-        unlink(path_buf.as_ptr())?;
+    if let Err((_, errno)) =
+        munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, chunk_nbytes) })
+    {
+        log_error(AllocError::MUnmap, Some(errno));
     }
 
-    Ok(())
+    if let Err(errno) = unsafe {
+        unlink(path_buf.as_ptr())
+    } {
+        log_error(AllocError::Unlink, Some(errno));
+    }
 }
 
 #[repr(C)]
@@ -361,8 +433,7 @@ impl FreelistAllocator {
         let mut path_buf = get_null_path_buf();
         format_shmem_name(&mut path_buf);
 
-        // TODO(rwails) Unwrap not safe here
-        let new_chunk = allocate_shared_chunk(&path_buf, self.chunk_nbytes).unwrap();
+        let new_chunk = allocate_shared_chunk(&path_buf, self.chunk_nbytes);
 
         unsafe {
             (*new_chunk).next_chunk = self.first_chunk;
@@ -578,7 +649,7 @@ impl FreelistAllocator {
                 offset,
             }
         } else {
-            panic!("Block attempted to be serialized with wrong allocator.");
+            log_error_and_exit(AllocError::WrongAllocator, None);
         }
     }
 
@@ -590,8 +661,7 @@ impl FreelistAllocator {
                 // Safe due to check above
                 let tmp = unsafe { (*chunk_to_dealloc).next_chunk };
 
-                // TODO(rwails) unwrap here is bad.
-                deallocate_shared_chunk(chunk_to_dealloc).unwrap();
+                deallocate_shared_chunk(chunk_to_dealloc);
 
                 chunk_to_dealloc = tmp;
             }
@@ -634,8 +704,7 @@ impl FreelistDeserializer {
     }
 
     fn map_chunk(&mut self, chunk_name: &PathBuf) -> *mut Chunk {
-        // TODO(rwails) Fix unwrap on view shared chunk
-        let chunk = view_shared_chunk(chunk_name, self.chunk_nbytes).unwrap();
+        let chunk = view_shared_chunk(chunk_name, self.chunk_nbytes);
 
         if self.nmapped_chunks == CHUNK_CAPACITY {
             // Ran out of chunk slots -- we're going to leak the handle.

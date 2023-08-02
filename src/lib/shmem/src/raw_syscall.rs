@@ -135,3 +135,18 @@ pub fn clock_gettime() -> Result<linux_api::time::timespec, i32> {
 pub fn getpid() -> i32 {
     unsafe { syscall!(SYS_getpid).as_u64_unchecked() as i32 }
 }
+
+pub fn kill(pid: i32, signal: i32) -> Result<i32, i32> {
+    convert_i32_rv_to_rv_errno(unsafe { syscall!(SYS_kill, pid, signal).as_u64_unchecked() as i32 })
+}
+
+pub fn fsync(fd: i32) -> Result<i32, i32> {
+    convert_i32_rv_to_rv_errno(unsafe { syscall!(SYS_fsync, fd).as_u64_unchecked() as i32 })
+}
+
+/// # Safety
+///
+/// `count` should not exceed the number of valid bytes in `buf`.
+pub unsafe fn write(fd: i32, buf: *const core::ffi::c_void, count: usize) -> isize {
+    unsafe { syscall!(SYS_write, fd, buf, count).as_u64_unchecked() as isize }
+}
