@@ -601,7 +601,7 @@ impl FreelistAllocator {
     }
 }
 
-const CHUNK_CAPACITY: usize = 128;
+const CHUNK_CAPACITY: usize = 64;
 
 #[repr(C)]
 #[derive(Debug)]

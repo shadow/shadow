@@ -75,7 +75,7 @@ pub struct BlockSerialized {
 }
 
 impl BlockSerialized {
-    fn to_string_buf(&self) -> StringBuf {
+    fn to_string_buf(self) -> StringBuf {
         let mut retval: StringBuf = [0; STRING_BUF_NBYTES];
 
         let mut offset_buf = [0u8; 32];
@@ -92,7 +92,7 @@ impl BlockSerialized {
         retval
     }
 
-    fn from_string_buf(string_buf: &StringBuf) -> Self {
+    fn from_string_buf(string_buf: StringBuf) -> Self {
         const DELIM: u8 = 59; // Decimal value of ;
 
         let lhs_itr = string_buf.iter();
@@ -342,7 +342,7 @@ mod tests {
         {
             let serialized_block = original_block.serialize();
             let serialized_str = serialized_block.to_string_buf();
-            let serialized_block = BlockSerialized::from_string_buf(&serialized_str);
+            let serialized_block = BlockSerialized::from_string_buf(serialized_str);
             let block = unsafe { SHDESERIALIZER.lock().deserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }

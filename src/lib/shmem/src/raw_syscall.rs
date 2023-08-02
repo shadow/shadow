@@ -29,6 +29,10 @@ fn open_impl(filename: *const char, flags: i32, mode: u32) -> i32 {
     unsafe { syscall!(SYS_open, filename, flags, mode).as_u64_unchecked() as i32 }
 }
 
+/// # Safety
+///
+/// Assumes filename is a null-terminated ASCII string and that flags and mode are valid as defined
+/// by the x86-64 system call interface.
 pub unsafe fn open(filename: *const u8, flags: i32, mode: u32) -> Result<i32, i32> {
     convert_i32_rv_to_rv_errno(open_impl(
         unsafe { core::mem::transmute::<*const u8, *const char>(filename) },
@@ -45,6 +49,9 @@ fn unlink_impl(filename: *const char) -> i32 {
     unsafe { syscall!(SYS_unlink, filename).as_u64_unchecked() as i32 }
 }
 
+/// # Safety
+///
+/// Assumes filename is a null-terminated ASCII string.
 pub unsafe fn unlink(filename: *const u8) -> Result<i32, i32> {
     convert_i32_rv_to_rv_errno(unlink_impl(unsafe {
         core::mem::transmute::<*const u8, *const char>(filename)
@@ -55,6 +62,10 @@ fn mmap_impl(addr: u64, len: u64, prot: u64, flags: u64, fd: u64, off: u64) -> u
     unsafe { syscall!(SYS_mmap, addr, len, prot, flags, fd, off).as_u64_unchecked() }
 }
 
+/// # Safety
+///
+/// `addr` should be a pointer hinting at a mapping location, or null. The other arguments should
+/// be valid as defined by the x86-64 system call interface.
 pub unsafe fn mmap<'a>(
     addr: *mut core::ffi::c_void,
     length: u64,
