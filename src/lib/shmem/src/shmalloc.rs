@@ -12,6 +12,7 @@ where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     block: *mut crate::shmalloc_impl::Block,
+    alias: bool,
     phantom: core::marker::PhantomData<&'allocator T>,
 }
 
@@ -55,7 +56,7 @@ where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     fn drop(&mut self) {
-        if !self.block.is_null() {
+        if !self.alias && !self.block.is_null() {
             // Guard here to prevent deadlock on free.
             SHMALLOC.lock().internal.dealloc(self.block);
             self.block = core::ptr::null_mut();
@@ -179,6 +180,7 @@ impl<'alloc> SharedMemAllocator<'alloc> {
         self.nallocs += 1;
         Block::<'alloc, T> {
             block,
+            alias: false,
             phantom: Default::default(),
         }
     }
@@ -238,7 +240,11 @@ impl<'alloc> SharedMemDeserializer<'alloc> {
         }
     }
 
-    pub fn deserialize<T>(&mut self, serialized: &BlockSerialized) -> Block<'alloc, T>
+    /// # Safety
+    ///
+    /// This function can violate type safety if a template type is provided that does not match
+    /// original block that was serialized.
+    pub unsafe fn deserialize<T>(&mut self, serialized: &BlockSerialized) -> Block<'alloc, T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
     {
@@ -246,6 +252,7 @@ impl<'alloc> SharedMemDeserializer<'alloc> {
 
         Block {
             block,
+            alias: true,
             phantom: Default::default(),
         }
     }
@@ -339,7 +346,7 @@ mod tests {
 
         BlockSerialized::from_string_buf(&sb);
 
-        let block2: Block<u32> = SHDESERIALIZER.lock().deserialize(&s);
+        let block2: Block<u32> = unsafe { SHDESERIALIZER.lock().deserialize(&s) };
         println!("{:?}, {:?}", block2, *block2);
 
         SHMALLOC.lock().free(block);
@@ -355,9 +362,8 @@ mod tests {
         {
             let serialized_block = original_block.serialize();
             let serialized_str = serialized_block.to_string_buf();
-            let serialized_block =
-                BlockSerialized::from_string_buf(&serialized_str);
-            let block = SHDESERIALIZER.lock().deserialize::<i32>(&serialized_block);
+            let serialized_block = BlockSerialized::from_string_buf(&serialized_str);
+            let block = unsafe { SHDESERIALIZER.lock().deserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }
     }
@@ -373,9 +379,12 @@ mod tests {
 
         type T = AtomicI32;
         let original_block = SHMALLOC.lock().alloc(AtomicI32::new(0));
+        println!("~~~~~~~~~> Returning this block: {:?}", original_block);
 
         let serialized_block = original_block.serialize();
-        let deserialized_block = SHDESERIALIZER.lock().deserialize::<T>(&serialized_block);
+
+        let deserialized_block =
+            unsafe { SHDESERIALIZER.lock().deserialize::<T>(&serialized_block) };
 
         assert_eq!(original_block.load(Ordering::SeqCst), 0);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 0);
@@ -389,5 +398,59 @@ mod tests {
         deserialized_block.store(20, Ordering::SeqCst);
         assert_eq!(original_block.load(Ordering::SeqCst), 20);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
+    }
+
+    // Validate our guarantee that the data pointer doesn't move, even if the block does.
+    // Host relies on this for soundness.
+    #[test]
+    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn shmemblock_stable_pointer() {
+        register_teardown();
+
+        type T = u32;
+        let block: Block<T> = SHMALLOC.lock().alloc(0);
+
+        let block_addr = &block as *const Block<T>;
+        let data_addr = *block as *const T;
+
+        let block = Some(block);
+
+        // Validate that the block itself actually moved.
+        let new_block_addr = block.as_ref().unwrap() as *const Block<T>;
+        assert_ne!(block_addr, new_block_addr);
+
+        // Validate that the data referenced by the block *hasn't* moved.
+        let new_data_addr = **(block.as_ref().unwrap()) as *const T;
+        assert_eq!(data_addr, new_data_addr);
+    }
+
+    // Validate our guarantee that the data pointer doesn't move, even if the block does.
+    #[test]
+    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn shmemblockremote_stable_pointer() {
+        register_teardown();
+
+        type T = u32;
+        let alloced_block: Block<T> = SHMALLOC.lock().alloc(0);
+        let block = unsafe {
+            SHDESERIALIZER
+                .lock()
+                .deserialize::<T>(&alloced_block.serialize())
+        };
+
+        let block_addr = &block as *const Block<T>;
+        let data_addr = *block as *const T;
+
+        let block = Some(block);
+
+        // Validate that the block itself actually moved.
+        let new_block_addr = block.as_ref().unwrap() as *const Block<T>;
+        assert_ne!(block_addr, new_block_addr);
+
+        // Validate that the data referenced by the block *hasn't* moved.
+        let new_data_addr = **(block.as_ref().unwrap()) as *const T;
+        assert_eq!(data_addr, new_data_addr);
     }
 }

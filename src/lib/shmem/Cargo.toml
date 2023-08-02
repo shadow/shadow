@@ -16,6 +16,8 @@ numtoa = "0.2.4"
 nix = "0.26.2"
 static_assertions = "1.1.0"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+linux-syscall = "1.0.0"
+linux-api = { path = "../linux-api" }
 
 [dev-dependencies]
 rand = "0.8.5"

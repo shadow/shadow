@@ -16,32 +16,32 @@ fn get_null_path_buf() -> PathBuf {
 }
 
 #[cfg(debug_assertions)]
-type MagicBuf = [u8; 4];
+type CanaryBuf = [u8; 4];
 
 #[cfg(debug_assertions)]
-fn get_magic_buf() -> MagicBuf {
+fn get_canary_buf() -> CanaryBuf {
     [0xDE, 0xAD, 0xBE, 0xEF]
 }
 
 #[cfg(not(debug_assertions))]
-type MagicBuf = [u8; 0];
+type CanaryBuf = [u8; 0];
 
 #[cfg(not(debug_assertions))]
-fn get_magic_buf() -> MagicBuf {
+fn get_canary_buf() -> CanaryBuf {
     []
 }
 
-trait Magic {
-    fn magic_init(&mut self);
-    fn magic_check(&self) -> bool;
+trait Canary {
+    fn canary_init(&mut self);
+    fn canary_check(&self) -> bool;
 
     #[cfg(debug_assertions)]
-    fn magic_assert(&self) {
-        assert!(self.magic_check());
+    fn canary_assert(&self) {
+        assert!(self.canary_check());
     }
 
     #[cfg(not(debug_assertions))]
-    fn magic_assert(&self) {}
+    fn canary_assert(&self) {}
 }
 
 fn format_shmem_name(buf: &mut [u8]) {
@@ -135,13 +135,13 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> Result<(&'a mut 
 #[repr(C)]
 #[derive(Debug)]
 struct Chunk {
-    magic_front: MagicBuf,
+    canary_front: CanaryBuf,
     chunk_name: PathBuf,
     chunk_fd: i32,
     chunk_nbytes: usize,
     data_cur: u32, // The current point at which the data starts from the start of the data segment
     next_chunk: *mut Chunk,
-    magic_back: MagicBuf,
+    canary_back: CanaryBuf,
 }
 
 impl Chunk {
@@ -155,14 +155,14 @@ impl Chunk {
     }
 }
 
-impl Magic for Chunk {
-    fn magic_init(&mut self) {
-        self.magic_front = get_magic_buf();
-        self.magic_back = get_magic_buf();
+impl Canary for Chunk {
+    fn canary_init(&mut self) {
+        self.canary_front = get_canary_buf();
+        self.canary_back = get_canary_buf();
     }
 
-    fn magic_check(&self) -> bool {
-        self.magic_front == get_magic_buf() && self.magic_back == get_magic_buf()
+    fn canary_check(&self) -> bool {
+        self.canary_front == get_canary_buf() && self.canary_back == get_canary_buf()
     }
 }
 
@@ -182,7 +182,7 @@ fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk
         (*chunk_meta).chunk_nbytes = nbytes;
         (*chunk_meta).data_cur = 0;
         (*chunk_meta).next_chunk = core::ptr::null_mut();
-        (*chunk_meta).magic_init();
+        (*chunk_meta).canary_init();
     }
 
     Ok(chunk_meta)
@@ -196,7 +196,7 @@ fn view_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> Result<*mut Chunk, i3
 
 fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
     unsafe {
-        (*chunk_meta).magic_assert();
+        (*chunk_meta).canary_assert();
     }
 
     let path_buf = unsafe { (*chunk_meta).chunk_name };
@@ -215,11 +215,11 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) -> Result<(), i32> {
 #[repr(C)]
 #[derive(Debug)]
 pub(crate) struct Block {
-    magic_front: MagicBuf,
+    canary_front: CanaryBuf,
     next_free_block: *mut Block, // This can't be a short pointer, because it may point across chunks.
     alloc_nbytes: u32,           // What is the size of the block
     data_offset: u32,            // From the start location of the block header
-    magic_back: MagicBuf,
+    canary_back: CanaryBuf,
 }
 
 #[repr(C)]
@@ -232,14 +232,14 @@ pub(crate) struct BlockSerialized {
 const BLOCK_STRUCT_NBYTES: usize = core::mem::size_of::<Block>();
 const BLOCK_STRUCT_ALIGNMENT: usize = core::mem::align_of::<Block>();
 
-impl Magic for Block {
-    fn magic_init(&mut self) {
-        self.magic_front = get_magic_buf();
-        self.magic_back = get_magic_buf();
+impl Canary for Block {
+    fn canary_init(&mut self) {
+        self.canary_front = get_canary_buf();
+        self.canary_back = get_canary_buf();
     }
 
-    fn magic_check(&self) -> bool {
-        self.magic_front == get_magic_buf() && self.magic_back == get_magic_buf()
+    fn canary_check(&self) -> bool {
+        self.canary_front == get_canary_buf() && self.canary_back == get_canary_buf()
     }
 }
 
@@ -258,7 +258,7 @@ impl Block {
     ///
     /// `block` is not null and has an address correctly computed by the `init_block` function.
     pub(self) fn get_block_data_range(&self) -> (*const u8, *const u8) {
-        self.magic_assert();
+        self.canary_assert();
 
         let data_offset = self.data_offset;
         let alloc_nbytes = self.alloc_nbytes;
@@ -440,7 +440,7 @@ impl FreelistAllocator {
             let block = block_struct_start as *mut Block;
 
             unsafe {
-                (*block).magic_init();
+                (*block).canary_init();
                 (*block).next_free_block = core::ptr::null_mut();
                 (*block).alloc_nbytes = alloc_nbytes as u32;
                 (*block).data_offset = data_offset as u32;
@@ -472,6 +472,8 @@ impl FreelistAllocator {
 
             let (p, _) = unsafe { (*block).get_block_data_range() };
             assert!(p.align_offset(alloc_alignment) == 0);
+
+            println!("~~~~~~~~~> Returning this block ptr: {:?}", block);
             return block;
         }
 
@@ -511,6 +513,8 @@ impl FreelistAllocator {
         let (p, _) = unsafe { (*block).get_block_data_range() };
         assert!(p.align_offset(alloc_alignment) == 0);
 
+        println!("~~~~~~~~~> Returning this block ptr: {:?}", block);
+
         block
     }
 
@@ -520,7 +524,7 @@ impl FreelistAllocator {
         }
 
         unsafe {
-            (*block).magic_assert();
+            (*block).canary_assert();
         }
         let old_block = self.next_free_block;
         unsafe {
@@ -532,19 +536,36 @@ impl FreelistAllocator {
     // PRE: Block was allocated with this allocator
     fn find_chunk(&self, block: *const Block) -> Option<*const Chunk> {
         unsafe {
-            (*block).magic_assert();
+            (*block).canary_assert();
         }
+
+        println!(
+            "~~~~~~~~~> Serializing this block: {:?} {:?}",
+            block,
+            unsafe { &(*block) }
+        );
 
         if !self.first_chunk.is_null() {
             let mut chunk_to_check = self.first_chunk;
 
+            println!(
+                "~~~~~~~~~> Checking chunk: {:?} {:?}",
+                chunk_to_check,
+                unsafe { &(*chunk_to_check) }
+            );
+
             while !chunk_to_check.is_null() {
                 // Safe to deref throughout this block because we checked for null above
                 unsafe {
-                    (*chunk_to_check).magic_assert();
+                    (*chunk_to_check).canary_assert();
                 }
                 let data_start = unsafe { (*chunk_to_check).get_data_start() };
                 let data_end = unsafe { (chunk_to_check as *const u8).add(self.chunk_nbytes) };
+
+                println!(
+                    "~~~~~~~~~> Data start, data end: {:?} {:?}",
+                    data_start, data_end
+                );
 
                 // Now we just see if the block is in the range.
                 let block_p = block as *const u8;
@@ -563,7 +584,7 @@ impl FreelistAllocator {
     // PRE: Block was allocated with this allocator
     pub fn serialize(&self, block: *const Block) -> BlockSerialized {
         unsafe {
-            (*block).magic_assert();
+            (*block).canary_assert();
         }
 
         if let Some(chunk) = self.find_chunk(block) {
@@ -582,6 +603,8 @@ impl FreelistAllocator {
     }
 
     pub fn destruct(&mut self) {
+        println!("~~~~~~~~~> Destructing");
+
         if !self.first_chunk.is_null() {
             let mut chunk_to_dealloc = self.first_chunk;
 
@@ -660,7 +683,7 @@ impl FreelistDeserializer {
 
         assert!(!block_p.is_null());
         unsafe {
-            (*(block_p as *mut Block)).magic_assert();
+            (*(block_p as *mut Block)).canary_assert();
         };
 
         block_p as *mut Block
