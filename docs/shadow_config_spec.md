@@ -96,6 +96,7 @@ hosts:
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.use_worker_spinning`](#experimentaluse_worker_spinning)
+- [`experimental.log_errors_to_stderr`](#experimentallog_errors_to_stderr)
 - [`host_option_defaults`](#host_option_defaults)
 - [`host_option_defaults.log_level`](#host_option_defaultslog_level)
 - [`host_option_defaults.pcap_capture_size`](#host_option_defaultspcap_capture_size)
@@ -529,6 +530,14 @@ Each worker thread will spin in a `sched_yield` loop while waiting for a new tas
 if not using the thread-per-core scheduler.
 
 This may improve runtime performance in some environments.
+
+#### `experimental.log_errors_to_tty`
+
+Default: true  
+Type: Bool
+
+Log `Error`-level log lines to shadow's `stderr` in addition to `stdout`, if
+`stdout` is not a tty but `stderr` is.
 
 #### `host_option_defaults`
 

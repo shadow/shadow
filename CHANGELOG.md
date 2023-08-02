@@ -10,7 +10,10 @@ MAJOR changes (breaking):
 
 MINOR changes (backwards-compatible):
 
-*
+* `ERROR`-level log lines are now logged to `stderr` in addition to `stdout` if `stdout`
+is not a tty but `stderr` is. This helps make errors more visible in the common
+case that `stdout` is redirected to a log file but `stderr` is not. This can
+currently be disabled via the (unstable) option `log-errors-to-tty`.
 
 PATCH changes (bugfixes):
 
