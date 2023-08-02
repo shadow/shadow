@@ -112,8 +112,6 @@ impl BlockSerialized {
 
         path_buf.iter_mut().zip(rhs_itr).for_each(|(x, y)| *x = *y);
 
-        println!("{:?}", offset_buf);
-
         let end = offset_buf.iter().position(|&x| x == 0).unwrap();
 
         let offset = unsafe {
@@ -356,12 +354,8 @@ mod tests {
     fn mutations() {
         register_teardown();
 
-        println!("{:?}", SHMALLOC.lock().internal);
-        println!("{:?}", SHDESERIALIZER.lock().internal);
-
         type T = AtomicI32;
         let original_block = SHMALLOC.lock().alloc(AtomicI32::new(0));
-        println!("~~~~~~~~~> Returning this block: {:?}", original_block);
 
         let serialized_block = original_block.serialize();
 

@@ -473,7 +473,6 @@ impl FreelistAllocator {
             let (p, _) = unsafe { (*block).get_block_data_range() };
             assert!(p.align_offset(alloc_alignment) == 0);
 
-            println!("~~~~~~~~~> Returning this block ptr: {:?}", block);
             return block;
         }
 
@@ -513,8 +512,6 @@ impl FreelistAllocator {
         let (p, _) = unsafe { (*block).get_block_data_range() };
         assert!(p.align_offset(alloc_alignment) == 0);
 
-        println!("~~~~~~~~~> Returning this block ptr: {:?}", block);
-
         block
     }
 
@@ -539,20 +536,8 @@ impl FreelistAllocator {
             (*block).canary_assert();
         }
 
-        println!(
-            "~~~~~~~~~> Serializing this block: {:?} {:?}",
-            block,
-            unsafe { &(*block) }
-        );
-
         if !self.first_chunk.is_null() {
             let mut chunk_to_check = self.first_chunk;
-
-            println!(
-                "~~~~~~~~~> Checking chunk: {:?} {:?}",
-                chunk_to_check,
-                unsafe { &(*chunk_to_check) }
-            );
 
             while !chunk_to_check.is_null() {
                 // Safe to deref throughout this block because we checked for null above
@@ -561,11 +546,6 @@ impl FreelistAllocator {
                 }
                 let data_start = unsafe { (*chunk_to_check).get_data_start() };
                 let data_end = unsafe { (chunk_to_check as *const u8).add(self.chunk_nbytes) };
-
-                println!(
-                    "~~~~~~~~~> Data start, data end: {:?} {:?}",
-                    data_start, data_end
-                );
 
                 // Now we just see if the block is in the range.
                 let block_p = block as *const u8;
@@ -603,8 +583,6 @@ impl FreelistAllocator {
     }
 
     pub fn destruct(&mut self) {
-        println!("~~~~~~~~~> Destructing");
-
         if !self.first_chunk.is_null() {
             let mut chunk_to_dealloc = self.first_chunk;
 
