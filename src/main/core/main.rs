@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::ffi::{CStr, OsStr};
-use std::os::fd::AsRawFd;
+use std::io::IsTerminal;
 use std::os::unix::ffi::OsStrExt;
 use std::thread;
 
@@ -143,8 +143,8 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
 
     // start up the logging subsystem to handle all future messages
     let log_errors_to_stderr = shadow_config.experimental.log_errors_to_tty.unwrap()
-        && !nix::unistd::isatty(std::io::stdout().as_raw_fd()).unwrap()
-        && nix::unistd::isatty(std::io::stderr().as_raw_fd()).unwrap();
+        && !std::io::stdout().lock().is_terminal()
+        && std::io::stderr().lock().is_terminal();
     shadow_logger::init(log_level.to_level_filter(), log_errors_to_stderr).unwrap();
 
     // disable log buffering during startup so that we see every message immediately in the terminal

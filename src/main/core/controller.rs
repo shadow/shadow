@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,7 +43,7 @@ impl<'a> Controller<'a> {
         let status_logger = self.config.general.progress.unwrap().then(|| {
             let state = ShadowStatusBarState::new(self.end_time);
 
-            if nix::unistd::isatty(libc::STDERR_FILENO).unwrap() {
+            if std::io::stderr().lock().is_terminal() {
                 let redraw_interval = Duration::from_millis(1000);
                 StatusLogger::Bar(StatusBar::new(state, redraw_interval))
             } else {

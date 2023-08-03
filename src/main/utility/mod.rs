@@ -347,6 +347,8 @@ mod tests {
 }
 
 mod export {
+    use std::io::IsTerminal;
+
     #[no_mangle]
     pub unsafe extern "C" fn utility_handleErrorInner(
         file_name: *const libc::c_char,
@@ -394,11 +396,14 @@ mod export {
             **ABORTING**"
         );
 
-        if !nix::unistd::isatty(libc::STDOUT_FILENO).unwrap_or(true) {
+        eprintln!("{error_msg}");
+
+        // If stderr is a terminal, and stdout isn't, also print to stdout.
+        // This helps ensure the error is preserved in the case that stdout
+        // is recorded to a file but stderr is not.
+        if std::io::stderr().lock().is_terminal() && !std::io::stdout().lock().is_terminal() {
             println!("{error_msg}");
         }
-
-        eprintln!("{error_msg}");
 
         std::process::abort()
     }
