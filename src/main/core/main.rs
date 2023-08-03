@@ -141,10 +141,35 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     let log_level = shadow_config.general.log_level.unwrap();
     let log_level: log::Level = log_level.into();
 
-    let isatty = unsafe { libc::isatty(0) };
+    let isatty = unsafe { libc::isatty(1) };
     let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("libc::isatty(1): {isatty}; errno: {errno}");
 
-    eprintln!("isatty(0): {isatty}; errno: {errno}");
+    let isatty = unsafe { libc::isatty(2) };
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("libc::isatty(2): {isatty}; errno: {errno}");
+
+    let isatty = unsafe { libc::isatty(std::io::stdout().as_raw_fd()) };
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("libc::isatty(std::io::stdout().as_raw_fd()): {isatty}; errno: {errno}");
+
+    let isatty = unsafe { libc::isatty(std::io::stderr().as_raw_fd()) };
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("libc::isatty(std::io::stderr().as_raw_fd()): {isatty}; errno: {errno}");
+
+    eprintln!(
+        "nix::unistd::isatty(std::io::stdout().as_raw_fd()): {:?}",
+        nix::unistd::isatty(std::io::stdout().as_raw_fd())
+    );
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("errno: {errno}");
+
+    eprintln!(
+        "nix::unistd::isatty(std::io::stderr().as_raw_fd()): {:?}",
+        nix::unistd::isatty(std::io::stderr().as_raw_fd())
+    );
+    let errno = std::io::Error::last_os_error().raw_os_error().unwrap();
+    eprintln!("errno: {errno}");
 
     // start up the logging subsystem to handle all future messages
     let log_errors_to_stderr = shadow_config.experimental.log_errors_to_tty.unwrap()
