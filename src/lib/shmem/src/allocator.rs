@@ -173,10 +173,38 @@ lazy_static! {
     };
 }
 
+extern "C" fn shmalloc_teardown() {
+    SHMALLOC.lock().destruct();
+}
+
+// Just needed because we can't put the drop guard in a global place. We don't want to drop
+// after every function, and there's no global test main routine we can take advantage of. No
+// big deal.
+#[cfg(test)]
+fn register_teardown() {
+    use std::sync::Mutex;
+    static MTX: Mutex<i32> = Mutex::new(0);
+    let _guard = MTX.lock();
+
+    static mut INIT: bool = false;
+
+    unsafe {
+        if !INIT {
+            libc::atexit(shmalloc_teardown);
+            INIT = true;
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn register_teardown() {
+}
+
 pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
+    register_teardown();
     SHMALLOC.lock().alloc(val)
 }
 
@@ -310,7 +338,7 @@ impl<'alloc> SharedMemDeserializer<'alloc> {
     }
 }
 
-struct SharedMemAllocatorDropGuard;
+pub struct SharedMemAllocatorDropGuard;
 
 impl Drop for SharedMemAllocatorDropGuard {
     fn drop(&mut self) {
@@ -324,32 +352,8 @@ mod tests {
     use rand::Rng;
     use std::sync::atomic::{AtomicI32, Ordering};
 
-    extern "C" fn shmalloc_teardown() {
-        SHMALLOC.lock().destruct();
-    }
-
-    // Just needed because we can't put the drop guard in a global place. We don't want to drop
-    // after every function, and there's no global test main routine we can take advantage of. No
-    // big deal.
-    fn register_teardown() {
-        use std::sync::Mutex;
-        static MTX: Mutex<i32> = Mutex::new(0);
-        let _guard = MTX.lock();
-
-        static mut INIT: bool = false;
-
-        unsafe {
-            if !INIT {
-                libc::atexit(shmalloc_teardown);
-                INIT = true;
-            }
-        }
-    }
-
     #[test]
     fn allocator_random_allocations() {
-        register_teardown();
-
         const NROUNDS: usize = 100;
         let mut marked_blocks: Vec<(u32, ShMemBlock<u32>)> = Default::default();
         let mut rng = rand::thread_rng();
@@ -388,7 +392,6 @@ mod tests {
 
     #[cfg_attr(miri, ignore)]
     fn round_trip_through_serializer() {
-        register_teardown();
         type T = i32;
         let x: T = 42;
 
@@ -408,8 +411,6 @@ mod tests {
     // Uses FFI
     #[cfg_attr(miri, ignore)]
     fn mutations() {
-        register_teardown();
-
         type T = AtomicI32;
         let original_block = shmalloc(AtomicI32::new(0));
 
@@ -439,8 +440,6 @@ mod tests {
     // Uses FFI
     #[cfg_attr(miri, ignore)]
     fn shmemblock_stable_pointer() {
-        register_teardown();
-
         type T = u32;
         let original_block: ShMemBlock<T> = shmalloc(0);
 
@@ -465,8 +464,6 @@ mod tests {
     // Uses FFI
     #[cfg_attr(miri, ignore)]
     fn shmemblockremote_stable_pointer() {
-        register_teardown();
-
         type T = u32;
         let alloced_block: ShMemBlock<T> = shmalloc(0);
 
