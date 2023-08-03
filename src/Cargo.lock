@@ -1498,6 +1498,8 @@ dependencies = [
  "bindgen",
  "cc",
  "libc",
+ "linux-api",
+ "linux-syscall",
  "logger",
  "nix",
  "numtoa",

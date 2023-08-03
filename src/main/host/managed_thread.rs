@@ -92,11 +92,11 @@ impl ManagedThread {
         log_path: &CStr,
     ) -> Self {
         let ipc_shmem =
-            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
+            Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         envv.push(
             CString::new(format!(
                 "SHADOW_IPC_BLK={}",
-                ipc_shmem.serialize().encode_to_string()
+                ipc_shmem.serialize().to_string_buf()
             ))
             .unwrap(),
         );
@@ -301,7 +301,7 @@ impl ManagedThread {
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, linux_api::errno::Errno> {
         let child_ipc_shmem =
-            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
+            Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         {
             let child_ipc_shmem = child_ipc_shmem.clone();
             WORKER_SHARED

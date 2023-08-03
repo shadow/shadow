@@ -674,7 +674,7 @@ impl Process {
             strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
         );
         let shim_shared_mem_block =
-            shadow_shmem::allocator::Allocator::global().alloc(shim_shared_mem);
+            shadow_shmem::allocator::shmalloc(shim_shared_mem);
 
         let working_dir = utility::pathbuf_to_nul_term_cstring(
             std::fs::canonicalize(host.data_dir_path()).unwrap(),

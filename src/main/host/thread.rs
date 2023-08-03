@@ -10,7 +10,7 @@ use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
-use shadow_shmem::allocator::{Allocator, ShMemBlock};
+use shadow_shmem::allocator::{shmalloc, ShMemBlock};
 
 use super::context::ProcessContext;
 use super::descriptor::descriptor_table::DescriptorTable;
@@ -344,7 +344,7 @@ impl Thread {
             host_id: host.id(),
             process_id: pid,
             tid_address: Cell::new(ForeignPtr::null()),
-            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
+            shim_shared_memory: shmalloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
                 tid.into(),
             )),

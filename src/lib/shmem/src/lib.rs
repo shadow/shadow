@@ -3,8 +3,8 @@
 
 pub mod allocator;
 mod shmalloc_impl;
-pub mod shmalloc;
 pub mod raw_syscall;
+pub mod util;
 
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
