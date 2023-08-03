@@ -1,9 +1,9 @@
 ## link to preload libs (rpath will not contain these paths when shadow is installed)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/preload-injector)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/preload-libc)
+link_directories(${CMAKE_BINARY_DIR}/src/lib/preload-openssl)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shim)
 link_directories(${CMAKE_BINARY_DIR}/src/lib/shmem)
-link_directories(${CMAKE_BINARY_DIR}/src/lib/injector_preload)
-link_directories(${CMAKE_BINARY_DIR}/src/lib/libc_preload)
-link_directories(${CMAKE_BINARY_DIR}/src/lib/openssl_preload)
 
 ## compile defs and flags
 add_definitions(-D_GNU_SOURCE)
