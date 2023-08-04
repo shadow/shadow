@@ -60,7 +60,7 @@ fn verify_supported_system() -> anyhow::Result<()> {
 
 /// Main entry point for the simulator.
 pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Result<()> {
-    let guard_ = crate::shadow_shmem::allocator::SharedMemAllocatorDropGuard;
+    let _guard = crate::shadow_shmem::allocator::SharedMemAllocatorDropGuard;
 
     if unsafe { c::main_checkGlibVersion() } != 0 {
         return Err(anyhow::anyhow!("Unsupported GLib version"));
