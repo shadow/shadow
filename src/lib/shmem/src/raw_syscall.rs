@@ -3,9 +3,8 @@
 //! with Shadow's shim preload library.
 //!
 //! Public functions for system calls are named according to their standard names found in man(2).
-//! The public function accept have parameters with types that are natural for Rust. Most of these
-//! public functions are accompanied by a *_impl() function that has a signature which more closely
-//! matches the x86_64 ABI:
+//! The public function accept have parameters with types that are natural for Rust.
+//! For a list of syscalls, a good reference is:
 //! <https://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/>
 
 use core::result::Result;
@@ -25,41 +24,33 @@ fn convert_i32_rv_to_rv_errno(rv: i32) -> Result<i32, i32> {
     }
 }
 
-fn open_impl(filename: *const char, flags: i32, mode: u32) -> i32 {
-    unsafe { syscall!(SYS_open, filename, flags, mode).as_u64_unchecked() as i32 }
+fn null_terminated(string: &[u8]) -> bool {
+    string.iter().any(|x| *x == 0)
 }
 
 /// # Safety
 ///
 /// Assumes filename is a null-terminated ASCII string and that flags and mode are valid as defined
 /// by the x86-64 system call interface.
-pub unsafe fn open(filename: *const u8, flags: i32, mode: u32) -> Result<i32, i32> {
-    convert_i32_rv_to_rv_errno(open_impl(
-        unsafe { core::mem::transmute::<*const u8, *const char>(filename) },
-        flags,
-        mode,
-    ))
+pub unsafe fn open(filename: &[u8], flags: linux_api::fcntl::OFlag, mode: u32) -> Result<i32, i32> {
+    assert!(null_terminated(filename));
+
+    convert_i32_rv_to_rv_errno(unsafe {
+        syscall!(SYS_open, filename.as_ptr(), flags.bits(), mode).as_u64_unchecked() as i32
+    })
 }
 
 pub fn close(fd: i32) -> Result<i32, i32> {
     unsafe { convert_i32_rv_to_rv_errno(syscall!(SYS_close, fd).as_u64_unchecked() as i32) }
 }
 
-fn unlink_impl(filename: *const char) -> i32 {
-    unsafe { syscall!(SYS_unlink, filename).as_u64_unchecked() as i32 }
-}
-
 /// # Safety
 ///
 /// Assumes filename is a null-terminated ASCII string.
-pub unsafe fn unlink(filename: *const u8) -> Result<i32, i32> {
-    convert_i32_rv_to_rv_errno(unlink_impl(unsafe {
-        core::mem::transmute::<*const u8, *const char>(filename)
-    }))
-}
-
-fn mmap_impl(addr: u64, len: u64, prot: u64, flags: u64, fd: u64, off: u64) -> u64 {
-    unsafe { syscall!(SYS_mmap, addr, len, prot, flags, fd, off).as_u64_unchecked() }
+pub unsafe fn unlink(filename: &[u8]) -> Result<i32, i32> {
+    convert_i32_rv_to_rv_errno(unsafe {
+        syscall!(SYS_unlink, filename.as_ptr()).as_u64_unchecked() as i32
+    })
 }
 
 /// # Safety
@@ -69,21 +60,23 @@ fn mmap_impl(addr: u64, len: u64, prot: u64, flags: u64, fd: u64, off: u64) -> u
 pub unsafe fn mmap<'a>(
     addr: *mut core::ffi::c_void,
     length: u64,
-    prot: i32,
-    flags: i32,
+    prot: linux_api::mman::ProtFlags,
+    flags: linux_api::mman::MapFlags,
     fd: i32,
     offset: u64,
 ) -> Result<&'a mut [u8], i32> {
-    let rv = mmap_impl(
-        addr as u64,
-        length,
-        prot as u64,
-        flags as u64,
-        fd as u64,
-        offset,
-    );
-
-    let rv = unsafe { core::mem::transmute::<u64, i64>(rv) };
+    let rv = unsafe {
+        syscall!(
+            SYS_mmap,
+            addr,
+            length,
+            prot.bits(),
+            flags.bits(),
+            fd,
+            offset
+        )
+        .as_u64_unchecked()
+    } as i64;
 
     if rv < 0 {
         Err(-TryInto::<i32>::try_into(rv).unwrap())
@@ -92,19 +85,14 @@ pub unsafe fn mmap<'a>(
     }
 }
 
-fn munmap_impl(addr: u64, nbytes: u64) -> i32 {
-    unsafe { syscall!(SYS_munmap, addr, nbytes).as_u64_unchecked() as i32 }
-}
-
-pub fn munmap(bytes: &mut [u8]) -> Result<(), (&mut [u8], i32)> {
-    let nbytes = bytes.len();
-
-    let rv = munmap_impl(bytes.as_mut_ptr() as u64, nbytes.try_into().unwrap());
+pub fn munmap(bytes: &mut [u8]) -> Result<(), i32> {
+    let rv =
+        unsafe { syscall!(SYS_munmap, bytes.as_mut_ptr(), bytes.len()).as_u64_unchecked() } as i32;
 
     if rv == 0 {
         Ok(())
     } else {
-        Err((bytes, -rv))
+        Err(-rv)
     }
 }
 
@@ -114,16 +102,15 @@ pub fn ftruncate(fd: i32, nbytes: u64) -> Result<i32, i32> {
     })
 }
 
-fn clock_gettime_impl(clockid: i32, ts: *mut linux_api::time::timespec) -> i32 {
-    unsafe { syscall!(SYS_clock_gettime, clockid, ts).as_u64_unchecked() as i32 }
-}
+pub fn clock_monotonic_gettime() -> Result<linux_api::time::timespec, i32> {
+    let cm: i32 = linux_api::time::ClockId::CLOCK_MONOTONIC.into();
 
-pub fn clock_gettime() -> Result<linux_api::time::timespec, i32> {
     let mut ts = linux_api::time::timespec {
         tv_sec: 0,
         tv_nsec: 0,
     };
-    let rv = clock_gettime_impl(linux_api::time::ClockId::CLOCK_MONOTONIC.into(), &mut ts);
+
+    let rv = unsafe { syscall!(SYS_clock_gettime, cm, &mut ts).as_u64_unchecked() } as i32;
 
     if rv == 0 {
         Ok(ts)

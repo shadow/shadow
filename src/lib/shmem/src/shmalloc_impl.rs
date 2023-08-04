@@ -10,8 +10,6 @@
 //! This code is intended to be private; the `allocator` module is the public, safer-to-use
 //! front end.
 
-#![allow(dead_code)]
-
 use crate::raw_syscall::*;
 use numtoa::NumToA;
 
@@ -119,7 +117,7 @@ fn format_shmem_name(buf: &mut [u8]) {
     let mut sec_buf = [0u8; 32];
     let mut nsec_buf = [0u8; 32];
 
-    let ts = match clock_gettime() {
+    let ts = match clock_monotonic_gettime() {
         Ok(ts) => ts,
         Err(errno) => log_error_and_exit(AllocError::Clock, Some(errno)),
     };
@@ -147,14 +145,11 @@ fn create_map_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [
     use linux_api::mman::{MapFlags, ProtFlags};
 
     const MODE: u32 = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+    let open_flags = OFlag::O_RDWR | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_CLOEXEC;
+    let prot = ProtFlags::PROT_READ | ProtFlags::PROT_WRITE;
+    let map_flags = MapFlags::MAP_SHARED;
 
-    let open_flags: i32 =
-        (OFlag::O_RDWR | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_CLOEXEC).bits();
-
-    let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
-    let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
-
-    let fd = match unsafe { open(path_buf.as_ptr(), open_flags, MODE) } {
+    let fd = match unsafe { open(path_buf, open_flags, MODE) } {
         Ok(fd) => fd,
         Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
     };
@@ -186,12 +181,12 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i
     use linux_api::fcntl::OFlag;
     use linux_api::mman::{MapFlags, ProtFlags};
 
-    let open_flags: i32 = (OFlag::O_RDWR | OFlag::O_CLOEXEC).bits();
     const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
-    let prot: i32 = (ProtFlags::PROT_READ | ProtFlags::PROT_WRITE).bits() as i32;
-    let map_flags: i32 = MapFlags::MAP_SHARED.bits() as i32;
+    let open_flags = OFlag::O_RDWR | OFlag::O_CLOEXEC;
+    let prot = ProtFlags::PROT_READ | ProtFlags::PROT_WRITE;
+    let map_flags = MapFlags::MAP_SHARED;
 
-    let fd = match unsafe { open(path_buf.as_ptr(), open_flags, MODE) } {
+    let fd = match unsafe { open(path_buf, open_flags, MODE) } {
         Ok(fd) => fd,
         Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
     };
@@ -283,13 +278,13 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) {
     let path_buf = unsafe { (*chunk_meta).chunk_name };
     let chunk_nbytes = unsafe { (*chunk_meta).chunk_nbytes };
 
-    if let Err((_, errno)) =
+    if let Err(errno) =
         munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, chunk_nbytes) })
     {
         log_error(AllocError::MUnmap, Some(errno));
     }
 
-    if let Err(errno) = unsafe { unlink(path_buf.as_ptr()) } {
+    if let Err(errno) = unsafe { unlink(&path_buf) } {
         log_error(AllocError::Unlink, Some(errno));
     }
 }
@@ -353,16 +348,6 @@ impl Block {
         (data_begin, data_end)
     }
 
-    pub(crate) fn get_mut_block_data_range(&self) -> (*mut u8, *mut u8) {
-        let (x, y) = self.get_block_data_range();
-        (x as *mut u8, y as *mut u8)
-    }
-
-    pub(crate) fn get_mut_bytes(&mut self) -> &mut [u8] {
-        let (begin_p, _) = self.get_mut_block_data_range();
-        unsafe { core::slice::from_raw_parts_mut(begin_p, self.alloc_nbytes as usize) }
-    }
-
     pub(crate) fn get_ref<T>(&self) -> &[T] {
         let (begin_p, end_p) = self.get_block_data_range();
         let block_len = unsafe { end_p.offset_from(begin_p) } as usize;
@@ -378,6 +363,10 @@ impl Block {
         unsafe { core::slice::from_raw_parts_mut(x_ptr as *mut T, nelems) }
     }
 }
+
+/*
+
+----> These functions are needed if implementing the global allocator API
 
 fn seek_prv_aligned_ptr(p: *mut u8, alignment: usize) -> *mut u8 {
     if p.align_offset(alignment) == 0 {
@@ -418,6 +407,8 @@ pub(crate) fn rewind(p: *mut u8) -> *mut Block {
 
     block_p as *mut Block
 }
+
+*/
 
 #[derive(Debug)]
 pub(crate) struct FreelistAllocator {

@@ -26,14 +26,3 @@ impl core::convert::From<&str> for StringBuf {
         s
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn roundtrip() {
-        let sb: StringBuf = "hello".into();
-        println!("{}", sb);
-    }
-}
