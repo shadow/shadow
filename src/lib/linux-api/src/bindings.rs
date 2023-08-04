@@ -249,6 +249,10 @@ pub const LINUX_AT_STATX_SYNC_AS_STAT: u32 = 0;
 pub const LINUX_AT_STATX_FORCE_SYNC: u32 = 8192;
 pub const LINUX_AT_STATX_DONT_SYNC: u32 = 16384;
 pub const LINUX_AT_RECURSIVE: u32 = 32768;
+pub const LINUX_EPOLL_CLOEXEC: u32 = 524288;
+pub const LINUX_EPOLL_CTL_ADD: u32 = 1;
+pub const LINUX_EPOLL_CTL_DEL: u32 = 2;
+pub const LINUX_EPOLL_CTL_MOD: u32 = 3;
 pub const LINUX___UAPI_DEF_IF_IFCONF: u32 = 1;
 pub const LINUX___UAPI_DEF_IF_IFMAP: u32 = 1;
 pub const LINUX___UAPI_DEF_IF_IFNAMSIZ: u32 = 1;
@@ -1285,6 +1289,7 @@ pub type linux___kernel_uid16_t = ::core::ffi::c_ushort;
 pub type linux___kernel_gid16_t = ::core::ffi::c_ushort;
 pub type linux___be16 = linux___u16;
 pub type linux___be32 = linux___u32;
+pub type linux___poll_t = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_flock {
@@ -1430,6 +1435,47 @@ fn bindgen_test_layout_flock64() {
             stringify!(linux_flock64),
             "::",
             stringify!(l_pid)
+        )
+    );
+}
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_epoll_event {
+    pub events: linux___poll_t,
+    pub data: linux___u64,
+}
+#[test]
+fn bindgen_test_layout_epoll_event() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_epoll_event> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_epoll_event>(),
+        12usize,
+        concat!("Size of: ", stringify!(linux_epoll_event))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_epoll_event>(),
+        1usize,
+        concat!("Alignment of ", stringify!(linux_epoll_event))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).events) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_epoll_event),
+            "::",
+            stringify!(events)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).data) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_epoll_event),
+            "::",
+            stringify!(data)
         )
     );
 }

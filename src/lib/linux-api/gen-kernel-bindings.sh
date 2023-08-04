@@ -82,6 +82,9 @@ bindgen_flags+=("--allowlist-type=sockaddr_in")
 bindgen_flags+=("--allowlist-type=flock")
 bindgen_flags+=("--allowlist-type=flock64")
 
+# epoll.h
+bindgen_flags+=("--allowlist-type=epoll_event")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
@@ -104,3 +107,4 @@ bindgen_flags+=("-I" "$LINUX_INSTALL_DIR/include")
 
 bindgen "${bindgen_flags[@]}"
 ./rename.py < "$BUILDDIR/bindings.rs" > src/bindings.rs
+rustfmt src/bindings.rs
