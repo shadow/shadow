@@ -810,9 +810,9 @@ dependencies = [
 
 [[package]]
 name = "loom"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27537a24ea22f4818f17260442099a6ed6e21c445ece117aa1873688c399cb79"
+checksum = "86a17963e5073acf8d3e2637402657c6b467218f36fe10d696b3e1095ae019bf"
 dependencies = [
  "cfg-if",
  "generator",
