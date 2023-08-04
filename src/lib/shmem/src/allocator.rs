@@ -181,6 +181,7 @@ extern "C" fn shmalloc_teardown() {
 // after every function, and there's no global test main routine we can take advantage of. No
 // big deal.
 #[cfg(test)]
+#[cfg_attr(miri, ignore)]
 fn register_teardown() {
     use std::sync::Mutex;
     static MTX: Mutex<i32> = Mutex::new(0);
@@ -352,6 +353,7 @@ mod tests {
     use std::sync::atomic::{AtomicI32, Ordering};
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn allocator_random_allocations() {
         const NROUNDS: usize = 100;
         let mut marked_blocks: Vec<(u32, ShMemBlock<u32>)> = Default::default();
@@ -389,6 +391,7 @@ mod tests {
         }
     }
 
+    #[test]
     #[cfg_attr(miri, ignore)]
     fn round_trip_through_serializer() {
         type T = i32;
