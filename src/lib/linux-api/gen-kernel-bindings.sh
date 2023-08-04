@@ -82,6 +82,9 @@ bindgen_flags+=("--allowlist-type=sockaddr_in")
 bindgen_flags+=("--allowlist-type=flock")
 bindgen_flags+=("--allowlist-type=flock64")
 
+# epoll.h
+bindgen_flags+=("--allowlist-type=epoll_event")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
