@@ -73,7 +73,8 @@ impl<T> RootedRcCommon<T> {
         unsafe { self.internal.unwrap().as_ref() }
     }
 
-    pub fn safely_drop(mut self, root: &Root, t: RefType) {
+    /// Decrement the reference. If this was the last strong reference, return the value.
+    pub fn safely_drop(mut self, root: &Root, t: RefType) -> Option<T> {
         let internal: &RootedRcInternal<T> = self.borrow_internal(root);
         match t {
             RefType::Weak => internal.dec_weak(),
@@ -105,10 +106,7 @@ impl<T> RootedRcCommon<T> {
             drop(unsafe { Box::from_raw(internal.as_ptr()) });
         }
 
-        // (Potentially) drop the internal value only after we've finished with
-        // the Rc bookkeeping, so that it's in a valid state even if the value's
-        // drop implementation panics.
-        drop(val);
+        val
     }
 
     pub fn clone(&self, root: &Root, t: RefType) -> Self {
@@ -212,6 +210,13 @@ impl<T> RootedRc<T> {
     #[inline]
     pub fn safely_drop(self, root: &Root) {
         self.common.safely_drop(root, RefType::Strong);
+    }
+
+    /// Safely drop the `RootedRc`, and return the inner value if this was the
+    /// last strong reference.
+    #[inline]
+    pub fn into_inner(this: Self, root: &Root) -> Option<T> {
+        this.common.safely_drop(root, RefType::Strong)
     }
 }
 
@@ -345,6 +350,23 @@ mod test_rooted_rc {
 
         rc.safely_drop(&root.lock().unwrap());
     }
+
+    #[test]
+    fn into_inner_recursive() {
+        let root = Root::new();
+        let inner = RootedRc::new(&root, ());
+        let outer1 = RootedRc::new(&root, inner);
+        let outer2 = outer1.clone(&root);
+
+        // Dropping the first outer returns None, since there is still another strong ref.
+        assert!(RootedRc::into_inner(outer1, &root).is_none());
+
+        // Dropping the second outer returns the inner ref.
+        let inner = RootedRc::into_inner(outer2, &root).unwrap();
+
+        // Now we can safely drop the inner ref.
+        inner.safely_drop(&root);
+    }
 }
 
 pub struct RootedRcWeak<T> {
@@ -379,7 +401,10 @@ impl<T> RootedRcWeak<T> {
 
     #[inline]
     pub fn safely_drop(self, root: &Root) {
-        self.common.safely_drop(root, RefType::Weak)
+        let val = self.common.safely_drop(root, RefType::Weak);
+        // Since this isn't a strong reference, this can't be the *last* strong
+        // reference, so the value should never be returned.
+        debug_assert!(val.is_none());
     }
 }
 
