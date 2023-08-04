@@ -1,4 +1,26 @@
-#![allow(dead_code)]
+//! In this module is a shared memory allocator that can be used in Shadow to share data between
+//! the main simulator process and managed processes. There are three main global functions that
+//! are provided:
+//!
+//! (1) `shmalloc()`, which places the input argument into shared memory and returns a `Block`
+//! smart pointer.
+//! (2) `shfree()`, which is used to deallocate allocated blocks.
+//! (3) `shdeserialize()`, which is used to take a serialized block and convert it back into a
+//! `Block` smart pointer that can be dereferenced.
+//!
+//! Blocks can be serialized with the `.serialize()` member function, which converts the block to a
+//! process-memory-layout agnostic representation of the block. The serialized block can be
+//! one-to-one coverted to and from a string for passing in between different processes.
+//!
+//! The intended workflow is:
+//!
+//! (a) The main Shadow simulator process allocates a shared memory block containing an object.
+//! (b) The block is serialized.
+//! (c) The serialized block is turned into a string.
+//! (d) The string is passed to one of Shadow's child, managed processes.
+//! (e) The managed process converts the string back to a serialized block.
+//! (f) The serialized block is deserialized into a shared memory block alias.
+//! (g) The alias is dereferenced and the shared object is retrieved.
 
 use numtoa::NumToA;
 
@@ -8,6 +30,86 @@ use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
 use crate::util::*;
+
+/// This function moves the input parameter into a newly-allocated shared memory block. Analogous to
+/// `malloc()`. Thread-safe.
+pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    register_teardown();
+    SHMALLOC.lock().alloc(val)
+}
+
+/// This function frees a previously allocated block. Thread-safe.
+pub fn shfree<T>(block: ShMemBlock<'static, T>)
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    SHMALLOC.lock().free(block);
+}
+
+/// This function takes a serialized block and converts it back into a BlockAlias that can be
+/// dereferenced. Thread-safe.
+///
+/// # Safety
+///
+/// This function can violate type safety if a template type is provided that does not match
+/// original block that was serialized.
+pub unsafe fn shdeserialize<T>(serialized: &ShMemBlockSerialized) -> ShMemBlockAlias<'static, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    unsafe { SHDESERIALIZER.lock().deserialize(serialized) }
+}
+
+#[cfg(test)]
+extern "C" fn shmalloc_teardown() {
+    SHMALLOC.lock().destruct();
+}
+
+// Just needed because we can't put the drop guard in a global place. We don't want to drop
+// after every function, and there's no global test main routine we can take advantage of. No
+// big deal.
+#[cfg(test)]
+#[cfg_attr(miri, ignore)]
+fn register_teardown() {
+    use std::sync::Mutex;
+    static MTX: Mutex<i32> = Mutex::new(0);
+    let _guard = MTX.lock();
+
+    static mut INIT: bool = false;
+
+    unsafe {
+        if !INIT {
+            libc::atexit(shmalloc_teardown);
+            INIT = true;
+        }
+    }
+}
+
+#[cfg(not(test))]
+fn register_teardown() {}
+
+// The global, singleton shared memory allocator and deserializer objects.
+lazy_static! {
+    static ref SHMALLOC: SelfContainedMutex<SharedMemAllocator<'static>> = {
+        let alloc = SharedMemAllocator::new();
+        SelfContainedMutex::new(alloc)
+    };
+    static ref SHDESERIALIZER: SelfContainedMutex<SharedMemDeserializer<'static>> = {
+        let deserial = SharedMemDeserializer::new();
+        SelfContainedMutex::new(deserial)
+    };
+}
+
+pub struct SharedMemAllocatorDropGuard;
+
+impl Drop for SharedMemAllocatorDropGuard {
+    fn drop(&mut self) {
+        SHMALLOC.lock().destruct();
+    }
+}
 
 #[derive(Debug)]
 pub struct ShMemBlock<'allocator, T>
@@ -162,78 +264,6 @@ impl ShMemBlockSerialized {
     }
 }
 
-lazy_static! {
-    pub static ref SHMALLOC: SelfContainedMutex<SharedMemAllocator<'static>> = {
-        let alloc = SharedMemAllocator::new();
-        SelfContainedMutex::new(alloc)
-    };
-    pub static ref SHDESERIALIZER: SelfContainedMutex<SharedMemDeserializer<'static>> = {
-        let deserial = SharedMemDeserializer::new();
-        SelfContainedMutex::new(deserial)
-    };
-}
-
-extern "C" fn shmalloc_teardown() {
-    SHMALLOC.lock().destruct();
-}
-
-// Just needed because we can't put the drop guard in a global place. We don't want to drop
-// after every function, and there's no global test main routine we can take advantage of. No
-// big deal.
-#[cfg(test)]
-#[cfg_attr(miri, ignore)]
-fn register_teardown() {
-    use std::sync::Mutex;
-    static MTX: Mutex<i32> = Mutex::new(0);
-    let _guard = MTX.lock();
-
-    static mut INIT: bool = false;
-
-    unsafe {
-        if !INIT {
-            libc::atexit(shmalloc_teardown);
-            INIT = true;
-        }
-    }
-}
-
-#[cfg(not(test))]
-fn register_teardown() {}
-
-pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    register_teardown();
-    SHMALLOC.lock().alloc(val)
-}
-
-pub fn shfree<T>(block: ShMemBlock<'static, T>)
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    SHMALLOC.lock().free(block);
-}
-
-/// # Safety
-///
-/// This function can violate type safety if a template type is provided that does not match
-/// original block that was serialized.
-pub unsafe fn shdeserialize<T>(serialized: &ShMemBlockSerialized) -> ShMemBlockAlias<'static, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    unsafe { SHDESERIALIZER.lock().deserialize(serialized) }
-}
-
-// lazy_static wants these.
-
-unsafe impl Send for SharedMemAllocator<'_> {}
-unsafe impl Sync for SharedMemAllocator<'_> {}
-
-unsafe impl Send for SharedMemDeserializer<'_> {}
-unsafe impl Sync for SharedMemDeserializer<'_> {}
-
 pub struct SharedMemAllocator<'alloc> {
     internal: crate::shmalloc_impl::FreelistAllocator,
     nallocs: isize,
@@ -282,6 +312,9 @@ impl<'alloc> SharedMemAllocator<'alloc> {
         }
     }
 }
+
+unsafe impl Send for SharedMemAllocator<'_> {}
+unsafe impl Sync for SharedMemAllocator<'_> {}
 
 // Experimental... implements the global allocator using the shared memory allocator.
 /*
@@ -342,13 +375,8 @@ impl<'alloc> SharedMemDeserializer<'alloc> {
     }
 }
 
-pub struct SharedMemAllocatorDropGuard;
-
-impl Drop for SharedMemAllocatorDropGuard {
-    fn drop(&mut self) {
-        SHMALLOC.lock().destruct();
-    }
-}
+unsafe impl Send for SharedMemDeserializer<'_> {}
+unsafe impl Sync for SharedMemDeserializer<'_> {}
 
 #[cfg(test)]
 mod tests {

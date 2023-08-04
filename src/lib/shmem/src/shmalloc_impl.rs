@@ -1,3 +1,15 @@
+//! This module implements a low-level, unsafe shared memory allocator that uses mmap'ed shared
+//! memory files as the backing store. The module is intended to be no-std so it can be used in
+//! Shadow's shim library, which must async-signal-safe.
+//!
+//! The allocator chains together chunks of shared memory and divvies out portions of each chunk
+//! using a first-fit strategy. The allocator also implements a freelist so that allocated blocks
+//! can be reused efficiently after free. The allocator design isn't good for general-purpose
+//! allocation, but should be OK when used for just a few types.
+//!
+//! This code is intended to be private; the `allocator` module is the public, safer-to-use
+//! front end.
+
 #![allow(dead_code)]
 
 use crate::raw_syscall::*;
