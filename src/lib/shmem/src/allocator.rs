@@ -197,8 +197,7 @@ fn register_teardown() {
 }
 
 #[cfg(not(test))]
-fn register_teardown() {
-}
+fn register_teardown() {}
 
 pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
 where

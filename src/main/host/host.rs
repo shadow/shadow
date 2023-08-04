@@ -238,8 +238,7 @@ impl Host {
             params.shim_log_level,
             manager_shmem,
         );
-        let shim_shmem =
-            UnsafeCell::new(shadow_shmem::allocator::shmalloc(host_shmem));
+        let shim_shmem = UnsafeCell::new(shadow_shmem::allocator::shmalloc(host_shmem));
 
         // Process IDs start at 1000
         let thread_id_counter = Cell::new(1000);

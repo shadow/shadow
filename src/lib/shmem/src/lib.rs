@@ -2,8 +2,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod allocator;
-mod shmalloc_impl;
 pub mod raw_syscall;
+mod shmalloc_impl;
 pub mod util;
 
 // Force cargo to link against crates that aren't (yet) referenced from Rust

@@ -277,9 +277,7 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) {
         log_error(AllocError::MUnmap, Some(errno));
     }
 
-    if let Err(errno) = unsafe {
-        unlink(path_buf.as_ptr())
-    } {
+    if let Err(errno) = unsafe { unlink(path_buf.as_ptr()) } {
         log_error(AllocError::Unlink, Some(errno));
     }
 }

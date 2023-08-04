@@ -91,8 +91,7 @@ impl ManagedThread {
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) -> Self {
-        let ipc_shmem =
-            Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
+        let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         envv.push(
             CString::new(format!(
                 "SHADOW_IPC_BLK={}",
@@ -300,8 +299,7 @@ impl ManagedThread {
         ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, linux_api::errno::Errno> {
-        let child_ipc_shmem =
-            Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
+        let child_ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         {
             let child_ipc_shmem = child_ipc_shmem.clone();
             WORKER_SHARED
