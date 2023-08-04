@@ -107,3 +107,4 @@ bindgen_flags+=("-I" "$LINUX_INSTALL_DIR/include")
 
 bindgen "${bindgen_flags[@]}"
 ./rename.py < "$BUILDDIR/bindings.rs" > src/bindings.rs
+rustfmt src/bindings.rs

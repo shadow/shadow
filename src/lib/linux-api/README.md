@@ -9,14 +9,14 @@ tooling to match versions like:
 
 Then the magix you want to regenerate src/bindings.rs is:
 
-    bash ./gen-kernel-bindings.sh && rustfmt src/bindings.rs
+    bash ./gen-kernel-bindings.sh
 
 If the linux structs/variables you want are not present, you'll need to
 modify `bindings-wrapper.h` and `gen-kernel-bindings.sh` and run again.
 
 To find what to add, grep the install dir, e.g.:
 
-    rg struct_epoll src/lib/linux-api/bindings-build/linux-install/
+    rg struct_epoll bindings-build/linux-install/
 
 That will give you hints as to what headers need to be included inside
 the `bindings-wrapper.h` file.
