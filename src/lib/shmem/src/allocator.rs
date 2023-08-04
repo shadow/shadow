@@ -215,6 +215,10 @@ where
     SHMALLOC.lock().free(block);
 }
 
+/// # Safety
+///
+/// This function can violate type safety if a template type is provided that does not match
+/// original block that was serialized.
 pub unsafe fn shdeserialize<T>(serialized: &ShMemBlockSerialized) -> ShMemBlockAlias<'static, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
