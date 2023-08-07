@@ -2,6 +2,8 @@ use std::cell::{Cell, UnsafeCell};
 
 use vasi::VirtualAddressSpaceIndependent;
 
+use crate::explicit_drop::ExplicitDrop;
+
 use super::{Root, Tag};
 
 /// Analagous to [std::cell::RefCell]. In particular like [std::cell::RefCell]
@@ -77,6 +79,18 @@ impl<T> RootedRefCell<T> {
 
 unsafe impl<T: Send> Send for RootedRefCell<T> {}
 unsafe impl<T: Send> Sync for RootedRefCell<T> {}
+
+impl<T> ExplicitDrop for RootedRefCell<T>
+where
+    T: ExplicitDrop,
+{
+    type ExplicitDropParam = <T as ExplicitDrop>::ExplicitDropParam;
+    type ExplicitDropResult = <T as ExplicitDrop>::ExplicitDropResult;
+
+    fn explicit_drop(self, param: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+        self.val.into_inner().explicit_drop(param)
+    }
+}
 
 pub struct RootedRefCellRef<'a, T> {
     guard: &'a RootedRefCell<T>,
