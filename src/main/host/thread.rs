@@ -15,7 +15,7 @@ use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
-use crate::utility::{syscall, IsSend};
+use crate::utility::{syscall, IsSend, ObjectCounter};
 
 /// The thread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -45,6 +45,7 @@ pub struct Thread {
     cond: Cell<SendPointer<c::SysCallCondition>>,
     /// The native, managed thread
     mthread: RefCell<ManagedThread>,
+    _counter: ObjectCounter,
 }
 
 impl IsSend for Thread {}
@@ -315,6 +316,7 @@ impl Thread {
                 &host.shim_shmem_lock_borrow().unwrap(),
                 tid.into(),
             )),
+            _counter: ObjectCounter::new("Thread"),
         };
         Ok(child)
     }
