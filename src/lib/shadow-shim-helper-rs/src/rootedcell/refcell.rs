@@ -132,6 +132,7 @@ mod test_rooted_refcell {
     use std::thread;
 
     use super::*;
+    use crate::explicit_drop::ExplicitDrop;
     use crate::rootedcell::rc::RootedRc;
 
     #[test]
@@ -151,7 +152,7 @@ mod test_rooted_refcell {
                 *borrow = 3;
                 // Drop rc with lock still held.
                 drop(borrow);
-                rc.safely_drop(&root);
+                rc.explicit_drop(&root);
                 root
             })
             .join()
@@ -160,6 +161,6 @@ mod test_rooted_refcell {
         let borrow = rc.borrow(&root);
         assert_eq!(*borrow, 3);
         drop(borrow);
-        rc.safely_drop(&root);
+        rc.explicit_drop(&root);
     }
 }

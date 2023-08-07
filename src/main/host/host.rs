@@ -16,6 +16,7 @@ use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -450,7 +451,7 @@ impl Host {
         if remove_process {
             trace!("Dropping orphan zombie process {pid:?}");
             let process = self.processes.borrow_mut().remove(&pid).unwrap();
-            RootedRc::safely_drop(process, self.root());
+            process.explicit_drop(self.root());
         }
     }
 
@@ -689,7 +690,7 @@ impl Host {
                 Worker::clear_active_process();
             }
 
-            processrc.safely_drop(self.root());
+            processrc.explicit_drop(self.root());
         }
         trace!("done freeing application for host '{}'", self.name());
     }

@@ -19,6 +19,7 @@ use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -271,7 +272,7 @@ impl RunnableProcess {
         }
 
         drop(thread);
-        threadrc.safely_drop(host.root());
+        threadrc.explicit_drop(host.root());
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -878,7 +879,7 @@ impl Process {
         let ctx = ProcessContext::new(host, self);
         let res = thread.resume(&ctx);
         drop(thread);
-        threadrc.safely_drop(host.root());
+        threadrc.explicit_drop(host.root());
 
         #[cfg(feature = "perf_timers")]
         {

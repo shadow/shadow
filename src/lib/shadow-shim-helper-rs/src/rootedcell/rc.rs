@@ -3,6 +3,8 @@ use std::{
     ptr::NonNull,
 };
 
+use crate::explicit_drop::ExplicitDrop;
+
 use super::{Root, Tag};
 
 struct RootedRcInternal<T> {
@@ -160,10 +162,12 @@ unsafe impl<T: Sync + Send> Sync for RootedRcCommon<T> {}
 /// the owner is required to prove ownership of the associated [Root]
 /// to perform any sensitive operations.
 ///
-/// Instances must be destroyed using [RootedRc::safely_drop], which validates
-/// that the [Root] is held before manipulating reference counts, etc.
-/// Failing to call [RootedRc::safely_drop] results in a `panic` in debug builds,
-/// or leaking the object in release builds.
+/// Instances must be destroyed explicitly, using [`RootedRc::explicit_drop`],
+/// [`RootedRc::explicit_drop_recursive`], or [`RootedRc::into_inner`].  These
+/// validate that the [Root] is held before manipulating reference counts, etc.
+///
+/// Dropping `RootedRc` without calling one of these methods results in a
+/// `panic` in debug builds, or leaking the object in release builds.
 pub struct RootedRc<T> {
     common: RootedRcCommon<T>,
 }
@@ -200,23 +204,37 @@ impl<T> RootedRc<T> {
         }
     }
 
-    /// Safely drop this object, dropping the internal value if no other
-    /// references to it remain.
-    ///
-    /// Instances that are dropped *without* calling this method cannot be
-    /// safely cleaned up. In debug builds this will result in a `panic`.
-    /// Otherwise the underlying reference count will simply not be decremented,
-    /// ultimately resulting in the enclosed value never being dropped.
-    #[inline]
-    pub fn safely_drop(self, root: &Root) {
-        self.common.safely_drop(root, RefType::Strong);
-    }
-
-    /// Safely drop the `RootedRc`, and return the inner value if this was the
-    /// last strong reference.
+    /// Drop the `RootedRc`, and return the inner value if this was the last
+    /// strong reference.
     #[inline]
     pub fn into_inner(this: Self, root: &Root) -> Option<T> {
         this.common.safely_drop(root, RefType::Strong)
+    }
+
+    /// Drops `self`, and if `self` was the last strong reference, call
+    /// `ExplicitDrop::explicit_drop` on the internal value.
+    pub fn explicit_drop_recursive(
+        self,
+        root: &Root,
+        param: &T::ExplicitDropParam,
+    ) -> Option<T::ExplicitDropResult>
+    where
+        T: ExplicitDrop,
+    {
+        Self::into_inner(self, root).map(|val| val.explicit_drop(param))
+    }
+}
+
+impl<T> ExplicitDrop for RootedRc<T> {
+    type ExplicitDropParam = Root;
+
+    type ExplicitDropResult = ();
+
+    /// If T itself implements `ExplicitDrop`, consider
+    /// `RootedRc::explicit_drop_recursive` instead to call it when dropping the
+    /// last strong reference.
+    fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+        self.common.safely_drop(root, RefType::Strong);
     }
 }
 
@@ -251,7 +269,7 @@ mod test_rooted_rc {
     fn construct_and_drop() {
         let root = Root::new();
         let rc = RootedRc::new(&root, 0);
-        rc.safely_drop(&root)
+        rc.explicit_drop(&root)
     }
 
     #[test]
@@ -282,7 +300,7 @@ mod test_rooted_rc {
             // Can access immutably
             let _ = *rc + 2;
             // Need to explicitly drop, since it mutates refcount.
-            rc.safely_drop(&root);
+            rc.explicit_drop(&root)
         })
         .join()
         .unwrap();
@@ -293,13 +311,13 @@ mod test_rooted_rc {
         let root = Root::new();
         let root = thread::spawn(move || {
             let rc = RootedRc::new(&root, 0);
-            rc.safely_drop(&root);
+            rc.explicit_drop(&root);
             root
         })
         .join()
         .unwrap();
         let rc = RootedRc::new(&root, 0);
-        rc.safely_drop(&root);
+        rc.explicit_drop(&root)
     }
 
     #[test]
@@ -314,14 +332,14 @@ mod test_rooted_rc {
         // Returns ownership of root.
         let root = thread::spawn(move || {
             let _ = *rc_thread;
-            rc_thread.safely_drop(&root);
+            rc_thread.explicit_drop(&root);
             root
         })
         .join()
         .unwrap();
 
         // Take the lock to drop rc
-        rc.safely_drop(&root);
+        rc.explicit_drop(&root);
     }
 
     #[test]
@@ -338,8 +356,8 @@ mod test_rooted_rc {
                 thread::spawn(move || {
                     let rootlock = root.lock().unwrap();
                     let rc2 = rc.clone(&rootlock);
-                    rc.safely_drop(&rootlock);
-                    rc2.safely_drop(&rootlock);
+                    rc.explicit_drop(&rootlock);
+                    rc2.explicit_drop(&rootlock);
                 })
             })
             .collect();
@@ -348,7 +366,7 @@ mod test_rooted_rc {
             handle.join().unwrap();
         }
 
-        rc.safely_drop(&root.lock().unwrap());
+        rc.explicit_drop(&root.lock().unwrap());
     }
 
     #[test]
@@ -365,7 +383,36 @@ mod test_rooted_rc {
         let inner = RootedRc::into_inner(outer2, &root).unwrap();
 
         // Now we can safely drop the inner ref.
-        inner.safely_drop(&root);
+        inner.explicit_drop(&root);
+    }
+
+    #[test]
+    fn explicit_drop() {
+        let root = Root::new();
+        let rc = RootedRc::new(&root, ());
+        rc.explicit_drop(&root);
+    }
+
+    #[test]
+    fn explicit_drop_recursive() {
+        // Defining `ExplicitDrop` for `MyOuter` lets us use `RootedRc::explicit_drop_recursive`
+        // to safely drop the inner `RootedRc` when dropping a `RootedRc<MyOuter>`.
+        struct MyOuter(RootedRc<()>);
+        impl ExplicitDrop for MyOuter {
+            type ExplicitDropParam = Root;
+            type ExplicitDropResult = ();
+
+            fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+                self.0.explicit_drop(root);
+            }
+        }
+
+        let root = Root::new();
+        let inner = RootedRc::new(&root, ());
+        let outer1 = RootedRc::new(&root, MyOuter(inner));
+        let outer2 = RootedRc::new(&root, MyOuter(outer1.0.clone(&root)));
+        outer1.explicit_drop_recursive(&root, &root);
+        outer2.explicit_drop_recursive(&root, &root);
     }
 }
 
@@ -398,9 +445,15 @@ impl<T> RootedRcWeak<T> {
             common: self.common.clone(root, RefType::Weak),
         }
     }
+}
+
+impl<T> ExplicitDrop for RootedRcWeak<T> {
+    type ExplicitDropParam = Root;
+
+    type ExplicitDropResult = ();
 
     #[inline]
-    pub fn safely_drop(self, root: &Root) {
+    fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
         let val = self.common.safely_drop(root, RefType::Weak);
         // Since this isn't a strong reference, this can't be the *last* strong
         // reference, so the value should never be returned.
@@ -428,9 +481,9 @@ mod test_rooted_rc_weak {
 
         assert_eq!(*upgraded, *strong);
 
-        upgraded.safely_drop(&root);
-        weak.safely_drop(&root);
-        strong.safely_drop(&root);
+        upgraded.explicit_drop(&root);
+        weak.explicit_drop(&root);
+        strong.explicit_drop(&root);
     }
 
     #[test]
@@ -439,11 +492,11 @@ mod test_rooted_rc_weak {
         let strong = RootedRc::new(&root, 42);
         let weak = RootedRc::downgrade(&strong, &root);
 
-        strong.safely_drop(&root);
+        strong.explicit_drop(&root);
 
         assert!(weak.upgrade(&root).is_none());
 
-        weak.safely_drop(&root);
+        weak.explicit_drop(&root);
     }
 
     #[test]
@@ -453,7 +506,7 @@ mod test_rooted_rc_weak {
         let root = Root::new();
         let strong = RootedRc::new(&root, 42);
         drop(RootedRc::downgrade(&strong, &root));
-        strong.safely_drop(&root);
+        strong.explicit_drop(&root);
     }
 
     // Validate that circular references are cleaned up correctly.
@@ -486,14 +539,14 @@ mod test_rooted_rc_weak {
             fn drop(&mut self) {
                 let weak = self.weak_self.replace(None).unwrap();
                 THREAD_ROOT.with(|root| {
-                    weak.safely_drop(root);
+                    weak.explicit_drop(root);
                 });
             }
         }
 
         let val = MyStruct::new();
         THREAD_ROOT.with(|root| {
-            val.safely_drop(root);
+            val.explicit_drop(root);
         })
     }
 
@@ -504,7 +557,7 @@ mod test_rooted_rc_weak {
         let rc = std::rc::Rc::new(());
         let strong = RootedRc::new(&root, rc.clone());
         drop(RootedRc::downgrade(&strong, &root));
-        strong.safely_drop(&root);
+        strong.explicit_drop(&root);
 
         // Because we safely dropped all of the strong references,
         // the internal std::rc::Rc value should still have been dropped.
