@@ -67,7 +67,7 @@ SyscallReturn syscallhandler_ioctl(SysCallHandler* sys, const SysCallArgs* args)
 
     trace("ioctl called on fd %d for request %ld", fd, request);
 
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);

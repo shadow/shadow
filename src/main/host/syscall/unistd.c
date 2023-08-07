@@ -33,7 +33,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }
@@ -122,7 +122,7 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
           offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }

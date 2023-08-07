@@ -888,11 +888,15 @@ impl LegacyTcpSocket {
         // should be fine since nothing should be relying on the socket having a specific/fixed fd
         // handle.
 
-        let new_descriptor = Worker::with_active_process(|proc| {
-            proc.descriptor_table_borrow_mut()
-                .deregister_descriptor(accepted_fd.try_into().unwrap())
-                .unwrap()
+        let new_descriptor = Worker::with_active_host(|host| {
+            Worker::with_active_thread(|thread| {
+                thread
+                    .descriptor_table_borrow_mut(host)
+                    .deregister_descriptor(accepted_fd.try_into().unwrap())
+                    .unwrap()
+            })
         })
+        .unwrap()
         .unwrap();
 
         let CompatFile::New(open_file) = new_descriptor.into_file() else {

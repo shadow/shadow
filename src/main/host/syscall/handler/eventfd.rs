@@ -74,8 +74,8 @@ impl SyscallHandler {
 
         let fd = ctx
             .objs
-            .process
-            .descriptor_table_borrow_mut()
+            .thread
+            .descriptor_table_borrow_mut(ctx.objs.host)
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 

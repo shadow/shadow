@@ -47,7 +47,7 @@ static int _syscallhandler_validateMmapArgsHelper(SysCallHandler* sys, int fd, s
 
     /* We only need a file if it's not an anonymous mapping. */
     if (!(flags & MAP_ANONYMOUS)) {
-        LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
+        LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
         int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
         if (errcode) {
             debug("Invalid fd %i", fd);

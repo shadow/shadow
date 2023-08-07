@@ -102,8 +102,8 @@ impl SyscallHandler {
 
         let fd = ctx
             .objs
-            .process
-            .descriptor_table_borrow_mut()
+            .thread
+            .descriptor_table_borrow_mut(ctx.objs.host)
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 
@@ -122,7 +122,7 @@ impl SyscallHandler {
     ) -> SyscallResult {
         let file = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.objs.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let CompatFile::New(file) = desc.file() else {
@@ -174,7 +174,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
                     // we don't have any C socket objects
                     return Err(Errno::ENOTSOCK.into());
@@ -247,7 +247,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     CompatFile::Legacy(_file) => {
@@ -319,7 +319,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
                     // we don't have any C socket objects
                     return Err(Errno::ENOTSOCK.into());
@@ -397,7 +397,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     CompatFile::Legacy(_file) => {
@@ -466,7 +466,7 @@ impl SyscallHandler {
     ) -> SyscallResult {
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.objs.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let CompatFile::New(file) = desc.file() else {
@@ -508,7 +508,7 @@ impl SyscallHandler {
     ) -> SyscallResult {
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
-            let desc_table = ctx.objs.process.descriptor_table_borrow();
+            let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
             let desc = Self::get_descriptor(&desc_table, fd)?;
 
             let CompatFile::New(file) = desc.file() else {
@@ -549,7 +549,7 @@ impl SyscallHandler {
         backlog: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.objs.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let CompatFile::New(file) = desc.file() else {
@@ -596,7 +596,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
                     // we don't have any C socket objects
                     return Err(Errno::ENOTSOCK.into());
@@ -640,7 +640,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
                     // we don't have any C socket objects
                     return Err(Errno::ENOTSOCK.into());
@@ -732,8 +732,8 @@ impl SyscallHandler {
 
         let new_fd = ctx
             .objs
-            .process
-            .descriptor_table_borrow_mut()
+            .thread
+            .descriptor_table_borrow_mut(ctx.objs.host)
             .register_descriptor(new_desc)
             .or(Err(Errno::ENFILE))?;
 
@@ -762,7 +762,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 let CompatFile::New(file) = Self::get_descriptor(&desc_table, fd)?.file() else {
                     // we don't have any C socket objects
                     return Err(Errno::ENOTSOCK.into());
@@ -806,7 +806,7 @@ impl SyscallHandler {
         how: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.objs.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let CompatFile::New(file) = desc.file() else {
@@ -902,7 +902,7 @@ impl SyscallHandler {
         desc_2.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut dt = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
         // ever need to worry about this in practice
         let fd_1 = dt.register_descriptor(desc_1).unwrap();
@@ -942,7 +942,7 @@ impl SyscallHandler {
         optlen_ptr: ForeignPtr<libc::socklen_t>,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.objs.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let CompatFile::New(file) = desc.file() else {
@@ -991,7 +991,7 @@ impl SyscallHandler {
         optlen: libc::socklen_t,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let desc_table = ctx.objs.process.descriptor_table_borrow();
+        let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let CompatFile::New(file) = desc.file() else {

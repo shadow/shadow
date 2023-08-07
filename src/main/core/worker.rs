@@ -156,7 +156,7 @@ impl Worker {
     ///
     /// Prefer to pass Thread explicitly where feasible. e.g. see `ThreadContext`.
     #[must_use]
-    fn with_active_thread<F, R>(f: F) -> Option<R>
+    pub fn with_active_thread<F, R>(f: F) -> Option<R>
     where
         F: FnOnce(&Thread) -> R,
     {
@@ -230,8 +230,10 @@ impl Worker {
     /// Clear the currently-active Thread.
     pub fn clear_active_thread() {
         Worker::with(|w| {
+            let host = w.active_host.borrow();
+            let root = host.as_ref().unwrap().root();
             let old = w.active_thread.borrow_mut().take().unwrap();
-            old.explicit_drop(w.active_host.borrow().as_ref().unwrap().root());
+            old.explicit_drop_recursive(root, root);
         })
         .unwrap()
     }

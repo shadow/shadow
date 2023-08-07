@@ -57,8 +57,8 @@ impl SyscallHandler {
 
         let fd = ctx
             .objs
-            .process
-            .descriptor_table_borrow_mut()
+            .thread
+            .descriptor_table_borrow_mut(ctx.objs.host)
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 
@@ -209,7 +209,7 @@ fn check_clockid(clockid: ClockId) -> Result<(), Errno> {
 
 fn get_cloned_file(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> Result<File, Errno> {
     // get the descriptor, or return error if it doesn't exist
-    let desc_table = ctx.objs.process.descriptor_table_borrow();
+    let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
     let desc = SyscallHandler::get_descriptor(&desc_table, fd)?;
 
     // Our TimerFd is a New Rust type, if we get a Legacy C type it must not be a TimerFd.
