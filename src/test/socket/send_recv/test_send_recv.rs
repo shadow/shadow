@@ -12,8 +12,8 @@ use rand::RngCore;
 use rand::SeedableRng;
 use test_utils::running_in_shadow;
 use test_utils::socket_utils::{
-    autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper, SockAddr,
-    SocketInitMethod,
+    autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper,
+    stream_connect_helper, SockAddr, SocketInitMethod,
 };
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, AsMutPtr};
@@ -391,6 +391,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     }
                 }
             }
+        }
+
+        for &sock_type in &[libc::SOCK_STREAM, libc::SOCK_DGRAM] {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{s} <sys_method={sys_method:?}, sock_type={sock_type}>");
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_bound_to_inaddr_any"),
+                move || test_bound_to_inaddr_any(sys_method, sock_type),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
         }
 
         tests.extend(vec![test_utils::ShadowTest::new(
@@ -2026,6 +2037,106 @@ fn test_large_buf(
             expected_err,
             false,
         )?;
+
+        Ok(())
+    })
+}
+
+fn test_bound_to_inaddr_any(
+    sys_method: SendRecvMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(libc::AF_INET, sock_type, 0) };
+    let mut fd_server = unsafe { libc::socket(libc::AF_INET, sock_type, 0) };
+    assert!(fd_client >= 0);
+    assert!(fd_server >= 0);
+
+    /// Binds the socket to a `INADDR_ANY` address.
+    fn inet_autobind_helper(fd: libc::c_int) -> libc::sockaddr_in {
+        let mut server_addr = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 0u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_ANY.to_be(),
+            },
+            sin_zero: [0; 8],
+        };
+
+        // bind on the autobind address
+        {
+            let server_addr_len = std::mem::size_of_val(&server_addr) as libc::socklen_t;
+            let server_addr = &mut server_addr as *mut _ as *mut libc::sockaddr;
+
+            let rv = unsafe { libc::bind(fd, server_addr, server_addr_len) };
+            assert_eq!(rv, 0);
+        }
+
+        // get the assigned address
+        {
+            let mut server_addr_len = std::mem::size_of_val(&server_addr) as libc::socklen_t;
+            let server_addr = &mut server_addr as *mut _ as *mut libc::sockaddr;
+
+            let rv = unsafe { libc::getsockname(fd, server_addr, &mut server_addr_len) };
+            assert_eq!(rv, 0);
+            assert_eq!(
+                server_addr_len as usize,
+                std::mem::size_of::<libc::sockaddr_in>()
+            );
+        }
+
+        server_addr
+    }
+
+    // bind the server socket to some unused address
+    let server_addr = inet_autobind_helper(fd_server);
+    let client_addr = inet_autobind_helper(fd_client);
+
+    if sock_type == libc::SOCK_DGRAM {
+        dgram_connect_helper(
+            fd_client,
+            SockAddr::Inet(server_addr),
+            std::mem::size_of_val(&server_addr) as libc::socklen_t,
+        );
+        dgram_connect_helper(
+            fd_server,
+            SockAddr::Inet(client_addr),
+            std::mem::size_of_val(&client_addr) as libc::socklen_t,
+        );
+    } else if sock_type == libc::SOCK_STREAM {
+        // connect the client to the server and get the accepted socket
+        let fd_peer = stream_connect_helper(
+            fd_client,
+            fd_server,
+            SockAddr::Inet(server_addr),
+            std::mem::size_of_val(&server_addr) as libc::socklen_t,
+            0,
+        );
+
+        // close the server
+        assert_eq!(0, unsafe { libc::close(fd_server) });
+
+        fd_server = fd_peer;
+    }
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // send from the client
+        simple_sendto_helper(sys_method, fd_client, &[1u8, 2, 3], &[], true)?;
+
+        // send from the server
+        simple_sendto_helper(sys_method, fd_server, &[1u8, 2, 3], &[], true)?;
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // recv at the server
+        let received_bytes =
+            simple_recvfrom_helper(sys_method, fd_server, &mut [0u8; 5], &[], false)?;
+        test_utils::result_assert_eq(received_bytes, 3, "Unexpected number of bytes read")?;
+
+        // recv at the client
+        let received_bytes =
+            simple_recvfrom_helper(sys_method, fd_client, &mut [0u8; 5], &[], false)?;
+        test_utils::result_assert_eq(received_bytes, 3, "Unexpected number of bytes read")?;
 
         Ok(())
     })
