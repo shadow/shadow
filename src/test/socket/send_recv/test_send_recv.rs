@@ -400,6 +400,50 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         )]);
     }
 
+    let init_methods = [
+        SocketInitMethod::Inet,
+        SocketInitMethod::Unix,
+        SocketInitMethod::UnixSocketpair,
+    ];
+
+    for &init_method in &init_methods {
+        let sock_types = match init_method.domain() {
+            libc::AF_INET => &[libc::SOCK_STREAM, libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{s} <init_method={init_method:?}, sock_type={sock_type}>");
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_zero_len_buf_read_and_recv"),
+                move || test_zero_len_buf_read_and_recv(init_method, sock_type),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
+        }
+
+        let sock_types = match init_method.domain() {
+            libc::AF_INET => &[libc::SOCK_DGRAM][..],
+            libc::AF_UNIX => &[libc::SOCK_DGRAM, libc::SOCK_SEQPACKET][..],
+            _ => unimplemented!(),
+        };
+
+        for &sock_type in sock_types {
+            // add details to the test names to avoid duplicates
+            let append_args =
+                |s| format!("{s} <init_method={init_method:?}, sock_type={sock_type}>");
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_zero_len_msg_read_and_recv"),
+                move || test_zero_len_msg_read_and_recv(init_method, sock_type),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
+        }
+    }
+
     for &init_method in &[SocketInitMethod::Unix, SocketInitMethod::UnixSocketpair] {
         for &sock_type in &[libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET] {
             // add details to the test names to avoid duplicates
@@ -577,6 +621,329 @@ fn test_zero_len_buf(
 
         // receive 0 bytes; no errors expected
         simple_recvfrom_helper(sys_method, fd_server, &mut [], &[], true)?;
+
+        Ok(())
+    })
+}
+
+/// Test recv() and read(), which behave differently for zero-len buffers.
+fn test_zero_len_buf_read_and_recv(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // PART 1: test with an empty receive buffer (no data available to read)
+
+        // recv(): use a null buffer
+        let rv = unsafe { libc::recv(fd_server, std::ptr::null_mut(), 0, 0) };
+        let errno = test_utils::get_errno();
+        assert_eq!(rv, -1);
+        assert_eq!(errno, libc::EAGAIN);
+
+        // recvmsg(): use a null iov array
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: std::ptr::null_mut(),
+            msg_iovlen: 0,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        let errno = test_utils::get_errno();
+        assert_eq!(rv, -1);
+        assert_eq!(errno, libc::EAGAIN);
+
+        // recvmsg(): use a non-null iov array
+        let mut iov = libc::iovec {
+            iov_base: std::ptr::null_mut(),
+            iov_len: 0,
+        };
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        let errno = test_utils::get_errno();
+        assert_eq!(rv, -1);
+        assert_eq!(errno, libc::EAGAIN);
+
+        // read(): use a null buffer
+        let rv = unsafe { libc::read(fd_server, std::ptr::null_mut(), 0) };
+        assert_eq!(rv, 0);
+
+        // readv(): use a null iov array
+        let rv = unsafe { libc::readv(fd_server, std::ptr::null(), 0) };
+        assert_eq!(rv, 0);
+
+        // readv: use a non-null iov array
+        let iov = libc::iovec {
+            iov_base: std::ptr::null_mut(),
+            iov_len: 0,
+        };
+        let rv = unsafe { libc::readv(fd_server, &iov, 1) };
+        assert_eq!(rv, 0);
+
+        // PART 2: test with a non-empty receive buffer (some data available to read)
+
+        // note: for non-stream sockets the recv will actually read and truncate a message from the
+        // socket even though the given buffer has length 0, so there must be enough messages in the
+        // socket's receive buffer for all of the tests below
+
+        // recv(2) says the following which is relevant to this test, but it doesn't seem to be true
+        // (see the "test_zero_len_msg_read_and_recv" test): "If a zero-length datagram is pending,
+        // read(2) and recv() with a flags argument of zero provide different behavior. In this
+        // circumstance, read(2) has no effect (the datagram remains pending), while recv() consumes
+        // the pending datagram."
+
+        // send some data to the server to partially fill its receive buffer (call send() multiple
+        // times so that non-stream sockets won't run out of messages to read)
+        for _ in 0..10 {
+            // send 10 chunks of 10 bytes
+            assert_eq!(
+                10,
+                nix::sys::socket::send(fd_client, &[1; 10], MsgFlags::empty()).unwrap()
+            );
+        }
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // recv(): use a null buffer
+        let rv = unsafe { libc::recv(fd_server, std::ptr::null_mut(), 0, 0) };
+        assert_eq!(rv, 0);
+
+        // recvmsg(): use a null iov array
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: std::ptr::null_mut(),
+            msg_iovlen: 0,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        assert_eq!(rv, 0);
+
+        // recvmsg(): use a non-null iov array
+        let mut iov = libc::iovec {
+            iov_base: std::ptr::null_mut(),
+            iov_len: 0,
+        };
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        assert_eq!(rv, 0);
+
+        // read(): use a null buffer
+        let rv = unsafe { libc::read(fd_server, std::ptr::null_mut(), 0) };
+        assert_eq!(rv, 0);
+
+        // readv(): use a null iov array
+        let rv = unsafe { libc::readv(fd_server, std::ptr::null(), 0) };
+        assert_eq!(rv, 0);
+
+        // readv: use a non-null iov array
+        let iov = libc::iovec {
+            iov_base: std::ptr::null_mut(),
+            iov_len: 0,
+        };
+        let rv = unsafe { libc::readv(fd_server, &iov, 1) };
+        assert_eq!(rv, 0);
+
+        Ok(())
+    })
+}
+
+/// Test recv() and read(), which may behave differently for zero-len messages.
+fn test_zero_len_msg_read_and_recv(
+    init_method: SocketInitMethod,
+    sock_type: libc::c_int,
+) -> Result<(), String> {
+    let (fd_client, fd_server) = socket_init_helper(
+        init_method,
+        sock_type,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+
+    // The man page recv(2) says the following:
+    //
+    // > If a zero-length datagram is pending, read(2) and recv() with a flags argument of zero
+    // > provide different behavior. In this circumstance, read(2) has no effect (the datagram remains
+    // > pending), while recv() consumes the pending datagram.
+    //
+    // But this doesn't actually seem to be the case. In this test, we recv() and read() 0-length
+    // messages, and read() does actually remove a 0-length message from the socket's receive
+    // buffer. Unless I'm misunderstanding the man page, it seems like the documentation is wrong.
+    //
+    // There is a more-specific case where the documentation holds true, which is when read()ing or
+    // recv()ing with a 0-length buffer. It seems that when read()ing from a socket with a 0-length
+    // buffer no pending messages of any zero or non-zero size will be removed, whereas recv()ing
+    // from a socket with a 0-length buffer does remove the pending message.
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        // PART 1: Try recv()ing and read()ing with non-zero length buffers.
+
+        // Send 5 messages of length 0, interleaved with 5 messages of length 1 containing the loop
+        // iteration. The 1-byte message allows us to know how many 0-byte messages we've read.
+        for x in 1..=3 {
+            assert_eq!(
+                0,
+                nix::sys::socket::send(fd_client, &[], MsgFlags::empty()).unwrap()
+            );
+            assert_eq!(
+                1,
+                nix::sys::socket::send(fd_client, &[x], MsgFlags::empty()).unwrap()
+            );
+        }
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // recv() message of length 0
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 0);
+
+        // recv() message of length 1 with contents "1"
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 1);
+
+        // read() message of length 0
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::read(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len()) };
+        assert_eq!(rv, 0);
+
+        // read() message of length 1 with contents "2"
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::read(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len()) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 2);
+
+        // recv() message of length 0
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 0);
+
+        // recv() message of length 1 with contents "3"
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 3);
+
+        // PART 2: Try recv()ing and read()ing with zero length buffers. This is similar to the
+        // "test_zero_len_buf_read_and_recv" test, but here we're testing dgram/seqpacket-specific
+        // behaviour.
+
+        for x in 1..=3 {
+            assert_eq!(
+                0,
+                nix::sys::socket::send(fd_client, &[], MsgFlags::empty()).unwrap()
+            );
+            assert_eq!(
+                1,
+                nix::sys::socket::send(fd_client, &[x], MsgFlags::empty()).unwrap()
+            );
+        }
+
+        // shadow needs to run events
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // recv() message of length 0
+        let mut buffer = [0u8; 0];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 0);
+
+        // recv() message of length 1 with contents "1"
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 1);
+
+        // read() message of length 0 (but it doesn't actually remove the message)
+        let mut buffer = [0u8; 0];
+        let rv = unsafe { libc::read(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len()) };
+        assert_eq!(rv, 0);
+
+        // readv() message of length 0 (but it doesn't actually remove the message)
+        let rv = unsafe { libc::readv(fd_server, std::ptr::null(), 0) };
+        assert_eq!(rv, 0);
+
+        // readv() message of length 0 (but it doesn't actually remove the message)
+        let mut buffer = [0u8; 0];
+        let iov = libc::iovec {
+            iov_base: buffer.as_mut_ptr() as *mut _,
+            iov_len: buffer.len(),
+        };
+        let rv = unsafe { libc::readv(fd_server, &iov, 1) };
+        assert_eq!(rv, 0);
+
+        // recv() message of length 0
+        let mut buffer = [0u8; 0];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 0);
+
+        // recv() message of length 1 with contents "2"
+        let mut buffer = [0u8; 1];
+        let rv = unsafe { libc::recv(fd_server, buffer.as_mut_ptr() as *mut _, buffer.len(), 0) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 2);
+
+        // recvmsg() message of length 0
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: std::ptr::null_mut(),
+            msg_iovlen: 0,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        assert_eq!(rv, 0);
+
+        // recvmsg() message of length 1 with contents "3"
+        let mut buffer = [0u8; 1];
+        let mut iov = libc::iovec {
+            iov_base: buffer.as_mut_ptr() as *mut _,
+            iov_len: buffer.len(),
+        };
+        let mut msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+        let rv = unsafe { libc::recvmsg(fd_server, &mut msg, 0) };
+        assert_eq!(rv, 1);
+        assert_eq!(buffer[0], 3);
 
         Ok(())
     })

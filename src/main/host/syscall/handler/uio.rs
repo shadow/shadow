@@ -223,6 +223,14 @@ impl SyscallHandler {
                 return Err(Errno::ESPIPE.into());
             }
 
+            // experimentally, it seems that read() calls on sockets with 0-length buffers will
+            // always return 0, even if there would otherwise be an EWOULDBOCK from a recv() call
+            // (see the `test_zero_len_buf_read_and_recv` and `test_zero_len_msg_read_and_recv`
+            // send/recv tests for examples)
+            if iovs.iter().map(|x| x.len).sum::<usize>() == 0 {
+                return Ok(0);
+            }
+
             let args = RecvmsgArgs {
                 iovs,
                 control_ptr: ForeignArrayPtr::new(ForeignPtr::null(), 0),
