@@ -3,6 +3,7 @@ use std::collections::{BTreeSet, HashMap};
 use log::*;
 
 use crate::host::descriptor::Descriptor;
+use crate::utility::ObjectCounter;
 
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;
@@ -18,6 +19,8 @@ pub struct DescriptorTable {
     // Lowest index not in `available_indices` that *might* be available. We still need to verify
     // availability in `descriptors`, though.
     next_index: u32,
+
+    _counter: ObjectCounter,
 }
 
 impl DescriptorTable {
@@ -26,6 +29,7 @@ impl DescriptorTable {
             descriptors: HashMap::new(),
             available_indices: BTreeSet::new(),
             next_index: 0,
+            _counter: ObjectCounter::new("DescriptorTable"),
         }
     }
 
