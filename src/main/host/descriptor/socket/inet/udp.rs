@@ -414,8 +414,21 @@ impl UdpSocket {
             let packet_priority =
                 Worker::with_active_host(|host| host.get_next_packet_priority()).unwrap();
 
+            let src_addr = socket_ref.bound_addr.unwrap();
+            let src_addr = if src_addr.ip().is_unspecified() {
+                // depending on the destination address, choose either localhost or the public IP
+                // address
+                if dst_addr.ip() == &std::net::Ipv4Addr::LOCALHOST {
+                    SocketAddrV4::new(Ipv4Addr::LOCALHOST, src_addr.port())
+                } else {
+                    SocketAddrV4::new(net_ns.default_ip, src_addr.port())
+                }
+            } else {
+                src_addr
+            };
+
             let header = MessageSendHeader {
-                src: socket_ref.bound_addr.unwrap(),
+                src: src_addr,
                 dst: dst_addr,
                 packet_priority,
             };
@@ -687,16 +700,20 @@ impl UdpSocket {
                 assert!(socket_ref.association.is_some());
 
                 // make sure the new peer address is connectable from the bound interface
-                match (
-                    bound_addr.ip() == &Ipv4Addr::LOCALHOST,
-                    peer_addr.ip() == &Ipv4Addr::LOCALHOST,
-                ) {
-                    // bound and peer on loopback interface
-                    (true, true) => {}
-                    // neither bound nor peer on loopback interface (shadow treats any non-127.0.0.1
-                    // address as an "internet" address)
-                    (false, false) => {}
-                    _ => return Err(Errno::EINVAL.into()),
+                if !bound_addr.ip().is_unspecified() {
+                    // assume that a socket bound to 0.0.0.0 can connect anywhere, so only check
+                    // localhost
+                    match (
+                        bound_addr.ip() == &Ipv4Addr::LOCALHOST,
+                        peer_addr.ip() == &Ipv4Addr::LOCALHOST,
+                    ) {
+                        // bound and peer on loopback interface
+                        (true, true) => {}
+                        // neither bound nor peer on loopback interface (shadow treats any
+                        // non-127.0.0.1 address as an "internet" address)
+                        (false, false) => {}
+                        _ => return Err(Errno::EINVAL.into()),
+                    }
                 }
             } else {
                 // we can't be unbound but have a peer

@@ -145,9 +145,16 @@ impl NetworkNamespace {
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
+        // Notes:
+        // - The `is_loopback` matches all loopback addresses, but shadow will only work correctly
+        //   with 127.0.0.1. Using any other loopback address will lead to problems.
+        // - If the address is 0.0.0.0, we return the `internet` interface. This is not ideal if a
+        //   socket bound to 0.0.0.0 is trying to send a localhost packet and uses this method to
+        //   get the network interface, since the packet will be sent on the internet interface
+        //   instead of loopback. It's not clear if this will lead to bugs.
         if addr.is_loopback() {
             Some(self.localhost.borrow())
-        } else if addr == self.default_ip {
+        } else if addr == self.default_ip || addr.is_unspecified() {
             Some(self.internet.borrow())
         } else {
             None
@@ -160,9 +167,16 @@ impl NetworkNamespace {
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
+        // Notes:
+        // - The `is_loopback` matches all loopback addresses, but shadow will only work correctly
+        //   with 127.0.0.1. Using any other loopback address will lead to problems.
+        // - If the address is 0.0.0.0, we return the `internet` interface. This is not ideal if a
+        //   socket bound to 0.0.0.0 is trying to send a localhost packet and uses this method to
+        //   get the network interface, since the packet will be sent on the internet interface
+        //   instead of loopback. It's not clear if this will lead to bugs.
         if addr.is_loopback() {
             Some(self.localhost.borrow_mut())
-        } else if addr == self.default_ip {
+        } else if addr == self.default_ip || addr.is_unspecified() {
             Some(self.internet.borrow_mut())
         } else {
             None
