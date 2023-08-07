@@ -18,7 +18,7 @@ rand = "0.8.5"
 rustix = { version = "0.38.4", default-features = false, features=["process"] }
 
 [target.'cfg(loom)'.dependencies]
-loom = { version = "0.6", features = ["checkpoint"] }
+loom = { version = "0.7", features = ["checkpoint"] }
 
 [target.'cfg(miri)'.dependencies]
 libc = { version ="0.2", default-features = false }
