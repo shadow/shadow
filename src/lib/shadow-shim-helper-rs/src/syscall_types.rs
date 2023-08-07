@@ -30,15 +30,15 @@ pub struct ForeignPtr<T> {
 }
 
 impl<T> ForeignPtr<T> {
-    fn new_with_type_inference(val: usize) -> Self {
+    const fn new_with_type_inference(val: usize) -> Self {
         Self {
             val,
-            _phantom: Default::default(),
+            _phantom: std::marker::PhantomData,
         }
     }
 
     #[inline]
-    pub fn null() -> Self {
+    pub const fn null() -> Self {
         // this will be an invalid pointer so we don't really care what type rust will infer for
         // this `ForeignPtr`
         Self::new_with_type_inference(0)
@@ -69,12 +69,12 @@ impl<T> ForeignPtr<T> {
     /// let ptr: ForeignPtr<u8> = ptr.cast();
     /// ```
     #[inline]
-    pub fn cast<U: NoTypeInference>(&self) -> ForeignPtr<U::This> {
+    pub const fn cast<U: NoTypeInference>(&self) -> ForeignPtr<U::This> {
         ForeignPtr::new_with_type_inference(self.val)
     }
 
     #[inline]
-    pub fn is_null(&self) -> bool {
+    pub const fn is_null(&self) -> bool {
         self.val == 0
     }
 
@@ -88,14 +88,14 @@ impl<T> ForeignPtr<T> {
 
     /// Add an offset to a pointer. `count` is in units of `T`.
     #[inline]
-    pub fn add(&self, count: usize) -> Self {
+    pub const fn add(&self, count: usize) -> Self {
         let val = self.val;
         Self::new_with_type_inference(val + count * std::mem::size_of::<T>())
     }
 
     /// Subtract an offset from a pointer. `count` is in units of `T`.
     #[inline]
-    pub fn sub(&self, count: usize) -> Self {
+    pub const fn sub(&self, count: usize) -> Self {
         let val = self.val;
         Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
     }

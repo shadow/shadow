@@ -439,7 +439,7 @@ impl LegacyTcpSocket {
 
     pub fn recvmsg(
         socket: &Arc<AtomicRefCell<Self>>,
-        args: RecvmsgArgs,
+        mut args: RecvmsgArgs,
         mem: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<RecvmsgReturn, SyscallError> {
@@ -471,6 +471,15 @@ impl LegacyTcpSocket {
         // run in a closure so that an early return doesn't skip checking if we should block
         let result = (|| {
             let mut bytes_read = 0;
+
+            // want to make sure we run the loop at least once so that we can return any errors
+            if args.iovs.is_empty() {
+                const EMPTY_IOV: IoVec = IoVec {
+                    base: ForeignPtr::null(),
+                    len: 0,
+                };
+                args.iovs = std::slice::from_ref(&EMPTY_IOV);
+            }
 
             for iov in args.iovs {
                 let errcode = unsafe { c::tcp_getConnectionError(tcp) };
