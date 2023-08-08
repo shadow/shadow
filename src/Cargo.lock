@@ -766,9 +766,9 @@ checksum = "ef53942eb7bf7ff43a617b3e2c1c4a5ecf5944a7c1bc12d7ee39bbb15e5c1519"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.4.3"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09fc20d2ca12cb9f044c93e3bd6d32d523e6e2ec3db4f7b2939cd99026ecd3f0"
+checksum = "57bcfdad1b858c2db7c38303a6d2ad4dfaf5eb53dfeb0910128b2c26d6158503"
 
 [[package]]
 name = "linux-syscall"
@@ -1315,7 +1315,7 @@ dependencies = [
  "bitflags 2.3.3",
  "errno",
  "libc",
- "linux-raw-sys 0.4.3",
+ "linux-raw-sys 0.4.5",
  "windows-sys",
 ]
 
@@ -1521,7 +1521,7 @@ dependencies = [
  "formatting-nostd",
  "libc",
  "linux-api",
- "linux-raw-sys 0.4.3",
+ "linux-raw-sys 0.4.5",
  "log",
  "log-c2rust",
  "logger",
@@ -1573,6 +1573,7 @@ dependencies = [
  "rand",
  "rustix 0.38.4",
  "signal-hook",
+ "vasi-sync",
 ]
 
 [[package]]
