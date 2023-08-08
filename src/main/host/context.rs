@@ -32,6 +32,8 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+
 use super::process::ProcessId;
 use super::thread::ThreadId;
 use super::{host::Host, process::Process, thread::Thread};
@@ -142,7 +144,7 @@ impl<'a> ThreadContextObjs<'a> {
             let mut ctx = ThreadContext::new(self.host, &process, &thread);
             f(&mut ctx)
         };
-        threadrc.safely_drop(self.host.root());
+        threadrc.explicit_drop(self.host.root());
         res
     }
 }

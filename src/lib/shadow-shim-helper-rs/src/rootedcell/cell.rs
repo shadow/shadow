@@ -80,6 +80,7 @@ mod test_rooted_cell {
     use std::thread;
 
     use super::*;
+    use crate::explicit_drop::ExplicitDrop;
     use crate::rootedcell::rc::RootedRc;
 
     #[test]
@@ -121,14 +122,14 @@ mod test_rooted_cell {
             let rc = { rc.clone(&root) };
             thread::spawn(move || {
                 rc.set(&root, 3);
-                rc.safely_drop(&root);
+                rc.explicit_drop(&root);
                 root
             })
             .join()
             .unwrap()
         };
         assert_eq!(rc.get(&root), 3);
-        rc.safely_drop(&root);
+        rc.explicit_drop(&root);
     }
 
     #[test]
