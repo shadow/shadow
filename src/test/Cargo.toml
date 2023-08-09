@@ -190,6 +190,7 @@ path = "time/nanosleep/test_nanosleep.rs"
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
+formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api" }
 nix = "0.26.2"

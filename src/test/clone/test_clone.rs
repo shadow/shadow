@@ -1,19 +1,23 @@
 use core::ffi::c_void;
 use std::error::Error;
+use std::fmt::Write;
 use std::num::NonZeroI32;
 use std::sync::atomic::{self, AtomicU32};
 
+use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 use linux_api::ldt::linux_user_desc;
 use linux_api::sched::CloneFlags;
 use linux_api::signal::tgkill;
+use rustix::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
+use rustix::fs::{OFlags, SeekFrom};
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
 use rustix::time::Timespec;
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{set, ShadowTest};
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scchannel::SelfContainedChannel;
-use vasi_sync::sync::futex_wait;
+use vasi_sync::sync::{futex_wait, AtomicI32};
 
 const CLONE_TEST_STACK_NBYTES: usize = 4 * 4096;
 
@@ -166,6 +170,145 @@ fn test_clone_clear_tid() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Creates an anonymous temp file with the specified contents, and current
+/// position set to beginning of the file.
+///
+/// Safe to call from threads without thread-local-storage set up.
+fn make_tmpfile(contents: &[u8]) -> OwnedFd {
+    // It'd be nicer to use O_TMPFILE, but Docker doesn't support it.
+
+    static COUNTER: AtomicI32 = AtomicI32::new(0);
+    let counter_val = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+    let pid = rustix::process::getpid().as_raw_nonzero();
+    let mut name = FormatBuffer::<20>::new();
+    write!(&mut name, "./test-clone-tmp-{pid}-{counter_val}").unwrap();
+    let tmpfile = rustix::fs::open(
+        name.as_str(),
+        OFlags::CREATE | OFlags::EXCL | OFlags::RDWR,
+        rustix::fs::Mode::RWXU,
+    )
+    .unwrap();
+    rustix::fs::unlink(name.as_str()).unwrap();
+    let mut written = 0;
+    while written < contents.len() {
+        written += rustix::io::write(&tmpfile, &contents[written..]).unwrap();
+    }
+    rustix::fs::seek(&tmpfile, SeekFrom::Start(0)).unwrap();
+
+    tmpfile
+}
+
+fn test_clone_files_description_offset(use_clone_files_flag: bool) -> Result<(), Box<dyn Error>> {
+    let tmpfile = make_tmpfile(&[1]);
+
+    extern "C" fn thread_fn(fd: *mut c_void) -> i32 {
+        // thread-local storage is not set up; don't call libc functions here.
+
+        let fd = unsafe { BorrowedFd::borrow_raw(fd as i32) };
+        let mut buf = [0; 1];
+        rustix::io::read(fd, &mut buf).unwrap();
+        assert_eq!(buf[0], 1);
+        0
+    }
+    let mut tls = make_empty_tls();
+    let stack = ThreadStack::new(CLONE_TEST_STACK_NBYTES);
+    let child_tid = AtomicU32::new(u32::MAX);
+    let mut flags = CloneFlags::CLONE_VM
+        | CloneFlags::CLONE_FS
+        | CloneFlags::CLONE_SIGHAND
+        | CloneFlags::CLONE_THREAD
+        | CloneFlags::CLONE_SYSVSEM
+        | CloneFlags::CLONE_SETTLS
+        | CloneFlags::CLONE_CHILD_CLEARTID;
+    if use_clone_files_flag {
+        flags |= CloneFlags::CLONE_FILES;
+    }
+    let child = unsafe {
+        libc::clone(
+            thread_fn,
+            stack.top(),
+            flags.bits().try_into().unwrap(),
+            tmpfile.as_raw_fd() as *mut core::ffi::c_void,
+            core::ptr::null_mut::<i32>(),
+            &mut tls,
+            child_tid.as_ptr(),
+        )
+    };
+    assert!(child > 0);
+
+    // Wait to be notified of child exit via futex wake on `CHILD_TID`.
+    wait_for_clear_tid(&child_tid);
+
+    // whether CLONE_FILES is specified or not, file offsets for file descriptions
+    // are shared. i.e. we should always be at position 1 now.
+    assert_eq!(rustix::fs::seek(&tmpfile, SeekFrom::Current(0)), Ok(1));
+
+    Ok(())
+}
+
+fn test_clone_files_dup(use_clone_files_flag: bool) -> Result<(), Box<dyn Error>> {
+    const PARENT_VAL: u8 = 1;
+    const CHILD_VAL: u8 = 2;
+
+    let tmpfile = make_tmpfile(&[PARENT_VAL]);
+
+    extern "C" fn thread_fn(fd: *mut c_void) -> i32 {
+        // thread-local storage is not set up; don't call libc functions here.
+
+        let new_tmpfile = make_tmpfile(&[CHILD_VAL]);
+        let mut orig_tmpfile = unsafe { OwnedFd::from_raw_fd(fd as i32) };
+        rustix::io::dup2(&new_tmpfile, &mut orig_tmpfile).unwrap();
+
+        // We had to wrap `orig_tmpfile` in an `OwnedFd` for use with
+        // rustix's dup2 API, but the parent thread actually owns it.
+        // Leak it so that we don't incorrectly close it when this thread exits.
+        orig_tmpfile.into_raw_fd();
+
+        0
+    }
+    let mut tls = make_empty_tls();
+    let stack = ThreadStack::new(CLONE_TEST_STACK_NBYTES);
+    let child_tid = AtomicU32::new(u32::MAX);
+    let mut flags = CloneFlags::CLONE_VM
+        | CloneFlags::CLONE_FS
+        | CloneFlags::CLONE_SIGHAND
+        | CloneFlags::CLONE_THREAD
+        | CloneFlags::CLONE_SYSVSEM
+        | CloneFlags::CLONE_SETTLS
+        | CloneFlags::CLONE_CHILD_CLEARTID;
+    if use_clone_files_flag {
+        flags |= CloneFlags::CLONE_FILES;
+    }
+    let child = unsafe {
+        libc::clone(
+            thread_fn,
+            stack.top(),
+            flags.bits().try_into().unwrap(),
+            tmpfile.as_raw_fd() as *mut core::ffi::c_void,
+            core::ptr::null_mut::<i32>(),
+            &mut tls,
+            child_tid.as_ptr(),
+        )
+    };
+    assert!(child > 0);
+
+    // Wait to be notified of child exit via futex wake on `CHILD_TID`.
+    wait_for_clear_tid(&child_tid);
+
+    let mut buf = [0; 1];
+    assert_eq!(rustix::io::read(&tmpfile, &mut buf).unwrap(), 1);
+    // If CLONE_FILES was set, then we should see the effect of the `dup2` done in
+    // the child thread; otherwise we shouldn't.
+    let expected_val = if use_clone_files_flag {
+        CHILD_VAL
+    } else {
+        PARENT_VAL
+    };
+    assert_eq!(buf[0], expected_val);
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -174,11 +317,37 @@ fn main() -> Result<(), Box<dyn Error>> {
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let all_envs = set![TestEnv::Libc, TestEnv::Shadow];
+    let libc_only = set![TestEnv::Libc];
 
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new("minimal", test_clone_minimal, all_envs.clone()),
-        ShadowTest::new("clear_tid", test_clone_clear_tid, all_envs),
+        ShadowTest::new("clear_tid", test_clone_clear_tid, all_envs.clone()),
+        ShadowTest::new(
+            "clone_files_set_description_offset",
+            || test_clone_files_description_offset(true),
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "clone_files_unset_description_offset",
+            || test_clone_files_description_offset(false),
+            libc_only.clone(),
+        ),
+        ShadowTest::new(
+            "clone_files_set_dup2",
+            || test_clone_files_dup(true),
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "clone_files_unset_dup2",
+            || test_clone_files_dup(false),
+            libc_only.clone(),
+        ),
     ];
+
+    // Explicitly reference these to avoid clippy warning about unnecessary
+    // clone at point of last usage above.
+    drop(all_envs);
+    drop(libc_only);
 
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnv::Shadow));

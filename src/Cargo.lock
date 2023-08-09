@@ -1579,6 +1579,7 @@ name = "shadow-tests"
 version = "3.0.0"
 dependencies = [
  "anyhow",
+ "formatting-nostd",
  "libc",
  "linux-api",
  "nix",
