@@ -1,4 +1,11 @@
 [workspace]
+# We need version 2 of the resolver to avoid features enabled in build dependencies
+# causing that feature to also be enabled outside of build dependencies. In particular
+# we need this to avoid rustix's `std` feature from being enabled in the shim and in
+# tests via cbindgen via build dependencies.
+# https://github.com/bytecodealliance/rustix/issues/780
+# https://doc.rust-lang.org/cargo/reference/resolver.html#feature-resolver-version-2
+resolver = "2"
 
 members = [
     "main",
