@@ -10,7 +10,7 @@ use linux_api::signal::tgkill;
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
 use rustix::time::Timespec;
 use test_utils::TestEnvironment as TestEnv;
-use test_utils::{running_in_shadow, set, ShadowTest};
+use test_utils::{set, ShadowTest};
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scchannel::SelfContainedChannel;
 use vasi_sync::sync::futex_wait;
@@ -100,6 +100,25 @@ fn test_clone_minimal() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Wait for `tid` to have value 0. Loops with a `FUTEX_WAIT` operation;
+/// intended for use with `CLONE_CHILD_CLEARTID`.
+fn wait_for_clear_tid(tid: &AtomicU32) {
+    let mut current;
+    loop {
+        current = tid.load(atomic::Ordering::Relaxed);
+        if current == 0 {
+            break;
+        }
+        match futex_wait(tid, current) {
+            Ok(0) => (),
+            Err(rustix::io::Errno::AGAIN) | Err(rustix::io::Errno::INTR) => {
+                // try again
+            }
+            other => panic!("Unexpected result: {other:?}"),
+        };
+    }
+}
+
 fn test_clone_clear_tid() -> Result<(), Box<dyn Error>> {
     extern "C" fn thread_fn(_param: *mut c_void) -> i32 {
         // thread-local storage is not set up; don't call libc functions here.
@@ -119,7 +138,7 @@ fn test_clone_clear_tid() -> Result<(), Box<dyn Error>> {
     }
     let mut tls = make_empty_tls();
     let stack = ThreadStack::new(CLONE_TEST_STACK_NBYTES);
-    static CHILD_TID: AtomicU32 = AtomicU32::new(u32::MAX);
+    let child_tid = AtomicU32::new(u32::MAX);
     let flags = CloneFlags::CLONE_VM
         | CloneFlags::CLONE_FS
         | CloneFlags::CLONE_FILES
@@ -136,27 +155,13 @@ fn test_clone_clear_tid() -> Result<(), Box<dyn Error>> {
             core::ptr::null_mut(),
             core::ptr::null_mut::<i32>(),
             &mut tls,
-            CHILD_TID.as_ptr(),
+            child_tid.as_ptr(),
         )
     };
     assert!(child > 0);
 
     // Wait to be notified of child exit via futex wake on `CHILD_TID`.
-    loop {
-        match futex_wait(&CHILD_TID, u32::MAX) {
-            Ok(0) | Err(rustix::io::Errno::AGAIN) | Err(rustix::io::Errno::INTR) => {
-                if CHILD_TID.load(atomic::Ordering::Relaxed) == 0 {
-                    // child thread has exited
-                    break;
-                } else {
-                    // spurious wakeup. Shouldn't happen under shadow.
-                    assert!(!running_in_shadow());
-                    // try again
-                }
-            }
-            other => panic!("Unexpected result: {other:?}"),
-        };
-    }
+    wait_for_clear_tid(&child_tid);
 
     Ok(())
 }
