@@ -1,6 +1,10 @@
 //! Tests for the TCP state machine. All of the types in this module (ex: `Host`, `Event`, etc) are
 //! only for testing, and are modelled after their respective Shadow counterparts.
 
+// ignore dead code in tests
+// TODO: ideally remove this
+#![allow(dead_code)]
+
 mod send_recv;
 mod transitions;
 
