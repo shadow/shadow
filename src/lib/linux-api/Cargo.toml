@@ -20,6 +20,7 @@ bytemuck = "1.13.1"
 linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
+linux-raw-sys = "0.4.5"
 
 [dev-dependencies]
 rustix = { version = "0.38.4", features = ["thread", "process", "time"] }

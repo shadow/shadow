@@ -1,11 +1,11 @@
 include_directories(${GLIB_INCLUDE_DIRS})
-add_executable(test_clone test_clone.c ../test_common.c)
-target_compile_options(test_clone PUBLIC "-pthread")
-target_link_libraries(test_clone ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-add_linux_tests(BASENAME clone COMMAND test_clone)
+add_executable(test_clone_leader_exits_early test_clone_leader_exits_early.c ../test_common.c)
+target_compile_options(test_clone_leader_exits_early PUBLIC "-pthread")
+target_link_libraries(test_clone_leader_exits_early ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+add_linux_tests(BASENAME clone_leader_exits_early COMMAND test_clone_leader_exits_early)
 
 add_shadow_tests(
-    BASENAME clone
+    BASENAME clone_leader_exits_early
     # Shim-side strace-logging use libc functions that assume native
     # thread-local-storage is set up. It *usually* works in practice, but is a
     # potential source of hard-to-debug errors.
@@ -14,11 +14,22 @@ add_shadow_tests(
     ARGS --strace-logging-mode=off
 )
 
-# The clone test exercises some corner cases in memory management, particularly
-# when the thread leader exits before all the threads. Useful to test it without
-# the memory manager (really the MemoryMapper) enabled.
+# This test exercises some corner cases in memory management. Useful to test it
+# without the memory manager (really the MemoryMapper) enabled.
 add_shadow_tests(
-    BASENAME clone-nomm
+    BASENAME clone_leader_exits_early_nomm
+    SHADOW_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/clone_leader_exits_early.yaml"
+    # Shim-side strace-logging use libc functions that assume native
+    # thread-local-storage is set up. It *usually* works in practice, but is a
+    # potential source of hard-to-debug errors.
+    #
+    # See https://github.com/shadow/shadow/issues/2919
+    ARGS --strace-logging-mode=off --use-memory-manager=false
+)
+
+add_linux_tests(BASENAME clone COMMAND sh -c "../../target/debug/test_clone --libc-passing")
+add_shadow_tests(
+    BASENAME clone
     # Shim-side strace-logging use libc functions that assume native
     # thread-local-storage is set up. It *usually* works in practice, but is a
     # potential source of hard-to-debug errors.
