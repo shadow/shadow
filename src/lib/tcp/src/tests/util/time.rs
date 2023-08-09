@@ -6,8 +6,9 @@ use crate::Dependencies;
 
 pub use std::time::Duration;
 
-/// Like [`std::time::Instant`], but the time is arbitrary and is controlled by the
-/// [`Dependencies`].
+/// Like [`std::time::Instant`], but the time is arbitrary. Since you cannot create arbitrary
+/// `std::time::Instant` values (only values derived from [`std::time::Instant::now()`]), this type
+/// is needed so that we can emulate time in our tests.
 // time is internally represented in nanoseconds
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Instant(u64);

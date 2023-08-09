@@ -133,7 +133,7 @@ pub trait Dependencies: Debug + Sized {
     fn fork(&self) -> Self;
 }
 
-/// Specifies whether the callback is meant to run on the child state or a child state. For example
+/// Specifies whether the callback is meant to run on the parent state or a child state. For example
 /// if a child state registers a timer, a value of `TimerRegisteredBy::Child` will be given to the
 /// callback so that it knows to apply the callback to a child state, not the parent state.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -154,7 +154,6 @@ where
         (self.into(), Err(CloseError::InvalidState))
     }
 
-    // TODO: this shouldn't be publicly exposed
     /// Start closing this socket by sending an RST packet. It may or may not close immediately
     /// depending on what state the socket is currently in.
     ///
@@ -321,7 +320,7 @@ impl<X: Dependencies> TcpState<X> {
 ///     self.0.as_ref().unwrap().as_init()
 /// }
 /// ```
-#[allow(unused_macros)]
+#[cfg(test)]
 macro_rules! forward {
     ($fn_name:ident, $($return_type:tt)*) => {
         #[inline]
@@ -378,7 +377,7 @@ enum TcpStateEnum<X: Dependencies> {
 ///     }
 /// }
 /// ```
-#[allow(unused_macros)]
+#[cfg(test)]
 macro_rules! as_impl {
     ($fn_name:ident, $variant:ident, $return_type:ident) => {
         #[inline]
