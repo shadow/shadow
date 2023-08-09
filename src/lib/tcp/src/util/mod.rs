@@ -71,3 +71,34 @@ pub(crate) fn remove_from_list<T: Eq>(list: &mut std::collections::LinkedList<T>
         list.append(&mut split_list);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_small_slice() {
+        SmallArrayBackedSlice::<3, u8>::empty();
+        SmallArrayBackedSlice::<3, u8>::new(&[]).unwrap();
+        SmallArrayBackedSlice::<3, u8>::new(&[1]).unwrap();
+        SmallArrayBackedSlice::<3, u8>::new(&[1, 2]).unwrap();
+        SmallArrayBackedSlice::<3, u8>::new(&[1, 2, 3]).unwrap();
+        assert!(SmallArrayBackedSlice::<3, u8>::new(&[1, 2, 3, 4]).is_none());
+    }
+
+    #[test]
+    fn test_deref_small_slice() {
+        let slice = SmallArrayBackedSlice::<3, u8>::empty();
+        assert!(slice.is_empty());
+
+        let slice = SmallArrayBackedSlice::<3, u8>::new(&[]).unwrap();
+        assert!(slice.is_empty());
+
+        let slice = SmallArrayBackedSlice::<3, u8>::new(&[1]).unwrap();
+        assert_eq!(slice.len(), 1);
+
+        let slice = SmallArrayBackedSlice::<3, u8>::new(&[1, 2, 3]).unwrap();
+        assert_eq!(slice.len(), 3);
+        assert_eq!(&*slice, &[1, 2, 3]);
+    }
+}
