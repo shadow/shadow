@@ -317,7 +317,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let all_envs = set![TestEnv::Libc, TestEnv::Shadow];
-    let libc_only = set![TestEnv::Libc];
 
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new("minimal", test_clone_minimal, all_envs.clone()),
@@ -330,7 +329,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "clone_files_unset_description_offset",
             || test_clone_files_description_offset(false),
-            libc_only.clone(),
+            all_envs.clone(),
         ),
         ShadowTest::new(
             "clone_files_set_dup2",
@@ -340,14 +339,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "clone_files_unset_dup2",
             || test_clone_files_dup(false),
-            libc_only.clone(),
+            all_envs.clone(),
         ),
     ];
 
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.
     drop(all_envs);
-    drop(libc_only);
 
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnv::Shadow));
