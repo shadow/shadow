@@ -1477,8 +1477,8 @@ pub fn tgkill_raw(tgid: i32, tid: i32, signo: i32) -> Result<(), Errno> {
         .map_err(Errno::from)
 }
 
-pub fn tgkill(tgid: NonZeroI32, tid: NonZeroI32, signal: Signal) -> Result<(), Errno> {
-    tgkill_raw(tgid.get(), tid.get(), signal.as_i32())
+pub fn tgkill(tgid: NonZeroI32, tid: NonZeroI32, signal: Option<Signal>) -> Result<(), Errno> {
+    tgkill_raw(tgid.get(), tid.get(), signal.map(i32::from).unwrap_or(0))
 }
 
 mod export {
