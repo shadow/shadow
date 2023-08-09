@@ -101,4 +101,44 @@ mod tests {
         assert_eq!(slice.len(), 3);
         assert_eq!(&*slice, &[1, 2, 3]);
     }
+
+    #[test]
+    fn test_remove_from_list() {
+        let mut list: std::collections::LinkedList<u8> =
+            [1, 6, 2, 7, 3, 6, 4, 0].into_iter().collect();
+
+        fn to_vec<T: Clone>(list: &std::collections::LinkedList<T>) -> Vec<T> {
+            list.clone().into_iter().collect()
+        }
+
+        remove_from_list(&mut list, &3);
+        assert_eq!(&to_vec(&list), &[1, 6, 2, 7, 6, 4, 0]);
+
+        remove_from_list(&mut list, &6);
+        assert_eq!(&to_vec(&list), &[1, 2, 7, 6, 4, 0]);
+
+        remove_from_list(&mut list, &6);
+        assert_eq!(&to_vec(&list), &[1, 2, 7, 4, 0]);
+
+        remove_from_list(&mut list, &1);
+        assert_eq!(&to_vec(&list), &[2, 7, 4, 0]);
+
+        remove_from_list(&mut list, &0);
+        assert_eq!(&to_vec(&list), &[2, 7, 4]);
+
+        remove_from_list(&mut list, &7);
+        assert_eq!(&to_vec(&list), &[2, 4]);
+
+        remove_from_list(&mut list, &4);
+        assert_eq!(&to_vec(&list), &[2]);
+
+        remove_from_list(&mut list, &3);
+        assert_eq!(&to_vec(&list), &[2]);
+
+        remove_from_list(&mut list, &2);
+        assert_eq!(&to_vec(&list), &[]);
+
+        remove_from_list(&mut list, &2);
+        assert_eq!(&to_vec(&list), &[]);
+    }
 }
