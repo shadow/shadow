@@ -6,7 +6,6 @@ use nix::unistd::Pid;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
@@ -451,12 +450,12 @@ impl Drop for Thread {
 }
 
 impl ExplicitDrop for Thread {
-    type ExplicitDropParam = Root;
+    type ExplicitDropParam = Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, root: &Root) {
+    fn explicit_drop(mut self, host: &Host) {
         if let Some(table) = self.desc_table.take() {
-            table.explicit_drop(root);
+            table.explicit_drop_recursive(host.root(), host);
         }
     }
 }

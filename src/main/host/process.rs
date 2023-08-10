@@ -269,7 +269,7 @@ impl RunnableProcess {
         }
 
         drop(thread);
-        threadrc.explicit_drop_recursive(host.root(), host.root());
+        threadrc.explicit_drop_recursive(host.root(), host);
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -867,7 +867,7 @@ impl Process {
         let ctx = ProcessContext::new(host, self);
         let res = thread.resume(&ctx);
         drop(thread);
-        threadrc.explicit_drop_recursive(host.root(), host.root());
+        threadrc.explicit_drop_recursive(host.root(), host);
 
         #[cfg(feature = "perf_timers")]
         {

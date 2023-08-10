@@ -231,9 +231,9 @@ impl Worker {
     pub fn clear_active_thread() {
         Worker::with(|w| {
             let host = w.active_host.borrow();
-            let root = host.as_ref().unwrap().root();
+            let host = host.as_ref().unwrap();
             let old = w.active_thread.borrow_mut().take().unwrap();
-            old.explicit_drop_recursive(root, root);
+            old.explicit_drop_recursive(host.root(), host);
         })
         .unwrap()
     }
