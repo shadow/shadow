@@ -1,14 +1,14 @@
 use core::ffi::c_void;
 use std::error::Error;
 use std::fmt::Write;
-use std::num::NonZeroI32;
 use std::sync::atomic::{self, AtomicU32};
 
 use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 use linux_api::ldt::linux_user_desc;
-use linux_api::sched::CloneFlags;
-use linux_api::signal::tgkill;
+use linux_api::posix_types::Pid;
+use linux_api::sched::{CloneFlags, CloneResult};
+use linux_api::signal::{kill_process, tgkill, Signal};
 use rustix::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
 use rustix::fs::{OFlags, SeekFrom};
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
@@ -30,9 +30,9 @@ fn make_empty_tls() -> linux_user_desc {
     desc
 }
 
-fn wait_for_thread_exit(tid: NonZeroI32) {
+fn wait_for_thread_exit(tid: Pid) {
     let pid = rustix::process::getpid();
-    while tgkill(pid.as_raw_nonzero(), tid, None) != Err(Errno::ESRCH) {}
+    while tgkill(pid.into(), tid, None) != Err(Errno::ESRCH) {}
 }
 
 struct ThreadStack {
@@ -97,10 +97,10 @@ fn test_clone_minimal() -> Result<(), Box<dyn Error>> {
             &mut tls,
         )
     };
-    assert!(child > 0);
+    let child = Pid::from_raw(child).unwrap();
     THREAD_DONE_CHANNEL.receive().unwrap();
     // Wait until thread has exited before deallocating its stack.
-    wait_for_thread_exit(child.try_into().unwrap());
+    wait_for_thread_exit(child);
     Ok(())
 }
 

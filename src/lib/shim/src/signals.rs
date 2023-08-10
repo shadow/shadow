@@ -286,12 +286,7 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
 
         let pid = rustix::process::getpid();
         let tid = rustix::thread::gettid();
-        linux_api::signal::tgkill(
-            pid.as_raw_nonzero(),
-            tid.as_raw_nonzero(),
-            Some(Signal::SIGUSR1),
-        )
-        .unwrap();
+        linux_api::signal::tgkill(pid.into(), tid.into(), Some(Signal::SIGUSR1)).unwrap();
 
         // Reacquire locks and references.
         host = crate::global_host_shmem::get();
