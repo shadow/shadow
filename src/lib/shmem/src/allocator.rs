@@ -74,6 +74,8 @@ extern "C" fn shmalloc_teardown() {
 #[cfg(test)]
 #[cfg_attr(miri, ignore)]
 fn register_teardown() {
+    extern crate std;
+
     use std::sync::Mutex;
     static MTX: Mutex<i32> = Mutex::new(0);
     let _guard = MTX.lock();
@@ -384,11 +386,13 @@ mod tests {
     use rand::Rng;
     use std::sync::atomic::{AtomicI32, Ordering};
 
+    extern crate std;
+
     #[test]
     #[cfg_attr(miri, ignore)]
     fn allocator_random_allocations() {
         const NROUNDS: usize = 100;
-        let mut marked_blocks: Vec<(u32, ShMemBlock<u32>)> = Default::default();
+        let mut marked_blocks: std::vec::Vec<(u32, ShMemBlock<u32>)> = Default::default();
         let mut rng = rand::thread_rng();
 
         let mut execute_round = || {
