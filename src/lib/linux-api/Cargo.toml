@@ -6,7 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["rustix"]
 std = []
+rustix = ["dep:rustix"]
 
 [dependencies]
 bitflags = "2.3.1"
@@ -21,6 +23,7 @@ linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
 linux-raw-sys = "0.4.5"
+rustix = { optional=true, version = "0.38.4", default-features=false, features = ["process"] }
 
 [dev-dependencies]
 rustix = { version = "0.38.4", default-features=false, features = ["thread", "process", "time"] }

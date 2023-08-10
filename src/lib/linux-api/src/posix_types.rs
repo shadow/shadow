@@ -41,3 +41,17 @@ impl Pid {
         self.0
     }
 }
+
+#[cfg(feature = "rustix")]
+impl From<rustix::process::Pid> for Pid {
+    fn from(value: rustix::process::Pid) -> Self {
+        Pid(value.as_raw_nonzero())
+    }
+}
+
+#[cfg(feature = "rustix")]
+impl From<Pid> for rustix::process::Pid {
+    fn from(value: Pid) -> Self {
+        rustix::process::Pid::from_raw(value.as_raw_nonzero().into()).unwrap()
+    }
+}
