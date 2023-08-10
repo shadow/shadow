@@ -25,7 +25,7 @@ impl SyscallHandler {
             |ctx: &mut SyscallContext| Self::legacy_syscall(cshadow::syscallhandler_fcntl, ctx);
 
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
         let Ok(cmd) = FcntlCommand::try_from(cmd) else {

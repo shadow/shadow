@@ -19,7 +19,6 @@ use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -41,11 +40,10 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::context::ProcessContext;
-use crate::host::descriptor::{CompatFile, Descriptor};
+use crate::host::descriptor::Descriptor;
 use crate::host::managed_thread::ManagedThread;
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility;
-use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
 
@@ -212,7 +210,6 @@ pub struct RunnableProcess {
     #[cfg(feature = "perf_timers")]
     total_run_time: Cell<Duration>,
 
-    desc_table: RefCell<DescriptorTable>,
     itimer_real: RefCell<Timer>,
 
     // The `RootedRc` lets us hold a reference to a thread without holding a
@@ -272,7 +269,7 @@ impl RunnableProcess {
         }
 
         drop(thread);
-        threadrc.explicit_drop(host.root());
+        threadrc.explicit_drop_recursive(host.root(), host);
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -326,18 +323,6 @@ impl RunnableProcess {
 
         let mut file = strace_logging.file.borrow_mut();
         Some(f(&mut file))
-    }
-
-    #[track_caller]
-    pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
-        self.desc_table.borrow()
-    }
-
-    #[track_caller]
-    pub fn descriptor_table_borrow_mut(
-        &self,
-    ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
-        self.desc_table.borrow_mut()
     }
 
     pub fn native_pid(&self) -> Pid {
@@ -646,7 +631,10 @@ impl Process {
         let main_thread_id = host.get_new_thread_id();
         let process_id = ProcessId::from(main_thread_id);
 
-        let desc_table = RefCell::new(DescriptorTable::new());
+        let desc_table = RootedRc::new(
+            host.root(),
+            RootedRefCell::new(host.root(), DescriptorTable::new()),
+        );
         let itimer_real = RefCell::new(Timer::new(move |host| {
             itimer_real_expiration(host, process_id)
         }));
@@ -704,7 +692,7 @@ impl Process {
         // and it shouldn't matter much.
 
         {
-            let mut descriptor_table = desc_table.borrow_mut();
+            let mut descriptor_table = desc_table.borrow_mut(host.root());
             Self::open_stdio_file_helper(
                 &mut descriptor_table,
                 libc::STDIN_FILENO.try_into().unwrap(),
@@ -745,7 +733,8 @@ impl Process {
             &shimlog_path,
         );
         let native_pid = mthread.native_pid();
-        let main_thread = Thread::wrap_mthread(host, mthread, process_id, main_thread_id).unwrap();
+        let main_thread =
+            Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id).unwrap();
 
         debug!("process '{:?}' started", plugin_name);
 
@@ -797,7 +786,6 @@ impl Process {
                         expected_final_state: Some(expected_final_state),
                         shim_shared_mem_block,
                         memory_manager: Box::new(RefCell::new(memory_manager)),
-                        desc_table,
                         itimer_real,
                         strace_logging,
                         dumpable: Cell::new(cshadow::SUID_DUMP_USER),
@@ -879,7 +867,7 @@ impl Process {
         let ctx = ProcessContext::new(host, self);
         let res = thread.resume(&ctx);
         drop(thread);
-        threadrc.explicit_drop(host.root());
+        threadrc.explicit_drop_recursive(host.root(), host);
 
         #[cfg(feature = "perf_timers")]
         {
@@ -1053,24 +1041,6 @@ impl Process {
         self.runnable().unwrap().with_strace_file(f)
     }
 
-    /// Deprecated wrapper for `RunnableProcess::descriptor_table_borrow`
-    #[track_caller]
-    pub fn descriptor_table_borrow(&self) -> impl Deref<Target = DescriptorTable> + '_ {
-        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
-            runnable.desc_table.borrow()
-        })
-    }
-
-    /// Deprecated wrapper for `RunnableProcess::descriptor_table_borrow_mut`
-    #[track_caller]
-    pub fn descriptor_table_borrow_mut(
-        &self,
-    ) -> impl Deref<Target = DescriptorTable> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
-            runnable.desc_table.borrow_mut()
-        })
-    }
-
     /// Deprecated wrapper for `RunnableProcess::native_pid`
     pub fn native_pid(&self) -> Pid {
         self.runnable().unwrap().native_pid
@@ -1166,18 +1136,6 @@ impl Process {
             runnable.common.name(),
             runnable.total_run_time.get()
         );
-
-        {
-            let mut descriptor_table = runnable.desc_table.borrow_mut();
-            let descriptors = descriptor_table.remove_all();
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|cb_queue| {
-                    for desc in descriptors {
-                        desc.close(host, cb_queue);
-                    }
-                })
-            });
-        }
 
         use nix::sys::wait::WaitStatus;
         let exit_status = match (
@@ -1471,105 +1429,8 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::host::context::ThreadContext;
-    use crate::host::descriptor::socket::inet::InetSocket;
-    use crate::host::descriptor::socket::Socket;
-    use crate::host::descriptor::File;
     use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
     use crate::host::thread::Thread;
-
-    /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
-    /// after.
-    #[no_mangle]
-    pub extern "C" fn process_registerDescriptor(
-        proc: *const Process,
-        desc: *mut Descriptor,
-    ) -> libc::c_int {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        let desc = Descriptor::from_raw(desc).unwrap();
-
-        proc.descriptor_table_borrow_mut()
-            .register_descriptor(*desc)
-            .unwrap()
-            .into()
-    }
-
-    /// Get a temporary reference to a descriptor.
-    #[no_mangle]
-    pub extern "C" fn process_getRegisteredDescriptor(
-        proc: *const Process,
-        handle: libc::c_int,
-    ) -> *const Descriptor {
-        let proc = unsafe { proc.as_ref().unwrap() };
-
-        let handle = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
-                return std::ptr::null();
-            }
-        };
-
-        match proc.descriptor_table_borrow().get(handle) {
-            Some(d) => d as *const Descriptor,
-            None => std::ptr::null(),
-        }
-    }
-
-    /// Get a temporary mutable reference to a descriptor.
-    #[no_mangle]
-    pub extern "C" fn process_getRegisteredDescriptorMut(
-        proc: *const Process,
-        handle: libc::c_int,
-    ) -> *mut Descriptor {
-        let proc = unsafe { proc.as_ref().unwrap() };
-
-        let handle = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
-                return std::ptr::null_mut();
-            }
-        };
-
-        match proc.descriptor_table_borrow_mut().get_mut(handle) {
-            Some(d) => d as *mut Descriptor,
-            None => std::ptr::null_mut(),
-        }
-    }
-
-    /// Get a temporary reference to a legacy file.
-    #[no_mangle]
-    pub unsafe extern "C" fn process_getRegisteredLegacyFile(
-        proc: *const Process,
-        handle: libc::c_int,
-    ) -> *mut cshadow::LegacyFile {
-        let proc = unsafe { proc.as_ref().unwrap() };
-
-        let handle = match handle.try_into() {
-            Ok(i) => i,
-            Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
-                return std::ptr::null_mut();
-            }
-        };
-
-        match proc.descriptor_table_borrow().get(handle).map(|x| x.file()) {
-            Some(CompatFile::Legacy(file)) => file.ptr(),
-            Some(CompatFile::New(file)) => {
-                // we have a special case for the legacy C TCP objects
-                if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(tcp))) = file.inner_file() {
-                    tcp.borrow().as_legacy_file()
-                } else {
-                    log::warn!(
-                        "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
-                        handle
-                    );
-                    std::ptr::null_mut()
-                }
-            }
-            None => std::ptr::null_mut(),
-        }
-    }
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
@@ -1982,6 +1843,20 @@ mod export {
         Worker::with_active_host(|host| {
             let tid = ThreadId::try_from(tid).unwrap();
             let Some(thread) = proc.thread_borrow(tid) else {
+                return std::ptr::null();
+            };
+            let thread = thread.borrow(host.root());
+            &*thread
+        })
+        .unwrap()
+    }
+
+    /// Returns a pointer to an arbitrary live thread in the process.
+    #[no_mangle]
+    pub unsafe extern "C" fn process_firstLiveThread(proc: *const Process) -> *const Thread {
+        let proc = unsafe { proc.as_ref().unwrap() };
+        Worker::with_active_host(|host| {
+            let Some(thread) = proc.first_live_thread_borrow(host.root()) else {
                 return std::ptr::null();
             };
             let thread = thread.borrow(host.root());

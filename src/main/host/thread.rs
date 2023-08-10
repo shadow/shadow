@@ -1,8 +1,11 @@
 use std::cell::{Cell, RefCell};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use linux_api::errno::Errno;
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
@@ -10,12 +13,13 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{Allocator, ShMemBlock};
 
 use super::context::ProcessContext;
+use super::descriptor::descriptor_table::DescriptorTable;
 use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
-use crate::utility::{syscall, IsSend};
+use crate::utility::{syscall, IsSend, ObjectCounter};
 
 /// The thread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -40,11 +44,19 @@ pub struct Thread {
     tid_address: Cell<ForeignPtr<libc::pid_t>>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
     syscallhandler: SendPointer<c::SysCallHandler>,
+    /// Descriptor table; potentially shared with other threads and processes.
+    // TODO: Consider using an Arc instead of RootedRc, particularly if this
+    // continues to be the only RootedRc member. Cloning this object currently
+    // only done when creating a child process or thread, and if we don't have
+    // any RootedRc members we could get rid of the requirement to explicitly
+    // drop Thread.
+    desc_table: Option<RootedRc<RootedRefCell<DescriptorTable>>>,
     // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
     // Non-trivial because SysCallCondition is currently not `Send`.
     cond: Cell<SendPointer<c::SysCallCondition>>,
     /// The native, managed thread
     mthread: RefCell<ManagedThread>,
+    _counter: ObjectCounter,
 }
 
 impl IsSend for Thread {}
@@ -142,6 +154,26 @@ impl Thread {
             unsafe { c::syscallcondition_cancel(c) };
             unsafe { c::syscallcondition_unref(c) };
         }
+    }
+
+    pub fn descriptor_table(&self) -> &RootedRc<RootedRefCell<DescriptorTable>> {
+        self.desc_table.as_ref().unwrap()
+    }
+
+    #[track_caller]
+    pub fn descriptor_table_borrow<'a>(
+        &'a self,
+        host: &'a Host,
+    ) -> impl Deref<Target = DescriptorTable> + 'a {
+        self.desc_table.as_ref().unwrap().borrow(host.root())
+    }
+
+    #[track_caller]
+    pub fn descriptor_table_borrow_mut<'a>(
+        &'a self,
+        host: &'a Host,
+    ) -> impl Deref<Target = DescriptorTable> + DerefMut + 'a {
+        self.desc_table.as_ref().unwrap().borrow_mut(host.root())
     }
 
     /// Natively execute munmap(2) on the given thread.
@@ -298,6 +330,7 @@ impl Thread {
     pub fn wrap_mthread(
         host: &Host,
         mthread: ManagedThread,
+        desc_table: RootedRc<RootedRefCell<DescriptorTable>>,
         pid: ProcessId,
         tid: ThreadId,
     ) -> Result<Thread, Errno> {
@@ -315,6 +348,8 @@ impl Thread {
                 &host.shim_shmem_lock_borrow().unwrap(),
                 tid.into(),
             )),
+            desc_table: Some(desc_table),
+            _counter: ObjectCounter::new("Thread"),
         };
         Ok(child)
     }
@@ -414,6 +449,17 @@ impl Drop for Thread {
     }
 }
 
+impl ExplicitDrop for Thread {
+    type ExplicitDropParam = Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop(mut self, host: &Host) {
+        if let Some(table) = self.desc_table.take() {
+            table.explicit_drop_recursive(host.root(), host);
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ThreadId(u32);
 
@@ -451,6 +497,9 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
+    use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::host::descriptor::socket::Socket;
+    use crate::host::descriptor::{CompatFile, Descriptor, File};
     use crate::host::host::Host;
     use crate::host::process::Process;
 
@@ -593,5 +642,111 @@ mod export {
             thread.unblocked_signal_pending(&process, host_lock)
         })
         .unwrap()
+    }
+
+    /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
+    /// after.
+    #[no_mangle]
+    pub extern "C" fn thread_registerDescriptor(
+        thread: *const Thread,
+        desc: *mut Descriptor,
+    ) -> libc::c_int {
+        let thread = unsafe { thread.as_ref().unwrap() };
+        let desc = Descriptor::from_raw(desc).unwrap();
+
+        Worker::with_active_host(|host| {
+            thread
+                .descriptor_table_borrow_mut(host)
+                .register_descriptor(*desc)
+                .unwrap()
+                .into()
+        })
+        .unwrap()
+    }
+
+    /// Get a temporary reference to a descriptor.
+    #[no_mangle]
+    pub extern "C" fn thread_getRegisteredDescriptor(
+        thread: *const Thread,
+        handle: libc::c_int,
+    ) -> *const Descriptor {
+        let thread = unsafe { thread.as_ref().unwrap() };
+
+        let handle = match handle.try_into() {
+            Ok(i) => i,
+            Err(_) => {
+                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                return std::ptr::null();
+            }
+        };
+
+        Worker::with_active_host(
+            |host| match thread.descriptor_table_borrow(host).get(handle) {
+                Some(d) => d as *const Descriptor,
+                None => std::ptr::null(),
+            },
+        )
+        .unwrap()
+    }
+
+    /// Get a temporary mutable reference to a descriptor.
+    #[no_mangle]
+    pub extern "C" fn thread_getRegisteredDescriptorMut(
+        thread: *const Thread,
+        handle: libc::c_int,
+    ) -> *mut Descriptor {
+        let thread = unsafe { thread.as_ref().unwrap() };
+
+        let handle = match handle.try_into() {
+            Ok(i) => i,
+            Err(_) => {
+                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                return std::ptr::null_mut();
+            }
+        };
+
+        Worker::with_active_host(|host| {
+            match thread.descriptor_table_borrow_mut(host).get_mut(handle) {
+                Some(d) => d as *mut Descriptor,
+                None => std::ptr::null_mut(),
+            }
+        })
+        .unwrap()
+    }
+
+    /// Get a temporary reference to a legacy file.
+    #[no_mangle]
+    pub unsafe extern "C" fn thread_getRegisteredLegacyFile(
+        thread: *const Thread,
+        handle: libc::c_int,
+    ) -> *mut c::LegacyFile {
+        let thread = unsafe { thread.as_ref().unwrap() };
+
+        let handle = match handle.try_into() {
+            Ok(i) => i,
+            Err(_) => {
+                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                return std::ptr::null_mut();
+            }
+        };
+
+        Worker::with_active_host(|host| {
+        match thread.descriptor_table_borrow(host).get(handle).map(|x| x.file()) {
+            Some(CompatFile::Legacy(file)) => file.ptr(),
+            Some(CompatFile::New(file)) => {
+                // we have a special case for the legacy C TCP objects
+                if let File::Socket(Socket::Inet(InetSocket::LegacyTcp(tcp))) = file.inner_file() {
+                    tcp.borrow().as_legacy_file()
+                } else {
+                    log::warn!(
+                        "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
+                        handle
+                    );
+                    std::ptr::null_mut()
+                }
+            }
+            None => std::ptr::null_mut(),
+        }
+        }).unwrap()
     }
 }

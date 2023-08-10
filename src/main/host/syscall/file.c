@@ -32,7 +32,7 @@ static int _syscallhandler_validateFileHelper(SysCallHandler* sys, int filefd,
     }
 
     /* Check if this is a virtual Shadow descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), filefd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), filefd);
     if (desc && file_desc_out) {
         *file_desc_out = (RegularFile*)desc;
     }
@@ -74,7 +74,7 @@ static SyscallReturn _syscallhandler_openHelper(SysCallHandler* sys, UntypedFore
 
     utility_debugAssert(errcode == 0);
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)filed, flags & O_CLOEXEC);
-    int handle = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
+    int handle = thread_registerDescriptor(_syscallhandler_getThread(sys), desc);
     return syscallreturn_makeDoneI64(handle);
 }
 

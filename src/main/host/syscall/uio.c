@@ -27,7 +27,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Untype
                                              unsigned long iovlen, off_t offset,
                                              LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
     if (!desc) {
         return -EBADF;
     }

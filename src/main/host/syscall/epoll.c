@@ -51,7 +51,7 @@ static SyscallReturn _syscallhandler_epollWaitHelper(SysCallHandler* sys, gint e
     }
 
     /* Get and check the epoll descriptor. */
-    LegacyFile* desc = process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), epfd);
     gint errorCode = _syscallhandler_validateLegacyFile(desc, DT_EPOLL);
 
     if (errorCode) {
@@ -138,7 +138,7 @@ static int _syscallhandler_createEpollHelper(SysCallHandler* sys, int64_t size,
 
     Epoll* epolld = epoll_new();
     Descriptor* desc = descriptor_fromLegacyFile((LegacyFile*)epolld, descFlags);
-    int handle = process_registerDescriptor(_syscallhandler_getProcess(sys), desc);
+    int handle = thread_registerDescriptor(_syscallhandler_getThread(sys), desc);
 
     return handle;
 }
@@ -184,7 +184,7 @@ SyscallReturn syscallhandler_epoll_ctl(SysCallHandler* sys, const SysCallArgs* a
 
     /* Get and check the epoll descriptor. */
     LegacyFile* epollDescriptor =
-        process_getRegisteredLegacyFile(_syscallhandler_getProcess(sys), epfd);
+        thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), epfd);
     gint errorCode = _syscallhandler_validateLegacyFile(epollDescriptor, DT_EPOLL);
 
     if (errorCode) {
@@ -198,7 +198,7 @@ SyscallReturn syscallhandler_epoll_ctl(SysCallHandler* sys, const SysCallArgs* a
 
     /* Find the child descriptor that the epoll is monitoring. */
     const Descriptor* descriptor =
-        process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), fd);
+        thread_getRegisteredDescriptor(_syscallhandler_getThread(sys), fd);
 
     if (descriptor == NULL) {
         debug("Child %i is not a shadow descriptor", fd);

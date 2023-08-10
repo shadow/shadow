@@ -190,11 +190,12 @@ path = "time/nanosleep/test_nanosleep.rs"
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
+formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api" }
 nix = "0.26.2"
 rand = { version="0.8.5", features=["small_rng"] }
-rustix = { version = "0.38.4", features=["mm", "time","thread"]}
+rustix = { version = "0.38.4", default-features=false, features=["mm", "time", "thread"]}
 signal-hook = "0.3.15"
 once_cell = "1.18.0"
 vasi-sync = { path = "../lib/vasi-sync" }

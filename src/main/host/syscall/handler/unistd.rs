@@ -30,8 +30,8 @@ impl SyscallHandler {
         // closing
         let desc = ctx
             .objs
-            .process
-            .descriptor_table_borrow_mut()
+            .thread
+            .descriptor_table_borrow_mut(ctx.objs.host)
             .deregister_descriptor(fd)
             .ok_or(linux_api::errno::Errno::EBADF)?;
 
@@ -47,7 +47,7 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int)]
     pub fn dup(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         // duplicate the descriptor
@@ -67,7 +67,7 @@ impl SyscallHandler {
         new_fd: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
@@ -102,7 +102,7 @@ impl SyscallHandler {
         flags: std::ffi::c_int,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
-        let mut desc_table = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
 
         // from 'man 2 dup3': "If oldfd equals newfd, then dup3() fails with the error EINVAL"
@@ -170,7 +170,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -218,7 +218,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -280,7 +280,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -329,7 +329,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -448,7 +448,7 @@ impl SyscallHandler {
         writer_desc.set_flags(descriptor_flags);
 
         // register the file descriptors
-        let mut dt = ctx.objs.process.descriptor_table_borrow_mut();
+        let mut dt = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         // unwrap here since the error handling would be messy (need to deregister) and we shouldn't
         // ever need to worry about this in practice
         let read_fd = dt.register_descriptor(reader_desc).unwrap();

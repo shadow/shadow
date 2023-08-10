@@ -78,7 +78,7 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
 
         /* Get the descriptor. */
         const Descriptor* desc =
-            process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), pfd->fd);
+            thread_getRegisteredDescriptor(_syscallhandler_getThread(sys), pfd->fd);
         if (desc) {
             _syscallhandler_getPollEventsHelper(desc, pfd);
         } else {
@@ -104,7 +104,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         const Descriptor* desc =
-            process_getRegisteredDescriptor(_syscallhandler_getProcess(sys), pfd->fd);
+            thread_getRegisteredDescriptor(_syscallhandler_getThread(sys), pfd->fd);
         utility_debugAssert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};

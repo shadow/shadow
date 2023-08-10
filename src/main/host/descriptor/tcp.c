@@ -2082,11 +2082,18 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_DROPPED);
                     return;
                 }
+                /* The descriptor table is stored in the  thread; typically all threads
+                 * within a Process share the same one, so using an arbitrary thread
+                 * should work. This should be fixed as part of fixing
+                 * https://github.com/shadow/shadow/issues/1780.
+                 */
+                const Thread* registerInThread = process_firstLiveThread(registerInProcess);
+                utility_alwaysAssert(registerInThread != NULL);
 
                 /* we need to multiplex a new child */
                 TCP* multiplexed = tcp_new(host, recvBufSize, sendBufSize);
                 Descriptor* desc = descriptor_fromLegacyTcp(multiplexed, /* flags= */ 0);
-                int handle = process_registerDescriptor(registerInProcess, desc);
+                int handle = thread_registerDescriptor(registerInThread, desc);
 
                 multiplexed->child =
                     _tcpchild_new(multiplexed, tcp, handle, header->sourceIP, header->sourcePort);

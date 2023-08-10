@@ -33,7 +33,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -94,7 +94,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -162,7 +162,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -296,7 +296,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -357,7 +357,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead
@@ -426,7 +426,7 @@ impl SyscallHandler {
             Some(x) => x,
             // get the file from the descriptor table, or return early if it doesn't exist
             None => {
-                let desc_table = ctx.objs.process.descriptor_table_borrow();
+                let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
                 match Self::get_descriptor(&desc_table, fd)?.file() {
                     CompatFile::New(file) => file.clone(),
                     // if it's a legacy file, use the C syscall handler instead

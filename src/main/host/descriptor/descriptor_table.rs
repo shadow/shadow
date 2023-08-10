@@ -1,8 +1,12 @@
 use std::collections::{BTreeSet, HashMap};
 
 use log::*;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 
 use crate::host::descriptor::Descriptor;
+use crate::host::host::Host;
+use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::ObjectCounter;
 
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;
@@ -18,6 +22,8 @@ pub struct DescriptorTable {
     // Lowest index not in `available_indices` that *might* be available. We still need to verify
     // availability in `descriptors`, though.
     next_index: u32,
+
+    _counter: ObjectCounter,
 }
 
 impl DescriptorTable {
@@ -26,6 +32,7 @@ impl DescriptorTable {
             descriptors: HashMap::new(),
             available_indices: BTreeSet::new(),
             next_index: 0,
+            _counter: ObjectCounter::new("DescriptorTable"),
         }
     }
 
@@ -190,6 +197,28 @@ impl DescriptorTable {
 impl Default for DescriptorTable {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ExplicitDrop for DescriptorTable {
+    type ExplicitDropParam = Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop(mut self, host: &Host) {
+        // Drop all descriptors using a callback queue.
+        //
+        // Doing this explicitly instead of letting `DescriptorTable`'s `Drop`
+        // implementation implicitly close these individually is a performance
+        // optimization so that all descriptors are closed before any of their
+        // callbacks run.
+        let descriptors = self.remove_all();
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                for desc in descriptors {
+                    desc.close(host, cb_queue);
+                }
+            })
+        });
     }
 }
 

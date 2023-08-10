@@ -8,6 +8,7 @@ use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
+use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
 use crate::host::syscall_types::SyscallError;
 use crate::host::thread::Thread;
@@ -58,13 +59,6 @@ impl SyscallHandler {
                 debug!("Missing CLONE_SIGHAND");
                 return Err(Errno::EINVAL.into());
             }
-            if !flags.contains(CloneFlags::CLONE_FILES) {
-                // AFAICT from clone(2) this is legal, but we don't yet support
-                // it in Shadow, since the file descriptor table is kept at the
-                // Process level instead of the Thread level.
-                warn!("CLONE_THREAD without CLONE_FILES not supported by shadow");
-                return Err(Errno::ENOTSUP.into());
-            }
             if !flags.contains(CloneFlags::CLONE_SETTLS) {
                 // Legal in Linux, but the shim will be broken and behave unpredictably.
                 warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
@@ -107,15 +101,20 @@ impl SyscallHandler {
             handled_flags.insert(CloneFlags::CLONE_FS);
         }
 
-        if flags.contains(CloneFlags::CLONE_FILES) {
-            if !flags.contains(CloneFlags::CLONE_THREAD) {
-                // I *think* we'd just need to wrap the descriptor table
-                // in e.g. a RootedRc, and clone the Rc in this case.
-                warn!("Failing clone: we don't support fork with shared descriptor table");
-                return Err(Errno::ENOTSUP.into());
-            }
-            handled_flags.insert(CloneFlags::CLONE_FILES);
-        }
+        let desc_table = if flags.contains(CloneFlags::CLONE_FILES) {
+            // Child gets a reference to the same table.
+            RootedRc::clone(ctx.objs.thread.descriptor_table(), ctx.objs.host.root())
+        } else {
+            // Child gets a *copy* of the table.
+            let root = ctx.objs.host.root();
+            let table: DescriptorTable = ctx
+                .objs
+                .thread
+                .descriptor_table_borrow(ctx.objs.host)
+                .clone();
+            RootedRc::new(root, RootedRefCell::new(root, table))
+        };
+        handled_flags.insert(CloneFlags::CLONE_FILES);
 
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             native_flags.insert(CloneFlags::CLONE_SETTLS);
@@ -166,8 +165,13 @@ impl SyscallHandler {
             ProcessId::from(child_tid)
         };
 
-        let child_thread =
-            Thread::wrap_mthread(ctx.objs.host, child_mthread, child_pid, child_tid)?;
+        let child_thread = Thread::wrap_mthread(
+            ctx.objs.host,
+            child_mthread,
+            desc_table,
+            child_pid,
+            child_tid,
+        )?;
 
         if flags.contains(CloneFlags::CLONE_THREAD) {
             let childrc = RootedRc::new(
