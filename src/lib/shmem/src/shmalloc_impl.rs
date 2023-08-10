@@ -10,7 +10,12 @@
 //! This code is intended to be private; the `allocator` module is the public, safer-to-use
 //! front end.
 
+use core::fmt::Write;
 use crate::raw_syscall::*;
+
+use formatting_nostd::FormatBuffer;
+use linux_api::errno::Errno;
+
 use numtoa::NumToA;
 
 const PATH_MAX_NBYTES: usize = 255;
@@ -52,6 +57,7 @@ trait Canary {
     fn canary_assert(&self) {}
 }
 
+#[derive(Copy, Clone)]
 pub(crate) enum AllocError {
     Clock,
     Open,
@@ -61,46 +67,55 @@ pub(crate) enum AllocError {
     Unlink,
     WrongAllocator,
     Leak,
+    GetPID,
 }
 
-pub(crate) fn log_error(error: AllocError, errno: Option<i32>) {
-    const STDERR_FD: i32 = 2;
-    let mut errno_buf = [0u8; 32];
-
-    let err: &[u8] = match error {
-        AllocError::Clock => b"[shadow:shmalloc] [CRITICAL] Error calling clock_gettime().\n",
-        AllocError::Open => b"[shadow:shmalloc] [CRITICAL] Error calling open().\n",
-        AllocError::FTruncate => b"[shadow:shmalloc] [CRITICAL] Error calling ftruncate().\n",
-        AllocError::MMap => b"[shadow:shmalloc] [CRITICAL] Error calling mmap().\n",
-        AllocError::MUnmap => b"[shadow:shmalloc] [WARNING] Error calling munmap().\n",
-        AllocError::Unlink => b"[shadow:shmalloc] [WARNING] Error calling unlink().\n",
-        AllocError::WrongAllocator => b"[shadow:shmalloc] [ERROR] Block was passed to incorrect allocator.\n",
-        AllocError::Leak => b"[shadow:shmalloc] [ERROR] Allocator destroyed but not all blocks are deallocated first.\n",
-    };
-
-    unsafe {
-        write(STDERR_FD, err.as_ptr() as *const _, err.len());
+const fn alloc_error_to_str(e: AllocError) -> Option<&'static str> {
+    match e {
+        AllocError::Clock => Some("Error calling clock_gettime()"),
+        AllocError::Open => Some("Error calling open()"),
+        AllocError::FTruncate => Some("Error calling ftruncate()"),
+        AllocError::MMap => Some("Error calling mmap()"),
+        AllocError::MUnmap => Some("Error calling munmap()"),
+        AllocError::Unlink => Some("Error calling unlink()"),
+        AllocError::WrongAllocator => Some("Block was passed to incorrect allocator"),
+        AllocError::Leak => Some("Allocator destroyed but not all blocks are deallocated first"),
+        AllocError::GetPID => Some("Error calling getpid()"),
     }
+}
+
+impl core::fmt::Debug for AllocError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match alloc_error_to_str(*self) {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "unknown allocator error"),
+        }
+    }
+}
+
+impl core::fmt::Display for AllocError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match alloc_error_to_str(*self) {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "unknown allocator error"),
+        }
+    }
+}
+
+pub(crate) fn log_err(error: AllocError, errno: Option<Errno>) {
+    let mut buf = FormatBuffer::<1024>::new();
 
     if let Some(e) = errno {
-        let errno_buf = e.numtoa(10, &mut errno_buf);
-
-        const PREAMBLE: &[u8; 44] = b"[shadow:shmalloc] [WARNING] Last error num: ";
-
-        unsafe {
-            write(STDERR_FD, PREAMBLE.as_ptr() as *const _, PREAMBLE.len());
-        }
-        unsafe {
-            write(STDERR_FD, errno_buf.as_ptr() as *const _, errno_buf.len());
-        }
-        unsafe {
-            write(STDERR_FD, b"\n".as_ptr() as *const _, 1);
-        }
+        write!(&mut buf, "{error}: {e}").unwrap();
+    } else {
+        write!(&mut buf, "{error}").unwrap();
     }
+
+    log::error!("{}", buf.as_str());
 }
 
-pub(crate) fn log_error_and_exit(error: AllocError, errno: Option<i32>) -> ! {
-    log_error(error, errno);
+pub(crate) fn log_err_and_exit(error: AllocError, errno: Option<Errno>) -> ! {
+    log_err(error, errno);
     let _ = kill(0, linux_api::signal::Signal::SIGABRT.into());
     unreachable!()
 }
@@ -111,7 +126,11 @@ fn format_shmem_name(buf: &mut [u8]) {
     buf.iter_mut().for_each(|x| *x = 0);
 
     let mut pid_buf = [0u8; 32];
-    let pid = getpid();
+    let pid = match getpid() {
+        Ok(pid) => pid,
+        Err(err) => log_err_and_exit(AllocError::GetPID, Some(err)),
+    };
+
     let pid_buf = pid.numtoa(10, &mut pid_buf);
 
     let mut sec_buf = [0u8; 32];
@@ -119,7 +138,7 @@ fn format_shmem_name(buf: &mut [u8]) {
 
     let ts = match clock_monotonic_gettime() {
         Ok(ts) => ts,
-        Err(errno) => log_error_and_exit(AllocError::Clock, Some(errno)),
+        Err(errno) => log_err_and_exit(AllocError::Clock, Some(errno)),
     };
 
     let sec_buf = ts.tv_sec.numtoa(10, &mut sec_buf);
@@ -151,12 +170,12 @@ fn create_map_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [
 
     let fd = match unsafe { open(path_buf, open_flags, MODE) } {
         Ok(fd) => fd,
-        Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
+        Err(err) => log_err_and_exit(AllocError::Open, Some(err)),
     };
 
     // u64 into usize should be safe to unwrap.
     if let Err(errno) = ftruncate(fd, nbytes.try_into().unwrap()) {
-        log_error_and_exit(AllocError::FTruncate, Some(errno))
+        log_err_and_exit(AllocError::FTruncate, Some(errno))
     };
 
     let retval = match unsafe {
@@ -170,7 +189,7 @@ fn create_map_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [
         )
     } {
         Ok(retval) => retval,
-        Err(errno) => log_error_and_exit(AllocError::MMap, Some(errno)),
+        Err(errno) => log_err_and_exit(AllocError::MMap, Some(errno)),
     };
 
     (retval, fd)
@@ -188,7 +207,7 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i
 
     let fd = match unsafe { open(path_buf, open_flags, MODE) } {
         Ok(fd) => fd,
-        Err(errno) => log_error_and_exit(AllocError::Open, Some(errno)),
+        Err(errno) => log_err_and_exit(AllocError::Open, Some(errno)),
     };
 
     let retval = match unsafe {
@@ -202,7 +221,7 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i
         )
     } {
         Ok(retval) => retval,
-        Err(errno) => log_error_and_exit(AllocError::MMap, Some(errno)),
+        Err(errno) => log_err_and_exit(AllocError::MMap, Some(errno)),
     };
 
     (retval, fd)
@@ -281,11 +300,11 @@ fn deallocate_shared_chunk(chunk_meta: *const Chunk) {
     if let Err(errno) =
         munmap(unsafe { core::slice::from_raw_parts_mut(chunk_meta as *mut u8, chunk_nbytes) })
     {
-        log_error(AllocError::MUnmap, Some(errno));
+        log_err(AllocError::MUnmap, Some(errno));
     }
 
     if let Err(errno) = unsafe { unlink(&path_buf) } {
-        log_error(AllocError::Unlink, Some(errno));
+        log_err(AllocError::Unlink, Some(errno));
     }
 }
 
@@ -650,7 +669,7 @@ impl FreelistAllocator {
                 offset,
             }
         } else {
-            log_error_and_exit(AllocError::WrongAllocator, None);
+            log_err_and_exit(AllocError::WrongAllocator, None);
         }
     }
 

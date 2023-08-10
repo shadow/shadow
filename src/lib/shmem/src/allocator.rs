@@ -310,7 +310,7 @@ impl<'alloc> SharedMemAllocator<'alloc> {
         self.internal.destruct();
 
         if self.nallocs != 0 {
-            crate::shmalloc_impl::log_error(crate::shmalloc_impl::AllocError::Leak, None);
+            crate::shmalloc_impl::log_err(crate::shmalloc_impl::AllocError::Leak, None);
         }
     }
 }
