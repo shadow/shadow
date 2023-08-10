@@ -15,7 +15,9 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use super::emulated_time;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, VirtualAddressSpaceIndependent)]
+#[derive(
+    Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord, Hash, VirtualAddressSpaceIndependent,
+)]
 #[repr(C)]
 pub struct SimulationTime(CSimulationTime);
 
@@ -220,19 +222,31 @@ impl std::ops::SubAssign<SimulationTime> for SimulationTime {
     }
 }
 
-impl std::ops::Mul<u64> for SimulationTime {
+impl std::ops::Mul<u32> for SimulationTime {
     type Output = SimulationTime;
 
-    fn mul(self, other: u64) -> Self::Output {
-        self.checked_mul(other).unwrap()
+    fn mul(self, other: u32) -> Self::Output {
+        self.checked_mul(other.into()).unwrap()
     }
 }
 
-impl std::ops::Div<u64> for SimulationTime {
+impl std::ops::MulAssign<u32> for SimulationTime {
+    fn mul_assign(&mut self, rhs: u32) {
+        *self = self.checked_mul(rhs.into()).unwrap();
+    }
+}
+
+impl std::ops::Div<u32> for SimulationTime {
     type Output = SimulationTime;
 
-    fn div(self, other: u64) -> Self::Output {
-        self.checked_div(other).unwrap()
+    fn div(self, other: u32) -> Self::Output {
+        self.checked_div(other.into()).unwrap()
+    }
+}
+
+impl std::ops::DivAssign<u32> for SimulationTime {
+    fn div_assign(&mut self, rhs: u32) {
+        *self = self.checked_div(rhs.into()).unwrap();
     }
 }
 
@@ -364,6 +378,110 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
         let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
         Ok(linux_api::time::timeval { tv_sec, tv_usec })
+    }
+}
+
+impl tcp::util::time::Duration for SimulationTime {
+    const MAX: Self = Self::MAX;
+    const NANOSECOND: Self = Self::NANOSECOND;
+    const MICROSECOND: Self = Self::MICROSECOND;
+    const MILLISECOND: Self = Self::MILLISECOND;
+    const SECOND: Self = Self::SECOND;
+    const ZERO: Self = Self::ZERO;
+
+    #[inline]
+    fn as_micros(&self) -> u128 {
+        self.as_micros().into()
+    }
+
+    #[inline]
+    fn as_millis(&self) -> u128 {
+        self.as_millis().into()
+    }
+
+    #[inline]
+    fn as_nanos(&self) -> u128 {
+        self.as_nanos()
+    }
+
+    #[inline]
+    fn as_secs(&self) -> u64 {
+        self.as_secs()
+    }
+
+    #[inline]
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    #[inline]
+    fn checked_div(self, rhs: u32) -> Option<Self> {
+        self.checked_div(rhs.into())
+    }
+
+    #[inline]
+    fn checked_mul(self, rhs: u32) -> Option<Self> {
+        self.checked_mul(rhs.into())
+    }
+
+    #[inline]
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
+    }
+
+    #[inline]
+    fn from_micros(micros: u64) -> Self {
+        Self::from_micros(micros)
+    }
+
+    #[inline]
+    fn from_millis(millis: u64) -> Self {
+        Self::from_millis(millis)
+    }
+
+    #[inline]
+    fn from_nanos(nanos: u64) -> Self {
+        Self::from_nanos(nanos)
+    }
+
+    #[inline]
+    fn from_secs(secs: u64) -> Self {
+        Self::from_secs(secs)
+    }
+
+    #[inline]
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+
+    #[inline]
+    fn saturating_add(self, rhs: Self) -> Self {
+        self.saturating_add(rhs)
+    }
+
+    #[inline]
+    fn saturating_mul(self, rhs: u32) -> Self {
+        self.saturating_mul(rhs.into())
+    }
+
+    #[inline]
+    fn saturating_sub(self, rhs: Self) -> Self {
+        self.saturating_sub(rhs)
+    }
+
+    #[inline]
+    fn subsec_micros(&self) -> u32 {
+        self.subsec_micros()
+    }
+
+    #[inline]
+    fn subsec_millis(&self) -> u32 {
+        self.subsec_millis()
+    }
+
+    #[inline]
+    fn subsec_nanos(&self) -> u32 {
+        self.subsec_nanos()
     }
 }
 

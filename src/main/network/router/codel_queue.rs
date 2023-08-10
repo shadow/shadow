@@ -421,16 +421,16 @@ mod tests {
         assert!(cdq.interval_end.is_some());
         assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
 
-        let now = start + TARGET + INTERVAL * 2u64;
+        let now = start + TARGET + INTERVAL * 2u32;
         assert_eq!(
-            cdq.process_standing_delay(&now, TARGET + INTERVAL * 2u64),
+            cdq.process_standing_delay(&now, TARGET + INTERVAL * 2u32),
             true
         );
         assert!(cdq.interval_end.is_some());
         assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
 
         // Delay back to low, interval resets, not ok to drop.
-        let now = start + TARGET + INTERVAL * 2u64;
+        let now = start + TARGET + INTERVAL * 2u32;
         assert_eq!(cdq.process_standing_delay(&now, one), false);
         assert!(cdq.interval_end.is_none());
     }
@@ -478,9 +478,9 @@ mod tests {
         // low-delay packets should put us back into store mode.
         for _ in 0..3 {
             // Add some low-delay packets
-            cdq.push(PacketRc::mock_new(), start + TARGET + INTERVAL * 2u64 - one);
+            cdq.push(PacketRc::mock_new(), start + TARGET + INTERVAL * 2u32 - one);
         }
-        cdq.pop(start + TARGET + INTERVAL * 2u64);
+        cdq.pop(start + TARGET + INTERVAL * 2u32);
         assert_eq!(cdq.mode, CoDelMode::Store);
     }
 
