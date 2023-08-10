@@ -1,6 +1,9 @@
-use linux_syscall::Result as LinuxSyscallResult;
+use linux_syscall::{Result as LinuxSyscallResult, Result64};
 
 use crate::errno::Errno;
+use crate::ldt::linux_user_desc;
+use crate::posix_types::{kernel_pid_t, Pid};
+use crate::signal::Signal;
 use crate::{bindings, const_conversions};
 
 bitflags::bitflags! {
@@ -49,4 +52,63 @@ pub fn sched_yield() -> Result<(), Errno> {
     unsafe { linux_syscall::syscall!(linux_syscall::SYS_sched_yield) }
         .check()
         .map_err(Errno::from)
+}
+
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone_raw(
+    flags: core::ffi::c_ulong,
+    stack: core::ffi::c_ulong,
+    parent_tid: *mut core::ffi::c_int,
+    child_tid: *mut core::ffi::c_int,
+    tls: core::ffi::c_ulong,
+) -> Result<core::ffi::c_long, Errno> {
+    unsafe {
+        linux_syscall::syscall!(
+            linux_syscall::SYS_clone,
+            flags,
+            stack,
+            parent_tid,
+            child_tid,
+            tls
+        )
+    }
+    .try_i64()
+    .map_err(Errno::from)
+}
+
+pub enum CloneResult {
+    CallerIsChild,
+    // Caller is the parent; child has the given pid
+    CallerIsParent(Pid),
+}
+
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone(
+    flags: CloneFlags,
+    exit_signal: Option<Signal>,
+    stack: *mut core::ffi::c_void,
+    parent_tid: *mut kernel_pid_t,
+    child_tid: *mut kernel_pid_t,
+    tls: *mut linux_user_desc,
+) -> Result<CloneResult, Errno> {
+    unsafe {
+        clone_raw(
+            flags.bits() | u64::try_from(Signal::as_raw(exit_signal)).unwrap(),
+            stack as core::ffi::c_ulong,
+            parent_tid,
+            child_tid,
+            tls as core::ffi::c_ulong,
+        )
+    }
+    .map(|res| match res.cmp(&0) {
+        core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
+        core::cmp::Ordering::Greater => {
+            CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())
+        }
+        core::cmp::Ordering::Less => unreachable!(),
+    })
 }
