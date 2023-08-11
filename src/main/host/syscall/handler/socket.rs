@@ -688,8 +688,13 @@ impl SyscallHandler {
             }
         };
 
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
+
         let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue))
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket.borrow_mut().accept(&net_ns, &mut *rng, cb_queue)
+            })
         });
 
         let file_status = socket.borrow().get_status();

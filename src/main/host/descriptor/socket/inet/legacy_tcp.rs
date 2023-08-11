@@ -845,7 +845,12 @@ impl LegacyTcpSocket {
         errcode.map_err(Into::into)
     }
 
-    pub fn accept(&mut self, _cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         let is_valid_listener = unsafe { c::tcp_isValidListener(self.as_legacy_tcp()) } == 1;
 
         // we must be listening in order to accept

@@ -339,11 +339,16 @@ impl InetSocketRefMut<'_> {
         -> Result<(), SyscallError>
     );
 
-    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         match self {
-            Self::LegacyTcp(socket) => socket.accept(cb_queue),
-            Self::Tcp(socket) => socket.accept(cb_queue),
-            Self::Udp(socket) => socket.accept(cb_queue),
+            Self::LegacyTcp(socket) => socket.accept(net_ns, rng, cb_queue),
+            Self::Tcp(socket) => socket.accept(net_ns, rng, cb_queue),
+            Self::Udp(socket) => socket.accept(net_ns, rng, cb_queue),
         }
     }
 

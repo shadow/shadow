@@ -749,7 +749,12 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub fn accept(&mut self, _cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         Err(Errno::EOPNOTSUPP.into())
     }
 

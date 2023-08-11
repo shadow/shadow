@@ -239,7 +239,12 @@ impl UnixSocket {
             .connect(&mut socket_ref.common, socket, addr, cb_queue)
     }
 
-    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         self.protocol_state.accept(&mut self.common, cb_queue)
     }
 
