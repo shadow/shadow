@@ -116,7 +116,7 @@ impl SyscallHandler {
                         return Err(Errno::EPROTONOSUPPORT.into());
                     }
                 };
-                Socket::Netlink(NetlinkSocket::new())
+                Socket::Netlink(NetlinkSocket::new(file_flags, socket_type, family))
             }
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
