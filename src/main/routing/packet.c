@@ -608,7 +608,7 @@ GList* packet_copyTCPSelectiveACKs(Packet* packet) {
 
 PacketTCPHeader* packet_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    utility_debugAssert(packet->protocol == PTCP);
+    utility_alwaysAssert(packet->protocol == PTCP);
     return (PacketTCPHeader*)packet->header;
 }
 

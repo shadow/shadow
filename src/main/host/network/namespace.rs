@@ -352,6 +352,16 @@ pub struct AssociationHandle {
     remote_addr: SocketAddrV4,
 }
 
+impl AssociationHandle {
+    pub fn local_addr(&self) -> SocketAddrV4 {
+        self.local_addr
+    }
+
+    pub fn remote_addr(&self) -> SocketAddrV4 {
+        self.remote_addr
+    }
+}
+
 impl std::ops::Drop for AssociationHandle {
     fn drop(&mut self) {
         Worker::with_active_host(|host| {

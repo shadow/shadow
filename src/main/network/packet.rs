@@ -9,6 +9,7 @@ use crate::host::syscall::io::IoVec;
 use crate::utility::pcap_writer::PacketDisplay;
 
 use linux_api::errno::Errno;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 
 #[repr(i32)]
@@ -78,6 +79,130 @@ impl PacketRc {
         let c_ptr = unsafe { c::packet_new_inner(1, 1) };
         unsafe { c::packet_setMock(c_ptr) };
         PacketRc::from_raw(c_ptr)
+    }
+
+    /// Set TCP headers for this packet. Will panic if the packet already has a header.
+    pub fn set_tcp(&mut self, header: &tcp::TcpHeader) {
+        let selective_acks = header
+            .selective_acks
+            .as_ref()
+            .map(AsRef::as_ref)
+            .unwrap_or(&[]);
+
+        // the tcp header allows for a max of 4 begin/end pairs
+        assert!(selective_acks.len() <= 4);
+
+        let mut selective_acks_glist = std::ptr::null_mut();
+
+        for sack in selective_acks {
+            for val in [sack.0, sack.1] {
+                // integer to pointer cast
+                let val = val as *mut libc::c_void;
+                selective_acks_glist = unsafe { c::g_list_append(selective_acks_glist, val) };
+            }
+        }
+
+        // TODO: not sure if linux uses milliseconds, but it probably doesn't matter as long as we
+        // convert it back to a u32 the same way when receiving packets
+        let timestamp = SimulationTime::from_millis(header.timestamp.unwrap_or(0).into());
+        let timestamp_echo = SimulationTime::from_millis(header.timestamp_echo.unwrap_or(0).into());
+
+        unsafe {
+            c::packet_setTCP(
+                self.c_ptr.ptr(),
+                to_legacy_tcp_flags(header.flags),
+                u32::from(*header.src().ip()).to_be(),
+                header.src().port().to_be(),
+                u32::from(*header.dst().ip()).to_be(),
+                header.dst().port().to_be(),
+                header.seq,
+            );
+
+            c::packet_updateTCP(
+                self.c_ptr.ptr(),
+                header.ack,
+                selective_acks_glist,
+                header.window_size.into(),
+                timestamp.into(),
+                timestamp_echo.into(),
+            );
+        }
+
+        // the C packet should make a copy of the glist, so we can free ours
+        unsafe { c::g_list_free(selective_acks_glist) };
+    }
+
+    pub fn get_tcp(&self) -> Option<tcp::TcpHeader> {
+        let header = unsafe { c::packet_getTCPHeader(self.c_ptr.ptr()) };
+        let header = unsafe { header.as_ref()? };
+
+        // TODO: not sure if linux uses milliseconds, but it probably doesn't matter as long as we
+        // converted it to a SimulationTime the same way when sending the packet
+        let timestamp = SimulationTime::from_c_simtime(header.timestampValue)
+            .unwrap()
+            .as_millis();
+        let timestamp_echo = SimulationTime::from_c_simtime(header.timestampEcho)
+            .unwrap()
+            .as_millis();
+
+        // need to get the selective acks from a glist, so we'll panic a lot here to simplify things
+
+        let mut selective_acks = header.selectiveACKs;
+
+        // TODO: this selective ack code is untested until the new tcp code uses sacks, so it has
+        // not been checked for memory safety issues and there are probably bugs
+        let mut sack_iter = std::iter::from_fn(move || {
+            if selective_acks.is_null() {
+                return None;
+            }
+
+            let rv = unsafe { (*selective_acks).data } as u64;
+            selective_acks = unsafe { (*selective_acks).next };
+            Some(u32::try_from(rv).unwrap())
+        });
+
+        let sack_iter = std::iter::from_fn(move || {
+            // we expect the packet sack list to have a length divisible by 2
+            let begin = sack_iter.next()?;
+            let end = sack_iter.next().unwrap();
+
+            Some((begin, end))
+        });
+
+        let selective_acks: Vec<_> = sack_iter.collect();
+        let selective_acks = tcp::util::SmallArrayBackedSlice::new(&selective_acks).unwrap();
+
+        // the C packet doesn't have the distinction between no sack option or a sack option of
+        // length 0, so we'll assume that an empty list is the same as no list
+        let selective_acks = if !selective_acks.is_empty() {
+            Some(selective_acks)
+        } else {
+            None
+        };
+
+        let src_ip = Ipv4Addr::from(u32::from_be(header.sourceIP));
+        let src_port = u16::from_be(header.sourcePort);
+
+        let dst_ip = Ipv4Addr::from(u32::from_be(header.destinationIP));
+        let dst_port = u16::from_be(header.destinationPort);
+
+        Some(tcp::TcpHeader {
+            ip: tcp::Ipv4Header {
+                src: src_ip,
+                dst: dst_ip,
+            },
+            flags: from_legacy_tcp_flags(header.flags),
+            src_port,
+            dst_port,
+            seq: header.sequence,
+            ack: header.acknowledgment,
+            window_size: header.window.try_into().unwrap(),
+            selective_acks,
+            // TODO: add a window scale field to the C packet header
+            window_scale: None,
+            timestamp: Some(timestamp.try_into().unwrap()),
+            timestamp_echo: Some(timestamp_echo.try_into().unwrap()),
+        })
     }
 
     /// Set UDP headers for this packet. Will panic if the packet already has a header.
@@ -430,4 +555,55 @@ fn display_udp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     writer.write_all(&checksum.to_be_bytes())?;
 
     Ok(())
+}
+
+pub fn to_legacy_tcp_flags(flags: tcp::TcpFlags) -> c::ProtocolTCPFlags {
+    let mut new_flags = c::ProtocolTCPFlags_PTCP_NONE;
+
+    for flag in flags.iter() {
+        match flag {
+            tcp::TcpFlags::FIN => new_flags |= c::ProtocolTCPFlags_PTCP_FIN,
+            tcp::TcpFlags::SYN => new_flags |= c::ProtocolTCPFlags_PTCP_SYN,
+            tcp::TcpFlags::RST => new_flags |= c::ProtocolTCPFlags_PTCP_RST,
+            tcp::TcpFlags::PSH => panic!("Unsupported TCP flag: {flag:?}"),
+            tcp::TcpFlags::ACK => new_flags |= c::ProtocolTCPFlags_PTCP_ACK,
+            tcp::TcpFlags::URG => panic!("Unsupported TCP flag: {flag:?}"),
+            tcp::TcpFlags::ECE => panic!("Unsupported TCP flag: {flag:?}"),
+            tcp::TcpFlags::CWR => panic!("Unsupported TCP flag: {flag:?}"),
+            _ => unreachable!(
+                "Each bit is covered by a flag, so the iterator either returned multiple flags at \
+                once or no flags: {flag:?}"
+            ),
+        }
+    }
+
+    new_flags
+}
+
+pub fn from_legacy_tcp_flags(mut flags: c::ProtocolTCPFlags) -> tcp::TcpFlags {
+    let mut new_flags = tcp::TcpFlags::empty();
+
+    if flags & c::ProtocolTCPFlags_PTCP_RST != 0 {
+        new_flags.insert(tcp::TcpFlags::RST);
+        flags &= !c::ProtocolTCPFlags_PTCP_RST;
+    }
+
+    if flags & c::ProtocolTCPFlags_PTCP_SYN != 0 {
+        new_flags.insert(tcp::TcpFlags::SYN);
+        flags &= !c::ProtocolTCPFlags_PTCP_SYN;
+    }
+
+    if flags & c::ProtocolTCPFlags_PTCP_ACK != 0 {
+        new_flags.insert(tcp::TcpFlags::ACK);
+        flags &= !c::ProtocolTCPFlags_PTCP_ACK;
+    }
+
+    if flags & c::ProtocolTCPFlags_PTCP_FIN != 0 {
+        new_flags.insert(tcp::TcpFlags::FIN);
+        flags &= !c::ProtocolTCPFlags_PTCP_FIN;
+    }
+
+    assert_eq!(flags, c::ProtocolTCPFlags_PTCP_NONE, "Unexpected TCP flags");
+
+    new_flags
 }
