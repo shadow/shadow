@@ -277,6 +277,7 @@ impl UdpSocket {
             InetSocket::Udp(Arc::clone(socket)),
             addr,
             unspecified_addr,
+            /* check_less_specific= */ true,
             net_ns,
             rng,
         )?;
@@ -388,6 +389,7 @@ impl UdpSocket {
                 InetSocket::Udp(Arc::clone(socket)),
                 local_addr,
                 unspecified_addr,
+                /* check_less_specific= */ true,
                 net_ns,
                 rng,
             )?;
@@ -735,6 +737,7 @@ impl UdpSocket {
                     InetSocket::Udp(Arc::clone(socket)),
                     local_addr,
                     unspecified_addr,
+                    /* check_less_specific= */ true,
                     net_ns,
                     rng,
                 )?;

@@ -1084,7 +1084,7 @@ mod export {
         );
         hostrc
             .net_ns
-            .is_interface_available(protocol_type, src, dst)
+            .is_interface_available(protocol_type, src, dst, true)
     }
 
     #[no_mangle]

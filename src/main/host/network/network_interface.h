@@ -25,7 +25,8 @@ void networkinterface_free(NetworkInterface* interface);
 
 /* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
-        in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
+                                       in_port_t port, in_addr_t peerAddr, in_port_t peerPort,
+                                       bool check_less_specific);
 
 void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
                                 ProtocolType type, in_port_t port, in_addr_t peerIP,

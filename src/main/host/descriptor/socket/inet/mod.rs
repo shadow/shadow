@@ -429,10 +429,13 @@ impl InetSocketWeak {
 /// non-zero port will be chosen. The final local address will be returned. If the peer address is
 /// unspecified and has a port of 0, the socket will receive packets from every peer address. The
 /// socket will be automatically disassociated when the returned [`AssociationHandle`] is dropped.
+/// If `check_less_specific` is true, the association will also fail if there is already a socket
+/// associated with the local address `local_addr` and peer address 0.0.0.0.
 fn associate_socket(
     socket: InetSocket,
     local_addr: SocketAddrV4,
     peer_addr: SocketAddrV4,
+    check_less_specific: bool,
     net_ns: &NetworkNamespace,
     rng: impl rand::Rng,
 ) -> Result<(SocketAddrV4, AssociationHandle), SyscallError> {
@@ -468,7 +471,7 @@ fn associate_socket(
     };
 
     // make sure the port is available at this address for this protocol
-    if !net_ns.is_interface_available(protocol, local_addr, peer_addr) {
+    if !net_ns.is_interface_available(protocol, local_addr, peer_addr, check_less_specific) {
         log::debug!(
             "The provided addresses (local={local_addr}, peer={peer_addr}) are not available"
         );
