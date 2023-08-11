@@ -22,6 +22,7 @@ union Addr {
     inet: libc::sockaddr_in,
     inet6: libc::sockaddr_in6,
     unix: libc::sockaddr_un,
+    netlink: libc::sockaddr_nl,
 }
 
 // verify there are no larger fields larger than `libc::sockaddr_storage`
@@ -166,6 +167,34 @@ impl SockaddrStorage {
         unsafe { Self::from_ptr(ptr as *const MaybeUninit<u8>, len) }.unwrap()
     }
 
+    /// If the socket address represents a valid netlink socket address (correct family and length),
+    /// returns the netlink socket address.
+    pub fn as_netlink(&self) -> Option<&nix::sys::socket::NetlinkAddr> {
+        if (self.len as usize) < std::mem::size_of::<libc::sockaddr_nl>() {
+            return None;
+        }
+        if self.family() != Some(AddressFamily::Netlink) {
+            return None;
+        }
+
+        // SAFETY: Assume that `nix::sys::socket::NetlinkAddr` is a transparent wrapper around a
+        // `libc::sockaddr_nl`. Verify (as best we can) that this is true.
+        assert_eq_size!(libc::sockaddr_nl, nix::sys::socket::NetlinkAddr);
+        assert_eq_align!(libc::sockaddr_nl, nix::sys::socket::NetlinkAddr);
+
+        Some(unsafe { &*(&self.addr.netlink as *const _ as *const nix::sys::socket::NetlinkAddr) })
+    }
+
+    /// Get a new `SockaddrStorage` with a copy of the netlink socket address.
+    pub fn from_netlink(addr: &nix::sys::socket::NetlinkAddr) -> Self {
+        // SAFETY: Assume that `nix::sys::socket::NetlinkAddr` is a transparent wrapper around a
+        // `libc::sockaddr_nl`. Verify (as best we can) that this is true.
+        assert_eq_size!(libc::sockaddr_nl, nix::sys::socket::NetlinkAddr);
+        assert_eq_align!(libc::sockaddr_nl, nix::sys::socket::NetlinkAddr);
+
+        unsafe { Self::from_ptr(addr.as_ptr() as *const MaybeUninit<u8>, addr.len()) }.unwrap()
+    }
+
     /// A pointer to the socket address. Some bytes may be uninitialized.
     pub fn as_ptr(&self) -> (*const MaybeUninit<u8>, libc::socklen_t) {
         (unsafe { &self.addr.slice }.as_ptr(), self.len)
@@ -182,13 +211,15 @@ impl std::fmt::Debug for SockaddrStorage {
         let as_inet = self.as_inet();
         let as_inet6 = self.as_inet6();
         let as_unix = self.as_unix();
+        let as_netlink = self.as_netlink();
 
         let as_inet = as_inet.map(|x| x as &dyn std::fmt::Debug);
         let as_inet6 = as_inet6.map(|x| x as &dyn std::fmt::Debug);
         let as_unix = as_unix.as_ref().map(|x| x as &dyn std::fmt::Debug);
+        let as_netlink = as_netlink.as_ref().map(|x| x as &dyn std::fmt::Debug);
 
         // find a representation that is not None
-        let options = [as_inet, as_inet6, as_unix];
+        let options = [as_inet, as_inet6, as_unix, as_netlink];
         let addr = options.into_iter().find_map(std::convert::identity);
 
         if let Some(ref addr) = addr {
@@ -210,13 +241,15 @@ impl std::fmt::Display for SockaddrStorage {
         let as_inet = self.as_inet();
         let as_inet6 = self.as_inet6();
         let as_unix = self.as_unix();
+        let as_netlink = self.as_netlink();
 
         let as_inet = as_inet.map(|x| x as &dyn std::fmt::Display);
         let as_inet6 = as_inet6.map(|x| x as &dyn std::fmt::Display);
         let as_unix = as_unix.as_ref().map(|x| x as &dyn std::fmt::Display);
+        let as_netlink = as_netlink.as_ref().map(|x| x as &dyn std::fmt::Display);
 
         // find a representation that is not None
-        let options = [as_inet, as_inet6, as_unix];
+        let options = [as_inet, as_inet6, as_unix, as_netlink];
         let addr = options.into_iter().find_map(std::convert::identity);
 
         if let Some(ref addr) = addr {
@@ -260,6 +293,12 @@ impl From<std::net::SocketAddrV4> for SockaddrStorage {
 impl From<std::net::SocketAddrV6> for SockaddrStorage {
     fn from(addr: std::net::SocketAddrV6) -> Self {
         nix::sys::socket::SockaddrIn6::from(addr).into()
+    }
+}
+
+impl From<nix::sys::socket::NetlinkAddr> for SockaddrStorage {
+    fn from(addr: nix::sys::socket::NetlinkAddr) -> Self {
+        SockaddrStorage::from_netlink(&addr)
     }
 }
 
@@ -533,6 +572,7 @@ mod tests {
         assert!(addr.as_inet().is_some());
         assert!(addr.as_inet6().is_none());
         assert!(addr.as_unix().is_none());
+        assert!(addr.as_netlink().is_none());
     }
 
     /// Convert from a `sockaddr_un` to a `SockaddrStorage`.
@@ -553,6 +593,28 @@ mod tests {
         assert!(addr.as_unix().is_some());
         assert!(addr.as_inet().is_none());
         assert!(addr.as_inet6().is_none());
+        assert!(addr.as_netlink().is_none());
+    }
+
+    /// Convert from a `sockaddr_nl` to a `SockaddrStorage`.
+    #[test]
+    fn storage_from_netlink_ptr() {
+        let mut addr: libc::sockaddr_nl = unsafe { std::mem::zeroed() };
+        addr.nl_family = libc::AF_NETLINK as u16;
+        // nl_pid and nl_groups can be arbitrary for the tests
+        addr.nl_pid = 0x38deb915;
+        addr.nl_groups = 0xf229a8ea;
+
+        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let len = std::mem::size_of_val(&addr).try_into().unwrap();
+
+        let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
+
+        assert_eq!(addr.family(), Some(AddressFamily::Netlink));
+        assert!(addr.as_netlink().is_some());
+        assert!(addr.as_inet().is_none());
+        assert!(addr.as_inet6().is_none());
+        assert!(addr.as_unix().is_none());
     }
 
     /// Convert from a `sockaddr_in` to a `SockaddrStorage` to a `SockaddrIn`.
@@ -590,6 +652,43 @@ mod tests {
         assert_eq!(addr.sin_family, libc::AF_INET as u16);
         assert_eq!(u16::from_be(addr.sin_port), addr_original.port());
         assert_eq!(u32::from_be(addr.sin_addr.s_addr), addr_original.ip());
+    }
+
+    /// Convert from a `sockaddr_nl` to a `SockaddrStorage` to a `NetlinkAddr`.
+    #[test]
+    fn netlink_addr_from_libc() {
+        let mut addr_nl: libc::sockaddr_nl = unsafe { std::mem::zeroed() };
+        addr_nl.nl_family = libc::AF_NETLINK as u16;
+        // nl_pid and nl_groups can be arbitrary for the test
+        addr_nl.nl_pid = 0x38deb915;
+        addr_nl.nl_groups = 0xf229a8ea;
+
+        let ptr = &addr_nl as *const _ as *const MaybeUninit<u8>;
+        let len = std::mem::size_of_val(&addr_nl).try_into().unwrap();
+
+        let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
+        let addr = addr.as_netlink().unwrap();
+
+        assert_eq!(addr.pid(), u32::from_le(addr_nl.nl_pid));
+        assert_eq!(addr.groups(), u32::from_le(addr_nl.nl_groups));
+    }
+
+    /// Convert from a `NetlinkAddr` to a `SockaddrStorage` to a `sockaddr_nl`.
+    #[test]
+    fn netlink_addr_to_libc() {
+        // nl_pid and nl_groups can be arbitrary for the test
+        let addr_original = nix::sys::socket::NetlinkAddr::new(0x38deb915, 0xf229a8ea);
+        let addr = SockaddrStorage::from_netlink(&addr_original);
+
+        let (ptr, len) = addr.as_ptr();
+        let ptr = ptr as *const libc::sockaddr_nl;
+        assert_eq!(len as usize, std::mem::size_of::<libc::sockaddr_nl>());
+
+        let addr = unsafe { ptr.as_ref() }.unwrap();
+
+        assert_eq!(addr.nl_family, libc::AF_NETLINK as u16);
+        assert_eq!(u32::from_le(addr.nl_pid), addr_original.pid());
+        assert_eq!(u32::from_le(addr.nl_groups), addr_original.groups());
     }
 
     /// Convert from a pathname `sockaddr_un` to a `SockaddrStorage` to a `SockaddrUnix`.

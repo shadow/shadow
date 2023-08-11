@@ -10,9 +10,11 @@ use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::{FileMode, FileSignals, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
+use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::SyscallError;
 use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
 
 pub struct NetlinkSocket {
@@ -111,6 +113,18 @@ impl NetlinkSocket {
         Err(Errno::ENOSYS.into())
     }
 
+    pub fn bind(
+        socket: &Arc<AtomicRefCell<Self>>,
+        addr: Option<&SockaddrStorage>,
+        _net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        let socket_ref = &mut *socket.borrow_mut();
+        socket_ref
+            .protocol_state
+            .bind(&mut socket_ref.common, socket, addr, rng)
+    }
+
     pub fn readv(
         &mut self,
         _iovs: &[IoVec],
@@ -176,7 +190,11 @@ impl NetlinkSocket {
     }
 }
 
-struct InitialState {}
+struct InitialState {
+    // Indicate that if the socket is already bound or not. We don't keep the bound address so that
+    // we won't need to fill it.
+    is_bound: bool,
+}
 struct ClosedState {}
 /// The current protocol state of the netlink socket. An `Option` is required for each variant so that
 /// the inner state object can be removed, transformed into a new state, and then re-added as a
@@ -203,7 +221,77 @@ state_upcast!(ClosedState, ProtocolState::Closed);
 
 impl ProtocolState {
     fn new(common: &mut NetlinkSocketCommon, socket: &Weak<AtomicRefCell<NetlinkSocket>>) -> Self {
-        ProtocolState::Initial(Some(InitialState {}))
+        ProtocolState::Initial(Some(InitialState { is_bound: false }))
+    }
+
+    fn bind(
+        &mut self,
+        common: &mut NetlinkSocketCommon,
+        socket: &Arc<AtomicRefCell<NetlinkSocket>>,
+        addr: Option<&SockaddrStorage>,
+        rng: impl rand::Rng,
+    ) -> SyscallResult {
+        match self {
+            Self::Initial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+            Self::Closed(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
+        }
+    }
+}
+
+impl InitialState {
+    fn bind(
+        &mut self,
+        _common: &mut NetlinkSocketCommon,
+        _socket: &Arc<AtomicRefCell<NetlinkSocket>>,
+        addr: Option<&SockaddrStorage>,
+        _rng: impl rand::Rng,
+    ) -> SyscallResult {
+        // if already bound
+        if self.is_bound {
+            return Err(Errno::EINVAL.into());
+        }
+
+        // get the netlink address
+        let Some(addr) = addr.and_then(|x| x.as_netlink()) else {
+            log::warn!(
+                "Attempted to bind netlink socket to non-netlink address {:?}",
+                addr
+            );
+            return Err(Errno::EINVAL.into());
+        };
+        // remember that the socket is bound
+        self.is_bound = true;
+
+        // According to netlink(7), if the pid is zero, the kernel takes care of assigning it, but
+        // we will leave it untouched at the moment. We can implement the assignment later when we
+        // want to support it.
+
+        // According to netlink(7), if the groups is non-zero, it means that the socket wants to
+        // listen to some groups. Since we don't support broadcasting to groups yet, we will emit
+        // the error here.
+        if addr.groups() != 0 {
+            log::warn!(
+                "Attempted to bind netlink socket to an address with non-zero groups {}",
+                addr.groups()
+            );
+            return Err(Errno::EINVAL.into());
+        }
+
+        Ok(0.into())
+    }
+}
+
+impl ClosedState {
+    fn bind(
+        &mut self,
+        _common: &mut NetlinkSocketCommon,
+        _socket: &Arc<AtomicRefCell<NetlinkSocket>>,
+        _addr: Option<&SockaddrStorage>,
+        _rng: impl rand::Rng,
+    ) -> SyscallResult {
+        // We follow the same approach as UnixSocket
+        log::warn!("bind() while in state {}", std::any::type_name::<Self>());
+        Err(Errno::EOPNOTSUPP.into())
     }
 }
 

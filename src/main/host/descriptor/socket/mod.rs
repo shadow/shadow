@@ -93,7 +93,7 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::bind(socket, addr, net_ns, rng),
             Self::Inet(socket) => InetSocket::bind(socket, addr, net_ns, rng),
-            Self::Netlink(_) => todo!(),
+            Self::Netlink(socket) => NetlinkSocket::bind(socket, addr, net_ns, rng),
         }
     }
 
