@@ -1,5 +1,3 @@
-use core::num::NonZeroI32;
-
 use bytemuck::TransparentWrapper;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
@@ -10,6 +8,8 @@ use crate::bindings::{self, linux_sigval};
 use crate::const_conversions;
 use crate::const_conversions::i32_from_u32_allowing_wraparound;
 use crate::errno::Errno;
+use crate::posix_types::kernel_pid_t;
+use crate::posix_types::Pid;
 
 // signal names. This is a `struct` instead of an `enum` to support
 // realtime signals.
@@ -106,6 +106,11 @@ impl Signal {
         assert!(rv.0 as u32 == val);
         assert!(rv.0 > Self::STANDARD_MAX.0);
         rv
+    }
+
+    /// Returns the raw signal integer or 0.
+    pub fn as_raw(this: Option<Self>) -> i32 {
+        this.map(|s| s.as_i32()).unwrap_or(0)
     }
 }
 
@@ -1207,16 +1212,26 @@ pub fn defaultaction(sig: Signal) -> LinuxDefaultAction {
     }
 }
 
-/// Low-level version of [`kill`], to avoid unnecessary conversions.
-pub fn kill_raw(pid: i32, sig: i32) -> Result<(), Errno> {
+/// Execute the `kill` syscall.
+pub fn kill_raw(pid: kernel_pid_t, sig: i32) -> Result<(), Errno> {
     unsafe { syscall!(linux_syscall::SYS_kill, pid, sig) }
         .check()
         .map_err(Errno::from)
 }
 
-/// Execute the `kill` syscall.
-pub fn kill(pid: i32, sig: Option<Signal>) -> Result<(), Errno> {
-    kill_raw(pid, sig.map(i32::from).unwrap_or(0))
+/// Execute the `kill` syscall, targeting a process.
+pub fn kill_process(pid: Pid, sig: Option<Signal>) -> Result<(), Errno> {
+    kill_raw(pid.as_raw_nonzero().into(), Signal::as_raw(sig))
+}
+
+/// Execute the `kill` syscall, targeting a process group.
+pub fn kill_process_group(pid: Pid, sig: Option<Signal>) -> Result<(), Errno> {
+    kill_raw(-i32::from(pid.as_raw_nonzero()), Signal::as_raw(sig))
+}
+
+/// Execute the `kill` syscall, targeting the current process group.
+pub fn kill_current_process_group(sig: Option<Signal>) -> Result<(), Errno> {
+    kill_raw(0, Signal::as_raw(sig))
 }
 
 /// Calls the `rt_sigaction` syscall.
@@ -1471,14 +1486,18 @@ pub unsafe fn sigaltstack(
     }
 }
 
-pub fn tgkill_raw(tgid: i32, tid: i32, signo: i32) -> Result<(), Errno> {
+pub fn tgkill_raw(tgid: kernel_pid_t, tid: kernel_pid_t, signo: i32) -> Result<(), Errno> {
     unsafe { syscall!(linux_syscall::SYS_tgkill, tgid, tid, signo) }
         .check()
         .map_err(Errno::from)
 }
 
-pub fn tgkill(tgid: NonZeroI32, tid: NonZeroI32, signal: Option<Signal>) -> Result<(), Errno> {
-    tgkill_raw(tgid.get(), tid.get(), signal.map(i32::from).unwrap_or(0))
+pub fn tgkill(tgid: Pid, tid: Pid, signal: Option<Signal>) -> Result<(), Errno> {
+    tgkill_raw(
+        Pid::as_raw(Some(tgid)),
+        Pid::as_raw(Some(tid)),
+        signal.map(i32::from).unwrap_or(0),
+    )
 }
 
 mod export {

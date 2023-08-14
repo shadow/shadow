@@ -1,14 +1,14 @@
 use core::ffi::c_void;
 use std::error::Error;
 use std::fmt::Write;
-use std::num::NonZeroI32;
 use std::sync::atomic::{self, AtomicU32};
 
 use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 use linux_api::ldt::linux_user_desc;
-use linux_api::sched::CloneFlags;
-use linux_api::signal::tgkill;
+use linux_api::posix_types::Pid;
+use linux_api::sched::{CloneFlags, CloneResult};
+use linux_api::signal::{tgkill, Signal};
 use rustix::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
 use rustix::fs::{OFlags, SeekFrom};
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
@@ -30,9 +30,9 @@ fn make_empty_tls() -> linux_user_desc {
     desc
 }
 
-fn wait_for_thread_exit(tid: NonZeroI32) {
+fn wait_for_thread_exit(tid: Pid) {
     let pid = rustix::process::getpid();
-    while tgkill(pid.as_raw_nonzero(), tid, None) != Err(Errno::ESRCH) {}
+    while tgkill(pid.into(), tid, None) != Err(Errno::ESRCH) {}
 }
 
 struct ThreadStack {
@@ -97,10 +97,10 @@ fn test_clone_minimal() -> Result<(), Box<dyn Error>> {
             &mut tls,
         )
     };
-    assert!(child > 0);
+    let child = Pid::from_raw(child).unwrap();
     THREAD_DONE_CHANNEL.receive().unwrap();
     // Wait until thread has exited before deallocating its stack.
-    wait_for_thread_exit(child.try_into().unwrap());
+    wait_for_thread_exit(child);
     Ok(())
 }
 
@@ -309,6 +309,37 @@ fn test_clone_files_dup(use_clone_files_flag: bool) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+fn test_fork() -> Result<(), Box<dyn Error>> {
+    let (reader, writer) = rustix::pipe::pipe().unwrap();
+
+    let flags = CloneFlags::empty();
+    let res = unsafe {
+        linux_api::sched::clone(
+            flags,
+            Some(Signal::SIGCHLD),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        )
+    }
+    .unwrap();
+
+    match res {
+        CloneResult::CallerIsChild => {
+            assert_eq!(rustix::io::write(&writer, &[42]), Ok(1));
+            linux_api::exit::exit_group(0);
+        }
+        CloneResult::CallerIsParent(_pid) => (),
+    };
+
+    let mut buf = [0];
+    assert_eq!(rustix::io::read(&reader, &mut buf), Ok(1));
+    assert_eq!(buf[0], 42);
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -317,6 +348,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let summarize = std::env::args().any(|x| x == "--summarize");
 
     let all_envs = set![TestEnv::Libc, TestEnv::Shadow];
+    let libc_only = set![TestEnv::Libc];
 
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new("minimal", test_clone_minimal, all_envs.clone()),
@@ -341,11 +373,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             || test_clone_files_dup(false),
             all_envs.clone(),
         ),
+        ShadowTest::new("fork_runs", test_fork, libc_only.clone()),
     ];
 
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.
     drop(all_envs);
+    drop(libc_only);
 
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnv::Shadow));
