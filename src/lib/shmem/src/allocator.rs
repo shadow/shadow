@@ -84,6 +84,7 @@ fn register_teardown() {
 fn register_teardown() {}
 
 // The global, singleton shared memory allocator and deserializer objects.
+// TODO(rwails): Adjust to use lazy lock instead.
 lazy_static! {
     static ref SHMALLOC: SelfContainedMutex<SharedMemAllocator<'static>> = {
         let alloc = SharedMemAllocator::new();
@@ -101,7 +102,16 @@ lazy_static! {
 ///
 /// Instead, this object can be instantiated once, eg at the start of main(), and then when it is
 /// dropped at program exit the cleanup routine is called.
-pub struct SharedMemAllocatorDropGuard;
+pub struct SharedMemAllocatorDropGuard(());
+
+impl SharedMemAllocatorDropGuard {
+    /// # Safety
+    ///
+    /// Must outlive all `ShMemBlock` objects allocated by the current process.
+    pub unsafe fn new() -> Self {
+        Self(())
+    }
+}
 
 impl Drop for SharedMemAllocatorDropGuard {
     fn drop(&mut self) {
@@ -263,6 +273,9 @@ impl core::str::FromStr for ShMemBlockSerialized {
     }
 }
 
+/// Safe wrapper around our low-level, unsafe, nostd shared memory allocator. This allocator type
+/// is not meant to be used directly, but can be accessed indirectly via calls made to `shmalloc()`
+/// and `shfree()`.
 pub struct SharedMemAllocator<'alloc> {
     internal: crate::shmalloc_impl::FreelistAllocator,
     nallocs: isize,
@@ -281,6 +294,7 @@ impl<'alloc> SharedMemAllocator<'alloc> {
         }
     }
 
+    // TODO(rwails): Fix the lifetime of the allocated block to match the allocator's lifetime.
     fn alloc<T: Sync + VirtualAddressSpaceIndependent>(&mut self, val: T) -> ShMemBlock<'alloc, T> {
         let t_nbytes: usize = core::mem::size_of::<T>();
         let t_alignment: usize = core::mem::align_of::<T>();
@@ -304,11 +318,15 @@ impl<'alloc> SharedMemAllocator<'alloc> {
     }
 
     fn destruct(&mut self) {
-        self.internal.destruct();
+        // if self.nallocs != 0 {
+        //crate::shmalloc_impl::log_err(crate::shmalloc_impl::AllocError::Leak, None);
 
-        if self.nallocs != 0 {
-            crate::shmalloc_impl::log_err(crate::shmalloc_impl::AllocError::Leak, None);
-        }
+        // TODO(rwails): This condition currently occurs when running Shadow. It's not actually
+        // a leak to worry about because the shared memory file backing store does get cleaned
+        // up. It's possible that all blocks are not dropped before this allocator is dropped.
+        // }
+
+        self.internal.destruct();
     }
 }
 
@@ -358,6 +376,7 @@ impl<'alloc> SharedMemDeserializer<'alloc> {
     ///
     /// This function can violate type safety if a template type is provided that does not match
     /// original block that was serialized.
+    // TODO(rwails): Fix the lifetime of the allocated block to match the deserializer's lifetime.
     pub unsafe fn deserialize<T>(
         &mut self,
         serialized: &ShMemBlockSerialized,

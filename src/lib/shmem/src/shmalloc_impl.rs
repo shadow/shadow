@@ -1,4 +1,4 @@
-//! This module implements a low-level, unsafe shared memory allocator that uses mmap'ed shared
+// //! This module implements a low-level, unsafe shared memory allocator that uses mmap'ed shared
 //! memory files as the backing store. The module is intended to be no-std so it can be used in
 //! Shadow's shim library, which must async-signal-safe.
 //!
@@ -20,21 +20,18 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::util::PathBuf;
 
+// TODO(rwails): This may be unified with `shadow_rs::utility::Magic`.
 #[cfg(debug_assertions)]
 type CanaryBuf = [u8; 4];
 
 #[cfg(debug_assertions)]
-fn get_canary_buf() -> CanaryBuf {
-    [0xDE, 0xAD, 0xBE, 0xEF]
-}
+const CANARY: CanaryBuf = [0xDE, 0xAD, 0xBE, 0xEF];
 
 #[cfg(not(debug_assertions))]
 type CanaryBuf = [u8; 0];
 
 #[cfg(not(debug_assertions))]
-fn get_canary_buf() -> CanaryBuf {
-    []
-}
+const CANARY: CanaryBuf = [];
 
 trait Canary {
     fn canary_init(&mut self);
@@ -58,7 +55,7 @@ pub(crate) enum AllocError {
     MUnmap,
     Unlink,
     WrongAllocator,
-    Leak,
+    // Leak,
     GetPID,
 }
 
@@ -71,7 +68,7 @@ const fn alloc_error_to_str(e: AllocError) -> Option<&'static str> {
         AllocError::MUnmap => Some("Error calling munmap()"),
         AllocError::Unlink => Some("Error calling unlink()"),
         AllocError::WrongAllocator => Some("Block was passed to incorrect allocator"),
-        AllocError::Leak => Some("Allocator destroyed but not all blocks are deallocated first"),
+        // AllocError::Leak => Some("Allocator destroyed but not all blocks are deallocated first"),
         AllocError::GetPID => Some("Error calling getpid()"),
     }
 }
@@ -232,22 +229,17 @@ impl Chunk {
 
 impl Canary for Chunk {
     fn canary_init(&mut self) {
-        self.canary_front = get_canary_buf();
-        self.canary_back = get_canary_buf();
+        self.canary_front = CANARY;
+        self.canary_back = CANARY;
     }
 
     fn canary_check(&self) -> bool {
-        self.canary_front == get_canary_buf() && self.canary_back == get_canary_buf()
+        self.canary_front == CANARY && self.canary_back == CANARY
     }
 }
 
 fn allocate_shared_chunk(path_buf: &PathBuf, nbytes: usize) -> *mut Chunk {
     let (p, fd) = create_map_shared_memory(path_buf, nbytes);
-
-    // Zero the memory so that we do not have to worry about junk between blocks.
-    unsafe {
-        core::ptr::write_bytes::<u8>(p.as_mut_ptr(), 0x00, nbytes);
-    }
 
     let chunk_meta: *mut Chunk = p.as_mut_ptr() as *mut Chunk;
 
@@ -310,29 +302,16 @@ const BLOCK_STRUCT_ALIGNMENT: usize = core::mem::align_of::<Block>();
 
 impl Canary for Block {
     fn canary_init(&mut self) {
-        self.canary_front = get_canary_buf();
-        self.canary_back = get_canary_buf();
+        self.canary_front = CANARY;
+        self.canary_back = CANARY;
     }
 
     fn canary_check(&self) -> bool {
-        self.canary_front == get_canary_buf() && self.canary_back == get_canary_buf()
+        self.canary_front == CANARY && self.canary_back == CANARY
     }
 }
 
 impl Block {
-    /// Gets the data corresponding to the block
-    ///
-    /// # Parameters
-    ///
-    /// * `block` - An initialized memory block.
-    ///
-    /// # Return Value
-    ///
-    /// The begin and end of the aligned data corresponding to the block.
-    ///
-    /// # Pre
-    ///
-    /// `block` is not null and has an address correctly computed by the `init_block` function.
     pub(self) fn get_block_data_range(&self) -> (*const u8, *const u8) {
         self.canary_assert();
 

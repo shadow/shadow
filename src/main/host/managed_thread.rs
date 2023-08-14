@@ -99,7 +99,6 @@ impl ManagedThread {
             ))
             .unwrap(),
         );
-        let x = ipc_shmem.serialize();
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(

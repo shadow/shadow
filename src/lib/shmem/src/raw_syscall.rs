@@ -7,6 +7,10 @@
 //! For a list of syscalls, a good reference is:
 //! <https://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/>
 
+// TODO(rwails): Adjust this crate to use rustix; configure linux-api to produce S_* mode
+// constants. We may also use already-existing definitions for some of the syscalls implemented
+// here.
+
 use core::result::Result;
 
 use linux_api::errno::Errno;
