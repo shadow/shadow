@@ -92,13 +92,7 @@ impl ManagedThread {
         log_path: &CStr,
     ) -> Self {
         let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
-        envv.push(
-            CString::new(format!(
-                "SHADOW_IPC_BLK={}",
-                ipc_shmem.serialize().to_string()
-            ))
-            .unwrap(),
-        );
+        envv.push(CString::new(format!("SHADOW_IPC_BLK={}", ipc_shmem.serialize())).unwrap());
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
