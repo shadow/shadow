@@ -210,7 +210,7 @@ where
     }
 }
 
-#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: crate::shmalloc_impl::BlockSerialized,
@@ -220,7 +220,6 @@ unsafe impl Pod for ShMemBlockSerialized {}
 
 impl core::fmt::Display for ShMemBlockSerialized {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // TODO(rwails) fixme
         let s =
             core::str::from_utf8(crate::util::trim_null_bytes(&self.internal.chunk_name).unwrap())
                 .unwrap();
@@ -233,7 +232,9 @@ impl core::str::FromStr for ShMemBlockSerialized {
 
     // Required method
     fn from_str(s: &str) -> anyhow::Result<Self> {
+        use core::fmt::Write;
         use formatting_nostd::FormatBuffer;
+
         if let Some(split_point) = s.find(';') {
             let (offset_str, path_str) = s.split_at(split_point);
 
@@ -245,11 +246,7 @@ impl core::str::FromStr for ShMemBlockSerialized {
 
             let mut chunk_format = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
 
-            {
-                use core::fmt::Write;
-                // TODO(rwails) FIXME
-                write!(&mut chunk_format, "{}", path_str).unwrap();
-            }
+            write!(&mut chunk_format, "{}", &path_str[1..]).unwrap();
 
             let mut chunk_name = crate::util::NULL_PATH_BUF;
             chunk_name

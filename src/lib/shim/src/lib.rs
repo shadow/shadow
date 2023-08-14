@@ -203,7 +203,8 @@ mod tls_ipc {
         let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
         let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
 
-        let ipc_blk = ShMemBlockSerialized::from_string_buf(ipc_blk.into());
+        use core::str::FromStr;
+        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
         // SAFETY: caller is responsible for `set`'s preconditions.
         unsafe { set(&ipc_blk) };
     }

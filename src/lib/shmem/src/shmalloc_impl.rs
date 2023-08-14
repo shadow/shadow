@@ -299,7 +299,7 @@ pub(crate) struct Block {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 pub(crate) struct BlockSerialized {
     pub(crate) chunk_name: crate::util::PathBuf,
     pub(crate) offset: isize,

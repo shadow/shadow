@@ -95,10 +95,11 @@ impl ManagedThread {
         envv.push(
             CString::new(format!(
                 "SHADOW_IPC_BLK={}",
-                ipc_shmem.serialize().to_string_buf()
+                ipc_shmem.serialize().to_string()
             ))
             .unwrap(),
         );
+        let x = ipc_shmem.serialize();
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
