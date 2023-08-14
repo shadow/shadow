@@ -130,8 +130,22 @@ pub fn getpid() -> Result<i32, Errno> {
     Ok(rc.as_u64_unchecked() as i32)
 }
 
+pub fn gettid() -> Result<i32, Errno> {
+    let rc = unsafe { syscall!(linux_syscall::SYS_gettid) };
+
+    rc.check().map_err(Errno::from)?;
+
+    Ok(rc.as_u64_unchecked() as i32)
+}
+
 pub fn kill(pid: i32, signal: i32) -> Result<(), Errno> {
     unsafe { syscall!(linux_syscall::SYS_kill, pid, signal) }
+        .check()
+        .map_err(Errno::from)
+}
+
+pub fn tgkill(pid: i32, tid: i32, signal: i32) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_tgkill, pid, tid, signal) }
         .check()
         .map_err(Errno::from)
 }

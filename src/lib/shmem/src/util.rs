@@ -1,28 +1,35 @@
-// A path is up to 256 bytes; an isize is 20 bytes; and one byte for delimiter and null terminator.
-pub const STRING_BUF_NBYTES: usize = 256 + 20 + 1 + 1;
+// The standard path length limit on Linux.
+pub const PATH_MAX_NBYTES: usize = 255;
 
-#[repr(transparent)]
-pub struct StringBuf(pub [u8; STRING_BUF_NBYTES]);
+// One extra byte for the null terminator.
+pub(crate) type PathBuf = [u8; PATH_MAX_NBYTES + 1];
 
-impl core::fmt::Display for StringBuf {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let s = if let Some(p) = self.0.iter().position(|x| *x == 0) {
-            core::str::from_utf8(&self.0[0..p]).unwrap()
-        } else {
-            core::str::from_utf8(&self.0[0..]).unwrap()
-        };
+pub(crate) const NULL_PATH_BUF: PathBuf = [0; PATH_MAX_NBYTES + 1];
 
-        write!(f, "{}", s)
+// A path is up to 256 bytes; an isize is 20 bytes; and one byte for delimiter.
+pub const SERIALIZED_BLOCK_BUF_NBYTES: usize = PATH_MAX_NBYTES + 20 + 1;
+
+// One extra byte for the null terminator.
+//pub(crate) type SerializedBlockBuf = [u8; SERIALIZED_BLOCK_BUF_NBYTES + 1];
+
+//pub (crate) const NULL_SERIALIZED_BUF: SerializedBlockBuf = [0; SERIALIZED_BLOCK_BUF_NBYTES + 1];
+
+pub(crate) fn trim_null_bytes<const N: usize>(s: &[u8; N]) -> Option<&[u8]> {
+    if let Some(i) = s.iter().position(|x| *x == 0) {
+        Some(&s[0..(i)])
+    } else {
+        None
     }
 }
 
-impl core::convert::From<&str> for StringBuf {
-    // Required method
-    fn from(value: &str) -> Self {
-        let mut s = StringBuf([0u8; STRING_BUF_NBYTES]);
-        s.0.iter_mut()
-            .zip(value.as_bytes())
-            .for_each(|(x, y)| *x = *y);
-        s
+pub(crate) fn buf_from_utf8_str<const N: usize>(s: &str) -> Option<[u8; N]> {
+    let mut retval = [0; N];
+
+    if s.len() >= N {
+        None
+    } else {
+        retval.iter_mut().zip(s.as_bytes().iter()).for_each(|(x, y)| *x = *y);
+        Some(retval)
     }
 }
+

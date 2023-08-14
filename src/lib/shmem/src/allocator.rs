@@ -10,7 +10,7 @@
 //!
 //! Blocks can be serialized with the `.serialize()` member function, which converts the block to a
 //! process-memory-layout agnostic representation of the block. The serialized block can be
-//! one-to-one coverted to and from a string for passing in between different processes.
+//! one-to-one converted to and from a string for passing in between different processes.
 //!
 //! The intended workflow is:
 //!
@@ -22,17 +22,14 @@
 //! (f) The serialized block is deserialized into a shared memory block alias.
 //! (g) The alias is dereferenced and the shared object is retrieved.
 
-use numtoa::NumToA;
-
 use lazy_static::lazy_static;
+
 use shadow_pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
-use crate::util::*;
-
 /// This function moves the input parameter into a newly-allocated shared memory block. Analogous to
-/// `malloc()`. Thread-safe.
+/// `malloc()`.
 pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
@@ -41,7 +38,7 @@ where
     SHMALLOC.lock().alloc(val)
 }
 
-/// This function frees a previously allocated block. Thread-safe.
+/// This function frees a previously allocated block.
 pub fn shfree<T>(block: ShMemBlock<'static, T>)
 where
     T: Sync + VirtualAddressSpaceIndependent,
@@ -50,7 +47,7 @@ where
 }
 
 /// This function takes a serialized block and converts it back into a BlockAlias that can be
-/// dereferenced. Thread-safe.
+/// dereferenced.
 ///
 /// # Safety
 ///
@@ -75,19 +72,12 @@ extern "C" fn shmalloc_teardown() {
 #[cfg_attr(miri, ignore)]
 fn register_teardown() {
     extern crate std;
+    use std::sync::Once;
 
-    use std::sync::Mutex;
-    static MTX: Mutex<i32> = Mutex::new(0);
-    let _guard = MTX.lock();
-
-    static mut INIT: bool = false;
-
-    unsafe {
-        if !INIT {
-            libc::atexit(shmalloc_teardown);
-            INIT = true;
-        }
-    }
+    static START: Once = Once::new();
+    START.call_once(|| unsafe {
+        libc::atexit(shmalloc_teardown);
+    });
 }
 
 #[cfg(not(test))]
@@ -105,6 +95,12 @@ lazy_static! {
     };
 }
 
+/// This struct exists as the intended singleton destructor for the global singleton shared memory
+/// allocator. Because the global allocator has static lifetime, drop() will never be called on it.
+/// Therefore, necessary cleanup routines are not called.
+///
+/// Instead, this object can be instantiated once, eg at the start of main(), and then when it is
+/// dropped at program exit the cleanup routine is called.
 pub struct SharedMemAllocatorDropGuard;
 
 impl Drop for SharedMemAllocatorDropGuard {
@@ -113,6 +109,13 @@ impl Drop for SharedMemAllocatorDropGuard {
     }
 }
 
+/// A smart pointer class that holds a `Sync` and `VirtualAddressSpaceIndependent` object. The pointer
+/// is obtained by a call to a shared memory allocator's `alloc()` function (or the global
+/// `shalloc()` function. The memory is freed when the block is dropped.
+///
+/// This smart pointer is unique in that it may be serialized to a string, passed across process
+/// boundaries, and deserialized in a (potentially) separate process to obtain a view of the
+/// contained data.
 #[derive(Debug)]
 pub struct ShMemBlock<'allocator, T>
 where
@@ -170,6 +173,11 @@ where
     }
 }
 
+/// This struct is analogous to the `ShMemBlock` smart pointer, except it does not assume ownership
+/// of the underlying memory and thus does not free the memory when dropped. An alias of a block is
+/// obtained with a call to `deserialize()` on a `SharedMemDeserializer` object (or likely by using
+/// the `shdeserialize()` to make this call on the global shared memory deserializer.
+///
 #[derive(Debug)]
 pub struct ShMemBlockAlias<'deserializer, T>
 where
@@ -202,7 +210,7 @@ where
     }
 }
 
-#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
     internal: crate::shmalloc_impl::BlockSerialized,
@@ -210,58 +218,50 @@ pub struct ShMemBlockSerialized {
 
 unsafe impl Pod for ShMemBlockSerialized {}
 
-impl ShMemBlockSerialized {
-    pub fn to_string_buf(self) -> StringBuf {
-        let mut retval = StringBuf([0; STRING_BUF_NBYTES]);
-
-        let mut offset_buf = [0u8; 32];
-        self.internal.offset.numtoa(10, &mut offset_buf);
-
-        let i1 = offset_buf.iter().filter(|x| **x != 0);
-        let i2 = ";".as_bytes().iter();
-        let i3 = self.internal.chunk_name.iter();
-
-        let i_all = i1.chain(i2).chain(i3);
-
-        retval.0.iter_mut().zip(i_all).for_each(|(x, y)| *x = *y);
-
-        retval
+impl core::fmt::Display for ShMemBlockSerialized {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // TODO(rwails) fixme
+        let s =
+            core::str::from_utf8(crate::util::trim_null_bytes(&self.internal.chunk_name).unwrap())
+                .unwrap();
+        write!(f, "{};{}", self.internal.offset, s)
     }
+}
 
-    pub fn from_string_buf(string_buf: StringBuf) -> Self {
-        const DELIM: u8 = 59; // Decimal value of ;
+impl core::str::FromStr for ShMemBlockSerialized {
+    type Err = anyhow::Error;
 
-        let lhs_itr = string_buf.0.iter();
-        let mut rhs_itr = string_buf.0.iter();
-        rhs_itr.find(|x| **x == DELIM);
+    // Required method
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        use formatting_nostd::FormatBuffer;
+        if let Some(split_point) = s.find(';') {
+            let (offset_str, path_str) = s.split_at(split_point);
 
-        let offset_itr = lhs_itr.take_while(|x| **x != DELIM);
-
-        let mut offset_buf = [0u8; 32];
-        offset_buf
-            .iter_mut()
-            .zip(offset_itr)
-            .for_each(|(x, y)| *x = *y);
-
-        let mut path_buf: crate::shmalloc_impl::PathBuf =
-            [0; crate::shmalloc_impl::PATH_BUF_NBYTES];
-
-        path_buf.iter_mut().zip(rhs_itr).for_each(|(x, y)| *x = *y);
-
-        // Unwraps safe here.
-        let end = offset_buf.iter().position(|&x| x == 0).unwrap();
-
-        let offset = unsafe {
-            core::str::from_utf8_unchecked(&offset_buf[0..end])
+            // let offset = offset_str.parse::<isize>().map_err(Err).unwrap();
+            let offset = offset_str
                 .parse::<isize>()
-                .unwrap()
-        };
+                .map_err(Err::<(), core::num::ParseIntError>)
+                .unwrap();
 
-        ShMemBlockSerialized {
-            internal: crate::shmalloc_impl::BlockSerialized {
-                chunk_name: path_buf,
-                offset,
-            },
+            let mut chunk_format = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
+
+            {
+                use core::fmt::Write;
+                // TODO(rwails) FIXME
+                write!(&mut chunk_format, "{}", path_str).unwrap();
+            }
+
+            let mut chunk_name = crate::util::NULL_PATH_BUF;
+            chunk_name
+                .iter_mut()
+                .zip(chunk_format.as_str().as_bytes().iter())
+                .for_each(|(x, y)| *x = *y);
+
+            Ok(ShMemBlockSerialized {
+                internal: crate::shmalloc_impl::BlockSerialized { chunk_name, offset },
+            })
+        } else {
+            Err(anyhow::anyhow!("missing ;"))
         }
     }
 }
@@ -436,8 +436,8 @@ mod tests {
         let original_block: ShMemBlock<T> = shmalloc(x);
         {
             let serialized_block = original_block.serialize();
-            let serialized_str = serialized_block.to_string_buf();
-            let serialized_block = ShMemBlockSerialized::from_string_buf(serialized_str);
+            let serialized_str = serialized_block.into();
+            let serialized_block = ShMemBlockSerialized::from(serialized_str);
             let block = unsafe { shdeserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }

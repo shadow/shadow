@@ -10,23 +10,15 @@
 //! This code is intended to be private; the `allocator` module is the public, safer-to-use
 //! front end.
 
-use core::fmt::Write;
 use crate::raw_syscall::*;
+use core::fmt::Write;
 
 use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 
-use numtoa::NumToA;
-
-const PATH_MAX_NBYTES: usize = 255;
-pub(crate) const PATH_BUF_NBYTES: usize = PATH_MAX_NBYTES + 1;
-pub(crate) type PathBuf = [u8; PATH_BUF_NBYTES];
-
 use vasi::VirtualAddressSpaceIndependent;
 
-fn get_null_path_buf() -> PathBuf {
-    [0; PATH_BUF_NBYTES]
-}
+use crate::util::PathBuf;
 
 #[cfg(debug_assertions)]
 type CanaryBuf = [u8; 4];
@@ -106,7 +98,7 @@ pub(crate) fn log_err(error: AllocError, errno: Option<Errno>) {
     let mut buf = FormatBuffer::<1024>::new();
 
     if let Some(e) = errno {
-        write!(&mut buf, "{error}: {e}").unwrap();
+        write!(&mut buf, "{error} ({e})").unwrap();
     } else {
         write!(&mut buf, "{error}").unwrap();
     }
@@ -116,45 +108,34 @@ pub(crate) fn log_err(error: AllocError, errno: Option<Errno>) {
 
 pub(crate) fn log_err_and_exit(error: AllocError, errno: Option<Errno>) -> ! {
     log_err(error, errno);
-    let _ = kill(0, linux_api::signal::Signal::SIGABRT.into());
+    let _ = tgkill(
+        getpid().unwrap(),
+        gettid().unwrap(),
+        linux_api::signal::Signal::SIGABRT.into(),
+    );
     unreachable!()
 }
 
-fn format_shmem_name(buf: &mut [u8]) {
-    static PREFIX: &str = "/dev/shm/shadow_shmemfile_";
-
-    buf.iter_mut().for_each(|x| *x = 0);
-
-    let mut pid_buf = [0u8; 32];
+fn format_shmem_name(buf: &mut PathBuf) {
     let pid = match getpid() {
         Ok(pid) => pid,
         Err(err) => log_err_and_exit(AllocError::GetPID, Some(err)),
     };
-
-    let pid_buf = pid.numtoa(10, &mut pid_buf);
-
-    let mut sec_buf = [0u8; 32];
-    let mut nsec_buf = [0u8; 32];
 
     let ts = match clock_monotonic_gettime() {
         Ok(ts) => ts,
         Err(errno) => log_err_and_exit(AllocError::Clock, Some(errno)),
     };
 
-    let sec_buf = ts.tv_sec.numtoa(10, &mut sec_buf);
-    let nsec_buf = ts.tv_nsec.numtoa(10, &mut nsec_buf);
+    let mut fb = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
+    write!(
+        &mut fb,
+        "/dev/shm/shadow_shmemfile_{}.{}-{}",
+        ts.tv_sec, ts.tv_nsec, pid
+    )
+    .unwrap();
 
-    let name_itr = PREFIX.as_bytes().iter().chain(
-        sec_buf.iter().chain(
-            ".".as_bytes().iter().chain(
-                nsec_buf
-                    .iter()
-                    .chain("-".as_bytes().iter().chain(pid_buf.iter())),
-            ),
-        ),
-    );
-
-    buf.iter_mut().zip(name_itr).for_each(|(x, y)| *x = *y);
+    *buf = crate::util::buf_from_utf8_str(fb.as_str()).unwrap();
 }
 
 const CHUNK_NBYTES_DEFAULT: usize = 8 * 1024 * 1024; // 8 MiB
@@ -200,7 +181,7 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i
     use linux_api::fcntl::OFlag;
     use linux_api::mman::{MapFlags, ProtFlags};
 
-    const MODE: u32 = libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP;
+    const MODE: u32 = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
     let open_flags = OFlag::O_RDWR | OFlag::O_CLOEXEC;
     let prot = ProtFlags::PROT_READ | ProtFlags::PROT_WRITE;
     let map_flags = MapFlags::MAP_SHARED;
@@ -228,7 +209,6 @@ fn view_shared_memory<'a>(path_buf: &PathBuf, nbytes: usize) -> (&'a mut [u8], i
 }
 
 #[repr(C)]
-#[derive(Debug)]
 struct Chunk {
     canary_front: CanaryBuf,
     chunk_name: PathBuf,
@@ -319,9 +299,9 @@ pub(crate) struct Block {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[derive(Copy, Clone, VirtualAddressSpaceIndependent)]
 pub(crate) struct BlockSerialized {
-    pub(crate) chunk_name: PathBuf,
+    pub(crate) chunk_name: crate::util::PathBuf,
     pub(crate) offset: isize,
 }
 
@@ -450,7 +430,7 @@ impl FreelistAllocator {
     }
 
     fn add_chunk(&mut self) -> Result<(), i32> {
-        let mut path_buf = get_null_path_buf();
+        let mut path_buf = crate::util::NULL_PATH_BUF;
         format_shmem_name(&mut path_buf);
 
         let new_chunk = allocate_shared_chunk(&path_buf, self.chunk_nbytes);
@@ -715,7 +695,7 @@ impl FreelistDeserializer {
             let chunk = self.chunks[idx];
 
             // Safe here to deref because we are only checking within the allocated range.
-            if unsafe { (*chunk).chunk_name == *chunk_name } {
+            if unsafe { (*chunk).chunk_name == (*chunk_name) } {
                 return chunk;
             }
         }
