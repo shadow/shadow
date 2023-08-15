@@ -315,7 +315,7 @@ impl TcpSocket {
             InetSocket::Tcp(Arc::clone(socket)),
             addr,
             peer_addr,
-            /* check_less_specific= */ true,
+            /* check_generic_peer= */ true,
             net_ns,
             rng,
         )?;
@@ -503,7 +503,7 @@ impl TcpSocket {
                     InetSocket::Tcp(Arc::clone(&socket)),
                     local_addr,
                     peer_addr,
-                    /* check_less_specific= */ true,
+                    /* check_generic_peer= */ true,
                     net_ns,
                     rng,
                 )?;
@@ -618,7 +618,7 @@ impl TcpSocket {
                     InetSocket::Tcp(Arc::clone(socket)),
                     local_addr,
                     peer_addr,
-                    /* check_less_specific= */ true,
+                    /* check_generic_peer= */ true,
                     net_ns,
                     rng,
                 )?;
@@ -716,7 +716,7 @@ impl TcpSocket {
             InetSocket::Tcp(Arc::clone(&new_socket)),
             local_addr,
             remote_addr,
-            /* check_less_specific= */ false,
+            /* check_generic_peer= */ false,
             net_ns,
             rng,
         )?;

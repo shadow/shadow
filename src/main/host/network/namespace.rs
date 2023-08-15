@@ -183,31 +183,25 @@ impl NetworkNamespace {
         }
     }
 
-    pub fn is_interface_available(
+    pub fn is_addr_in_use(
         &self,
         protocol_type: cshadow::ProtocolType,
         src: SocketAddrV4,
         dst: SocketAddrV4,
-        check_less_specific: bool,
-    ) -> bool {
+    ) -> Result<bool, NoInterface> {
         if src.ip().is_unspecified() {
-            // Check that all interfaces are available.
-            !self.localhost.borrow().is_associated(
-                protocol_type,
-                src.port(),
-                dst,
-                check_less_specific,
-            ) && !self.internet.borrow().is_associated(
-                protocol_type,
-                src.port(),
-                dst,
-                check_less_specific,
-            )
+            Ok(self
+                .localhost
+                .borrow()
+                .is_addr_in_use(protocol_type, src.port(), dst)
+                || self
+                    .internet
+                    .borrow()
+                    .is_addr_in_use(protocol_type, src.port(), dst))
         } else {
-            // The interface is not available if it does not exist.
             match self.interface_borrow(*src.ip()) {
-                Some(i) => !i.is_associated(protocol_type, src.port(), dst, check_less_specific),
-                None => false,
+                Some(i) => Ok(i.is_addr_in_use(protocol_type, src.port(), dst)),
+                None => Err(NoInterface),
             }
         }
     }
@@ -230,13 +224,22 @@ impl NetworkNamespace {
         for _ in 0..10 {
             let random_port = rng.gen_range(MIN_RANDOM_PORT..=u16::MAX);
 
-            // this will check all interfaces in the case of INADDR_ANY
-            if self.is_interface_available(
-                protocol_type,
-                SocketAddrV4::new(interface_ip, random_port),
-                peer,
-                true,
-            ) {
+            // `is_addr_in_use` will check all interfaces in the case of INADDR_ANY
+            let specific_in_use = self
+                .is_addr_in_use(
+                    protocol_type,
+                    SocketAddrV4::new(interface_ip, random_port),
+                    peer,
+                )
+                .unwrap_or(true);
+            let generic_in_use = self
+                .is_addr_in_use(
+                    protocol_type,
+                    SocketAddrV4::new(interface_ip, random_port),
+                    SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
+                )
+                .unwrap_or(true);
+            if !specific_in_use && !generic_in_use {
                 return Some(random_port);
             }
         }
@@ -246,12 +249,17 @@ impl NetworkNamespace {
         // but start from a random port instead of the min.
         let start = rng.gen_range(MIN_RANDOM_PORT..=u16::MAX);
         for port in (start..=u16::MAX).chain(MIN_RANDOM_PORT..start) {
-            if self.is_interface_available(
-                protocol_type,
-                SocketAddrV4::new(interface_ip, port),
-                peer,
-                true,
-            ) {
+            let specific_in_use = self
+                .is_addr_in_use(protocol_type, SocketAddrV4::new(interface_ip, port), peer)
+                .unwrap_or(true);
+            let generic_in_use = self
+                .is_addr_in_use(
+                    protocol_type,
+                    SocketAddrV4::new(interface_ip, port),
+                    SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0),
+                )
+                .unwrap_or(true);
+            if !specific_in_use && !generic_in_use {
                 return Some(port);
             }
         }
@@ -341,6 +349,17 @@ struct InterfaceOptions {
     pub pcap: Option<PcapOptions>,
     pub qdisc: QDiscMode,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct NoInterface;
+
+impl std::fmt::Display for NoInterface {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "No interface available")
+    }
+}
+
+impl std::error::Error for NoInterface {}
 
 /// A handle for a socket association with a network interface(s). The network association will be
 /// dissolved when this handle is dropped (similar to
