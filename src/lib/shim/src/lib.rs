@@ -15,7 +15,7 @@ use shadow_shim_helper_rs::shim_event::{ShimEventStartReq, ShimEventToShadow, Sh
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use shadow_shmem::allocator::{Serializer, ShMemBlockAlias, ShMemBlockSerialized};
+use shadow_shmem::allocator::{shdeserialize, ShMemBlockAlias, ShMemBlockSerialized};
 use tls::ThreadLocalStorage;
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scmutex::SelfContainedMutex;
@@ -184,7 +184,7 @@ mod tls_ipc {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `IPCData`.
     /// The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
-        let blk: ShMemBlockAlias<IPCData> = unsafe { Serializer::global().deserialize(blk) };
+        let blk: ShMemBlockAlias<IPCData> = unsafe { shdeserialize(blk) };
         assert!(IPC_DATA_BLOCK.get().replace(Some(blk)).is_none());
     }
 
@@ -203,7 +203,8 @@ mod tls_ipc {
         let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
         let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
 
-        let ipc_blk = ShMemBlockSerialized::decode_from_string(ipc_blk).unwrap();
+        use core::str::FromStr;
+        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
         // SAFETY: caller is responsible for `set`'s preconditions.
         unsafe { set(&ipc_blk) };
     }
@@ -219,7 +220,7 @@ mod tls_thread_shmem {
 
     static SHMEM: ShimTlsVar<ShMemBlockAlias<ThreadShmem>> = ShimTlsVar::new(&SHIM_TLS, || {
         let serialized = INITIALIZER.get().replace(None).unwrap();
-        unsafe { Serializer::global().deserialize(&serialized) }
+        unsafe { shdeserialize(&serialized) }
     });
 
     /// Panics if `set` hasn't been called yet.
@@ -250,7 +251,7 @@ mod global_manager_shmem {
     // It uses `INITIALIZER` to do its one-time init.
     static SHMEM: LazyLock<ShMemBlockAlias<ManagerShmem>> = LazyLock::const_new(|| {
         let serialized = INITIALIZER.lock().take().unwrap();
-        unsafe { Serializer::global().deserialize(&serialized) }
+        unsafe { shdeserialize(&serialized) }
     });
 
     /// # Safety
@@ -296,7 +297,7 @@ mod global_host_shmem {
     // It uses `INITIALIZER` to do its one-time init.
     static SHMEM: LazyLock<ShMemBlockAlias<HostShmem>> = LazyLock::const_new(|| {
         let serialized = INITIALIZER.lock().take().unwrap();
-        unsafe { Serializer::global().deserialize(&serialized) }
+        unsafe { shdeserialize(&serialized) }
     });
 
     /// # Safety
@@ -341,7 +342,7 @@ mod global_process_shmem {
     // It uses `INITIALIZER` to do its one-time init.
     static SHMEM: LazyLock<ShMemBlockAlias<ProcessShmem>> = LazyLock::const_new(|| {
         let serialized = INITIALIZER.lock().take().unwrap();
-        unsafe { Serializer::global().deserialize(&serialized) }
+        unsafe { shdeserialize(&serialized) }
     });
 
     /// # Safety

@@ -717,6 +717,9 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "lazycell"
@@ -1595,16 +1598,21 @@ dependencies = [
 name = "shadow_shmem"
 version = "0.1.0"
 dependencies = [
- "bindgen",
- "cc",
+ "anyhow",
+ "formatting-nostd",
+ "lazy_static",
  "libc",
+ "linux-api",
+ "linux-syscall",
+ "log",
  "logger",
  "nix",
  "once_cell",
- "shadow-build-common",
+ "rand",
  "shadow-pod",
  "static_assertions",
  "vasi",
+ "vasi-sync",
 ]
 
 [[package]]
@@ -1666,6 +1674,12 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "spin"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "static_assertions"

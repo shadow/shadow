@@ -238,8 +238,7 @@ impl Host {
             params.shim_log_level,
             manager_shmem,
         );
-        let shim_shmem =
-            UnsafeCell::new(shadow_shmem::allocator::Allocator::global().alloc(host_shmem));
+        let shim_shmem = UnsafeCell::new(shadow_shmem::allocator::shmalloc(host_shmem));
 
         // Process IDs start at 1000
         let thread_id_counter = Cell::new(1000);
@@ -913,7 +912,6 @@ mod export {
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
     use shadow_shim_helper_rs::shim_shmem;
-    use shadow_shmem::allocator::ShMemBlockSerialized;
 
     use super::*;
     use crate::{
@@ -1213,15 +1211,6 @@ mod export {
     pub unsafe extern "C" fn host_unlockShimShmemLock(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.unlock_shmem()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_serializeShmem(hostrc: *const Host) -> ShMemBlockSerialized {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        // SAFETY: wrt the `shim_shmem` field requirements: We're calling an
-        // immutable method of `ShMemBlock`; this doesn't touch the HostShmem
-        // data (including HostShmem::protected).
-        unsafe { hostrc.shim_shmem.get().as_ref().unwrap().serialize() }
     }
 
     /// Returns the next value and increments our monotonically increasing

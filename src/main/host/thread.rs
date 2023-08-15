@@ -10,7 +10,7 @@ use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
-use shadow_shmem::allocator::{Allocator, ShMemBlock};
+use shadow_shmem::allocator::{shmalloc, ShMemBlock};
 
 use super::context::ProcessContext;
 use super::descriptor::descriptor_table::DescriptorTable;
@@ -344,7 +344,7 @@ impl Thread {
             host_id: host.id(),
             process_id: pid,
             tid_address: Cell::new(ForeignPtr::null()),
-            shim_shared_memory: Allocator::global().alloc(ThreadShmem::new(
+            shim_shared_memory: shmalloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
                 tid.into(),
             )),
@@ -493,7 +493,6 @@ impl std::fmt::Display for ThreadId {
 mod export {
     use shadow_shim_helper_rs::shim_shmem::export::{ShimShmemHostLock, ShimShmemThread};
     use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
-    use shadow_shmem::allocator::ShMemBlockSerialized;
 
     use super::*;
     use crate::core::worker::Worker;
@@ -561,17 +560,6 @@ mod export {
     pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> UntypedForeignPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.get_tid_address().cast::<()>()
-    }
-
-    /// Writes the serialized shared memory block handle to `out`
-    #[no_mangle]
-    pub unsafe extern "C" fn thread_getShMBlockSerialized(
-        thread: *const Thread,
-        out: *mut ShMemBlockSerialized,
-    ) {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        let out = unsafe { out.as_mut().unwrap() };
-        *out = thread.shim_shared_memory.serialize();
     }
 
     /// Returns a typed pointer to memory shared with the shim (which is backed by

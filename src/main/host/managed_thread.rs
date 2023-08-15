@@ -91,15 +91,8 @@ impl ManagedThread {
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) -> Self {
-        let ipc_shmem =
-            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
-        envv.push(
-            CString::new(format!(
-                "SHADOW_IPC_BLK={}",
-                ipc_shmem.serialize().encode_to_string()
-            ))
-            .unwrap(),
-        );
+        let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
+        envv.push(CString::new(format!("SHADOW_IPC_BLK={}", ipc_shmem.serialize())).unwrap());
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
@@ -300,8 +293,7 @@ impl ManagedThread {
         ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, linux_api::errno::Errno> {
-        let child_ipc_shmem =
-            Arc::new(shadow_shmem::allocator::Allocator::global().alloc(IPCData::new()));
+        let child_ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         {
             let child_ipc_shmem = child_ipc_shmem.clone();
             WORKER_SHARED

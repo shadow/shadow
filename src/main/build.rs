@@ -48,7 +48,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             includes: vec![
                 "lib/logger/log_level.h".into(),
                 "lib/shadow-shim-helper-rs/shim_helper.h".into(),
-                "lib/shmem/shmem_allocator.h".into(),
                 "lib/tsc/tsc.h".into(),
                 "main/bindings/c/bindings-opaque.h".into(),
                 "main/core/worker.h".into(),

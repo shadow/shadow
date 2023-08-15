@@ -1,27 +1,150 @@
-use std::{marker::PhantomData, ops::Deref};
+//! In this module is a shared memory allocator that can be used in Shadow to share data between
+//! the main simulator process and managed processes. There are three main global functions that
+//! are provided:
+//!
+//! (1) `shmalloc()`, which places the input argument into shared memory and returns a `Block`
+//! smart pointer.
+//! (2) `shfree()`, which is used to deallocate allocated blocks.
+//! (3) `shdeserialize()`, which is used to take a serialized block and convert it back into a
+//! `Block` smart pointer that can be dereferenced.
+//!
+//! Blocks can be serialized with the `.serialize()` member function, which converts the block to a
+//! process-memory-layout agnostic representation of the block. The serialized block can be
+//! one-to-one converted to and from a string for passing in between different processes.
+//!
+//! The intended workflow is:
+//!
+//! (a) The main Shadow simulator process allocates a shared memory block containing an object.
+//! (b) The block is serialized.
+//! (c) The serialized block is turned into a string.
+//! (d) The string is passed to one of Shadow's child, managed processes.
+//! (e) The managed process converts the string back to a serialized block.
+//! (f) The serialized block is deserialized into a shared memory block alias.
+//! (g) The alias is dereferenced and the shared object is retrieved.
 
-use once_cell::sync::OnceCell;
+use lazy_static::lazy_static;
+
 use shadow_pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
+use vasi_sync::scmutex::SelfContainedMutex;
 
-use crate::c_bindings;
-
-/// A typed pointer to shared memory.
-///
-/// The pointer to the underlying data (e.g. as accessed via `deref`) is guaranteed
-/// not to change even if the `ShMemBlock` itself is moved. (Host uses this to safely
-/// cache a lock obtained from a ShMemBlock).
-pub struct ShMemBlock<'allocator, T>
-// T must be Sync, since it will be simultaneously available to multiple threads
-// (and processes).
-// T mut be VirtualAddressSpaceIndependent, since it may be simultaneously
-// mapped into different virtual address spaces.
+/// This function moves the input parameter into a newly-allocated shared memory block. Analogous to
+/// `malloc()`.
+pub fn shmalloc<T>(val: T) -> ShMemBlock<'static, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
-    internal: c_bindings::ShMemBlock,
-    allocator: &'allocator Allocator,
-    _phantom: PhantomData<T>,
+    register_teardown();
+    SHMALLOC.lock().alloc(val)
+}
+
+/// This function frees a previously allocated block.
+pub fn shfree<T>(block: ShMemBlock<'static, T>)
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    SHMALLOC.lock().free(block);
+}
+
+/// This function takes a serialized block and converts it back into a BlockAlias that can be
+/// dereferenced.
+///
+/// # Safety
+///
+/// This function can violate type safety if a template type is provided that does not match
+/// original block that was serialized.
+pub unsafe fn shdeserialize<T>(serialized: &ShMemBlockSerialized) -> ShMemBlockAlias<'static, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    unsafe { SHDESERIALIZER.lock().deserialize(serialized) }
+}
+
+#[cfg(test)]
+extern "C" fn shmalloc_teardown() {
+    SHMALLOC.lock().destruct();
+}
+
+// Just needed because we can't put the drop guard in a global place. We don't want to drop
+// after every function, and there's no global test main routine we can take advantage of. No
+// big deal.
+#[cfg(test)]
+#[cfg_attr(miri, ignore)]
+fn register_teardown() {
+    extern crate std;
+    use std::sync::Once;
+
+    static START: Once = Once::new();
+    START.call_once(|| unsafe {
+        libc::atexit(shmalloc_teardown);
+    });
+}
+
+#[cfg(not(test))]
+fn register_teardown() {}
+
+// The global, singleton shared memory allocator and deserializer objects.
+// TODO(rwails): Adjust to use lazy lock instead.
+lazy_static! {
+    static ref SHMALLOC: SelfContainedMutex<SharedMemAllocator<'static>> = {
+        let alloc = SharedMemAllocator::new();
+        SelfContainedMutex::new(alloc)
+    };
+    static ref SHDESERIALIZER: SelfContainedMutex<SharedMemDeserializer<'static>> = {
+        let deserial = SharedMemDeserializer::new();
+        SelfContainedMutex::new(deserial)
+    };
+}
+
+/// This struct exists as the intended singleton destructor for the global singleton shared memory
+/// allocator. Because the global allocator has static lifetime, drop() will never be called on it.
+/// Therefore, necessary cleanup routines are not called.
+///
+/// Instead, this object can be instantiated once, eg at the start of main(), and then when it is
+/// dropped at program exit the cleanup routine is called.
+pub struct SharedMemAllocatorDropGuard(());
+
+impl SharedMemAllocatorDropGuard {
+    /// # Safety
+    ///
+    /// Must outlive all `ShMemBlock` objects allocated by the current process.
+    pub unsafe fn new() -> Self {
+        Self(())
+    }
+}
+
+impl Drop for SharedMemAllocatorDropGuard {
+    fn drop(&mut self) {
+        SHMALLOC.lock().destruct();
+    }
+}
+
+/// A smart pointer class that holds a `Sync` and `VirtualAddressSpaceIndependent` object. The pointer
+/// is obtained by a call to a shared memory allocator's `alloc()` function (or the global
+/// `shalloc()` function. The memory is freed when the block is dropped.
+///
+/// This smart pointer is unique in that it may be serialized to a string, passed across process
+/// boundaries, and deserialized in a (potentially) separate process to obtain a view of the
+/// contained data.
+#[derive(Debug)]
+pub struct ShMemBlock<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    block: *mut crate::shmalloc_impl::Block,
+    phantom: core::marker::PhantomData<&'allocator T>,
+}
+
+impl<'allocator, T> ShMemBlock<'allocator, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    pub fn serialize(&self) -> ShMemBlockSerialized {
+        let serialized = SHMALLOC.lock().internal.serialize(self.block);
+        ShMemBlockSerialized {
+            internal: serialized,
+        }
+    }
 }
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
@@ -35,289 +158,305 @@ unsafe impl<'allocator, T> Send for ShMemBlock<'allocator, T> where
 {
 }
 
-impl<'allocator, T> ShMemBlock<'allocator, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    /// Panics if the ShMemBlock is NULL, the incorrect size, or unaligned.
-    ///
-    /// SAFETY: The memory pointed to by `internal` should already be initialized
-    /// to an instance of `T`, and must not be deallocated while the returned
-    /// object is still alive.
-    unsafe fn new(internal: c_bindings::ShMemBlock, allocator: &'allocator Allocator) -> Self {
-        assert_eq!(internal.nbytes, std::mem::size_of::<T>());
-        assert!(!internal.p.is_null());
-        assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
-        Self {
-            internal,
-            allocator,
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn serialize(&self) -> ShMemBlockSerialized {
-        let serialized = unsafe {
-            c_bindings::shmemallocator_blockSerialize(self.allocator.internal, &self.internal)
-        };
-        ShMemBlockSerialized {
-            internal: serialized,
-        }
-    }
-
-    // We require that T is FFI safe (and hence has a stable layout).
-    // This function will fail to compile if it isn't.
-    #[deny(improper_ctypes_definitions)]
-    extern "C" fn _validate_stable_layout(_: T) {}
-}
-
-impl<'allocator, T> Drop for ShMemBlock<'allocator, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    fn drop(&mut self) {
-        unsafe {
-            std::ptr::drop_in_place(self.internal.p as *mut T);
-            c_bindings::shmemallocator_free(self.allocator.internal, &mut self.internal as *mut _)
-        }
-    }
-}
-
-impl<'allocator, T> Deref for ShMemBlock<'allocator, T>
+impl<'allocator, T> core::ops::Deref for ShMemBlock<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        // SAFETY: Validity ensured by [`ShMemBlock::new`].
-        unsafe { (self.internal.p as *const T).as_ref().unwrap() }
+        let block = unsafe { &*self.block };
+        &block.get_ref::<T>()[0]
     }
 }
 
-/// An *alias* for a [`ShMemBlock`], which may live in a different process and
-/// address space.
-pub struct ShMemBlockAlias<'serializer, T>
-// T must be Sync, since it will be simultaneously available to multiple threads
-// (and processes).
-// T mut be VirtualAddressSpaceIndependent, since it may be simultaneously
-// mapped into different virtual address spaces.
+impl<'allocator, T> core::ops::Drop for ShMemBlock<'allocator, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
-    internal: c_bindings::ShMemBlock,
-    // TODO: Extend Serializer to allow cleaning up individual deserialized
-    // blocks, and do so from this objects `drop` method.
-    #[allow(unused)]
-    serializer: &'serializer Serializer,
-    _phantom: PhantomData<T>,
+    fn drop(&mut self) {
+        if !self.block.is_null() {
+            // Guard here to prevent deadlock on free.
+            SHMALLOC.lock().internal.dealloc(self.block);
+            self.block = core::ptr::null_mut();
+        }
+    }
+}
+
+/// This struct is analogous to the `ShMemBlock` smart pointer, except it does not assume ownership
+/// of the underlying memory and thus does not free the memory when dropped. An alias of a block is
+/// obtained with a call to `deserialize()` on a `SharedMemDeserializer` object (or likely by using
+/// the `shdeserialize()` to make this call on the global shared memory deserializer.
+///
+#[derive(Debug)]
+pub struct ShMemBlockAlias<'deserializer, T>
+where
+    T: Sync + VirtualAddressSpaceIndependent,
+{
+    block: *mut crate::shmalloc_impl::Block,
+    phantom: core::marker::PhantomData<&'deserializer T>,
 }
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
 // immutable references to the underlying data.
-unsafe impl<'serializer, T> Sync for ShMemBlockAlias<'serializer, T> where
+unsafe impl<'deserializer, T> Sync for ShMemBlockAlias<'deserializer, T> where
     T: Sync + VirtualAddressSpaceIndependent
 {
 }
-unsafe impl<'serializer, T> Send for ShMemBlockAlias<'serializer, T> where
+unsafe impl<'deserializer, T> Send for ShMemBlockAlias<'deserializer, T> where
     T: Send + Sync + VirtualAddressSpaceIndependent
 {
 }
 
-impl<'serializer, T> ShMemBlockAlias<'serializer, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    /// Panics if the ShMemBlock is NULL, the incorrect size, or unaligned.
-    ///
-    /// SAFETY: The memory pointed to by `internal` should already be initialized
-    /// to an instance of `T`, and must not be deallocated while the returned
-    /// object is still alive.
-    unsafe fn new(internal: c_bindings::ShMemBlock, serializer: &'serializer Serializer) -> Self {
-        assert_eq!(internal.nbytes, std::mem::size_of::<T>());
-        assert!(!internal.p.is_null());
-        assert_eq!(internal.p.align_offset(std::mem::align_of::<T>()), 0);
-        Self {
-            internal,
-            serializer,
-            _phantom: PhantomData,
-        }
-    }
-
-    // We require that T is FFI safe (and hence has a stable layout).
-    // This function will fail to compile if it isn't.
-    #[deny(improper_ctypes_definitions)]
-    extern "C" fn _validate_stable_layout(_: T) {}
-}
-
-impl<'origin, T> Drop for ShMemBlockAlias<'origin, T>
-where
-    T: Sync + VirtualAddressSpaceIndependent,
-{
-    fn drop(&mut self) {
-        // No cleanup of individual blocks implemented.
-        // TODO: Probably ought to munmap.
-    }
-}
-
-impl<'origin, T> Deref for ShMemBlockAlias<'origin, T>
+impl<'deserializer, T> core::ops::Deref for ShMemBlockAlias<'deserializer, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        // SAFETY: Validity ensured by [`ShMemBlockAlias::new`].
-        unsafe { (self.internal.p as *const T).as_ref().unwrap() }
+        let block = unsafe { &*self.block };
+        &block.get_ref::<T>()[0]
     }
 }
 
-/// A serialized descriptor for a `ShMemBlock`, suitable to be transferred
-/// across processes, which can be used to create a `ShMemBlockAlias` referencing
-/// the original `ShMemBlock`.
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(transparent)]
 pub struct ShMemBlockSerialized {
-    internal: c_bindings::ShMemBlockSerialized,
+    internal: crate::shmalloc_impl::BlockSerialized,
 }
+
 unsafe impl Pod for ShMemBlockSerialized {}
 
-// SAFETY: This is a serialized blob, designed to be VASI.
-unsafe impl VirtualAddressSpaceIndependent for c_bindings::ShMemBlockSerialized {}
-
-impl ShMemBlockSerialized {
-    // Keep in sync with macro of same name in shmem_allocator.h.
-    const SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN: usize = 21 + 21 + 21 + 256 + 1;
-
-    pub fn encode_to_string(&self) -> String {
-        let mut buf = Vec::new();
-        buf.resize(Self::SHD_SHMEM_BLOCK_SERIALIZED_MAX_STRLEN, 0i8);
-        unsafe { c_bindings::shmemblockserialized_toString(&self.internal, buf.as_mut_ptr()) };
-        let buf = buf
-            .iter()
-            .take_while(|c| **c != 0)
-            .map(|c| *c as u8)
-            .collect();
-        String::from_utf8(buf).unwrap()
+impl core::fmt::Display for ShMemBlockSerialized {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let s =
+            core::str::from_utf8(crate::util::trim_null_bytes(&self.internal.chunk_name).unwrap())
+                .unwrap();
+        write!(f, "{};{}", self.internal.offset, s)
     }
+}
 
-    pub fn decode_from_string(s: &str) -> Option<Self> {
-        let mut err: bool = false;
-        let mut buf: Vec<i8> = s.as_bytes().iter().map(|b| *b as i8).collect();
-        // Null terminate.
-        buf.push(0);
-        let res = Self {
-            internal: unsafe {
-                c_bindings::shmemblockserialized_fromString(buf.as_ptr(), &mut err)
-            },
-        };
-        if err {
-            None
+impl core::str::FromStr for ShMemBlockSerialized {
+    type Err = anyhow::Error;
+
+    // Required method
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        use core::fmt::Write;
+        use formatting_nostd::FormatBuffer;
+
+        if let Some((offset_str, path_str)) = s.split_once(';') {
+            // let offset = offset_str.parse::<isize>().map_err(Err).unwrap();
+            let offset = offset_str
+                .parse::<isize>()
+                .map_err(Err::<(), core::num::ParseIntError>)
+                .unwrap();
+
+            let mut chunk_format = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
+
+            write!(&mut chunk_format, "{}", &path_str).unwrap();
+
+            let mut chunk_name = crate::util::NULL_PATH_BUF;
+            chunk_name
+                .iter_mut()
+                .zip(chunk_format.as_str().as_bytes().iter())
+                .for_each(|(x, y)| *x = *y);
+
+            Ok(ShMemBlockSerialized {
+                internal: crate::shmalloc_impl::BlockSerialized { chunk_name, offset },
+            })
         } else {
-            Some(res)
+            Err(anyhow::anyhow!("missing ;"))
         }
     }
 }
 
-/// An allocator for `ShMemBlock`s.
-pub struct Allocator {
-    internal: *mut c_bindings::ShMemAllocator,
+/// Safe wrapper around our low-level, unsafe, nostd shared memory allocator. This allocator type
+/// is not meant to be used directly, but can be accessed indirectly via calls made to `shmalloc()`
+/// and `shfree()`.
+pub struct SharedMemAllocator<'alloc> {
+    internal: crate::shmalloc_impl::FreelistAllocator,
+    nallocs: isize,
+    phantom: core::marker::PhantomData<&'alloc ()>,
 }
 
-// SAFETY: The C bindings for ShMemAllocator use internal locking to ensure
-// thread-safe access.
-//
-// TODO: Consider using SyncSendPointer instead of directly implementing these.
-// Would require reorganizing crates to avoid a circular dependency, though.
-unsafe impl Send for Allocator {}
-unsafe impl Sync for Allocator {}
+impl<'alloc> SharedMemAllocator<'alloc> {
+    fn new() -> Self {
+        let mut internal = crate::shmalloc_impl::FreelistAllocator::new();
+        internal.init().unwrap();
 
-impl Allocator {
-    pub fn global() -> &'static Self {
-        static GLOBAL: OnceCell<Allocator> = OnceCell::new();
-        GLOBAL.get_or_init(|| Self {
-            internal: unsafe { c_bindings::shmemallocator_getGlobal() },
-        })
+        Self {
+            internal,
+            nallocs: 0,
+            phantom: Default::default(),
+        }
     }
 
-    pub fn alloc<T>(&self, val: T) -> ShMemBlock<T>
-    where
-        T: Sync + VirtualAddressSpaceIndependent,
-    {
-        let nbytes = std::mem::size_of_val(&val);
-        let raw_block = unsafe { c_bindings::shmemallocator_alloc(self.internal, nbytes) };
-        assert_eq!(raw_block.nbytes, nbytes);
-        assert!(!raw_block.p.is_null());
-        assert_eq!(raw_block.p.align_offset(std::mem::align_of::<T>()), 0);
-        // Safety: We've validated non-null, size, and alignment.
-        unsafe { (raw_block.p as *mut T).write(val) };
-        // Safety: We've correctly initialized the raw_block, and are
-        // transferring sole ownership to the ShMemBlock.
-        unsafe { ShMemBlock::new(raw_block, self) }
+    // TODO(rwails): Fix the lifetime of the allocated block to match the allocator's lifetime.
+    fn alloc<T: Sync + VirtualAddressSpaceIndependent>(&mut self, val: T) -> ShMemBlock<'alloc, T> {
+        let t_nbytes: usize = core::mem::size_of::<T>();
+        let t_alignment: usize = core::mem::align_of::<T>();
+
+        let block = self.internal.alloc(t_nbytes, t_alignment);
+        unsafe {
+            (*block).get_mut_ref::<T>()[0] = val;
+        }
+
+        self.nallocs += 1;
+        ShMemBlock::<'alloc, T> {
+            block,
+            phantom: Default::default(),
+        }
+    }
+
+    fn free<T: Sync + VirtualAddressSpaceIndependent>(&mut self, mut block: ShMemBlock<'alloc, T>) {
+        self.nallocs -= 1;
+        block.block = core::ptr::null_mut();
+        self.internal.dealloc(block.block);
+    }
+
+    fn destruct(&mut self) {
+        // if self.nallocs != 0 {
+        //crate::shmalloc_impl::log_err(crate::shmalloc_impl::AllocError::Leak, None);
+
+        // TODO(rwails): This condition currently occurs when running Shadow. It's not actually
+        // a leak to worry about because the shared memory file backing store does get cleaned
+        // up. It's possible that all blocks are not dropped before this allocator is dropped.
+        // }
+
+        self.internal.destruct();
     }
 }
 
-/// Transforms `ShMemBlockSerialized` to `ShMemBlockAlias`.
-pub struct Serializer {
-    internal: *mut crate::c_bindings::ShMemSerializer,
+unsafe impl Send for SharedMemAllocator<'_> {}
+unsafe impl Sync for SharedMemAllocator<'_> {}
+
+// Experimental... implements the global allocator using the shared memory allocator.
+/*
+unsafe impl Sync for GlobalAllocator {}
+unsafe impl Send for GlobalAllocator {}
+
+struct GlobalAllocator {}
+
+unsafe impl core::alloc::GlobalAlloc for GlobalAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        let block_p = SHMALLOC
+            .lock()
+            .internal
+            .alloc(layout.size(), layout.align());
+        let (p, _) = unsafe { (*block_p).get_mut_block_data_range() };
+        p
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
+        let block_p = crate::shmalloc_impl::rewind(ptr);
+        SHMALLOC.lock().internal.dealloc(block_p);
+    }
+}
+*/
+
+pub struct SharedMemDeserializer<'alloc> {
+    internal: crate::shmalloc_impl::FreelistDeserializer,
+    phantom: core::marker::PhantomData<&'alloc ()>,
 }
 
-// SAFETY: The C bindings for ShMemSerializer use internal locking to ensure
-// thread-safe access.
-//
-// TODO: Consider using SyncSendPointer instead of directly implementing these.
-// Would require reorganizing crates to avoid a circular dependency, though.
-unsafe impl Send for Serializer {}
-unsafe impl Sync for Serializer {}
+impl<'alloc> SharedMemDeserializer<'alloc> {
+    fn new() -> Self {
+        let internal = crate::shmalloc_impl::FreelistDeserializer::new();
 
-impl Serializer {
-    pub fn global() -> &'static Self {
-        static GLOBAL: OnceCell<Serializer> = OnceCell::new();
-        GLOBAL.get_or_init(|| Self {
-            internal: unsafe { c_bindings::shmemserializer_getGlobal() },
-        })
+        Self {
+            internal,
+            phantom: Default::default(),
+        }
     }
 
     /// # Safety
     ///
-    /// * `block` must have been created from a `ShMemBlock<T>`
-    /// * The returned `ShMemBlockAlias` must not outlive the original `ShMemBlock`
-    ///   that `block` was serialized from. We can't guarantee this with normal
-    ///   lifetime analysis, since the original block may be in another process.
-    pub unsafe fn deserialize<'a, T>(
-        &'a self,
-        block: &ShMemBlockSerialized,
-    ) -> ShMemBlockAlias<'a, T>
+    /// This function can violate type safety if a template type is provided that does not match
+    /// original block that was serialized.
+    // TODO(rwails): Fix the lifetime of the allocated block to match the deserializer's lifetime.
+    pub unsafe fn deserialize<T>(
+        &mut self,
+        serialized: &ShMemBlockSerialized,
+    ) -> ShMemBlockAlias<'alloc, T>
     where
         T: Sync + VirtualAddressSpaceIndependent,
     {
-        let raw_blk =
-            unsafe { c_bindings::shmemserializer_blockDeserialize(self.internal, &block.internal) };
-        unsafe { ShMemBlockAlias::new(raw_blk, self) }
+        let block = self.internal.deserialize(&serialized.internal);
+
+        ShMemBlockAlias {
+            block,
+            phantom: Default::default(),
+        }
     }
 }
 
+unsafe impl Send for SharedMemDeserializer<'_> {}
+unsafe impl Sync for SharedMemDeserializer<'_> {}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use rand::Rng;
     use std::sync::atomic::{AtomicI32, Ordering};
 
-    use super::*;
+    extern crate std;
 
     #[test]
-    // Uses FFI
+    #[cfg_attr(miri, ignore)]
+    fn allocator_random_allocations() {
+        const NROUNDS: usize = 100;
+        let mut marked_blocks: std::vec::Vec<(u32, ShMemBlock<u32>)> = Default::default();
+        let mut rng = rand::thread_rng();
+
+        let mut execute_round = || {
+            // Some allocations
+            for i in 0..255 {
+                let b = shmalloc(i);
+                marked_blocks.push((i, b));
+            }
+
+            // Generate some number of items to pop
+            let n1: u8 = rng.gen();
+
+            for _ in 0..n1 {
+                let last_marked_block = marked_blocks.pop().unwrap();
+                assert_eq!(last_marked_block.0, *last_marked_block.1);
+                shfree(last_marked_block.1);
+            }
+
+            // Then check all blocks
+            for idx in 0..marked_blocks.len() {
+                assert_eq!(marked_blocks[idx].0, *marked_blocks[idx].1);
+            }
+        };
+
+        for _ in 0..NROUNDS {
+            execute_round();
+        }
+
+        while marked_blocks.len() > 0 {
+            let b = marked_blocks.pop().unwrap();
+            shfree(b.1);
+        }
+    }
+
+    #[test]
     #[cfg_attr(miri, ignore)]
     fn round_trip_through_serializer() {
         type T = i32;
         let x: T = 42;
 
-        let original_block: ShMemBlock<T> = Allocator::global().alloc(x);
+        let original_block: ShMemBlock<T> = shmalloc(x);
         {
             let serialized_block = original_block.serialize();
-            let serialized_str = serialized_block.encode_to_string();
-            let serialized_block =
-                ShMemBlockSerialized::decode_from_string(&serialized_str).unwrap();
-            let block = unsafe { Serializer::global().deserialize::<T>(&serialized_block) };
+            let serialized_str = serialized_block.into();
+            let serialized_block = ShMemBlockSerialized::from(serialized_str);
+            let block = unsafe { shdeserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }
+
+        shfree(original_block);
     }
 
     #[test]
@@ -325,11 +464,11 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn mutations() {
         type T = AtomicI32;
-        let original_block = Allocator::global().alloc(AtomicI32::new(0));
+        let original_block = shmalloc(AtomicI32::new(0));
 
         let serialized_block = original_block.serialize();
-        let deserialized_block =
-            unsafe { Serializer::global().deserialize::<T>(&serialized_block) };
+
+        let deserialized_block = unsafe { shdeserialize::<T>(&serialized_block) };
 
         assert_eq!(original_block.load(Ordering::SeqCst), 0);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 0);
@@ -343,6 +482,8 @@ mod tests {
         deserialized_block.store(20, Ordering::SeqCst);
         assert_eq!(original_block.load(Ordering::SeqCst), 20);
         assert_eq!(deserialized_block.load(Ordering::SeqCst), 20);
+
+        shfree(original_block);
     }
 
     // Validate our guarantee that the data pointer doesn't move, even if the block does.
@@ -352,20 +493,22 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn shmemblock_stable_pointer() {
         type T = u32;
-        let block: ShMemBlock<T> = Allocator::global().alloc(0);
+        let original_block: ShMemBlock<T> = shmalloc(0);
 
-        let block_addr = &block as *const ShMemBlock<T>;
-        let data_addr = block.deref() as *const T;
+        let block_addr = &original_block as *const ShMemBlock<T>;
+        let data_addr = *original_block as *const T;
 
-        let block = Some(block);
+        let block = Some(original_block);
 
         // Validate that the block itself actually moved.
         let new_block_addr = block.as_ref().unwrap() as *const ShMemBlock<T>;
         assert_ne!(block_addr, new_block_addr);
 
         // Validate that the data referenced by the block *hasn't* moved.
-        let new_data_addr = block.as_ref().unwrap().deref() as *const T;
+        let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
+
+        shfree(block.unwrap());
     }
 
     // Validate our guarantee that the data pointer doesn't move, even if the block does.
@@ -374,20 +517,23 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn shmemblockremote_stable_pointer() {
         type T = u32;
-        let allocd_block: ShMemBlock<T> = Allocator::global().alloc(0);
-        let block = unsafe { Serializer::global().deserialize::<T>(&allocd_block.serialize()) };
+        let alloced_block: ShMemBlock<T> = shmalloc(0);
 
-        let block_addr = &block as *const _;
-        let data_addr = block.deref() as *const T;
+        let block = unsafe { shdeserialize::<T>(&alloced_block.serialize()) };
+
+        let block_addr = &block as *const ShMemBlockAlias<T>;
+        let data_addr = *block as *const T;
 
         let block = Some(block);
 
         // Validate that the block itself actually moved.
-        let new_block_addr = block.as_ref().unwrap() as *const _;
+        let new_block_addr = block.as_ref().unwrap() as *const ShMemBlockAlias<T>;
         assert_ne!(block_addr, new_block_addr);
 
         // Validate that the data referenced by the block *hasn't* moved.
-        let new_data_addr = block.as_ref().unwrap().deref() as *const T;
+        let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
+
+        shfree(alloced_block);
     }
 }

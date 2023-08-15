@@ -200,7 +200,7 @@ impl<'a> Manager<'a> {
         let meminfo_file =
             std::fs::File::open("/proc/meminfo").context("Failed to open '/proc/meminfo'")?;
 
-        let shmem = shadow_shmem::allocator::Allocator::global().alloc(ManagerShmem {
+        let shmem = shadow_shmem::allocator::shmalloc(ManagerShmem {
             log_start_time_micros: unsafe { c::logger_get_global_start_time_micros() },
         });
 
