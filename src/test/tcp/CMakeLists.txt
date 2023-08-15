@@ -16,6 +16,13 @@ foreach(BlockingMode blocking nonblocking-poll nonblocking-select nonblocking-ep
             # TODO: support lossy iov tests
             continue()
         endif()
+
         add_shadow_tests(BASENAME tcp-${BlockingMode}-${Network})
+
+        if(NOT "${Network}" STREQUAL lossy)
+            add_shadow_tests(BASENAME tcp-${BlockingMode}-${Network}-new-tcp
+                             SHADOW_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/tcp-${BlockingMode}-${Network}.yaml"
+                             ARGS --use-new-tcp true)
+        endif()
     endforeach()
 endforeach()

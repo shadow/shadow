@@ -1516,6 +1516,7 @@ dependencies = [
  "std-util",
  "syscall-logger",
  "system-deps",
+ "tcp",
  "tempfile",
  "vasi-sync",
  "vsprintf",

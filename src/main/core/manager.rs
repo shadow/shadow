@@ -607,6 +607,7 @@ impl<'a> Manager<'a> {
                     .log_level
                     .unwrap_or_else(|| self.config.general.log_level.unwrap())
                     .to_c_loglevel(),
+                use_new_tcp: self.config.experimental.use_new_tcp.unwrap(),
             };
 
             Box::new(unsafe {

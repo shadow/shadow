@@ -6,6 +6,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
+use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
@@ -74,10 +75,15 @@ impl SyscallHandler {
                         log::debug!("Unsupported inet stream socket protocol {protocol}");
                         return Err(Errno::EPROTONOSUPPORT.into());
                     }
-                    Socket::Inet(InetSocket::LegacyTcp(LegacyTcpSocket::new(
-                        file_flags,
-                        ctx.objs.host,
-                    )))
+
+                    if ctx.objs.host.params.use_new_tcp {
+                        Socket::Inet(InetSocket::Tcp(TcpSocket::new(file_flags)))
+                    } else {
+                        Socket::Inet(InetSocket::LegacyTcp(LegacyTcpSocket::new(
+                            file_flags,
+                            ctx.objs.host,
+                        )))
+                    }
                 }
                 libc::SOCK_DGRAM => {
                     if protocol != 0 && protocol != libc::IPPROTO_UDP {
@@ -682,8 +688,13 @@ impl SyscallHandler {
             }
         };
 
+        let mut rng = ctx.objs.host.random_mut();
+        let net_ns = ctx.objs.host.network_namespace_borrow();
+
         let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().accept(cb_queue))
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket.borrow_mut().accept(&net_ns, &mut *rng, cb_queue)
+            })
         });
 
         let file_status = socket.borrow().get_status();

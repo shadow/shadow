@@ -22,14 +22,17 @@ use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
 
 use self::legacy_tcp::LegacyTcpSocket;
+use self::tcp::TcpSocket;
 use self::udp::UdpSocket;
 
 pub mod legacy_tcp;
+pub mod tcp;
 pub mod udp;
 
 #[derive(Clone)]
 pub enum InetSocket {
     LegacyTcp(Arc<AtomicRefCell<LegacyTcpSocket>>),
+    Tcp(Arc<AtomicRefCell<TcpSocket>>),
     Udp(Arc<AtomicRefCell<UdpSocket>>),
 }
 
@@ -37,6 +40,7 @@ impl InetSocket {
     pub fn borrow(&self) -> InetSocketRef {
         match self {
             Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.borrow()),
+            Self::Tcp(ref f) => InetSocketRef::Tcp(f.borrow()),
             Self::Udp(ref f) => InetSocketRef::Udp(f.borrow()),
         }
     }
@@ -44,6 +48,7 @@ impl InetSocket {
     pub fn try_borrow(&self) -> Result<InetSocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
             Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
+            Self::Tcp(ref f) => InetSocketRef::Tcp(f.try_borrow()?),
             Self::Udp(ref f) => InetSocketRef::Udp(f.try_borrow()?),
         })
     }
@@ -51,6 +56,7 @@ impl InetSocket {
     pub fn borrow_mut(&self) -> InetSocketRefMut {
         match self {
             Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
+            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.borrow_mut()),
             Self::Udp(ref f) => InetSocketRefMut::Udp(f.borrow_mut()),
         }
     }
@@ -58,6 +64,7 @@ impl InetSocket {
     pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
             Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
+            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
             Self::Udp(ref f) => InetSocketRefMut::Udp(f.try_borrow_mut()?),
         })
     }
@@ -65,6 +72,7 @@ impl InetSocket {
     pub fn downgrade(&self) -> InetSocketWeak {
         match self {
             Self::LegacyTcp(x) => InetSocketWeak::LegacyTcp(Arc::downgrade(x)),
+            Self::Tcp(x) => InetSocketWeak::Tcp(Arc::downgrade(x)),
             Self::Udp(x) => InetSocketWeak::Udp(Arc::downgrade(x)),
         }
     }
@@ -74,6 +82,7 @@ impl InetSocket {
             // usually we'd use `Arc::as_ptr()`, but we want to use the handle for the C `TCP`
             // object for consistency with the handle for the `LegacySocket`
             Self::LegacyTcp(f) => f.borrow().canonical_handle(),
+            Self::Tcp(f) => Arc::as_ptr(f) as usize,
             Self::Udp(f) => Arc::as_ptr(f) as usize,
         }
     }
@@ -86,6 +95,7 @@ impl InetSocket {
     ) -> SyscallResult {
         match self {
             Self::LegacyTcp(socket) => LegacyTcpSocket::bind(socket, addr, net_ns, rng),
+            Self::Tcp(socket) => TcpSocket::bind(socket, addr, net_ns, rng),
             Self::Udp(socket) => UdpSocket::bind(socket, addr, net_ns, rng),
         }
     }
@@ -101,6 +111,7 @@ impl InetSocket {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::listen(socket, backlog, net_ns, rng, cb_queue)
             }
+            Self::Tcp(socket) => TcpSocket::listen(socket, backlog, net_ns, rng, cb_queue),
             Self::Udp(socket) => UdpSocket::listen(socket, backlog, net_ns, rng, cb_queue),
         }
     }
@@ -116,6 +127,7 @@ impl InetSocket {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::connect(socket, addr, net_ns, rng, cb_queue)
             }
+            Self::Tcp(socket) => TcpSocket::connect(socket, addr, net_ns, rng, cb_queue),
             Self::Udp(socket) => UdpSocket::connect(socket, addr, net_ns, rng, cb_queue),
         }
     }
@@ -131,6 +143,9 @@ impl InetSocket {
         match self {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
+            }
+            Self::Tcp(socket) => {
+                TcpSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
             }
             Self::Udp(socket) => {
                 UdpSocket::sendmsg(socket, args, memory_manager, net_ns, rng, cb_queue)
@@ -148,6 +163,7 @@ impl InetSocket {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::recvmsg(socket, args, memory_manager, cb_queue)
             }
+            Self::Tcp(socket) => TcpSocket::recvmsg(socket, args, memory_manager, cb_queue),
             Self::Udp(socket) => UdpSocket::recvmsg(socket, args, memory_manager, cb_queue),
         }
     }
@@ -157,6 +173,7 @@ impl std::fmt::Debug for InetSocket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
+            Self::Tcp(_) => write!(f, "Tcp")?,
             Self::Udp(_) => write!(f, "Udp")?,
         }
 
@@ -175,29 +192,31 @@ impl std::fmt::Debug for InetSocket {
 
 pub enum InetSocketRef<'a> {
     LegacyTcp(atomic_refcell::AtomicRef<'a, LegacyTcpSocket>),
+    Tcp(atomic_refcell::AtomicRef<'a, TcpSocket>),
     Udp(atomic_refcell::AtomicRef<'a, UdpSocket>),
 }
 
 pub enum InetSocketRefMut<'a> {
     LegacyTcp(atomic_refcell::AtomicRefMut<'a, LegacyTcpSocket>),
+    Tcp(atomic_refcell::AtomicRefMut<'a, TcpSocket>),
     Udp(atomic_refcell::AtomicRefMut<'a, UdpSocket>),
 }
 
 // file functions
 impl InetSocketRef<'_> {
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn supports_sa_restart(&self) -> bool
     );
 }
@@ -207,6 +226,7 @@ impl InetSocketRef<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
             Self::LegacyTcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::Tcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Udp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
@@ -214,15 +234,16 @@ impl InetSocketRef<'_> {
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
             Self::LegacyTcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::Tcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Udp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Udp;
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
@@ -231,54 +252,54 @@ impl InetSocketRef<'_> {
 
 // inet socket-specific functions
 impl InetSocketRef<'_> {
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_data_to_send(&self) -> bool
     );
 }
 
 // file functions
 impl InetSocketRefMut<'_> {
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn state(&self) -> FileState
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn mode(&self) -> FileMode
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn get_status(&self) -> FileStatus
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
     );
-    enum_passthrough!(self, (val), LegacyTcp, Udp;
+    enum_passthrough!(self, (val), LegacyTcp, Tcp, Udp;
         pub fn set_has_open_file(&mut self, val: bool)
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn supports_sa_restart(&self) -> bool
     );
-    enum_passthrough!(self, (cb_queue), LegacyTcp, Udp;
+    enum_passthrough!(self, (cb_queue), LegacyTcp, Tcp, Udp;
         pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
-    enum_passthrough!(self, (status), LegacyTcp, Udp;
+    enum_passthrough!(self, (status), LegacyTcp, Tcp, Udp;
         pub fn set_status(&mut self, status: FileStatus)
     );
-    enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp, Udp;
+    enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (ptr), LegacyTcp, Udp;
+    enum_passthrough!(self, (ptr), LegacyTcp, Tcp, Udp;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)
     );
-    enum_passthrough!(self, (ptr), LegacyTcp, Udp;
+    enum_passthrough!(self, (ptr), LegacyTcp, Tcp, Udp;
         pub fn remove_legacy_listener(&mut self, ptr: *mut c::StatusListener)
     );
-    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), LegacyTcp, Udp;
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), LegacyTcp, Tcp, Udp;
         pub fn readv(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
                      mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
-    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), LegacyTcp, Udp;
+    enum_passthrough!(self, (iovs, offset, flags, mem, cb_queue), LegacyTcp, Tcp, Udp;
         pub fn writev(&mut self, iovs: &[IoVec], offset: Option<libc::off_t>, flags: libc::c_int,
                       mem: &mut MemoryManager, cb_queue: &mut CallbackQueue) -> Result<libc::ssize_t, SyscallError>
     );
@@ -289,6 +310,7 @@ impl InetSocketRefMut<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
             Self::LegacyTcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::Tcp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Udp(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
@@ -296,50 +318,57 @@ impl InetSocketRefMut<'_> {
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
         match self {
             Self::LegacyTcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::Tcp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Udp(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Udp;
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
         -> Result<libc::socklen_t, SyscallError>
     );
 
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Udp;
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn setsockopt(&mut self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
                           optlen: libc::socklen_t, memory_manager: &MemoryManager)
         -> Result<(), SyscallError>
     );
 
-    pub fn accept(&mut self, cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         match self {
-            Self::LegacyTcp(socket) => socket.accept(cb_queue),
-            Self::Udp(socket) => socket.accept(cb_queue),
+            Self::LegacyTcp(socket) => socket.accept(net_ns, rng, cb_queue),
+            Self::Tcp(socket) => socket.accept(net_ns, rng, cb_queue),
+            Self::Udp(socket) => socket.accept(net_ns, rng, cb_queue),
         }
     }
 
-    enum_passthrough!(self, (how, cb_queue), LegacyTcp, Udp;
+    enum_passthrough!(self, (how, cb_queue), LegacyTcp, Tcp, Udp;
         pub fn shutdown(&mut self, how: Shutdown, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError>
     );
 }
 
 // inet socket-specific functions
 impl InetSocketRefMut<'_> {
-    enum_passthrough!(self, (packet, cb_queue, recv_time), LegacyTcp, Udp;
+    enum_passthrough!(self, (packet, cb_queue, recv_time), LegacyTcp, Tcp, Udp;
         pub fn push_in_packet(&mut self, packet: PacketRc, cb_queue: &mut CallbackQueue, recv_time: EmulatedTime)
     );
-    enum_passthrough!(self, (cb_queue), LegacyTcp, Udp;
+    enum_passthrough!(self, (cb_queue), LegacyTcp, Tcp, Udp;
         pub fn pull_out_packet(&mut self, cb_queue: &mut CallbackQueue) -> Option<PacketRc>
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority>
     );
-    enum_passthrough!(self, (), LegacyTcp, Udp;
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_data_to_send(&self) -> bool
     );
 }
@@ -348,6 +377,7 @@ impl std::fmt::Debug for InetSocketRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
+            Self::Tcp(_) => write!(f, "Tcp")?,
             Self::Udp(_) => write!(f, "Udp")?,
         }
 
@@ -364,6 +394,7 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::LegacyTcp(_) => write!(f, "LegacyTcp")?,
+            Self::Tcp(_) => write!(f, "Tcp")?,
             Self::Udp(_) => write!(f, "Udp")?,
         }
 
@@ -379,6 +410,7 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
 #[derive(Clone)]
 pub enum InetSocketWeak {
     LegacyTcp(Weak<AtomicRefCell<LegacyTcpSocket>>),
+    Tcp(Weak<AtomicRefCell<TcpSocket>>),
     Udp(Weak<AtomicRefCell<UdpSocket>>),
 }
 
@@ -386,6 +418,7 @@ impl InetSocketWeak {
     pub fn upgrade(&self) -> Option<InetSocket> {
         match self {
             Self::LegacyTcp(x) => x.upgrade().map(InetSocket::LegacyTcp),
+            Self::Tcp(x) => x.upgrade().map(InetSocket::Tcp),
             Self::Udp(x) => x.upgrade().map(InetSocket::Udp),
         }
     }
@@ -396,10 +429,13 @@ impl InetSocketWeak {
 /// non-zero port will be chosen. The final local address will be returned. If the peer address is
 /// unspecified and has a port of 0, the socket will receive packets from every peer address. The
 /// socket will be automatically disassociated when the returned [`AssociationHandle`] is dropped.
+/// If `check_less_specific` is true, the association will also fail if there is already a socket
+/// associated with the local address `local_addr` and peer address 0.0.0.0.
 fn associate_socket(
     socket: InetSocket,
     local_addr: SocketAddrV4,
     peer_addr: SocketAddrV4,
+    check_less_specific: bool,
     net_ns: &NetworkNamespace,
     rng: impl rand::Rng,
 ) -> Result<(SocketAddrV4, AssociationHandle), SyscallError> {
@@ -415,6 +451,7 @@ fn associate_socket(
 
     let protocol = match socket {
         InetSocket::LegacyTcp(_) => c::_ProtocolType_PTCP,
+        InetSocket::Tcp(_) => c::_ProtocolType_PTCP,
         InetSocket::Udp(_) => c::_ProtocolType_PUDP,
     };
 
@@ -434,7 +471,7 @@ fn associate_socket(
     };
 
     // make sure the port is available at this address for this protocol
-    if !net_ns.is_interface_available(protocol, local_addr, peer_addr) {
+    if !net_ns.is_interface_available(protocol, local_addr, peer_addr, check_less_specific) {
         log::debug!(
             "The provided addresses (local={local_addr}, peer={peer_addr}) are not available"
         );

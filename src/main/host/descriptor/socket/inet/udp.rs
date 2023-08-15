@@ -277,6 +277,7 @@ impl UdpSocket {
             InetSocket::Udp(Arc::clone(socket)),
             addr,
             unspecified_addr,
+            /* check_less_specific= */ true,
             net_ns,
             rng,
         )?;
@@ -388,6 +389,7 @@ impl UdpSocket {
                 InetSocket::Udp(Arc::clone(socket)),
                 local_addr,
                 unspecified_addr,
+                /* check_less_specific= */ true,
                 net_ns,
                 rng,
             )?;
@@ -735,6 +737,7 @@ impl UdpSocket {
                     InetSocket::Udp(Arc::clone(socket)),
                     local_addr,
                     unspecified_addr,
+                    /* check_less_specific= */ true,
                     net_ns,
                     rng,
                 )?;
@@ -749,7 +752,12 @@ impl UdpSocket {
         Ok(())
     }
 
-    pub fn accept(&mut self, _cb_queue: &mut CallbackQueue) -> Result<OpenFile, SyscallError> {
+    pub fn accept(
+        &mut self,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
         Err(Errno::EOPNOTSUPP.into())
     }
 

@@ -163,6 +163,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // Haven't decided how to handle glib struct types yet. Avoid using them
         // until we do.
         .blocklist_type("_?GQueue")
+        .allowlist_function("g_list_append")
+        .allowlist_function("g_list_free")
+        .allowlist_type("GList")
         // Needs GQueue
         .opaque_type("_?LegacySocket.*")
         .blocklist_type("_?Socket.*")
@@ -246,7 +249,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .opaque_type("DescriptorTable")
         .opaque_type("MemoryManager")
         .opaque_type("TaskRef")
-        .opaque_type("GList")
         .blocklist_type("Logger")
         .blocklist_type("Timer")
         .blocklist_type("Controller")

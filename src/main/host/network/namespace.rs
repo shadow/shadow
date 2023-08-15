@@ -188,21 +188,25 @@ impl NetworkNamespace {
         protocol_type: cshadow::ProtocolType,
         src: SocketAddrV4,
         dst: SocketAddrV4,
+        check_less_specific: bool,
     ) -> bool {
         if src.ip().is_unspecified() {
             // Check that all interfaces are available.
-            !self
-                .localhost
-                .borrow()
-                .is_associated(protocol_type, src.port(), dst)
-                && !self
-                    .internet
-                    .borrow()
-                    .is_associated(protocol_type, src.port(), dst)
+            !self.localhost.borrow().is_associated(
+                protocol_type,
+                src.port(),
+                dst,
+                check_less_specific,
+            ) && !self.internet.borrow().is_associated(
+                protocol_type,
+                src.port(),
+                dst,
+                check_less_specific,
+            )
         } else {
             // The interface is not available if it does not exist.
             match self.interface_borrow(*src.ip()) {
-                Some(i) => !i.is_associated(protocol_type, src.port(), dst),
+                Some(i) => !i.is_associated(protocol_type, src.port(), dst, check_less_specific),
                 None => false,
             }
         }
@@ -231,6 +235,7 @@ impl NetworkNamespace {
                 protocol_type,
                 SocketAddrV4::new(interface_ip, random_port),
                 peer,
+                true,
             ) {
                 return Some(random_port);
             }
@@ -245,6 +250,7 @@ impl NetworkNamespace {
                 protocol_type,
                 SocketAddrV4::new(interface_ip, port),
                 peer,
+                true,
             ) {
                 return Some(port);
             }
@@ -344,6 +350,16 @@ pub struct AssociationHandle {
     protocol: cshadow::ProtocolType,
     local_addr: SocketAddrV4,
     remote_addr: SocketAddrV4,
+}
+
+impl AssociationHandle {
+    pub fn local_addr(&self) -> SocketAddrV4 {
+        self.local_addr
+    }
+
+    pub fn remote_addr(&self) -> SocketAddrV4 {
+        self.remote_addr
+    }
 }
 
 impl std::ops::Drop for AssociationHandle {
