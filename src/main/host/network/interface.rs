@@ -115,26 +115,13 @@ impl NetworkInterface {
         };
     }
 
-    pub fn is_associated(
-        &self,
-        protocol: c::ProtocolType,
-        port: u16,
-        peer: SocketAddrV4,
-        check_less_specific: bool,
-    ) -> bool {
+    pub fn is_addr_in_use(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {
         let port = port.to_be();
         let peer_ip = u32::from(*peer.ip()).to_be();
         let peer_port = peer.port().to_be();
 
         (unsafe {
-            c::networkinterface_isAssociated(
-                self.c_ptr.ptr(),
-                protocol,
-                port,
-                peer_ip,
-                peer_port,
-                check_less_specific,
-            )
+            c::networkinterface_isAssociated(self.c_ptr.ptr(), protocol, port, peer_ip, peer_port)
         }) != 0
     }
 

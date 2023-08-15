@@ -277,7 +277,7 @@ impl LegacyTcpSocket {
             InetSocket::LegacyTcp(Arc::clone(socket)),
             addr,
             peer_addr,
-            /* check_less_specific= */ true,
+            /* check_generic_peer= */ true,
             net_ns,
             rng,
         )?;
@@ -661,7 +661,7 @@ impl LegacyTcpSocket {
                 super::InetSocket::LegacyTcp(socket.clone()),
                 local_addr,
                 peer_addr,
-                /* check_less_specific= */ true,
+                /* check_generic_peer= */ true,
                 net_ns,
                 rng,
             )?;
@@ -765,7 +765,7 @@ impl LegacyTcpSocket {
                 super::InetSocket::LegacyTcp(socket.clone()),
                 local_addr,
                 peer_addr,
-                /* check_less_specific= */ true,
+                /* check_generic_peer= */ true,
                 net_ns,
                 rng,
             )?;

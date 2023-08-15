@@ -74,29 +74,14 @@ static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
 
 /* The address and ports must be in network byte order. */
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
-                                       in_port_t port, in_addr_t peerAddr, in_port_t peerPort,
-                                       bool check_less_specific) {
+                                       in_port_t port, in_addr_t peerAddr, in_port_t peerPort) {
     MAGIC_ASSERT(interface);
 
     gboolean isFound = FALSE;
 
-    if (check_less_specific) {
-        /* we need to check the general key too (ie the ones listening sockets use) */
-        gchar* general = _networkinterface_getAssociationKey(interface, type, port, 0, 0);
-        if (g_hash_table_contains(interface->boundSockets, general)) {
-            isFound = TRUE;
-        }
-        g_free(general);
-    }
-
-    if (!isFound) {
-        gchar* specific =
-            _networkinterface_getAssociationKey(interface, type, port, peerAddr, peerPort);
-        if (g_hash_table_contains(interface->boundSockets, specific)) {
-            isFound = TRUE;
-        }
-        g_free(specific);
-    }
+    gchar* key = _networkinterface_getAssociationKey(interface, type, port, peerAddr, peerPort);
+    isFound = g_hash_table_contains(interface->boundSockets, key);
+    g_free(key);
 
     return isFound;
 }
