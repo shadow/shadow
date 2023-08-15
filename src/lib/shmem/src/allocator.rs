@@ -245,9 +245,7 @@ impl core::str::FromStr for ShMemBlockSerialized {
         use core::fmt::Write;
         use formatting_nostd::FormatBuffer;
 
-        if let Some(split_point) = s.find(';') {
-            let (offset_str, path_str) = s.split_at(split_point);
-
+        if let Some((offset_str, path_str)) = s.split_once(';') {
             // let offset = offset_str.parse::<isize>().map_err(Err).unwrap();
             let offset = offset_str
                 .parse::<isize>()
@@ -256,7 +254,7 @@ impl core::str::FromStr for ShMemBlockSerialized {
 
             let mut chunk_format = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
 
-            write!(&mut chunk_format, "{}", &path_str[1..]).unwrap();
+            write!(&mut chunk_format, "{}", &path_str).unwrap();
 
             let mut chunk_name = crate::util::NULL_PATH_BUF;
             chunk_name

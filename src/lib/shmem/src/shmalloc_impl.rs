@@ -1,4 +1,4 @@
-// //! This module implements a low-level, unsafe shared memory allocator that uses mmap'ed shared
+//! This module implements a low-level, unsafe shared memory allocator that uses mmap'ed shared
 //! memory files as the backing store. The module is intended to be no-std so it can be used in
 //! Shadow's shim library, which must async-signal-safe.
 //!
