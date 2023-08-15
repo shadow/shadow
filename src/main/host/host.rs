@@ -1055,39 +1055,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_doesInterfaceExist(
-        hostrc: *const Host,
-        interface_ip: in_addr_t,
-    ) -> bool {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let ipv4 = Ipv4Addr::from(u32::from_be(interface_ip));
-        ipv4.is_unspecified() || hostrc.interface_borrow(ipv4).is_some()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn host_isInterfaceAvailable(
-        hostrc: *const Host,
-        protocol_type: cshadow::ProtocolType,
-        interface_addr: in_addr_t,
-        port: in_port_t,
-        peer_addr: in_addr_t,
-        peer_port: in_port_t,
-    ) -> bool {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        let src = SocketAddrV4::new(
-            Ipv4Addr::from(u32::from_be(interface_addr)),
-            u16::from_be(port),
-        );
-        let dst = SocketAddrV4::new(
-            Ipv4Addr::from(u32::from_be(peer_addr)),
-            u16::from_be(peer_port),
-        );
-        hostrc
-            .net_ns
-            .is_interface_available(protocol_type, src, dst, true)
-    }
-
-    #[no_mangle]
     pub unsafe extern "C" fn host_disassociateInterface(
         hostrc: *const Host,
         protocol: cshadow::ProtocolType,
