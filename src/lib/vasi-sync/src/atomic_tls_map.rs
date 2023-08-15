@@ -72,6 +72,10 @@ impl AtomicOptionNonZeroUsize {
         self.0.store(Self::to_usize(val), order)
     }
 
+    pub fn swap(&self, val: Option<NonZeroUsize>, order: atomic::Ordering) -> Option<NonZeroUsize> {
+        Self::from_usize(self.0.swap(Self::to_usize(val), order))
+    }
+
     pub fn compare_exchange(
         &self,
         current: Option<NonZeroUsize>,
@@ -217,6 +221,29 @@ where
         self.keys[idx].store(None, atomic::Ordering::Release);
         Some(value)
     }
+
+    /// # Safety
+    ///
+    /// There must be no outstanding references from `self`, nor parallel access
+    /// to `self` before this method returns.
+    pub unsafe fn clear(&self) {
+        for idx in 0..N {
+            if self.keys[idx]
+                .swap(None, atomic::Ordering::Relaxed)
+                .is_some()
+            {
+                self.values[idx].get_mut().with(|value| {
+                    assert_eq!(self.refcounts[idx].get(), 0);
+                    // SAFETY: Caller has guaranteed that we effectively have exclusive access
+                    // to `self`.
+                    let value = unsafe { &mut *value };
+                    // SAFETY: The `some` value for the key indicates that this value
+                    // is initialized.
+                    unsafe { value.assume_init_drop() }
+                })
+            }
+        }
+    }
 }
 
 impl<const N: usize, V, H> AtomicTlsMap<N, V, H>
@@ -240,22 +267,8 @@ where
     H: BuildHasher,
 {
     fn drop(&mut self) {
-        for idx in 0..N {
-            // No special synchronization requirements here since we have a
-            // `mut` reference to self. Even values that were inserted by other
-            // threads should now be safe to access; for us to have obtained a
-            // `mut` reference some external synchronization must have occurred,
-            // which should make the values safely accessible by this thread.
-            if self.keys[idx].load(atomic::Ordering::Relaxed).is_some() {
-                self.values[idx].get_mut().with(|value| {
-                    assert_eq!(self.refcounts[idx].get(), 0);
-                    // SAFETY: We have exclusive access to `self`.
-                    let value = unsafe { &mut *value };
-                    // SAFETY: We know the value is initialized.
-                    unsafe { value.assume_init_drop() }
-                })
-            }
-        }
+        // SAFETY: We have exclusive access to `self`.
+        unsafe { self.clear() };
     }
 }
 

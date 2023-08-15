@@ -99,6 +99,29 @@ mod atomic_tls_map_tests {
     }
 
     #[test]
+    fn test_clear() {
+        sync::model(|| {
+            let value = sync::Arc::new(1);
+            unsafe {
+                let table = AtomicTlsMap::<10, sync::Arc<i32>>::new();
+                let key = NonZeroUsize::try_from(1).unwrap();
+                table.get_or_insert_with(key, || value.clone());
+                assert_eq!(sync::Arc::strong_count(&value), 2);
+                table.remove(key);
+                assert_eq!(sync::Arc::strong_count(&value), 1);
+                table.get_or_insert_with(key, || value.clone());
+                assert_eq!(sync::Arc::strong_count(&value), 2);
+
+                table.clear();
+                // Clearing the table should reduce the count back to 1.
+                assert_eq!(sync::Arc::strong_count(&value), 1);
+                // Accessing the previously-present key should insert instead.
+                assert_eq!(**table.get_or_insert_with(key, || sync::Arc::new(2)), 2);
+            };
+        })
+    }
+
+    #[test]
     fn test_drop() {
         sync::model(|| {
             let value = sync::Arc::new(());
