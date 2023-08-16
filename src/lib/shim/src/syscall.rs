@@ -79,9 +79,7 @@ unsafe fn emulated_syscall_event(
             ShimEventToShim::SyscallComplete(syscall_complete) => {
                 // Shadow has returned a result for the emulated syscall
 
-                if crate::global_host_shmem::try_get().is_none()
-                    || crate::global_process_shmem::try_with(|_| ()).is_none()
-                {
+                if crate::global_host_shmem::try_get().is_none() {
                     // We should only get here during early initialization. We don't have what
                     // we need to process signals yet, so just return the result.
                     return syscall_complete.retval;

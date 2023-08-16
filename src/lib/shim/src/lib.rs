@@ -361,14 +361,6 @@ mod global_process_shmem {
     pub fn with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> O {
         f(&SHMEM.force())
     }
-
-    pub fn try_with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> Option<O> {
-        if !SHMEM.initd() {
-            None
-        } else {
-            Some(with(f))
-        }
-    }
 }
 
 // Force cargo to link against crates that aren't (yet) referenced from Rust
@@ -660,13 +652,12 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn shim_processSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
-        global_process_shmem::try_with(|process| {
+        global_process_shmem::with(|process| {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
             process as *const _
         })
-        .unwrap_or(core::ptr::null())
     }
 
     /// Wait for start event from shadow, from a newly spawned thread.
