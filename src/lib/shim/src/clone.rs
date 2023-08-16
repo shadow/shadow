@@ -1,3 +1,6 @@
+use linux_api::ldt::linux_user_desc;
+use linux_api::sched::{CloneFlags, CloneResult};
+use linux_api::signal::Signal;
 use linux_api::ucontext::{sigcontext, ucontext};
 use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
 use shadow_shmem::allocator::ShMemBlockSerialized;
@@ -128,11 +131,67 @@ unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
 pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
-    let flags = event.flags;
+    let flags = CloneFlags::from_bits(event.flags).unwrap();
     let ptid: *mut i32 = event.ptid.cast::<i32>().into_raw_mut();
     let ctid: *mut i32 = event.ctid.cast::<i32>().into_raw_mut();
     let child_stack: *mut u8 = event.child_stack.cast::<u8>().into_raw_mut();
     let newtls = event.newtls;
+
+    if !flags.contains(CloneFlags::CLONE_THREAD) {
+        if !child_stack.is_null() {
+            // Don't know of a real-world need for this, but shouldn't be
+            // difficult to implement if needed.
+            unimplemented!("fork with new stack");
+        }
+        if flags.contains(CloneFlags::CLONE_VM) {
+            // Don't know of a real-world need for this.
+            unimplemented!("fork with shared memory");
+        }
+        if flags.contains(CloneFlags::CLONE_VFORK) {
+            // We want to support this eventually, but will take some work.
+            unimplemented!("vfork");
+        }
+        if flags.contains(CloneFlags::CLONE_SETTLS) {
+            // In particular we don't correctly handle the case where the parent
+            // thread is using `tls::Mode::Native`, but the child thread is
+            // unable to.
+            //
+            // We could try to detect that more specific case and/or correctly
+            // handle it, but I don't think this is likely to be needed.
+            unimplemented!("CLONE_SETTLS without CLONE_THREAD");
+        }
+
+        // The shadow Process should be the parent; not this process.
+        assert!(flags.contains(CloneFlags::CLONE_PARENT));
+
+        let parent_tls_key = crate::SHIM_TLS.current_key();
+
+        let res = match unsafe {
+            linux_api::sched::clone(
+                flags,
+                Some(Signal::SIGCHLD),
+                child_stack.cast(),
+                ptid,
+                ctid,
+                newtls as *mut linux_user_desc,
+            )
+        } {
+            Ok(r) => r,
+            Err(e) => return e.to_negated_i64(),
+        };
+        return match res {
+            CloneResult::CallerIsChild => {
+                // SAFETY: We have exclusive access to SHIM_TLS: this is the only thread
+                // in the new process, and we're not sharing memory with the parent process.
+                unsafe { crate::SHIM_TLS.fork_from(parent_tls_key) };
+                // SAFETY: Shadow should give us the correct type and lifetime.
+                unsafe { crate::tls_ipc::set(&event.ipc_block) };
+                crate::init_thread();
+                0
+            }
+            CloneResult::CallerIsParent(child) => child.as_raw_nonzero().get().into(),
+        };
+    }
 
     assert!(
         !child_stack.is_null(),
@@ -215,7 +274,7 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
             // clone syscall number in, rv out
             inout("rax") libc::SYS_clone => rv,
             // clone syscall arg1
-            in("rdi") flags,
+            in("rdi") flags.bits(),
             // clone syscall arg2
             in("rsi") child_current_rsp,
             // clone syscall arg3
