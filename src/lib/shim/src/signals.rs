@@ -9,7 +9,7 @@ use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
 use crate::tls::ShimTlsVar;
-use crate::{global_host_shmem, tls_allow_native_syscalls, tls_thread_shmem};
+use crate::{global_host_shmem, global_process_shmem, tls_allow_native_syscalls, tls_thread_shmem};
 
 /// Information passed through to the SIGUSR1 signal handler. Contains the info
 /// needed to call a managed code signal handler.
@@ -102,19 +102,20 @@ fn die_with_fatal_signal(sig: Signal) -> ! {
 /// we basically can't ensure).
 pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
     let mut host = crate::global_host_shmem::get();
-    let mut process = crate::global_process_shmem::get();
     let mut host_lock = host.protected().lock();
 
     let mut restartable = true;
 
     loop {
-        let Some((sig, siginfo)) = tls_thread_shmem::with(|thread| {
-            shim_shmem::take_pending_unblocked_signal(&host_lock, &process, thread)
-        }) else {
+        let Some((sig, siginfo)) = global_process_shmem::with(|process| tls_thread_shmem::with(|thread| {
+            shim_shmem::take_pending_unblocked_signal(&host_lock, process, thread)
+        })) else {
             break;
         };
 
-        let action = *unsafe { process.protected.borrow(&host_lock.root).signal_action(sig) };
+        let action = global_process_shmem::with(|process| *unsafe {
+            process.protected.borrow(&host_lock.root).signal_action(sig)
+        });
 
         if matches!(unsafe { action.handler() }, SignalHandler::SigIgn) {
             continue;
@@ -155,17 +156,19 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
         });
 
         if action.flags_retain().contains(SigActionFlags::SA_RESETHAND) {
-            // SAFETY: The handler (`SigDfl`) is sound.
-            unsafe {
-                *process
-                    .protected
-                    .borrow_mut(&host_lock.root)
-                    .signal_action_mut(sig) = sigaction::new_with_default_restorer(
-                    SignalHandler::SigDfl,
-                    SigActionFlags::empty(),
-                    sigset_t::EMPTY,
-                )
-            };
+            global_process_shmem::with(|process| {
+                // SAFETY: The handler (`SigDfl`) is sound.
+                unsafe {
+                    *process
+                        .protected
+                        .borrow_mut(&host_lock.root)
+                        .signal_action_mut(sig) = sigaction::new_with_default_restorer(
+                        SignalHandler::SigDfl,
+                        SigActionFlags::empty(),
+                        sigset_t::EMPTY,
+                    )
+                };
+            });
         }
 
         if !action.flags_retain().contains(SigActionFlags::SA_RESTART) {
@@ -252,7 +255,6 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
         // return.
         drop(host_lock);
         drop(host);
-        drop(process);
 
         // We raise a signal natively to let the kernel create a ucontext for us
         // and switch stacks. We invoke the managed code's signal handler from our
@@ -297,7 +299,6 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
 
         // Reacquire locks and references.
         host = crate::global_host_shmem::get();
-        process = crate::global_process_shmem::get();
         host_lock = host.protected().lock();
 
         // Restore mask and stack

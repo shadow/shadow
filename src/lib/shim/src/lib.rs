@@ -358,18 +358,15 @@ mod global_process_shmem {
     }
 
     /// Panics if `set` hasn't been called yet.
-    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ProcessShmem>> + 'static
-    {
-        SHMEM.force()
+    pub fn with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> O {
+        f(&SHMEM.force())
     }
 
-    pub fn try_get(
-    ) -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, ProcessShmem>> + 'static>
-    {
+    pub fn try_with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> Option<O> {
         if !SHMEM.initd() {
             None
         } else {
-            Some(get())
+            Some(with(f))
         }
     }
 }
@@ -663,13 +660,11 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn shim_processSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
-        let rv = global_process_shmem::try_get();
-        rv.map(|x| {
-            let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess = x.deref();
+        global_process_shmem::try_with(|process| {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
-            rv as *const _
+            process as *const _
         })
         .unwrap_or(core::ptr::null())
     }
@@ -692,6 +687,8 @@ pub mod export {
 
     #[no_mangle]
     pub extern "C" fn _shim_parent_init_host_shm() {
-        unsafe { global_host_shmem::set(&global_process_shmem::get().host_shmem) }
+        global_process_shmem::with(|process| unsafe {
+            global_host_shmem::set(&process.host_shmem)
+        });
     }
 }

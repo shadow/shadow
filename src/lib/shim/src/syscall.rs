@@ -80,7 +80,7 @@ unsafe fn emulated_syscall_event(
                 // Shadow has returned a result for the emulated syscall
 
                 if crate::global_host_shmem::try_get().is_none()
-                    || crate::global_process_shmem::try_get().is_none()
+                    || crate::global_process_shmem::try_with(|_| ()).is_none()
                 {
                     // We should only get here during early initialization. We don't have what
                     // we need to process signals yet, so just return the result.
@@ -120,7 +120,9 @@ unsafe fn emulated_syscall_event(
 
                 let rv = unsafe { native_syscall(&syscall_event.syscall_args) };
 
-                if let FfiOption::Some(strace_fd) = crate::global_process_shmem::get().strace_fd {
+                if let FfiOption::Some(strace_fd) =
+                    crate::global_process_shmem::with(|process| process.strace_fd)
+                {
                     let emulated_time = global_host_shmem::get()
                         .sim_time
                         .load(atomic::Ordering::Relaxed)
