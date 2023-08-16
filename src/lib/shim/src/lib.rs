@@ -179,34 +179,15 @@ mod tls_ipc {
         ipc.as_ref().map(|block| f(block)).unwrap()
     }
 
+    /// The previous value, if any, is dropped.
+    ///
     /// # Safety
     ///
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `IPCData`.
     /// The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
         let blk: ShMemBlockAlias<IPCData> = unsafe { shdeserialize(blk) };
-        assert!(IPC_DATA_BLOCK.get().replace(Some(blk)).is_none());
-    }
-
-    /// # Safety
-    ///
-    /// Environment variable SHADOW_IPC_BLK must contained a serialized block of
-    /// type `IPCData`, which outlives the current thread.
-    pub unsafe fn set_from_env() {
-        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
-        // SAFETY: Kind of not. We should pass this some other way than an environment
-        // variable. Ok in practice as long as we do our initialization after libc's early
-        // initialization, and nothing else mutates this environment variable.
-        // https://github.com/shadow/shadow/issues/2848
-        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
-        assert!(!ipc_blk.is_null());
-        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
-        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
-
-        use core::str::FromStr;
-        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
-        // SAFETY: caller is responsible for `set`'s preconditions.
-        unsafe { set(&ipc_blk) };
+        IPC_DATA_BLOCK.get().replace(Some(blk));
     }
 }
 
@@ -559,7 +540,20 @@ pub mod export {
     /// type `IPCData`, which outlives the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn _shim_parent_init_ipc() {
-        unsafe { tls_ipc::set_from_env() };
+        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
+        // SAFETY: Kind of not. We should pass this some other way than an environment
+        // variable. Ok in practice as long as we do our initialization after libc's early
+        // initialization, and nothing else mutates this environment variable.
+        // https://github.com/shadow/shadow/issues/2848
+        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
+        assert!(!ipc_blk.is_null());
+        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
+        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
+
+        use core::str::FromStr;
+        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
+        // SAFETY: caller is responsible for `set`'s preconditions.
+        unsafe { tls_ipc::set(&ipc_blk) };
     }
 
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
