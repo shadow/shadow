@@ -213,29 +213,24 @@ mod tls_ipc {
 mod tls_thread_shmem {
     use super::*;
 
-    // Set explicitly via `set`, and then used in the lazy initialization of
-    // `SHMEM`.
-    static INITIALIZER: ShimTlsVar<Cell<Option<ShMemBlockSerialized>>> =
-        ShimTlsVar::new(&SHIM_TLS, || Cell::new(None));
-
-    static SHMEM: ShimTlsVar<ShMemBlockAlias<ThreadShmem>> = ShimTlsVar::new(&SHIM_TLS, || {
-        let serialized = INITIALIZER.get().replace(None).unwrap();
-        unsafe { shdeserialize(&serialized) }
-    });
+    static SHMEM: ShimTlsVar<RefCell<Option<ShMemBlockAlias<ThreadShmem>>>> =
+        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
 
     /// Panics if `set` hasn't been called yet.
     pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
-        f(&SHMEM.get())
+        f(SHMEM.get().borrow().as_ref().unwrap())
     }
 
+    /// The previous value, if any, is dropped.
+    ///
     /// # Safety
     ///
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of
     /// type `ThreadShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
-        assert!(INITIALIZER.get().replace(Some(*blk)).is_none());
-        // Force initialization, for clearer debugging in case of failure.
-        SHMEM.get();
+        // SAFETY: Caller guarantees correct type.
+        let blk = unsafe { shdeserialize(blk) };
+        SHMEM.get().borrow_mut().replace(blk);
     }
 }
 
