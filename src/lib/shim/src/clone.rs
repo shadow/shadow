@@ -108,12 +108,12 @@ unsafe extern "C" fn set_context(ctx: &sigcontext) -> ! {
 /// type `IPCData`, which outlives the current thread.
 unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
     let blk = unsafe { blk.as_ref().unwrap() };
-    let prev = crate::global_allow_native_syscalls::swap(true);
+    let prev = crate::tls_allow_native_syscalls::swap(true);
 
     // SAFETY: ensured by caller
     unsafe { crate::tls_ipc::set(blk) };
 
-    crate::global_allow_native_syscalls::swap(prev);
+    crate::tls_allow_native_syscalls::swap(prev);
 }
 
 /// Execute a native `clone` syscall. The newly created child thread will

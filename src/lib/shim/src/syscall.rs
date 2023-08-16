@@ -188,7 +188,7 @@ pub mod export {
         n: core::ffi::c_long,
         mut args: va_list::VaList,
     ) -> core::ffi::c_long {
-        let old_native_syscall_flag = crate::global_allow_native_syscalls::swap(true);
+        let old_native_syscall_flag = crate::tls_allow_native_syscalls::swap(true);
 
         let syscall_args = SysCallArgs {
             number: n,
@@ -207,7 +207,7 @@ pub mod export {
         let ctx = unsafe { ctx.as_mut() };
         let retval = unsafe { emulated_syscall_event(ctx, &event) };
 
-        crate::global_allow_native_syscalls::swap(old_native_syscall_flag);
+        crate::tls_allow_native_syscalls::swap(old_native_syscall_flag);
 
         retval.into()
     }

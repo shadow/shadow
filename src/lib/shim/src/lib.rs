@@ -45,7 +45,7 @@ pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
 }
 
-mod global_allow_native_syscalls {
+mod tls_allow_native_syscalls {
     use super::*;
 
     static ALLOW_NATIVE_SYSCALLS: ShimTlsVar<Cell<bool>> =
@@ -551,13 +551,13 @@ pub mod export {
     /// the beginning of an operation, and restore the old value afterwards.
     #[no_mangle]
     pub extern "C" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
-        global_allow_native_syscalls::swap(new)
+        tls_allow_native_syscalls::swap(new)
     }
 
     /// Whether syscall interposition is currently enabled.
     #[no_mangle]
     pub extern "C" fn shim_interpositionEnabled() -> bool {
-        !global_allow_native_syscalls::get()
+        !tls_allow_native_syscalls::get()
     }
 
     /// Allocates and installs a signal stack. This is to ensure that our
