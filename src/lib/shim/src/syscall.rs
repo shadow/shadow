@@ -119,7 +119,7 @@ unsafe fn emulated_syscall_event(
                 let rv = unsafe { native_syscall(&syscall_event.syscall_args) };
 
                 if let FfiOption::Some(strace_fd) =
-                    crate::global_process_shmem::with(|process| process.strace_fd)
+                    crate::tls_process_shmem::with(|process| process.strace_fd)
                 {
                     let emulated_time = global_host_shmem::get()
                         .sim_time

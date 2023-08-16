@@ -9,7 +9,7 @@ use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
 use crate::tls::ShimTlsVar;
-use crate::{global_host_shmem, global_process_shmem, tls_allow_native_syscalls, tls_thread_shmem};
+use crate::{global_host_shmem, tls_allow_native_syscalls, tls_process_shmem, tls_thread_shmem};
 
 /// Information passed through to the SIGUSR1 signal handler. Contains the info
 /// needed to call a managed code signal handler.
@@ -107,13 +107,13 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
     let mut restartable = true;
 
     loop {
-        let Some((sig, siginfo)) = global_process_shmem::with(|process| tls_thread_shmem::with(|thread| {
+        let Some((sig, siginfo)) = tls_process_shmem::with(|process| tls_thread_shmem::with(|thread| {
             shim_shmem::take_pending_unblocked_signal(&host_lock, process, thread)
         })) else {
             break;
         };
 
-        let action = global_process_shmem::with(|process| *unsafe {
+        let action = tls_process_shmem::with(|process| *unsafe {
             process.protected.borrow(&host_lock.root).signal_action(sig)
         });
 
@@ -156,7 +156,7 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
         });
 
         if action.flags_retain().contains(SigActionFlags::SA_RESETHAND) {
-            global_process_shmem::with(|process| {
+            tls_process_shmem::with(|process| {
                 // SAFETY: The handler (`SigDfl`) is sound.
                 unsafe {
                     *process
