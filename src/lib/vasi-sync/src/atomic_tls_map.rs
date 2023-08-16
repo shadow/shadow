@@ -1,7 +1,7 @@
-use crate::sync::{atomic, AtomicUsize, Cell, ConstPtr, UnsafeCell};
+use crate::sync::{atomic, AtomicUsize};
 
+use core::cell::RefCell;
 use core::hash::{BuildHasher, Hasher};
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::num::NonZeroUsize;
 use core::ops::Deref;
@@ -23,14 +23,10 @@ where
     H: BuildHasher,
 {
     keys: [AtomicOptionNonZeroUsize; N],
-    values: [UnsafeCell<MaybeUninit<V>>; N],
-    // This lets us enforce that a still-referenced key is not removed.
-    // TODO: Consider storing `RefCell<V>` in `values` instead. That'd be a bit
-    // more idiomatic, and is probably a better layout for cache performance.
-    refcounts: [Cell<usize>; N],
+    values: [RefCell<MaybeUninit<V>>; N],
     build_hasher: H,
 }
-/// Override default of `UnsafeCell`, `Cell`, and `V` not being `Sync`.  We
+/// Override default of `RefCell` and `V` not being `Sync`.  We
 /// synchronize access to these (if partly by requiring users to guarantee no
 /// parallel access to a given key from multiple threads).
 /// Likewise `V` only needs to be `Send`.
@@ -102,8 +98,7 @@ where
     pub fn new_with_hasher(build_hasher: H) -> Self {
         Self {
             keys: core::array::from_fn(|_| AtomicOptionNonZeroUsize::new(None)),
-            values: core::array::from_fn(|_| UnsafeCell::new(MaybeUninit::uninit())),
-            refcounts: core::array::from_fn(|_| Cell::new(0)),
+            values: core::array::from_fn(|_| RefCell::new(MaybeUninit::uninit())),
             build_hasher,
         }
     }
@@ -137,8 +132,8 @@ where
     pub unsafe fn get(&self, key: NonZeroUsize) -> Option<Ref<V>> {
         // SAFETY: Ensured by caller
         let idx = self.idx(key)?;
-        let ptr = self.values[idx].get();
-        Some(unsafe { Ref::new(ptr, &self.refcounts[idx]) })
+        let ptr = self.values[idx].try_borrow().expect("Can't borrow");
+        Some(unsafe { Ref::new(ptr) })
     }
 
     /// Insert `(key, value)`.
@@ -169,12 +164,20 @@ where
                     )
                     .is_ok()
             })
-            .unwrap();
-        self.values[idx].get_mut().with(|table_value| {
-            let table_value = unsafe { &mut *table_value };
-            table_value.write(value)
-        });
-        unsafe { Ref::new(self.values[idx].get(), &self.refcounts[idx]) }
+            .expect("Table is full");
+        self.values[idx]
+            .try_borrow_mut()
+            .expect("Can't borrow mutably")
+            .write(value);
+        // This borrow can only fail after the one above succeeded if another
+        // thread is unsoundly accessing this key.
+        unsafe {
+            Ref::new(
+                self.values[idx]
+                    .try_borrow()
+                    .expect("Unsound concurrent access"),
+            )
+        }
     }
 
     /// Retrieve the value associated with `key`, initializing it with `init` if `key`
@@ -204,15 +207,12 @@ where
     /// The value at `key`, if any, must have been inserted by the current thread.
     pub unsafe fn remove(&self, key: NonZeroUsize) -> Option<V> {
         let idx = self.idx(key)?;
-        assert_eq!(
-            self.refcounts[idx].get(),
-            0,
-            "Removed key while references still held: {key:?}"
-        );
-        let value = self.values[idx].get_mut().with(|value| {
-            let value = unsafe { &mut *value };
-            unsafe { value.assume_init_read() }
-        });
+        let value = unsafe {
+            self.values[idx]
+                .try_borrow_mut()
+                .expect("Removed key while references still held")
+                .assume_init_read()
+        };
 
         // Careful not to panic between `assume_init_read` above and the `store`
         // below; doing so would cause `value` to be dropped twice.
@@ -232,15 +232,16 @@ where
                 .swap(None, atomic::Ordering::Relaxed)
                 .is_some()
             {
-                self.values[idx].get_mut().with(|value| {
-                    assert_eq!(self.refcounts[idx].get(), 0);
-                    // SAFETY: Caller has guaranteed that we effectively have exclusive access
-                    // to `self`.
-                    let value = unsafe { &mut *value };
-                    // SAFETY: The `some` value for the key indicates that this value
-                    // is initialized.
-                    unsafe { value.assume_init_drop() }
-                })
+                // SAFETY: Caller has guaranteed that we effectively have exclusive access
+                // to `self`.
+                // SAFETY: The `some` value for the key indicates that this value
+                // is initialized.
+                unsafe {
+                    self.values[idx]
+                        .try_borrow_mut()
+                        .expect("Can't borrow mutably")
+                        .assume_init_drop()
+                };
             }
         }
     }
@@ -273,9 +274,7 @@ where
 }
 
 pub struct Ref<'a, V> {
-    ptr: ConstPtr<MaybeUninit<V>>,
-    refcount: &'a Cell<usize>,
-    _phantom: PhantomData<&'a V>,
+    ptr: core::cell::Ref<'a, MaybeUninit<V>>,
 }
 static_assertions::assert_not_impl_any!(Ref<'static, ()>: Send, Sync);
 
@@ -283,13 +282,8 @@ impl<'a, V> Ref<'a, V> {
     /// # Safety
     ///
     /// Current thread must be the only one to access `refcount`
-    unsafe fn new(ptr: ConstPtr<MaybeUninit<V>>, refcount: &'a Cell<usize>) -> Self {
-        refcount.set(refcount.get() + 1);
-        Self {
-            ptr,
-            refcount,
-            _phantom: PhantomData,
-        }
+    unsafe fn new(ptr: core::cell::Ref<'a, MaybeUninit<V>>) -> Self {
+        Self { ptr }
     }
 }
 
@@ -297,17 +291,9 @@ impl<'a, V> Deref for Ref<'a, V> {
     type Target = V;
 
     fn deref(&self) -> &Self::Target {
-        // SAFETY: The table ensures no mutable accesses to this value as long
-        // as `Ref`s exist.
-        let val = unsafe { self.ptr.deref() };
+        let val = self.ptr.deref();
         // SAFETY: The table ensures that the value is initialized before
         // constructing this `Ref`.
         unsafe { val.assume_init_ref() }
-    }
-}
-
-impl<'a, V> Drop for Ref<'a, V> {
-    fn drop(&mut self) {
-        self.refcount.set(self.refcount.get() - 1)
     }
 }
