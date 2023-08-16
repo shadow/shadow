@@ -224,9 +224,8 @@ mod tls_thread_shmem {
     });
 
     /// Panics if `set` hasn't been called yet.
-    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ThreadShmem>> + 'static
-    {
-        SHMEM.get()
+    pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
+        f(&SHMEM.get())
     }
 
     /// # Safety
@@ -236,7 +235,7 @@ mod tls_thread_shmem {
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
         assert!(INITIALIZER.get().replace(Some(*blk)).is_none());
         // Force initialization, for clearer debugging in case of failure.
-        get();
+        SHMEM.get();
     }
 }
 
@@ -613,9 +612,7 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_threadSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
-        let rv = tls_thread_shmem::get();
-        let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread = rv.deref();
-        rv as *const _
+        tls_thread_shmem::with(|thread| thread as *const _)
     }
 
     #[no_mangle]

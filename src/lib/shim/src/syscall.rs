@@ -125,7 +125,7 @@ unsafe fn emulated_syscall_event(
                         .sim_time
                         .load(atomic::Ordering::Relaxed)
                         - EmulatedTime::SIMULATION_START;
-                    let tid = tls_thread_shmem::get().tid;
+                    let tid = tls_thread_shmem::with(|thread| thread.tid);
                     let parts = TimeParts::from_nanos(emulated_time.as_nanos());
                     let mut buffer = FormatBuffer::<200>::new();
                     writeln!(
