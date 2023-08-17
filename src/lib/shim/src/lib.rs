@@ -89,31 +89,38 @@ mod tls_thread_signal_stack {
     /// This should be called once per thread before any signal handlers run.
     /// Panics if already called on the current thread.
     pub fn init() {
-        // Allocate
-        let new_stack = unsafe {
-            rustix::mm::mmap_anonymous(
-                core::ptr::null_mut(),
-                SHIM_SIGNAL_STACK_SIZE,
-                rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                rustix::mm::MapFlags::PRIVATE,
-            )
-        }
-        .unwrap();
-
-        // Save to thread-local, so that we can deallocate on thread exit
-        assert!(
-            THREAD_SIGNAL_STACK.get().replace(new_stack).is_null(),
-            "Allocated signal stack twice for current thread"
-        );
-
-        // Set up guard page
-        unsafe { rustix::mm::mprotect(new_stack, 4096, rustix::mm::MprotectFlags::empty()) }
+        if THREAD_SIGNAL_STACK.get().get().is_null() {
+            // Allocate
+            let new_stack = unsafe {
+                rustix::mm::mmap_anonymous(
+                    core::ptr::null_mut(),
+                    SHIM_SIGNAL_STACK_SIZE,
+                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                    rustix::mm::MapFlags::PRIVATE,
+                )
+            }
             .unwrap();
+
+            // Save to thread-local, so that we can deallocate on thread exit
+            assert!(
+                THREAD_SIGNAL_STACK.get().replace(new_stack).is_null(),
+                "Allocated signal stack twice for current thread"
+            );
+
+            // Set up guard page
+            unsafe { rustix::mm::mprotect(new_stack, 4096, rustix::mm::MprotectFlags::empty()) }
+                .unwrap();
+        } else {
+            // We get here after forking.
+            //
+            // We still have the signal stack allocated in the new process.
+            // We still need to install it though, below.
+        }
 
         // Install via `sigaltstack`. The kernel will switch to this stack when
         // invoking one of our signal handlers.
         let stack_descriptor = linux_api::signal::stack_t {
-            ss_sp: new_stack,
+            ss_sp: THREAD_SIGNAL_STACK.get().get(),
             ss_size: SHIM_SIGNAL_STACK_SIZE.try_into().unwrap(),
             // Clear the alternate stack settings on entry to signal handler, and
             // restore it on exit.  Otherwise a signal handler invoked while another
