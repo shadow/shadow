@@ -131,20 +131,29 @@ impl<'a> ThreadContextObjs<'a> {
     where
         F: FnOnce(&mut ThreadContext) -> R,
     {
-        // Avoid holding a borrow of process's thread list here, since
-        // handlers such as for `clone` may need to mutate it.
-        let process = self.host.process_borrow(self.pid).unwrap();
-        let process = process.borrow(self.host.root());
-        let threadrc = process
-            .thread_borrow(self.tid)
+        // Avoid holding a borrow of process and threads lists here, since
+        // handlers such as for `clone` may need to mutate them.
+
+        let processrc = self
+            .host
+            .process_borrow(self.pid)
             .unwrap()
             .clone(self.host.root());
         let res = {
-            let thread = threadrc.borrow(self.host.root());
-            let mut ctx = ThreadContext::new(self.host, &process, &thread);
-            f(&mut ctx)
+            let process = processrc.borrow(self.host.root());
+            let threadrc = process
+                .thread_borrow(self.tid)
+                .unwrap()
+                .clone(self.host.root());
+            let res = {
+                let thread = threadrc.borrow(self.host.root());
+                let mut ctx = ThreadContext::new(self.host, &process, &thread);
+                f(&mut ctx)
+            };
+            threadrc.explicit_drop(self.host.root());
+            res
         };
-        threadrc.explicit_drop(self.host.root());
+        processrc.explicit_drop(self.host.root());
         res
     }
 }
