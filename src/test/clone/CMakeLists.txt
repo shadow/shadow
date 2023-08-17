@@ -37,3 +37,6 @@ add_shadow_tests(
     # See https://github.com/shadow/shadow/issues/2919
     ARGS --strace-logging-mode=off
 )
+
+add_linux_tests(BASENAME fork COMMAND sh -c "../../target/debug/test_fork --libc-passing")
+add_shadow_tests(BASENAME fork)
