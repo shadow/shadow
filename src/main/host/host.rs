@@ -436,6 +436,23 @@ impl Host {
         self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
     }
 
+    pub fn add_and_schedule_forked_process(
+        &self,
+        host: &Host,
+        process: RootedRc<RootedRefCell<Process>>,
+    ) {
+        let (process_id, thread_id) = {
+            let process = process.borrow(&self.root);
+            (process.id(), process.thread_group_leader_id())
+        };
+        host.processes.borrow_mut().insert(process_id, process);
+        // Schedule process to run.
+        let task = TaskRef::new(move |host| {
+            host.resume(process_id, thread_id);
+        });
+        self.schedule_task_with_delay(task, SimulationTime::ZERO);
+    }
+
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
         let remove_process = {
             let Some(processrc) = self.process_borrow(pid) else {

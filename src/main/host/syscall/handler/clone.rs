@@ -43,10 +43,6 @@ impl SyscallHandler {
         // We use the managed-code provided newtls.
         let native_newtls = newtls;
 
-        if exit_signal.is_some() {
-            warn!("Exit signal is unimplemented");
-            return Err(Errno::ENOTSUP.into());
-        }
         // We use an i8 here because it needs to fit into the lowest 8 bits of
         // the flags parameter to the native clone call.
         let native_raw_exit_signal: i8 = 0;
@@ -64,6 +60,10 @@ impl SyscallHandler {
                 warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
                 return Err(Errno::ENOTSUP.into());
             }
+            if exit_signal.is_some() {
+                warn!("Exit signal is unimplemented");
+                return Err(Errno::ENOTSUP.into());
+            }
             // The native clone call will:
             // - create a thread.
             native_flags.insert(CloneFlags::CLONE_THREAD);
@@ -78,8 +78,12 @@ impl SyscallHandler {
 
             handled_flags.insert(CloneFlags::CLONE_THREAD);
         } else {
-            warn!("Failing clone: we don't support creating a new process (e.g. fork, vfork) yet");
-            return Err(Errno::ENOTSUP.into());
+            if ctx.objs.process.memory_borrow().has_mapper() {
+                warn!("Fork with memory mapper unimplemented");
+                return Err(Errno::ENOTSUP.into());
+            }
+            // Make shadow the parent process
+            native_flags.insert(CloneFlags::CLONE_PARENT);
         }
 
         if flags.contains(CloneFlags::CLONE_SIGHAND) {
@@ -173,14 +177,23 @@ impl SyscallHandler {
             child_tid,
         )?;
 
+        let childrc = RootedRc::new(
+            ctx.objs.host.root(),
+            RootedRefCell::new(ctx.objs.host.root(), child_thread),
+        );
+
         if flags.contains(CloneFlags::CLONE_THREAD) {
-            let childrc = RootedRc::new(
-                ctx.objs.host.root(),
-                RootedRefCell::new(ctx.objs.host.root(), child_thread),
-            );
             ctx.objs.process.add_thread(ctx.objs.host, childrc);
         } else {
-            unreachable!("Should have already bailed above");
+            let process = ctx
+                .objs
+                .process
+                .borrow_runnable()
+                .unwrap()
+                .new_forked_process(ctx.objs.host, childrc);
+            ctx.objs
+                .host
+                .add_and_schedule_forked_process(ctx.objs.host, process);
         }
 
         if do_parent_settid {
