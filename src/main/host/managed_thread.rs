@@ -3,6 +3,7 @@ use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
+use linux_api::sched::CloneFlags;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
@@ -294,17 +295,6 @@ impl ManagedThread {
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, linux_api::errno::Errno> {
         let child_ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
-        {
-            let child_ipc_shmem = child_ipc_shmem.clone();
-            WORKER_SHARED
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .child_pid_watcher()
-                .register_callback(self.native_pid(), move |_pid| {
-                    child_ipc_shmem.from_plugin().close_writer();
-                })
-        };
 
         // Send the IPC block for the new mthread to use.
         let clone_res: i64 = match self.continue_plugin(
@@ -337,12 +327,41 @@ impl ManagedThread {
             other => panic!("Unexpected result from shim: {other:?}"),
         };
 
+        let native_pid = if flags & CloneFlags::CLONE_THREAD.bits() == 0 {
+            nix::unistd::Pid::from_raw(child_native_tid)
+        } else {
+            self.native_pid
+        };
+
+        if flags & CloneFlags::CLONE_THREAD.bits() == 0 {
+            // Child is a new process; register it.
+            WORKER_SHARED
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .child_pid_watcher()
+                .register_pid(native_pid);
+        }
+
+        // Register the child thread's IPC block with the ChildPidWatcher.
+        {
+            let child_ipc_shmem = child_ipc_shmem.clone();
+            WORKER_SHARED
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .child_pid_watcher()
+                .register_callback(native_pid, move |_pid| {
+                    child_ipc_shmem.from_plugin().close_writer();
+                })
+        };
+
         Ok(Self {
             ipc_shmem: child_ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
             current_event: RefCell::new(start_req),
-            native_pid: self.native_pid,
+            native_pid,
             native_tid: nix::unistd::Pid::from_raw(child_native_tid),
             // TODO: can we assume it's inherited from the current thread affinity?
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
