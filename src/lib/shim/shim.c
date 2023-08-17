@@ -39,7 +39,7 @@ static void _shim_parent_init_logging() {
     shimlogger_install(level);
 }
 
-static void _shim_parent_init_death_signal() {
+static void _shim_init_death_signal() {
     // Ensure that the child process exits when Shadow does. This is to avoid
     // confusing behavior or a "stalled out" process in the case that Shadow
     // exits abnormally. Shadow normally ensures all managed processes have
@@ -143,7 +143,7 @@ void _shim_parent_init_preload() {
     _shim_parent_init_logging();
     _shim_parent_set_working_dir();
     _shim_init_signal_stack();
-    _shim_parent_init_death_signal();
+    _shim_init_death_signal();
     _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
@@ -151,12 +151,22 @@ void _shim_parent_init_preload() {
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
-void _shim_child_init_preload() {
+void _shim_child_thread_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
     _shim_preload_only_child_ipc_wait_for_start_event();
 
     _shim_init_signal_stack();
+
+    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+}
+
+void _shim_child_process_init_preload() {
+    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+
+    _shim_preload_only_child_ipc_wait_for_start_event();
+    _shim_init_signal_stack();
+    _shim_init_death_signal();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }

@@ -387,7 +387,7 @@ pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
 ///
 /// Uses C ABI so that we can call from `asm`.
 extern "C" fn init_thread() {
-    unsafe { bindings::_shim_child_init_preload() };
+    unsafe { bindings::_shim_child_thread_init_preload() };
     log::trace!("Finished shim thread init");
 }
 

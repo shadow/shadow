@@ -186,7 +186,7 @@ unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
             unsafe { crate::SHIM_TLS.fork_from(parent_tls_key) };
             // SAFETY: Shadow should give us the correct type and lifetime.
             unsafe { crate::tls_ipc::set(&event.ipc_block) };
-            crate::init_thread();
+            unsafe { crate::bindings::_shim_child_process_init_preload() };
             0
         }
         CloneResult::CallerIsParent(child) => child.as_raw_nonzero().get().into(),
