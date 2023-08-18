@@ -217,6 +217,28 @@ where
         self.keys[idx].store(None, atomic::Ordering::Release);
         Some(value)
     }
+
+    /// Resets metadata in the map to mark all entries vacant, without dropping
+    /// the values.
+    ///
+    /// Intended for use after `fork`, after which entries belonging to other threads
+    /// are not guaranteed to be in any consistent state (so can't be dropped), but
+    /// the threads owning those entries no longer exist in the child, so they *can*
+    /// be safely overwritten.
+    ///
+    /// # Safety
+    ///
+    /// Any outstanding references from `self` (e.g. obtained via Self::get)
+    /// must not be accessed *or dropped* again. e.g. references held by other
+    /// threads before `fork` are OK, since those threads do not exist in the
+    /// current process, and so will not access the child's copy of this table.
+    /// References that have been forgotten via `core::mem::forget` are also ok.
+    pub unsafe fn forget_all(&self) {
+        for idx in 0..N {
+            self.refcounts[idx].set(0);
+            self.keys[idx].store(None, atomic::Ordering::Release);
+        }
+    }
 }
 
 impl<const N: usize, V, H> AtomicTlsMap<N, V, H>
