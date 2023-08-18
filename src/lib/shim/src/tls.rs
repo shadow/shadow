@@ -170,14 +170,14 @@ static_assertions::assert_eq_align!(TlsOneThreadStorageAllocation, TlsOneThreadS
 static_assertions::assert_eq_size!(TlsOneThreadStorageAllocation, TlsOneThreadStorage);
 
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
-/// *live* threads. See [`unregister_and_exit_current_thread`].
+/// *live* threads. See [`ThreadLocalStorage::unregister_current_thread`].
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct ThreadLocalStorageKey(FastThreadId);
 
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
 /// *live* threads; in particular [`FastThreadId::ElfThreadPointer`] of a live
 /// thread can have the same value as a previously seen dead thread. See
-/// [`unregister_and_exit_current_thread`].
+/// [`ThreadLocalStorage::unregister_current_thread`].
 ///
 /// Internal implemenation of [`ThreadLocalStorageKey`]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
@@ -555,9 +555,10 @@ impl<'tls> lazy_lock::Producer<usize> for OffsetInitializer<'tls> {
 //
 // TODO: Consider changing API to only provide a `with` method instead of
 // allowing access to `'static` references. This would let us validate in
-// [`unregister_and_exit_current_thread`] that no variables are currently being accessed
-// and enforce that none are accessed afterwards, and potentially let us run
-// `Drop` impls (though I think we'd also need an allocator for the latter).
+// [`ThreadLocalStorage::unregister_current_thread`] that no variables are
+// currently being accessed and enforce that none are accessed afterwards, and
+// potentially let us run `Drop` impls (though I think we'd also need an
+// allocator for the latter).
 pub struct ShimTlsVar<'tls, T, F = fn() -> T>
 where
     F: Fn() -> T,
