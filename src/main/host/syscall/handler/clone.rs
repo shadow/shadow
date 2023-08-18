@@ -3,6 +3,7 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
 use log::{debug, trace, warn};
 use nix::sys::signal::Signal;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -80,6 +81,10 @@ impl SyscallHandler {
         } else {
             if ctx.objs.process.memory_borrow().has_mapper() {
                 warn!("Fork with memory mapper unimplemented");
+                return Err(Errno::ENOTSUP.into());
+            }
+            if flags.contains(CloneFlags::CLONE_VM) {
+                warn!("Fork with memory shared with parent unimplemented");
                 return Err(Errno::ENOTSUP.into());
             }
             // Make shadow the parent process
@@ -182,7 +187,13 @@ impl SyscallHandler {
             RootedRefCell::new(ctx.objs.host.root(), child_thread),
         );
 
+        let child_process_rc;
+        let child_process_borrow;
+        let child_process;
         if flags.contains(CloneFlags::CLONE_THREAD) {
+            child_process_rc = None;
+            child_process_borrow = None;
+            child_process = ctx.objs.process;
             ctx.objs.process.add_thread(ctx.objs.host, childrc);
         } else {
             let process = ctx
@@ -191,6 +202,14 @@ impl SyscallHandler {
                 .borrow_runnable()
                 .unwrap()
                 .new_forked_process(ctx.objs.host, childrc);
+            child_process_rc = Some(process.clone(ctx.objs.host.root()));
+            child_process_borrow = Some(
+                child_process_rc
+                    .as_ref()
+                    .unwrap()
+                    .borrow(ctx.objs.host.root()),
+            );
+            child_process = child_process_borrow.as_ref().unwrap();
             ctx.objs
                 .host
                 .add_and_schedule_forked_process(ctx.objs.host, process);
@@ -204,18 +223,21 @@ impl SyscallHandler {
         }
 
         if do_child_settid {
-            // FIXME: handle the case where child doesn't share virtual memory.
-            assert!(flags.contains(CloneFlags::CLONE_VM));
-            ctx.objs
-                .process
+            // Set the child thread id in the child's memory.
+            child_process
                 .memory_borrow_mut()
                 .write(ctid, &kernel_pid_t::from(child_tid))?;
         }
 
         if do_child_cleartid {
-            let childrc = ctx.objs.process.thread_borrow(child_tid).unwrap();
+            let childrc = child_process.thread_borrow(child_tid).unwrap();
             let child = childrc.borrow(ctx.objs.host.root());
             child.set_tid_address(ctid);
+        }
+
+        drop(child_process_borrow);
+        if let Some(c) = child_process_rc {
+            c.explicit_drop(ctx.objs.host.root())
         }
 
         Ok(kernel_pid_t::from(child_tid))
