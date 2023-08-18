@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -139,7 +140,7 @@ impl From<FileState> for c::Status {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum StateListenerFilter {
     Never,
     OffToOn,
@@ -359,6 +360,26 @@ impl File {
             Self::TimerFd(f) => Arc::as_ptr(f) as usize,
             Self::Epoll(f) => Arc::as_ptr(f) as usize,
         }
+    }
+}
+
+impl Eq for File {}
+
+impl PartialEq for File {
+    fn eq(&self, other: &Self) -> bool {
+        self.canonical_handle() == other.canonical_handle()
+    }
+}
+
+impl Ord for File {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.canonical_handle().cmp(&other.canonical_handle())
+    }
+}
+
+impl PartialOrd for File {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
