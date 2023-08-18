@@ -7,10 +7,12 @@
 mod sync;
 
 mod atomic_tls_map_tests {
+    use std::cell::RefCell;
     use std::num::NonZeroUsize;
 
     use super::sync;
 
+    use nix::sys::wait::WaitStatus;
     use vasi_sync::atomic_tls_map::AtomicTlsMap;
 
     #[test]
@@ -161,6 +163,53 @@ mod atomic_tls_map_tests {
                 sync::Arc::decrement_strong_count(value);
             };
         })
+    }
+
+    // Test `forget_all` with a real `fork`. More precisely replicates the intended
+    // use-case, but can't run under loom or miri.
+    #[cfg(all(not(miri), not(loom)))]
+    #[test]
+    fn test_forget_all_and_reuse_key_with_fork() {
+        let table = AtomicTlsMap::<10, RefCell<i32>>::new();
+        let key = NonZeroUsize::try_from(1).unwrap();
+
+        let value = unsafe { table.get_or_insert_with(key, || RefCell::new(1)) };
+
+        let fork_rv = unsafe { nix::unistd::fork() }.unwrap();
+        let child = match fork_rv {
+            nix::unistd::ForkResult::Parent { child } => child,
+            nix::unistd::ForkResult::Child => {
+                // Ensure we exit with non-zero exit code on panic.
+                std::panic::set_hook(Box::new(|info| {
+                    eprintln!("panic: {info:?}");
+                    unsafe { libc::exit(1) };
+                }));
+
+                // Parent thread doesn't exist in the child process.
+                // We can safely forget its entry.
+                unsafe { table.forget_all() };
+
+                // We can reuse the same key, which should store an entry in the same
+                // address still in use by the parent. But since our memory is copy-on-write
+                // copy, this will WAI.
+                let value = unsafe { table.get_or_insert_with(key, || RefCell::new(42)) };
+                assert_eq!(*value.borrow(), 42);
+
+                // Exit the child process
+                unsafe { libc::exit(0) };
+            }
+        };
+
+        // Intentionally "race" with the child.
+        assert_eq!(*value.borrow(), 1);
+        *value.borrow_mut() = 2;
+        assert_eq!(*value.borrow(), 2);
+
+        // Wait for child to exit, verifying it exited normally.
+        assert_eq!(
+            nix::sys::wait::waitpid(child, None),
+            Ok(WaitStatus::Exited(child, 0))
+        );
     }
 
     #[test]

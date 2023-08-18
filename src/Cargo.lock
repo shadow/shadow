@@ -1988,6 +1988,7 @@ dependencies = [
  "criterion",
  "libc",
  "loom",
+ "nix",
  "num_enum",
  "rand",
  "rustc-hash",

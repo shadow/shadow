@@ -16,6 +16,8 @@ rustc-hash = { version = "1.1.0", default-features=false }
 criterion = "0.5.1"
 rand = "0.8.5"
 rustix = { version = "0.38.4", default-features = false, features=["process"] }
+libc = "0.2"
+nix =  "0.26.2"
 
 [target.'cfg(loom)'.dependencies]
 loom = { version = "0.7", features = ["checkpoint"] }
