@@ -8,7 +8,7 @@ use rustix::fd::BorrowedFd;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::option::FfiOption;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadParentRes, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
+    ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
     ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{SysCallArgs, SysCallReg};
@@ -162,9 +162,10 @@ unsafe fn emulated_syscall_event(
 
                 let clone_res = unsafe { crate::clone::do_clone(ctx.as_mut().unwrap(), &r) };
                 tls_ipc::with(|ipc| {
-                    ipc.to_shadow().send(ShimEventToShadow::AddThreadParentRes(
-                        ShimEventAddThreadParentRes { clone_res },
-                    ))
+                    ipc.to_shadow()
+                        .send(ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes {
+                            clone_res,
+                        }))
                 })
             }
             e @ ShimEventToShim::StartRes => {

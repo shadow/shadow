@@ -10,7 +10,7 @@ use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadParentRes, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
+    ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
     ShimEventToShadow, ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
@@ -253,8 +253,22 @@ impl ManagedThread {
                         }
                     }
                 }
-                e @ ShimEventToShadow::SyscallComplete(_)
-                | e @ ShimEventToShadow::AddThreadParentRes(_) => panic!("Unexpected event: {e:?}"),
+                ShimEventToShadow::AddThreadRes(res) => {
+                    // We get here in the child process after forking.
+
+                    // Child should have gotten 0 back from its native clone syscall.
+                    assert_eq!(res.clone_res, 0);
+
+                    // Complete the virtualized clone syscall.
+                    self.continue_plugin(
+                        ctx.host,
+                        &ShimEventToShim::SyscallComplete(ShimEventSyscallComplete {
+                            retval: 0.into(),
+                            restartable: false,
+                        }),
+                    )
+                }
+                e @ ShimEventToShadow::SyscallComplete(_) => panic!("Unexpected event: {e:?}"),
             };
             assert!(self.is_running());
         }
@@ -308,9 +322,7 @@ impl ManagedThread {
                 newtls,
             }),
         ) {
-            ShimEventToShadow::AddThreadParentRes(ShimEventAddThreadParentRes { clone_res }) => {
-                clone_res
-            }
+            ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes { clone_res }) => clone_res,
             r => panic!("Unexpected result: {r:?}"),
         };
         let clone_res: SysCallReg = syscall::raw_return_value_to_result(clone_res)?;
