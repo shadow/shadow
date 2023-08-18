@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let libc_only = set![TestEnv::Libc];
 
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> =
-        vec![ShadowTest::new("fork_runs", test_fork, libc_only.clone())];
+        vec![ShadowTest::new("fork_runs", test_fork, all_envs.clone())];
 
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.

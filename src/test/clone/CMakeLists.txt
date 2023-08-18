@@ -39,4 +39,7 @@ add_shadow_tests(
 )
 
 add_linux_tests(BASENAME fork COMMAND sh -c "../../target/debug/test_fork --libc-passing")
-add_shadow_tests(BASENAME fork)
+add_shadow_tests(
+    BASENAME fork
+    # The memory mapper is not currently supported with fork
+    ARGS --use-memory-manager=false)
