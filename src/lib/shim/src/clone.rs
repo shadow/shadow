@@ -119,9 +119,9 @@ unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
     crate::tls_allow_native_syscalls::swap(prev);
 }
 
-/// Execute a native `clone` syscall. The newly created child thread will
-/// resume execution from `ctx`, which should be the point where the managed
-/// code originally made a `clone` syscall (but was intercepted by seccomp).
+/// Execute a native `clone` syscall to create a new thread in a new process.
+///
+/// This function returns in both the parent and the child.
 ///
 /// # Safety
 ///
@@ -130,68 +130,88 @@ unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
-pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
+unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
     let flags = CloneFlags::from_bits(event.flags).unwrap();
+    assert!(!flags.contains(CloneFlags::CLONE_THREAD));
     let ptid: *mut i32 = event.ptid.cast::<i32>().into_raw_mut();
     let ctid: *mut i32 = event.ctid.cast::<i32>().into_raw_mut();
     let child_stack: *mut u8 = event.child_stack.cast::<u8>().into_raw_mut();
     let newtls = event.newtls;
 
-    if !flags.contains(CloneFlags::CLONE_THREAD) {
-        if !child_stack.is_null() {
-            // Don't know of a real-world need for this, but shouldn't be
-            // difficult to implement if needed.
-            unimplemented!("fork with new stack");
-        }
-        if flags.contains(CloneFlags::CLONE_VM) {
-            // Don't know of a real-world need for this.
-            unimplemented!("fork with shared memory");
-        }
-        if flags.contains(CloneFlags::CLONE_VFORK) {
-            // We want to support this eventually, but will take some work.
-            unimplemented!("vfork");
-        }
-        if flags.contains(CloneFlags::CLONE_SETTLS) {
-            // In particular we don't correctly handle the case where the parent
-            // thread is using `tls::Mode::Native`, but the child thread is
-            // unable to.
-            //
-            // We could try to detect that more specific case and/or correctly
-            // handle it, but I don't think this is likely to be needed.
-            unimplemented!("CLONE_SETTLS without CLONE_THREAD");
-        }
-
-        // The shadow Process should be the parent; not this process.
-        assert!(flags.contains(CloneFlags::CLONE_PARENT));
-
-        let parent_tls_key = crate::SHIM_TLS.current_key();
-
-        let res = match unsafe {
-            linux_api::sched::clone(
-                flags,
-                Some(Signal::SIGCHLD),
-                child_stack.cast(),
-                ptid,
-                ctid,
-                newtls as *mut linux_user_desc,
-            )
-        } {
-            Ok(r) => r,
-            Err(e) => return e.to_negated_i64(),
-        };
-        return match res {
-            CloneResult::CallerIsChild => {
-                // SAFETY: We have exclusive access to SHIM_TLS: this is the only thread
-                // in the new process, and we're not sharing memory with the parent process.
-                unsafe { crate::SHIM_TLS.fork_from(parent_tls_key) };
-                // SAFETY: Shadow should give us the correct type and lifetime.
-                unsafe { crate::tls_ipc::set(&event.ipc_block) };
-                crate::init_thread();
-                0
-            }
-            CloneResult::CallerIsParent(child) => child.as_raw_nonzero().get().into(),
-        };
+    if !child_stack.is_null() {
+        // Don't know of a real-world need for this, but shouldn't be
+        // difficult to implement if needed.
+        unimplemented!("fork with new stack");
     }
+    if flags.contains(CloneFlags::CLONE_VM) {
+        // Don't know of a real-world need for this.
+        unimplemented!("fork with shared memory");
+    }
+    if flags.contains(CloneFlags::CLONE_VFORK) {
+        // We want to support this eventually, but will take some work.
+        unimplemented!("vfork");
+    }
+    if flags.contains(CloneFlags::CLONE_SETTLS) {
+        // In particular we don't correctly handle the case where the parent
+        // thread is using `tls::Mode::Native`, but the child thread is
+        // unable to.
+        //
+        // We could try to detect that more specific case and/or correctly
+        // handle it, but I don't think this is likely to be needed.
+        unimplemented!("CLONE_SETTLS without CLONE_THREAD");
+    }
+
+    // The shadow Process should be the parent; not this process.
+    assert!(flags.contains(CloneFlags::CLONE_PARENT));
+
+    let parent_tls_key = crate::SHIM_TLS.current_key();
+
+    let res = match unsafe {
+        linux_api::sched::clone(
+            flags,
+            Some(Signal::SIGCHLD),
+            child_stack.cast(),
+            ptid,
+            ctid,
+            newtls as *mut linux_user_desc,
+        )
+    } {
+        Ok(r) => r,
+        Err(e) => return e.to_negated_i64(),
+    };
+    match res {
+        CloneResult::CallerIsChild => {
+            // SAFETY: We have exclusive access to SHIM_TLS: this is the only thread
+            // in the new process, and we're not sharing memory with the parent process.
+            unsafe { crate::SHIM_TLS.fork_from(parent_tls_key) };
+            // SAFETY: Shadow should give us the correct type and lifetime.
+            unsafe { crate::tls_ipc::set(&event.ipc_block) };
+            crate::init_thread();
+            0
+        }
+        CloneResult::CallerIsParent(child) => child.as_raw_nonzero().get().into(),
+    }
+}
+
+/// Execute a native `clone` syscall to create a new thread.  The newly created
+/// child thread will resume execution from `ctx`, which should be the point
+/// where the managed code originally made a `clone` syscall (but was
+/// intercepted by seccomp).
+///
+/// # Safety
+///
+/// * `ctx` must be dereferenceable, and must be safe for the newly spawned
+/// child thread to restore.
+/// * Other pointers, if non-null, must be safely dereferenceable.
+/// * `child_stack` must be "sufficiently big" for the child thread to run on.
+/// * `tls` if provided must point to correctly initialized thread local storage.
+unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
+    let flags = CloneFlags::from_bits(event.flags).unwrap();
+    assert!(flags.contains(CloneFlags::CLONE_THREAD));
+    let ptid: *mut i32 = event.ptid.cast::<i32>().into_raw_mut();
+    let ctid: *mut i32 = event.ctid.cast::<i32>().into_raw_mut();
+    let child_stack: *mut u8 = event.child_stack.cast::<u8>().into_raw_mut();
+    let newtls = event.newtls;
 
     assert!(
         !child_stack.is_null(),
@@ -292,4 +312,30 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
         )
     }
     rv
+}
+
+/// Execute a native `clone` syscall, creating a new thread, which may be in
+/// a new process (depending whether CLONE_THREAD is set).
+///
+/// If CLONE_THREAD is set, then the newly created child thread will resume
+/// execution from `ctx`, which should be the point where the managed code
+/// originally made a `clone` syscall (but was intercepted by seccomp).
+/// Otherwise this function will return normally in both the parent and child
+/// processes.
+///
+/// # Safety
+///
+/// * `ctx` must be dereferenceable, and must be safe for the newly spawned
+/// child thread to restore.
+/// * Other pointers, if non-null, must be safely dereferenceable.
+/// * `child_stack` must be "sufficiently big" for the child thread to run on.
+/// * `tls` if provided must point to correctly initialized thread local storage.
+pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
+    let flags = CloneFlags::from_bits(event.flags).unwrap();
+
+    if flags.contains(CloneFlags::CLONE_THREAD) {
+        unsafe { do_clone_thread(ctx, event) }
+    } else {
+        unsafe { do_clone_process(event) }
+    }
 }
