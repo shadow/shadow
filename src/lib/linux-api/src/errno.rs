@@ -203,6 +203,7 @@ const fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::ESRCH => Some("ESRCH"),
         Errno::ENOENT => Some("ENOENT"),
         Errno::ENOTTY => Some("ENOTTY"),
+        Errno::EEXIST => Some("EEXIST"),
         _ => None,
     }
 }
@@ -338,6 +339,7 @@ impl Errno {
     pub const ESRCH: Self = Self::from_u32_const(bindings::LINUX_ESRCH);
     pub const ENOENT: Self = Self::from_u32_const(bindings::LINUX_ENOENT);
     pub const ENOTTY: Self = Self::from_u32_const(bindings::LINUX_ENOTTY);
+    pub const EEXIST: Self = Self::from_u32_const(bindings::LINUX_EEXIST);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);

@@ -51,6 +51,7 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod epoll;
 pub mod errno;
 pub mod exit;
 pub mod fcntl;
