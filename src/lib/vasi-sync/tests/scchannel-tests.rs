@@ -32,7 +32,6 @@ mod scchannel_tests {
                 })
             };
             let reader = {
-                let channel = channel.clone();
                 sync::thread::spawn(move || channel.receive())
             };
             writer.join().unwrap();
@@ -100,7 +99,6 @@ mod scchannel_tests {
             // Simulate a separate watchdog thread that detects that the writer process
             // has exited, and closes the channel in parallel with the other operations.
             let watchdog = {
-                let channel = channel.clone();
                 sync::thread::spawn(move || channel.close_writer())
             };
             let res = reader.join().unwrap();
