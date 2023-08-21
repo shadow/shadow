@@ -815,7 +815,7 @@ mod test {
                         my_i16.get().store(i as i16, atomic::Ordering::Relaxed);
 
                         assert_eq!(my_i16.get().load(atomic::Ordering::Relaxed), i as i16);
-                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), { i });
+                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), i);
                         assert_eq!(my_i8.get().load(atomic::Ordering::Relaxed), i as i8);
                         unsafe { tls.unregister_current_thread() };
                     })
