@@ -181,7 +181,7 @@ mod export {
         if pcap.is_null() {
             return;
         }
-        unsafe { Box::from_raw(pcap) };
+        drop(unsafe { Box::from_raw(pcap) });
     }
 
     /// If there's an error, returns 1. Otherwise returns 0. If there's an error, the pcap file is

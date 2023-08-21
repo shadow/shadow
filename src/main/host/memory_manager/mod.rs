@@ -838,7 +838,7 @@ mod export {
 
     #[no_mangle]
     pub unsafe extern "C" fn memorymanager_freeRef(memory_ref: *mut ProcessMemoryRef<'_, u8>) {
-        unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) };
+        drop(unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) });
     }
 
     #[no_mangle]

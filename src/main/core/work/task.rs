@@ -268,6 +268,6 @@ pub mod export {
     /// `task` must be legally dereferencable.
     #[no_mangle]
     pub unsafe extern "C" fn taskref_drop(task: *mut TaskRef) {
-        unsafe { Box::from_raw(notnull_mut(task)) };
+        drop(unsafe { Box::from_raw(notnull_mut(task)) });
     }
 }

@@ -910,7 +910,7 @@ mod export {
     pub extern "C" fn openfile_drop(file: *const OpenFile) {
         assert!(!file.is_null());
 
-        unsafe { Box::from_raw(file as *mut OpenFile) };
+        drop(unsafe { Box::from_raw(file as *mut OpenFile) });
     }
 
     /// Get the state of the `OpenFile` object.
@@ -989,7 +989,7 @@ mod export {
     pub extern "C" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
-        unsafe { Box::from_raw(file as *mut File) };
+        drop(unsafe { Box::from_raw(file as *mut File) });
     }
 
     /// Increment the ref count of the `File` object. The returned pointer will not be the same as
@@ -1059,7 +1059,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
         assert!(!event_source.is_null());
-        unsafe { Box::from_raw(event_source) };
+        drop(unsafe { Box::from_raw(event_source) });
     }
 
     #[no_mangle]
