@@ -83,8 +83,8 @@ impl Latch {
                 libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
                 // the man page says to use INT_MAX, even though this is a uint32_t
                 i32::MAX,
-                std::ptr::null() as *const libc::timespec,
-                std::ptr::null_mut() as *mut u32,
+                std::ptr::null::<libc::timespec>(),
+                std::ptr::null_mut::<u32>(),
                 0u32,
             )
         };
@@ -122,8 +122,8 @@ impl LatchWaiter {
                         futex_word.as_ptr(),
                         libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
                         latch_gen,
-                        std::ptr::null() as *const libc::timespec,
-                        std::ptr::null_mut() as *mut u32,
+                        std::ptr::null::<libc::timespec>(),
+                        std::ptr::null_mut::<u32>(),
                         0u32,
                     )
                 });

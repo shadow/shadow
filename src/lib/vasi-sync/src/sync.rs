@@ -70,8 +70,8 @@ unsafe fn futex(
                 futex_operation,
                 rustix::thread::FutexFlags::empty(),
                 val,
-                core::ptr::null() as *const rustix::fs::Timespec,
-                core::ptr::null_mut() as *mut u32,
+                core::ptr::null(),
+                core::ptr::null_mut(),
                 0u32,
             )
         }

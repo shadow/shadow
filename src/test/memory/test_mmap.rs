@@ -263,7 +263,7 @@ fn test_mremap_clobber() -> Result<(), Box<dyn Error>> {
     let smolbuf = mmap_and_init_buf(page_size());
 
     // mremap smolbuf into the middle of bigbuf, clobbering it.
-    let req_new_address = unsafe { bigbuf.add(page_size()) as *mut libc::c_void };
+    let req_new_address = unsafe { bigbuf.add(page_size()) };
     let actual_new_address = unsafe {
         libc::mremap(
             smolbuf,
