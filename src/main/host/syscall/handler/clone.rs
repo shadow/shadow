@@ -44,10 +44,6 @@ impl SyscallHandler {
         // We use the managed-code provided newtls.
         let native_newtls = newtls;
 
-        // We use an i8 here because it needs to fit into the lowest 8 bits of
-        // the flags parameter to the native clone call.
-        let native_raw_exit_signal: i8 = 0;
-
         if flags.contains(CloneFlags::CLONE_THREAD) {
             // From clone(2):
             // > Since Linux 2.5.35, the flags mask must also include
@@ -160,7 +156,7 @@ impl SyscallHandler {
 
         let child_mthread = ctx.objs.thread.mthread().native_clone(
             ctx.objs,
-            native_flags.bits() | (native_raw_exit_signal as u64),
+            native_flags,
             native_child_stack,
             native_ptid,
             native_ctid,

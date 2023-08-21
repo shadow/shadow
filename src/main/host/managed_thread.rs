@@ -302,7 +302,7 @@ impl ManagedThread {
     pub fn native_clone(
         &self,
         ctx: &ThreadContext,
-        flags: libc::c_ulong,
+        flags: CloneFlags,
         child_stack: ForeignPtr<()>,
         ptid: ForeignPtr<libc::pid_t>,
         ctid: ForeignPtr<libc::pid_t>,
@@ -315,7 +315,7 @@ impl ManagedThread {
             ctx.host,
             &ShimEventToShim::AddThreadReq(ShimEventAddThreadReq {
                 ipc_block: child_ipc_shmem.serialize(),
-                flags,
+                flags: flags.bits(),
                 child_stack,
                 ptid: ptid.cast::<()>(),
                 ctid: ctid.cast::<()>(),
@@ -339,13 +339,13 @@ impl ManagedThread {
             other => panic!("Unexpected result from shim: {other:?}"),
         };
 
-        let native_pid = if flags & CloneFlags::CLONE_THREAD.bits() == 0 {
-            nix::unistd::Pid::from_raw(child_native_tid)
-        } else {
+        let native_pid = if flags.contains(CloneFlags::CLONE_THREAD) {
             self.native_pid
+        } else {
+            nix::unistd::Pid::from_raw(child_native_tid)
         };
 
-        if flags & CloneFlags::CLONE_THREAD.bits() == 0 {
+        if !flags.contains(CloneFlags::CLONE_THREAD) {
             // Child is a new process; register it.
             WORKER_SHARED
                 .borrow()
