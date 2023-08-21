@@ -518,7 +518,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocket_drop(socket: *const InetSocket) {
         assert!(!socket.is_null());
-        unsafe { Box::from_raw(socket.cast_mut()) };
+        drop(unsafe { Box::from_raw(socket.cast_mut()) });
     }
 
     /// Helper for GLib functions that take a `TaskObjectFreeFunc`. See [`inetsocket_drop`].
@@ -626,7 +626,7 @@ mod export {
     #[no_mangle]
     pub extern "C" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
         assert!(!socket.is_null());
-        unsafe { Box::from_raw(socket) };
+        drop(unsafe { Box::from_raw(socket) });
     }
 
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong

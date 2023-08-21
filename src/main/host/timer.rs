@@ -229,7 +229,7 @@ pub mod export {
     /// `timer` must be safely dereferenceable. Consumes `timer`.
     #[no_mangle]
     pub unsafe extern "C" fn timer_drop(timer: *mut Timer) {
-        unsafe { Box::from_raw(timer) };
+        drop(unsafe { Box::from_raw(timer) });
     }
 
     /// # Safety

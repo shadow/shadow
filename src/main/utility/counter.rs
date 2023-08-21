@@ -218,7 +218,7 @@ mod export {
         if counter_ptr.is_null() {
             return;
         }
-        unsafe { Box::from_raw(counter_ptr) };
+        drop(unsafe { Box::from_raw(counter_ptr) });
     }
 
     #[no_mangle]
@@ -306,7 +306,7 @@ mod export {
         assert!(!counter.is_null());
         assert!(!ptr.is_null());
         // Free the previously alloc'd string
-        unsafe { CString::from_raw(ptr) };
+        drop(unsafe { CString::from_raw(ptr) });
     }
 }
 
