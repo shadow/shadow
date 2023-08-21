@@ -428,8 +428,8 @@ mod tests {
             }
 
             // Then check all blocks
-            for idx in 0..marked_blocks.len() {
-                assert_eq!(marked_blocks[idx].0, *marked_blocks[idx].1);
+            for block in &marked_blocks {
+                assert_eq!(block.0, *block.1);
             }
         };
 

@@ -743,8 +743,8 @@ mod tests {
         const NUM_ITER: usize = 10;
 
         // pop more bytes and chunks than we push so that we generally stay near an empty queue
-        assert!(PROB_POP > PROB_PUSH);
-        assert!(MAX_POP > MAX_PUSH);
+        static_assertions::const_assert!(PROB_POP > PROB_PUSH);
+        static_assertions::const_assert!(MAX_POP > MAX_PUSH);
 
         let mut bq = ByteQueue::new(10);
 

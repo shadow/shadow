@@ -84,14 +84,14 @@ mod atomic_tls_map_tests {
 
                 assert_eq!(
                     table
-                        .get(NonZeroUsize::try_from(NonZeroUsize::try_from(1).unwrap()).unwrap())
+                        .get(NonZeroUsize::try_from(1).unwrap())
                         .as_deref()
                         .copied(),
                     None
                 );
                 assert_eq!(
                     table
-                        .get(NonZeroUsize::try_from(NonZeroUsize::try_from(2).unwrap()).unwrap())
+                        .get(NonZeroUsize::try_from(2).unwrap())
                         .as_deref()
                         .copied(),
                     Some(12)
