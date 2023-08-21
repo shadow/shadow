@@ -3,13 +3,14 @@ use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
 use std::sync::{atomic, Arc};
 
+use linux_api::sched::CloneFlags;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadParentRes, ShimEventAddThreadReq, ShimEventSyscall, ShimEventSyscallComplete,
+    ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
     ShimEventToShadow, ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
@@ -252,8 +253,22 @@ impl ManagedThread {
                         }
                     }
                 }
-                e @ ShimEventToShadow::SyscallComplete(_)
-                | e @ ShimEventToShadow::AddThreadParentRes(_) => panic!("Unexpected event: {e:?}"),
+                ShimEventToShadow::AddThreadRes(res) => {
+                    // We get here in the child process after forking.
+
+                    // Child should have gotten 0 back from its native clone syscall.
+                    assert_eq!(res.clone_res, 0);
+
+                    // Complete the virtualized clone syscall.
+                    self.continue_plugin(
+                        ctx.host,
+                        &ShimEventToShim::SyscallComplete(ShimEventSyscallComplete {
+                            retval: 0.into(),
+                            restartable: false,
+                        }),
+                    )
+                }
+                e @ ShimEventToShadow::SyscallComplete(_) => panic!("Unexpected event: {e:?}"),
             };
             assert!(self.is_running());
         }
@@ -287,40 +302,27 @@ impl ManagedThread {
     pub fn native_clone(
         &self,
         ctx: &ThreadContext,
-        flags: libc::c_ulong,
+        flags: CloneFlags,
         child_stack: ForeignPtr<()>,
         ptid: ForeignPtr<libc::pid_t>,
         ctid: ForeignPtr<libc::pid_t>,
         newtls: libc::c_ulong,
     ) -> Result<ManagedThread, linux_api::errno::Errno> {
         let child_ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
-        {
-            let child_ipc_shmem = child_ipc_shmem.clone();
-            WORKER_SHARED
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .child_pid_watcher()
-                .register_callback(self.native_pid(), move |_pid| {
-                    child_ipc_shmem.from_plugin().close_writer();
-                })
-        };
 
         // Send the IPC block for the new mthread to use.
         let clone_res: i64 = match self.continue_plugin(
             ctx.host,
             &ShimEventToShim::AddThreadReq(ShimEventAddThreadReq {
                 ipc_block: child_ipc_shmem.serialize(),
-                flags,
+                flags: flags.bits(),
                 child_stack,
                 ptid: ptid.cast::<()>(),
                 ctid: ctid.cast::<()>(),
                 newtls,
             }),
         ) {
-            ShimEventToShadow::AddThreadParentRes(ShimEventAddThreadParentRes { clone_res }) => {
-                clone_res
-            }
+            ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes { clone_res }) => clone_res,
             r => panic!("Unexpected result: {r:?}"),
         };
         let clone_res: SysCallReg = syscall::raw_return_value_to_result(clone_res)?;
@@ -337,12 +339,41 @@ impl ManagedThread {
             other => panic!("Unexpected result from shim: {other:?}"),
         };
 
+        let native_pid = if flags.contains(CloneFlags::CLONE_THREAD) {
+            self.native_pid
+        } else {
+            nix::unistd::Pid::from_raw(child_native_tid)
+        };
+
+        if !flags.contains(CloneFlags::CLONE_THREAD) {
+            // Child is a new process; register it.
+            WORKER_SHARED
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .child_pid_watcher()
+                .register_pid(native_pid);
+        }
+
+        // Register the child thread's IPC block with the ChildPidWatcher.
+        {
+            let child_ipc_shmem = child_ipc_shmem.clone();
+            WORKER_SHARED
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .child_pid_watcher()
+                .register_callback(native_pid, move |_pid| {
+                    child_ipc_shmem.from_plugin().close_writer();
+                })
+        };
+
         Ok(Self {
             ipc_shmem: child_ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
             current_event: RefCell::new(start_req),
-            native_pid: self.native_pid,
+            native_pid,
             native_tid: nix::unistd::Pid::from_raw(child_native_tid),
             // TODO: can we assume it's inherited from the current thread affinity?
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),

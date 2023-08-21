@@ -721,6 +721,13 @@ Examples:
 - `{signaled: 9}`
 - `running`
 
+Only processes started directly from the configuration have an
+`expected_final_state`. Processes that *those* processes start (e.g. via `fork`
+in C, or running an executable in a shell script) don't have one. Generally it's
+the parent process's responsibility to do any necessary validation of the exit
+status of its children (e.g. via `waitpid` in C, or checking `$?` in a bash
+script).
+
 #### `hosts.<hostname>.processes[*].path`
 
 *Required*  

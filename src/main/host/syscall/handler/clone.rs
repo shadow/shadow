@@ -3,6 +3,7 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
 use log::{debug, trace, warn};
 use nix::sys::signal::Signal;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -43,14 +44,6 @@ impl SyscallHandler {
         // We use the managed-code provided newtls.
         let native_newtls = newtls;
 
-        if exit_signal.is_some() {
-            warn!("Exit signal is unimplemented");
-            return Err(Errno::ENOTSUP.into());
-        }
-        // We use an i8 here because it needs to fit into the lowest 8 bits of
-        // the flags parameter to the native clone call.
-        let native_raw_exit_signal: i8 = 0;
-
         if flags.contains(CloneFlags::CLONE_THREAD) {
             // From clone(2):
             // > Since Linux 2.5.35, the flags mask must also include
@@ -62,6 +55,10 @@ impl SyscallHandler {
             if !flags.contains(CloneFlags::CLONE_SETTLS) {
                 // Legal in Linux, but the shim will be broken and behave unpredictably.
                 warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
+                return Err(Errno::ENOTSUP.into());
+            }
+            if exit_signal.is_some() {
+                warn!("Exit signal is unimplemented");
                 return Err(Errno::ENOTSUP.into());
             }
             // The native clone call will:
@@ -78,8 +75,16 @@ impl SyscallHandler {
 
             handled_flags.insert(CloneFlags::CLONE_THREAD);
         } else {
-            warn!("Failing clone: we don't support creating a new process (e.g. fork, vfork) yet");
-            return Err(Errno::ENOTSUP.into());
+            if ctx.objs.process.memory_borrow().has_mapper() {
+                warn!("Fork with memory mapper unimplemented");
+                return Err(Errno::ENOTSUP.into());
+            }
+            if flags.contains(CloneFlags::CLONE_VM) {
+                warn!("Fork with memory shared with parent unimplemented");
+                return Err(Errno::ENOTSUP.into());
+            }
+            // Make shadow the parent process
+            native_flags.insert(CloneFlags::CLONE_PARENT);
         }
 
         if flags.contains(CloneFlags::CLONE_SIGHAND) {
@@ -151,7 +156,7 @@ impl SyscallHandler {
 
         let child_mthread = ctx.objs.thread.mthread().native_clone(
             ctx.objs,
-            native_flags.bits() | (native_raw_exit_signal as u64),
+            native_flags,
             native_child_stack,
             native_ptid,
             native_ctid,
@@ -173,14 +178,37 @@ impl SyscallHandler {
             child_tid,
         )?;
 
+        let childrc = RootedRc::new(
+            ctx.objs.host.root(),
+            RootedRefCell::new(ctx.objs.host.root(), child_thread),
+        );
+
+        let child_process_rc;
+        let child_process_borrow;
+        let child_process;
         if flags.contains(CloneFlags::CLONE_THREAD) {
-            let childrc = RootedRc::new(
-                ctx.objs.host.root(),
-                RootedRefCell::new(ctx.objs.host.root(), child_thread),
-            );
+            child_process_rc = None;
+            child_process_borrow = None;
+            child_process = ctx.objs.process;
             ctx.objs.process.add_thread(ctx.objs.host, childrc);
         } else {
-            unreachable!("Should have already bailed above");
+            let process = ctx
+                .objs
+                .process
+                .borrow_runnable()
+                .unwrap()
+                .new_forked_process(ctx.objs.host, childrc);
+            child_process_rc = Some(process.clone(ctx.objs.host.root()));
+            child_process_borrow = Some(
+                child_process_rc
+                    .as_ref()
+                    .unwrap()
+                    .borrow(ctx.objs.host.root()),
+            );
+            child_process = child_process_borrow.as_ref().unwrap();
+            ctx.objs
+                .host
+                .add_and_schedule_forked_process(ctx.objs.host, process);
         }
 
         if do_parent_settid {
@@ -191,18 +219,21 @@ impl SyscallHandler {
         }
 
         if do_child_settid {
-            // FIXME: handle the case where child doesn't share virtual memory.
-            assert!(flags.contains(CloneFlags::CLONE_VM));
-            ctx.objs
-                .process
+            // Set the child thread id in the child's memory.
+            child_process
                 .memory_borrow_mut()
                 .write(ctid, &kernel_pid_t::from(child_tid))?;
         }
 
         if do_child_cleartid {
-            let childrc = ctx.objs.process.thread_borrow(child_tid).unwrap();
+            let childrc = child_process.thread_borrow(child_tid).unwrap();
             let child = childrc.borrow(ctx.objs.host.root());
             child.set_tid_address(ctid);
+        }
+
+        drop(child_process_borrow);
+        if let Some(c) = child_process_rc {
+            c.explicit_drop(ctx.objs.host.root())
         }
 
         Ok(kernel_pid_t::from(child_tid))

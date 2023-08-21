@@ -436,18 +436,36 @@ impl Host {
         self.schedule_task_at_emulated_time(task, EmulatedTime::SIMULATION_START + start_time);
     }
 
+    pub fn add_and_schedule_forked_process(
+        &self,
+        host: &Host,
+        process: RootedRc<RootedRefCell<Process>>,
+    ) {
+        let (process_id, thread_id) = {
+            let process = process.borrow(&self.root);
+            (process.id(), process.thread_group_leader_id())
+        };
+        host.processes.borrow_mut().insert(process_id, process);
+        // Schedule process to run.
+        let task = TaskRef::new(move |host| {
+            host.resume(process_id, thread_id);
+        });
+        self.schedule_task_with_delay(task, SimulationTime::ZERO);
+    }
+
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
+        let Some(processrc) = self.process_borrow(pid).map(|p| RootedRc::clone(&p, &self.root)) else {
+            trace!("{pid:?} doesn't exist");
+            return;
+        };
         let remove_process = {
-            let Some(processrc) = self.process_borrow(pid) else {
-                trace!("{pid:?} doesn't exist");
-                return;
-            };
             Worker::set_active_process(&processrc);
             let process = processrc.borrow(self.root());
             process.resume(self, tid);
             Worker::clear_active_process();
             process.borrow_zombie().is_some() && process.ppid().is_none()
         };
+        RootedRc::explicit_drop(processrc, &self.root);
         if remove_process {
             trace!("Dropping orphan zombie process {pid:?}");
             let process = self.processes.borrow_mut().remove(&pid).unwrap();

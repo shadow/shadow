@@ -45,7 +45,7 @@ pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
 }
 
-mod global_allow_native_syscalls {
+mod tls_allow_native_syscalls {
     use super::*;
 
     static ALLOW_NATIVE_SYSCALLS: ShimTlsVar<Cell<bool>> =
@@ -89,31 +89,38 @@ mod tls_thread_signal_stack {
     /// This should be called once per thread before any signal handlers run.
     /// Panics if already called on the current thread.
     pub fn init() {
-        // Allocate
-        let new_stack = unsafe {
-            rustix::mm::mmap_anonymous(
-                core::ptr::null_mut(),
-                SHIM_SIGNAL_STACK_SIZE,
-                rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                rustix::mm::MapFlags::PRIVATE,
-            )
-        }
-        .unwrap();
-
-        // Save to thread-local, so that we can deallocate on thread exit
-        assert!(
-            THREAD_SIGNAL_STACK.get().replace(new_stack).is_null(),
-            "Allocated signal stack twice for current thread"
-        );
-
-        // Set up guard page
-        unsafe { rustix::mm::mprotect(new_stack, 4096, rustix::mm::MprotectFlags::empty()) }
+        if THREAD_SIGNAL_STACK.get().get().is_null() {
+            // Allocate
+            let new_stack = unsafe {
+                rustix::mm::mmap_anonymous(
+                    core::ptr::null_mut(),
+                    SHIM_SIGNAL_STACK_SIZE,
+                    rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                    rustix::mm::MapFlags::PRIVATE,
+                )
+            }
             .unwrap();
+
+            // Save to thread-local, so that we can deallocate on thread exit
+            assert!(
+                THREAD_SIGNAL_STACK.get().replace(new_stack).is_null(),
+                "Allocated signal stack twice for current thread"
+            );
+
+            // Set up guard page
+            unsafe { rustix::mm::mprotect(new_stack, 4096, rustix::mm::MprotectFlags::empty()) }
+                .unwrap();
+        } else {
+            // We get here after forking.
+            //
+            // We still have the signal stack allocated in the new process.
+            // We still need to install it though, below.
+        }
 
         // Install via `sigaltstack`. The kernel will switch to this stack when
         // invoking one of our signal handlers.
         let stack_descriptor = linux_api::signal::stack_t {
-            ss_sp: new_stack,
+            ss_sp: THREAD_SIGNAL_STACK.get().get(),
             ss_size: SHIM_SIGNAL_STACK_SIZE.try_into().unwrap(),
             // Clear the alternate stack settings on entry to signal handler, and
             // restore it on exit.  Otherwise a signal handler invoked while another
@@ -179,64 +186,39 @@ mod tls_ipc {
         ipc.as_ref().map(|block| f(block)).unwrap()
     }
 
+    /// The previous value, if any, is dropped.
+    ///
     /// # Safety
     ///
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `IPCData`.
     /// The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
         let blk: ShMemBlockAlias<IPCData> = unsafe { shdeserialize(blk) };
-        assert!(IPC_DATA_BLOCK.get().replace(Some(blk)).is_none());
-    }
-
-    /// # Safety
-    ///
-    /// Environment variable SHADOW_IPC_BLK must contained a serialized block of
-    /// type `IPCData`, which outlives the current thread.
-    pub unsafe fn set_from_env() {
-        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
-        // SAFETY: Kind of not. We should pass this some other way than an environment
-        // variable. Ok in practice as long as we do our initialization after libc's early
-        // initialization, and nothing else mutates this environment variable.
-        // https://github.com/shadow/shadow/issues/2848
-        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
-        assert!(!ipc_blk.is_null());
-        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
-        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
-
-        use core::str::FromStr;
-        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
-        // SAFETY: caller is responsible for `set`'s preconditions.
-        unsafe { set(&ipc_blk) };
+        IPC_DATA_BLOCK.get().replace(Some(blk));
     }
 }
 
 mod tls_thread_shmem {
     use super::*;
 
-    // Set explicitly via `set`, and then used in the lazy initialization of
-    // `SHMEM`.
-    static INITIALIZER: ShimTlsVar<Cell<Option<ShMemBlockSerialized>>> =
-        ShimTlsVar::new(&SHIM_TLS, || Cell::new(None));
-
-    static SHMEM: ShimTlsVar<ShMemBlockAlias<ThreadShmem>> = ShimTlsVar::new(&SHIM_TLS, || {
-        let serialized = INITIALIZER.get().replace(None).unwrap();
-        unsafe { shdeserialize(&serialized) }
-    });
+    static SHMEM: ShimTlsVar<RefCell<Option<ShMemBlockAlias<ThreadShmem>>>> =
+        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
 
     /// Panics if `set` hasn't been called yet.
-    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ThreadShmem>> + 'static
-    {
-        SHMEM.get()
+    pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
+        f(SHMEM.get().borrow().as_ref().unwrap())
     }
 
+    /// The previous value, if any, is dropped.
+    ///
     /// # Safety
     ///
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of
     /// type `ThreadShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
-        assert!(INITIALIZER.get().replace(Some(*blk)).is_none());
-        // Force initialization, for clearer debugging in case of failure.
-        get();
+        // SAFETY: Caller guarantees correct type.
+        let blk = unsafe { shdeserialize(blk) };
+        SHMEM.get().borrow_mut().replace(blk);
     }
 }
 
@@ -330,48 +312,27 @@ mod global_host_shmem {
     }
 }
 
-// TODO: we'll probably need to make this per-thread to support fork.
-mod global_process_shmem {
+mod tls_process_shmem {
     use super::*;
 
-    // This is set explicitly, so needs a Mutex.
-    static INITIALIZER: SelfContainedMutex<Option<ShMemBlockSerialized>> =
-        SelfContainedMutex::const_new(None);
-
-    // The actual block is in a `LazyLock`, which is much faster to access.
-    // It uses `INITIALIZER` to do its one-time init.
-    static SHMEM: LazyLock<ShMemBlockAlias<ProcessShmem>> = LazyLock::const_new(|| {
-        let serialized = INITIALIZER.lock().take().unwrap();
-        unsafe { shdeserialize(&serialized) }
-    });
-
-    /// # Safety
-    ///
-    /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `ProcessShmem`.
-    /// The `ShMemBlock` must outlive this process.
-    pub unsafe fn set(blk: &ShMemBlockSerialized) {
-        assert!(!SHMEM.initd());
-        assert!(INITIALIZER.lock().replace(*blk).is_none());
-        // Ensure that `try_get` returns true (without it having to take the
-        // `INITIALIZER` lock to check), and that we fail early if `SHMEM` can't
-        // actually be initialized.
-        SHMEM.force();
-    }
+    static SHMEM: ShimTlsVar<RefCell<Option<ShMemBlockAlias<ProcessShmem>>>> =
+        ShimTlsVar::new(&SHIM_TLS, || RefCell::new(None));
 
     /// Panics if `set` hasn't been called yet.
-    pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ProcessShmem>> + 'static
-    {
-        SHMEM.force()
+    pub fn with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> O {
+        f(SHMEM.get().borrow().as_ref().unwrap())
     }
 
-    pub fn try_get(
-    ) -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, ProcessShmem>> + 'static>
-    {
-        if !SHMEM.initd() {
-            None
-        } else {
-            Some(get())
-        }
+    /// The previous value, if any, is dropped.
+    ///
+    /// # Safety
+    ///
+    /// `blk` must contained a serialized block referencing a `ShMemBlock` of
+    /// type `ProcessShmem`.  The `ShMemBlock` must outlive the current thread.
+    pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        // SAFETY: Caller guarantees correct type.
+        let blk = unsafe { shdeserialize(blk) };
+        SHMEM.get().borrow_mut().replace(blk);
     }
 }
 
@@ -426,7 +387,7 @@ pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
 ///
 /// Uses C ABI so that we can call from `asm`.
 extern "C" fn init_thread() {
-    unsafe { bindings::_shim_child_init_preload() };
+    unsafe { bindings::_shim_child_thread_init_preload() };
     log::trace!("Finished shim thread init");
 }
 
@@ -450,18 +411,14 @@ fn init_process() {
 
 /// Wait for "start" event from Shadow, use it to initialize the thread shared
 /// memory block, and optionally to initialize the process shared memory block.
-fn wait_for_start_event(init_process: bool) {
+fn wait_for_start_event() {
     log::trace!("waiting for start event");
 
     let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
         thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_blk_serialized.as_mut_ptr()),
-        process_shmem_block_to_init: ForeignPtr::from_raw_ptr(if init_process {
-            process_blk_serialized.as_mut_ptr()
-        } else {
-            core::ptr::null_mut()
-        }),
+        process_shmem_block_to_init: ForeignPtr::from_raw_ptr(process_blk_serialized.as_mut_ptr()),
     });
     let res = tls_ipc::with(|ipc| {
         ipc.to_shadow().send(start_req);
@@ -474,12 +431,10 @@ fn wait_for_start_event(init_process: bool) {
     // SAFETY: blk should be of the correct type and outlive this thread.
     unsafe { tls_thread_shmem::set(&thread_blk_serialized) };
 
-    if init_process {
-        // SAFETY: shadow should have initialized
-        let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
-        // SAFETY: blk should be of the correct type and outlive this process.
-        unsafe { global_process_shmem::set(&process_blk_serialized) };
-    }
+    // SAFETY: shadow should have initialized
+    let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
+    // SAFETY: blk should be of the correct type and outlive this process.
+    unsafe { tls_process_shmem::set(&process_blk_serialized) };
 }
 
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
@@ -551,13 +506,13 @@ pub mod export {
     /// the beginning of an operation, and restore the old value afterwards.
     #[no_mangle]
     pub extern "C" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
-        global_allow_native_syscalls::swap(new)
+        tls_allow_native_syscalls::swap(new)
     }
 
     /// Whether syscall interposition is currently enabled.
     #[no_mangle]
     pub extern "C" fn shim_interpositionEnabled() -> bool {
-        !global_allow_native_syscalls::get()
+        !tls_allow_native_syscalls::get()
     }
 
     /// Allocates and installs a signal stack. This is to ensure that our
@@ -592,7 +547,20 @@ pub mod export {
     /// type `IPCData`, which outlives the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn _shim_parent_init_ipc() {
-        unsafe { tls_ipc::set_from_env() };
+        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
+        // SAFETY: Kind of not. We should pass this some other way than an environment
+        // variable. Ok in practice as long as we do our initialization after libc's early
+        // initialization, and nothing else mutates this environment variable.
+        // https://github.com/shadow/shadow/issues/2848
+        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
+        assert!(!ipc_blk.is_null());
+        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
+        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
+
+        use core::str::FromStr;
+        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
+        // SAFETY: caller is responsible for `set`'s preconditions.
+        unsafe { tls_ipc::set(&ipc_blk) };
     }
 
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
@@ -613,9 +581,7 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C" fn shim_threadSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
-        let rv = tls_thread_shmem::get();
-        let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread = rv.deref();
-        rv as *const _
+        tls_thread_shmem::with(|thread| thread as *const _)
     }
 
     #[no_mangle]
@@ -666,26 +632,23 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn shim_processSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
-        let rv = global_process_shmem::try_get();
-        rv.map(|x| {
-            let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess = x.deref();
+        tls_process_shmem::with(|process| {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
-            rv as *const _
+            process as *const _
         })
-        .unwrap_or(core::ptr::null())
     }
 
     /// Wait for start event from shadow, from a newly spawned thread.
     #[no_mangle]
     pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
-        wait_for_start_event(false);
+        wait_for_start_event();
     }
 
     #[no_mangle]
     pub extern "C" fn _shim_ipc_wait_for_start_event() {
-        wait_for_start_event(true);
+        wait_for_start_event();
     }
 
     #[no_mangle]
@@ -695,6 +658,6 @@ pub mod export {
 
     #[no_mangle]
     pub extern "C" fn _shim_parent_init_host_shm() {
-        unsafe { global_host_shmem::set(&global_process_shmem::get().host_shmem) }
+        tls_process_shmem::with(|process| unsafe { global_host_shmem::set(&process.host_shmem) });
     }
 }

@@ -25,5 +25,6 @@ const ShimShmemManager* shim_managerSharedMem();
 
 // Exposed for Rust
 void _shim_parent_init_preload();
-void _shim_child_init_preload();
+void _shim_child_thread_init_preload();
+void _shim_child_process_init_preload();
 #endif // SHD_SHIM_SHIM_H_

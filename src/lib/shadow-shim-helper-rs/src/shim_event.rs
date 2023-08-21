@@ -37,10 +37,10 @@ pub struct ShimEventAddThreadReq {
     pub newtls: libc::c_ulong,
 }
 
-/// Data for [`ShimEventToShadow::AddThreadParentRes`]
+/// Data for [`ShimEventToShadow::AddThreadRes`]
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct ShimEventAddThreadParentRes {
+pub struct ShimEventAddThreadRes {
     pub clone_res: i64,
 }
 
@@ -75,7 +75,7 @@ pub enum ShimEventToShadow {
     /// Response to ShimEventToShim::Syscall
     SyscallComplete(ShimEventSyscallComplete),
     /// Response to `ShimEventToShim::AddThreadReq`
-    AddThreadParentRes(ShimEventAddThreadParentRes),
+    AddThreadRes(ShimEventAddThreadRes),
 }
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]

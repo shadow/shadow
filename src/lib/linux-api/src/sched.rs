@@ -112,3 +112,36 @@ pub unsafe fn clone(
         core::cmp::Ordering::Less => unreachable!(),
     })
 }
+
+/// See `fork(2)`.
+///
+/// # Safety
+///
+/// *Mostly* safe, since most memory will be copy-on-write in the child process.
+/// Non-private mutable mappings *are* shared in the child, though, which may
+/// break soundness. (Such mappings aren't common in practice)
+///
+/// Additionally some OS resources are shared with the parent, and others are
+/// dropped, which may /// break assumptions by code that uses or wraps such
+/// resources. See `fork(2)` for a full list, but some notable examples include:
+///
+/// * The child shares file descriptors (and underlying file descriptions) with the parent.
+/// * The child is the only thread in the new process.
+pub unsafe fn fork_raw() -> Result<core::ffi::c_long, Errno> {
+    unsafe { linux_syscall::syscall!(linux_syscall::SYS_fork) }
+        .try_i64()
+        .map_err(Errno::from)
+}
+
+/// # Safety
+///
+/// See `fork_raw`
+pub unsafe fn fork() -> Result<CloneResult, Errno> {
+    unsafe { fork_raw() }.map(|res| match res.cmp(&0) {
+        core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
+        core::cmp::Ordering::Greater => {
+            CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())
+        }
+        core::cmp::Ordering::Less => unreachable!(),
+    })
+}

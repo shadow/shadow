@@ -9,7 +9,7 @@ use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
 use crate::tls::ShimTlsVar;
-use crate::{global_allow_native_syscalls, global_host_shmem, tls_thread_shmem};
+use crate::{global_host_shmem, tls_allow_native_syscalls, tls_process_shmem, tls_thread_shmem};
 
 /// Information passed through to the SIGUSR1 signal handler. Contains the info
 /// needed to call a managed code signal handler.
@@ -31,7 +31,7 @@ static SIGUSR1_SIGINFO: ShimTlsVar<Cell<Option<Sigusr1Info>>> =
 extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core::ffi::c_void) {
     let mut info = SIGUSR1_SIGINFO.get().take().unwrap();
     let signo = info.siginfo.signal().unwrap().as_i32();
-    assert!(crate::global_allow_native_syscalls::swap(false));
+    assert!(crate::tls_allow_native_syscalls::swap(false));
     // SAFETY: Should have been initialized correctly in `process_signals`.
     let handler = unsafe { info.action.handler() };
 
@@ -68,11 +68,11 @@ extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core:
             panic!("No handler")
         }
     }
-    assert!(!crate::global_allow_native_syscalls::swap(true));
+    assert!(!crate::tls_allow_native_syscalls::swap(true));
 }
 
 fn die_with_fatal_signal(sig: Signal) -> ! {
-    assert!(crate::global_allow_native_syscalls::get());
+    assert!(crate::tls_allow_native_syscalls::get());
     if sig == Signal::SIGKILL {
         // No need to restore default action, and trying to do so would fail.
     } else {
@@ -102,16 +102,20 @@ fn die_with_fatal_signal(sig: Signal) -> ! {
 /// we basically can't ensure).
 pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
     let mut host = crate::global_host_shmem::get();
-    let mut process = crate::global_process_shmem::get();
-    let mut thread = crate::tls_thread_shmem::get();
     let mut host_lock = host.protected().lock();
 
     let mut restartable = true;
 
-    while let Some((sig, siginfo)) =
-        shim_shmem::take_pending_unblocked_signal(&host_lock, &process, &thread)
-    {
-        let action = *unsafe { process.protected.borrow(&host_lock.root).signal_action(sig) };
+    loop {
+        let Some((sig, siginfo)) = tls_process_shmem::with(|process| tls_thread_shmem::with(|thread| {
+            shim_shmem::take_pending_unblocked_signal(&host_lock, process, thread)
+        })) else {
+            break;
+        };
+
+        let action = tls_process_shmem::with(|process| *unsafe {
+            process.protected.borrow(&host_lock.root).signal_action(sig)
+        });
 
         if matches!(unsafe { action.handler() }, SignalHandler::SigIgn) {
             continue;
@@ -132,12 +136,13 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
 
         trace!("Handling emulated signal {sig:?}");
 
-        let (sigaltstack_orig_emu, mask_orig_emu): (stack_t, sigset_t) = {
-            let t = thread.protected.borrow(&host_lock.root);
-            // SAFETY: Pointers in the sigaltstack are valid in the managed process.
-            let stack = unsafe { t.sigaltstack() };
-            (*stack, t.blocked_signals)
-        };
+        let (sigaltstack_orig_emu, mask_orig_emu): (stack_t, sigset_t) =
+            tls_thread_shmem::with(|thread| {
+                let t = thread.protected.borrow(&host_lock.root);
+                // SAFETY: Pointers in the sigaltstack are valid in the managed process.
+                let stack = unsafe { t.sigaltstack() };
+                (*stack, t.blocked_signals)
+            });
 
         let mask_emu_during_handler = {
             let mut m = action.mask() | mask_orig_emu;
@@ -146,20 +151,24 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
             }
             m
         };
-        thread.protected.borrow_mut(&host_lock.root).blocked_signals = mask_emu_during_handler;
+        tls_thread_shmem::with(|thread| {
+            thread.protected.borrow_mut(&host_lock.root).blocked_signals = mask_emu_during_handler
+        });
 
         if action.flags_retain().contains(SigActionFlags::SA_RESETHAND) {
-            // SAFETY: The handler (`SigDfl`) is sound.
-            unsafe {
-                *process
-                    .protected
-                    .borrow_mut(&host_lock.root)
-                    .signal_action_mut(sig) = sigaction::new_with_default_restorer(
-                    SignalHandler::SigDfl,
-                    SigActionFlags::empty(),
-                    sigset_t::EMPTY,
-                )
-            };
+            tls_process_shmem::with(|process| {
+                // SAFETY: The handler (`SigDfl`) is sound.
+                unsafe {
+                    *process
+                        .protected
+                        .borrow_mut(&host_lock.root)
+                        .signal_action_mut(sig) = sigaction::new_with_default_restorer(
+                        SignalHandler::SigDfl,
+                        SigActionFlags::empty(),
+                        sigset_t::EMPTY,
+                    )
+                };
+            });
         }
 
         if !action.flags_retain().contains(SigActionFlags::SA_RESTART) {
@@ -197,14 +206,16 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
                     sigaltstack_orig_emu.size(),
                 )
             };
-            // SAFETY: stack pointer in the assigned stack (if any) is valid in
-            // the managed process.
-            unsafe {
-                *thread
-                    .protected
-                    .borrow_mut(&host_lock.root)
-                    .sigaltstack_mut() = sigaltstack_emu_during_handler
-            };
+            tls_thread_shmem::with(|thread| {
+                // SAFETY: stack pointer in the assigned stack (if any) is valid in
+                // the managed process.
+                unsafe {
+                    *thread
+                        .protected
+                        .borrow_mut(&host_lock.root)
+                        .sigaltstack_mut() = sigaltstack_emu_during_handler
+                };
+            });
 
             let mut sigaltstack_orig_native =
                 stack_t::new(core::ptr::null_mut(), SigAltStackFlags::empty(), 0);
@@ -244,8 +255,6 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
         // return.
         drop(host_lock);
         drop(host);
-        drop(process);
-        drop(thread);
 
         // We raise a signal natively to let the kernel create a ucontext for us
         // and switch stacks. We invoke the managed code's signal handler from our
@@ -290,12 +299,10 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
 
         // Reacquire locks and references.
         host = crate::global_host_shmem::get();
-        process = crate::global_process_shmem::get();
-        thread = crate::tls_thread_shmem::get();
         host_lock = host.protected().lock();
 
         // Restore mask and stack
-        {
+        tls_thread_shmem::with(|thread| {
             let mut thread = thread.protected.borrow_mut(&host_lock.root);
             thread.blocked_signals = mask_orig_emu;
             // SAFETY: Pointers are valid in managed process.
@@ -304,7 +311,7 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
                 // SAFETY: We're restoring the previous, presumably valid, stack.
                 unsafe { linux_api::signal::sigaltstack(Some(&s), None) }.unwrap();
             }
-        }
+        });
     }
     restartable
 }
@@ -314,7 +321,7 @@ extern "C" fn handle_hardware_error_signal(
     info: *mut siginfo_t,
     ctx: *mut core::ffi::c_void,
 ) {
-    let old_native_syscall_flag = global_allow_native_syscalls::swap(true);
+    let old_native_syscall_flag = tls_allow_native_syscalls::swap(true);
 
     let signal = Signal::try_from(signo).unwrap();
 
@@ -326,8 +333,7 @@ extern "C" fn handle_hardware_error_signal(
     // Otherwise the error was raised from managed code, and could potentially
     // be handled by a signal handler that it installed.
 
-    {
-        let thread = tls_thread_shmem::get();
+    tls_thread_shmem::with(|thread| {
         let host = global_host_shmem::get();
         let host_lock = host.protected().lock();
         let pending_signals = thread.protected.borrow(&host_lock.root).pending_signals;
@@ -339,13 +345,13 @@ extern "C" fn handle_hardware_error_signal(
             thread_protected
                 .set_pending_standard_siginfo(signal, unsafe { info.as_ref().unwrap() });
         }
-    }
+    });
 
     let ctx = ctx.cast::<ucontext>();
     // SAFETY: The kernel should have given us a valid `ucontext` here.
     unsafe { process_signals(ctx.as_mut()) };
 
-    global_allow_native_syscalls::swap(old_native_syscall_flag);
+    tls_allow_native_syscalls::swap(old_native_syscall_flag);
 }
 
 pub fn install_hardware_error_handlers() {

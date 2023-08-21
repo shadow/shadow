@@ -219,13 +219,25 @@ impl MemoryCopier {
         // While the documentation for process_vm_writev says to use the pid, in
         // practice it needs to be the tid of a still-running thread. i.e. using the
         // pid after the thread group leader has exited will fail.
+        //
+        // TODO: get this explicitly from the caller instead of reaching out to
+        // the global Worker.
         let tid = Worker::with_active_host(|host| {
             Worker::with_active_process(|process| {
-                // Don't access another process's memory.
-                assert_eq!(process.native_pid(), self.pid);
-                let thread = process.first_live_thread_borrow(host.root()).unwrap();
-                let thread = thread.borrow(host.root());
-                thread.native_tid()
+                if process.native_pid() != self.pid {
+                    // This currently only happens in the clone syscall handler
+                    // if we need to write to the child's memory, and the child
+                    // is a new process. In this case the thread group leader should
+                    // be alive, so the pid will work.
+                    //
+                    // TODO: as above, this hack can be avoided by getting a live tid
+                    // explicitly from the caller.
+                    self.pid
+                } else {
+                    let thread = process.first_live_thread_borrow(host.root()).unwrap();
+                    let thread = thread.borrow(host.root());
+                    thread.native_tid()
+                }
             })
             .unwrap()
         })

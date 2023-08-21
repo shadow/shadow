@@ -170,9 +170,16 @@ static_assertions::assert_eq_align!(TlsOneThreadStorageAllocation, TlsOneThreadS
 static_assertions::assert_eq_size!(TlsOneThreadStorageAllocation, TlsOneThreadStorage);
 
 /// An opaque, per-thread identifier. These are only guaranteed to be unique for
+/// *live* threads. See [`ThreadLocalStorage::unregister_current_thread`].
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub struct ThreadLocalStorageKey(FastThreadId);
+
+/// An opaque, per-thread identifier. These are only guaranteed to be unique for
 /// *live* threads; in particular [`FastThreadId::ElfThreadPointer`] of a live
 /// thread can have the same value as a previously seen dead thread. See
-/// [`unregister_and_exit_current_thread`].
+/// [`ThreadLocalStorage::unregister_current_thread`].
+///
+/// Internal implemenation of [`ThreadLocalStorageKey`]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 enum FastThreadId {
     ElfThreadPointer(ElfThreadPointer),
@@ -327,34 +334,25 @@ impl ThreadLocalStorage {
     /// Returns thread local storage for the current thread. The raw byte contents
     /// are initialized to zero.
     fn current_thread_storage(&self) -> TlsOneThreadBackingStoreRef {
-        match self.preferred_mode {
-            Mode::Native => {
-                if ElfThreadPointer::current().is_some() {
-                    // Native (libc) TLS seems to be set up properly. Use it.
-                    let alloc: *mut TlsOneThreadStorageAllocation =
-                        unsafe { crate::bindings::shim_native_tls() };
-                    return TlsOneThreadBackingStoreRef::Native(unsafe {
-                        TlsOneThreadStorage::from_static_lifetime_zeroed_allocation(alloc)
-                    });
-                }
-                // else fallthrough
-            }
-            // Fall through
-            Mode::NativeTlsId | Mode::Gettid => (),
+        if let Some(ThreadLocalStorageKey(id)) = self.current_key() {
+            // SAFETY: `id` is unique to this live thread, and caller guarantees
+            // any previous thread with this `id` has been removed.
+            let res = unsafe {
+                self.storages
+                    .deref()
+                    .get_or_insert_with(id.to_nonzero_usize(), || {
+                        MmapBox::new(TlsOneThreadStorage::new())
+                    })
+            };
+            TlsOneThreadBackingStoreRef::Mapped(res)
+        } else {
+            // Use native (libc) TLS.
+            let alloc: *mut TlsOneThreadStorageAllocation =
+                unsafe { crate::bindings::shim_native_tls() };
+            TlsOneThreadBackingStoreRef::Native(unsafe {
+                TlsOneThreadStorage::from_static_lifetime_zeroed_allocation(alloc)
+            })
         }
-
-        // Use our fallback mechanism.
-        let id = FastThreadId::current();
-        // SAFETY: `id` is unique to this live thread, and caller guarantees
-        // any previous thread with this `id` has been removed.
-        let res = unsafe {
-            self.storages
-                .deref()
-                .get_or_insert_with(id.to_nonzero_usize(), || {
-                    MmapBox::new(TlsOneThreadStorage::new())
-                })
-        };
-        TlsOneThreadBackingStoreRef::Mapped(res)
     }
 
     /// Release this thread's thread local storage and exit the thread.
@@ -382,6 +380,75 @@ impl ThreadLocalStorage {
         // SAFETY: `id` is unique to this live thread, and caller guarantees
         // any previous thread with this `id` has been removed.
         unsafe { storages.remove(id.to_nonzero_usize()) };
+    }
+
+    /// An opaque key referencing this thread's thread-local-storage.
+    ///
+    /// `None` if the current thread uses native TLS.
+    pub fn current_key(&self) -> Option<ThreadLocalStorageKey> {
+        match self.preferred_mode {
+            Mode::Native if ElfThreadPointer::current().is_some() => {
+                // Native (libc) TLS seems to be set up properly. We'll use that,
+                // so there is no storage key.
+                None
+            }
+            // Use our fallback mechanism.
+            _ => Some(ThreadLocalStorageKey(FastThreadId::current())),
+        }
+    }
+
+    /// Reassigns storage from `prev_id` to the current thread, and drops
+    /// storage for all other threads.
+    ///
+    /// Meant to be called after forking a new process from a thread with ID
+    /// `prev_id`.
+    ///
+    /// # Safety
+    ///
+    /// `self` must not be shared with any other threads. Typically this is ensured
+    /// by calling this function after `fork` (but *not* `vfork`), and before any
+    /// additional threads are created from the new process.
+    ///
+    /// Current thread must have the same native thread local storage as the
+    /// parent; It is sufficient for parent to *not* have used CLONE_SETTLS when
+    /// creating the current thread.
+    pub unsafe fn fork_from(&self, prev_key: Option<ThreadLocalStorageKey>) {
+        let prev_storage = prev_key.map(|id| {
+            // SAFETY: Previous thread doesn't exist in this process.
+            unsafe { self.storages.remove(id.0.to_nonzero_usize()).unwrap() }
+        });
+
+        // SAFETY: Caller guarantees nothing else is accessing thread local
+        // storage.
+        unsafe {
+            self.storages.forget_all();
+        }
+
+        let curr_key = self.current_key();
+        match (prev_storage, curr_key) {
+            (None, None) => {
+                // Both parent and current use native storage. Caller guarantees
+                // that it's the same storage (e.g. no CLONE_SETTLS flag).
+            }
+            (Some(prev_storage), Some(curr_key)) => {
+                // Move storage to new key.
+                unsafe {
+                    self.storages
+                        .get_or_insert_with(curr_key.0.to_nonzero_usize(), move || prev_storage)
+                };
+            }
+            _ => {
+                // Need to migrate thread local storage between native and table.
+                //
+                // table -> native might not be too bad. We should be able to write
+                // the storage we retrieved from the table into native TLS.
+                //
+                // Not sure how to implement native -> table. I think we'd need
+                // to make the backing storage clonable, and clone it from the
+                // parent process so that we can access it from the child.
+                unimplemented!()
+            }
+        }
     }
 }
 
@@ -488,9 +555,10 @@ impl<'tls> lazy_lock::Producer<usize> for OffsetInitializer<'tls> {
 //
 // TODO: Consider changing API to only provide a `with` method instead of
 // allowing access to `'static` references. This would let us validate in
-// [`unregister_and_exit_current_thread`] that no variables are currently being accessed
-// and enforce that none are accessed afterwards, and potentially let us run
-// `Drop` impls (though I think we'd also need an allocator for the latter).
+// [`ThreadLocalStorage::unregister_current_thread`] that no variables are
+// currently being accessed and enforce that none are accessed afterwards, and
+// potentially let us run `Drop` impls (though I think we'd also need an
+// allocator for the latter).
 pub struct ShimTlsVar<'tls, T, F = fn() -> T>
 where
     F: Fn() -> T,

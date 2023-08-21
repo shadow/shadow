@@ -51,6 +51,14 @@ use crate::utility::perf_timer::PerfTimer;
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
 pub struct ProcessId(u32);
 
+impl ProcessId {
+    /// Returns what the `ProcessId` would be of a `Process` whose thread
+    /// group leader has id `thread_group_leader_tid`.
+    pub fn from_thread_group_leader_tid(thread_group_leader_tid: ThreadId) -> Self {
+        ProcessId::try_from(libc::pid_t::from(thread_group_leader_tid)).unwrap()
+    }
+}
+
 impl std::fmt::Display for ProcessId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -113,6 +121,16 @@ pub enum ExitStatus {
 struct StraceLogging {
     file: RefCell<std::fs::File>,
     options: FmtOptions,
+}
+
+impl StraceLogging {
+    pub fn try_clone(&self) -> Result<StraceLogging, std::io::Error> {
+        let file = self.file.borrow().try_clone()?;
+        Ok(StraceLogging {
+            file: RefCell::new(file),
+            options: self.options,
+        })
+    }
 }
 
 /// Parts of the process that are present in all states.
@@ -510,6 +528,76 @@ impl RunnableProcess {
         host.schedule_task_with_delay(task, SimulationTime::ZERO);
     }
 
+    /// Create a new `Process`, forked from `self`, with the thread `new_thread_group_leader`.
+    pub fn new_forked_process(
+        &self,
+        host: &Host,
+        new_thread_group_leader: RootedRc<RootedRefCell<Thread>>,
+    ) -> RootedRc<RootedRefCell<Process>> {
+        let new_tgl_tid;
+        let native_pid;
+        {
+            let new_tgl = new_thread_group_leader.borrow(host.root());
+            new_tgl_tid = new_tgl.id();
+            native_pid = new_tgl.native_pid();
+        }
+        let pid = ProcessId::from_thread_group_leader_tid(new_tgl_tid);
+        assert_eq!(
+            pid,
+            new_thread_group_leader.borrow(host.root()).process_id()
+        );
+        let plugin_name = self.common.plugin_name.clone();
+        let name = make_name(host, plugin_name.to_str().unwrap(), pid);
+
+        let common = Common {
+            id: pid,
+            host_id: host.id(),
+            name,
+            plugin_name,
+            working_dir: self.common.working_dir.clone(),
+        };
+
+        // The child will log to the same strace log file. Entries contain thread IDs,
+        // though it might be tricky to map those back to processes.
+        let strace_logging = self
+            .strace_logging
+            .as_ref()
+            .map(|strace| strace.try_clone().unwrap());
+
+        // `fork(2)`:
+        //  > The child does not inherit timers from its parent
+        //  > (setitimer(2), alarm(2), timer_create(2)).
+        let itimer_real = RefCell::new(Timer::new(move |host| itimer_real_expiration(host, pid)));
+
+        let threads = RefCell::new(BTreeMap::from([(new_tgl_tid, new_thread_group_leader)]));
+
+        let shim_shared_mem = ProcessShmem::new(
+            &host.shim_shmem_lock_borrow().unwrap().root,
+            host.shim_shmem().serialize(),
+            host.id(),
+            strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
+        );
+        let shim_shared_mem_block = shadow_shmem::allocator::shmalloc(shim_shared_mem);
+
+        let runnable_process = RunnableProcess {
+            common,
+            expected_final_state: None,
+            shim_shared_mem_block,
+            strace_logging,
+            dumpable: self.dumpable.clone(),
+            native_pid,
+            itimer_real,
+            threads,
+            unsafe_borrow_mut: RefCell::new(None),
+            unsafe_borrows: RefCell::new(Vec::new()),
+            memory_manager: Box::new(RefCell::new(unsafe { MemoryManager::new(native_pid) })),
+        };
+        let child_process = Process {
+            state: RefCell::new(Some(ProcessState::Runnable(runnable_process))),
+        };
+        RootedRc::new(host.root(), RootedRefCell::new(host.root(), child_process))
+    }
+
     /// Shared memory for this process.
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         &self.shim_shared_mem_block
@@ -639,13 +727,7 @@ impl Process {
             itimer_real_expiration(host, process_id)
         }));
 
-        let name = CString::new(format!(
-            "{host_name}.{exe_name}.{id}",
-            host_name = host.name(),
-            exe_name = plugin_name.to_str().unwrap(),
-            id = u32::from(process_id)
-        ))
-        .unwrap();
+        let name = make_name(host, plugin_name.to_str().unwrap(), process_id);
 
         let mut file_basename = PathBuf::new();
         file_basename.push(host.data_dir_path());
@@ -1412,6 +1494,16 @@ impl UnsafeBorrowMut {
 // This is admittedly hand-wavy and making some assumptions about the implementation of
 // RefCell, but this whole type is temporary scaffolding to support legacy C code.
 unsafe impl Send for UnsafeBorrowMut {}
+
+fn make_name(host: &Host, exe_name: &str, id: ProcessId) -> CString {
+    CString::new(format!(
+        "{host_name}.{exe_name}.{id}",
+        host_name = host.name(),
+        exe_name = exe_name,
+        id = u32::from(id)
+    ))
+    .unwrap()
+}
 
 mod export {
     use std::ffi::c_char;

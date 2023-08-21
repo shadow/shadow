@@ -8,7 +8,7 @@ use rustix::fd::BorrowedFd;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::option::FfiOption;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadParentRes, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
+    ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
     ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{SysCallArgs, SysCallReg};
@@ -79,9 +79,7 @@ unsafe fn emulated_syscall_event(
             ShimEventToShim::SyscallComplete(syscall_complete) => {
                 // Shadow has returned a result for the emulated syscall
 
-                if crate::global_host_shmem::try_get().is_none()
-                    || crate::global_process_shmem::try_get().is_none()
-                {
+                if crate::global_host_shmem::try_get().is_none() {
                     // We should only get here during early initialization. We don't have what
                     // we need to process signals yet, so just return the result.
                     return syscall_complete.retval;
@@ -120,12 +118,14 @@ unsafe fn emulated_syscall_event(
 
                 let rv = unsafe { native_syscall(&syscall_event.syscall_args) };
 
-                if let FfiOption::Some(strace_fd) = crate::global_process_shmem::get().strace_fd {
+                if let FfiOption::Some(strace_fd) =
+                    crate::tls_process_shmem::with(|process| process.strace_fd)
+                {
                     let emulated_time = global_host_shmem::get()
                         .sim_time
                         .load(atomic::Ordering::Relaxed)
                         - EmulatedTime::SIMULATION_START;
-                    let tid = tls_thread_shmem::get().tid;
+                    let tid = tls_thread_shmem::with(|thread| thread.tid);
                     let parts = TimeParts::from_nanos(emulated_time.as_nanos());
                     let mut buffer = FormatBuffer::<200>::new();
                     writeln!(
@@ -162,9 +162,10 @@ unsafe fn emulated_syscall_event(
 
                 let clone_res = unsafe { crate::clone::do_clone(ctx.as_mut().unwrap(), &r) };
                 tls_ipc::with(|ipc| {
-                    ipc.to_shadow().send(ShimEventToShadow::AddThreadParentRes(
-                        ShimEventAddThreadParentRes { clone_res },
-                    ))
+                    ipc.to_shadow()
+                        .send(ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes {
+                            clone_res,
+                        }))
                 })
             }
             e @ ShimEventToShim::StartRes => {
@@ -188,7 +189,7 @@ pub mod export {
         n: core::ffi::c_long,
         mut args: va_list::VaList,
     ) -> core::ffi::c_long {
-        let old_native_syscall_flag = crate::global_allow_native_syscalls::swap(true);
+        let old_native_syscall_flag = crate::tls_allow_native_syscalls::swap(true);
 
         let syscall_args = SysCallArgs {
             number: n,
@@ -207,7 +208,7 @@ pub mod export {
         let ctx = unsafe { ctx.as_mut() };
         let retval = unsafe { emulated_syscall_event(ctx, &event) };
 
-        crate::global_allow_native_syscalls::swap(old_native_syscall_flag);
+        crate::tls_allow_native_syscalls::swap(old_native_syscall_flag);
 
         retval.into()
     }

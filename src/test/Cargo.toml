@@ -13,6 +13,10 @@ name = "test_clone"
 path = "clone/test_clone.rs"
 
 [[bin]]
+name = "test_fork"
+path = "clone/test_fork.rs"
+
+[[bin]]
 name = "test_epoll"
 path = "epoll/test_epoll.rs"
 
@@ -192,7 +196,7 @@ path = "time/nanosleep/test_nanosleep.rs"
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
-linux-api = { path = "../lib/linux-api" }
+linux-api = { path = "../lib/linux-api", features  = ["std"] }
 nix = "0.26.2"
 rand = { version="0.8.5", features=["small_rng"] }
 rustix = { version = "0.38.4", default-features=false, features=["mm", "pipe", "time", "thread"]}
