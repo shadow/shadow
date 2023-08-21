@@ -66,6 +66,6 @@ mod test {
 
         let mut buf = [0xff; 4];
         assert_eq!(rustix::io::read(reader.as_fd(), &mut buf), Ok(3));
-        assert_eq!(buf, ['1' as u8, '2' as u8, '3' as u8, 0xff]);
+        assert_eq!(buf, [b'1', b'2', b'3', 0xff]);
     }
 }

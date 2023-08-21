@@ -810,12 +810,12 @@ mod test {
                         assert_eq!(my_i16.get().load(atomic::Ordering::Relaxed), 0);
 
                         // Order shouldn't matter here, but change it from above anyway.
-                        my_i32.get().store(i as i32, atomic::Ordering::Relaxed);
+                        my_i32.get().store(i, atomic::Ordering::Relaxed);
                         my_i8.get().store(i as i8, atomic::Ordering::Relaxed);
                         my_i16.get().store(i as i16, atomic::Ordering::Relaxed);
 
                         assert_eq!(my_i16.get().load(atomic::Ordering::Relaxed), i as i16);
-                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), i as i32);
+                        assert_eq!(my_i32.get().load(atomic::Ordering::Relaxed), { i });
                         assert_eq!(my_i8.get().load(atomic::Ordering::Relaxed), i as i8);
                         unsafe { tls.unregister_current_thread() };
                     })

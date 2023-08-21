@@ -76,7 +76,7 @@ impl<'a, T> SyscallVal<'a, T> {
             args,
             options,
             mem,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -215,7 +215,7 @@ where
                 args,
                 options,
                 mem,
-                _phantom: PhantomData::default(),
+                _phantom: PhantomData,
             }),
             // the syscall was not completed and will be re-run again later
             SyscallResult::Err(SyscallError::Blocked(_)) => None,

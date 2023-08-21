@@ -406,32 +406,29 @@ mod tests {
         // Not above target so interval is not set.
         assert!(cdq.interval_end.is_none());
         let now = start + TARGET - one;
-        assert_eq!(cdq.process_standing_delay(&now, TARGET - one), false);
+        assert!(!cdq.process_standing_delay(&now, TARGET - one));
         assert!(cdq.interval_end.is_none());
 
         // Reached target, interval is set but still not ok to drop.
         let now = start + TARGET;
-        assert_eq!(cdq.process_standing_delay(&now, TARGET), false);
+        assert!(!cdq.process_standing_delay(&now, TARGET));
         assert!(cdq.interval_end.is_some());
         assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
 
         // Now we exceed target+interval, so ok to drop.
         let now = start + TARGET + INTERVAL;
-        assert_eq!(cdq.process_standing_delay(&now, TARGET + INTERVAL), true);
+        assert!(cdq.process_standing_delay(&now, TARGET + INTERVAL));
         assert!(cdq.interval_end.is_some());
         assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
 
         let now = start + TARGET + INTERVAL * 2u32;
-        assert_eq!(
-            cdq.process_standing_delay(&now, TARGET + INTERVAL * 2u32),
-            true
-        );
+        assert!(cdq.process_standing_delay(&now, TARGET + INTERVAL * 2u32));
         assert!(cdq.interval_end.is_some());
         assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
 
         // Delay back to low, interval resets, not ok to drop.
         let now = start + TARGET + INTERVAL * 2u32;
-        assert_eq!(cdq.process_standing_delay(&now, one), false);
+        assert!(!cdq.process_standing_delay(&now, one));
         assert!(cdq.interval_end.is_none());
     }
 
@@ -514,7 +511,7 @@ mod tests {
         assert_eq!(cdq.len(), N - 1);
         assert_eq!(cdq.current_drop_count, 0);
         assert_eq!(cdq.previous_drop_count, 0);
-        assert_eq!(cdq.was_dropping_recently(&(start + TARGET)), false);
+        assert!(!cdq.was_dropping_recently(&(start + TARGET)));
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Enters Drop mode, drops 1 packet and sets drop_next
@@ -523,15 +520,12 @@ mod tests {
         assert_eq!(cdq.current_drop_count, 1);
         assert_eq!(cdq.previous_drop_count, 1);
         assert!(cdq.drop_next.is_some());
-        assert_eq!(
-            cdq.was_dropping_recently(&(start + TARGET + INTERVAL)),
-            true
-        );
+        assert!(cdq.was_dropping_recently(&(start + TARGET + INTERVAL)));
         assert_eq!(cdq.mode, CoDelMode::Drop);
 
         // In Drop mode, we have repeated drops, but then it leaves Drop mode
         // before the queue is empty.
-        assert_eq!(cdq.should_drop(&end), true);
+        assert!(cdq.should_drop(&end));
         cdq.pop(end);
         assert_eq!(cdq.len(), 1);
         assert_eq!(cdq.current_drop_count, N - 4);

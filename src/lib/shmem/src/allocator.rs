@@ -437,7 +437,7 @@ mod tests {
             execute_round();
         }
 
-        while marked_blocks.len() > 0 {
+        while !marked_blocks.is_empty() {
             let b = marked_blocks.pop().unwrap();
             shfree(b.1);
         }

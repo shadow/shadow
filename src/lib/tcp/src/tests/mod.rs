@@ -434,7 +434,7 @@ impl TcpSocket {
     }
 
     pub fn push_in_packet(&mut self, header: &TcpHeader, payload: Bytes) {
-        self.with_tcp_state(|s| s.push_packet(&header, payload))
+        self.with_tcp_state(|s| s.push_packet(header, payload))
             .unwrap();
     }
 
@@ -468,7 +468,7 @@ impl TcpSocket {
         }
 
         let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
-        let tcp = Rc::clone(&tcp);
+        let tcp = Rc::clone(tcp);
         let handle = host.associate_socket(tcp, local_addr, peer_addr)?;
         tcp_ref.association_handle = Some(handle);
 
@@ -491,7 +491,7 @@ impl TcpSocket {
             let associate_fn = || {
                 let local_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
                 let peer_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0);
-                let tcp = Rc::clone(&tcp);
+                let tcp = Rc::clone(tcp);
                 host.associate_socket(tcp, local_addr, peer_addr).map(Some)
             };
             tcp_ref.with_tcp_state(|state| state.listen(backlog, associate_fn))
@@ -590,7 +590,7 @@ impl TcpSocket {
                     .unwrap();
                 let local_addr = SocketAddrV4::new(route, 0);
 
-                let socket = Rc::clone(&socket);
+                let socket = Rc::clone(socket);
                 let handle = host.associate_socket(socket, local_addr, peer_addr);
                 handle.map(|x| (x.local_addr(), Some(x)))
             };
@@ -700,7 +700,7 @@ impl Host {
             return Some(src);
         }
 
-        return None;
+        None
     }
 }
 
@@ -811,7 +811,7 @@ fn establish_helper(scheduler: &Scheduler, host: &mut Host) -> Rc<RefCell<TcpSoc
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(scheduler);
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::bind(&tcp, SocketAddrV4::new(host.ip_addr, 10), host).unwrap();
