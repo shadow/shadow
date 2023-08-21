@@ -45,10 +45,7 @@ pub struct HostTreePointer<T> {
 impl<T> Copy for HostTreePointer<T> {}
 impl<T> Clone for HostTreePointer<T> {
     fn clone(&self) -> Self {
-        Self {
-            host_id: self.host_id,
-            ptr: self.ptr,
-        }
+        *self
     }
 }
 

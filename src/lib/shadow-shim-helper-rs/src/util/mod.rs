@@ -30,7 +30,7 @@ pub struct SyncSendPointer<T>(*mut T);
 impl<T> Copy for SyncSendPointer<T> {}
 impl<T> Clone for SyncSendPointer<T> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 
@@ -62,7 +62,7 @@ pub struct SendPointer<T>(*mut T);
 impl<T> Copy for SendPointer<T> {}
 impl<T> Clone for SendPointer<T> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 
