@@ -29,18 +29,18 @@ pub fn split_at_first_char(buf: &[u8]) -> Option<(&str, &[u8])> {
 fn test_split_at_first_char() {
     // Valid first char; multiple lengths
     assert_eq!(
-        split_at_first_char(&['1' as u8, '2' as u8, '3' as u8][..]),
-        Some(("1", &['2' as u8, '3' as u8][..]))
+        split_at_first_char(&[b'1', b'2', b'3'][..]),
+        Some(("1", &[b'2', b'3'][..]))
     );
     assert_eq!(
-        split_at_first_char(&['1' as u8, '2' as u8][..]),
-        Some(("1", &['2' as u8][..]))
+        split_at_first_char(&[b'1', b'2'][..]),
+        Some(("1", &[b'2'][..]))
     );
-    assert_eq!(split_at_first_char(&['1' as u8][..]), Some(("1", &[][..])));
+    assert_eq!(split_at_first_char(&[b'1'][..]), Some(("1", &[][..])));
 
     // Invalid first char; multiple lengths
-    assert_eq!(split_at_first_char(&[0x80, '2' as u8, '3' as u8][..]), None);
-    assert_eq!(split_at_first_char(&[0x80, '2' as u8][..]), None);
+    assert_eq!(split_at_first_char(&[0x80, b'2', b'3'][..]), None);
+    assert_eq!(split_at_first_char(&[0x80, b'2'][..]), None);
     assert_eq!(split_at_first_char(&[0x80][..]), None);
 
     // > 1-byte first characters
@@ -106,7 +106,7 @@ fn test_split_at_first_char_lossy() {
     // Using the implementatin knowledge that this is implemented using `split_at_first_char`;
     // just focus on testing the cases that are different for this method.
     assert_eq!(
-        split_at_first_char_lossy(&['1' as u8, 2, 3][..]),
+        split_at_first_char_lossy(&[b'1', 2, 3][..]),
         ("1", &[2, 3][..])
     );
     assert_eq!(
@@ -148,7 +148,7 @@ fn test_lossy_decode_iterator() {
         vec!["1", "2", "3"]
     );
     assert_eq!(
-        decode_lossy(&[0x80, 0x80, 'x' as u8, 0x80]).collect::<Vec<_>>(),
+        decode_lossy(&[0x80, 0x80, b'x', 0x80]).collect::<Vec<_>>(),
         vec![
             UNICODE_REPLACEMENT_CHAR_STR,
             "x",

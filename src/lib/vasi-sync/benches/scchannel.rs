@@ -12,14 +12,11 @@ use vasi_sync::scchannel::SelfContainedChannel;
 #[repr(align(128))]
 struct Ipc(SelfContainedChannel<()>, SelfContainedChannel<()>);
 
-const PID_ZERO: Option<Pid> = unsafe { Pid::from_raw(0) };
+const PID_ZERO: Option<Pid> = Pid::from_raw(0);
 
 fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
     let initial_cpu_set = rustix::process::sched_getaffinity(PID_ZERO).unwrap();
-    let pinned_cpu_id = (0..)
-        .into_iter()
-        .find(|i| initial_cpu_set.is_set(*i))
-        .unwrap();
+    let pinned_cpu_id = (0..).find(|i| initial_cpu_set.is_set(*i)).unwrap();
     let pinned_cpu_set = {
         let mut s = CpuSet::new();
         s.set(pinned_cpu_id);

@@ -135,70 +135,6 @@ impl Tsc {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn get_emulated_cycles(clock: u64, nanos: u64) -> u64 {
-        let tsc = Tsc::new(clock);
-
-        let mut rax = 0;
-        let mut rdx = 0;
-        let mut rcx = 0;
-        let mut rip = 0;
-
-        tsc.emulate_rdtsc(&mut rax, &mut rdx, &mut rip, nanos);
-        assert_eq!(rax >> 32, 0);
-        assert_eq!(rdx >> 32, 0);
-        let rdtsc_res = (rdx << 32) | rax;
-
-        tsc.emulate_rdtscp(&mut rax, &mut rdx, &mut rcx, &mut rip, nanos);
-        assert_eq!(rax >> 32, 0);
-        assert_eq!(rdx >> 32, 0);
-        let rdtscp_res = (rdx << 32) | rax;
-
-        assert_eq!(rdtsc_res, rdtscp_res);
-        rdtsc_res
-    }
-
-    #[test]
-    fn ns_granularity_at_1_ghz() {
-        assert_eq!(get_emulated_cycles(1_000_000_000, 1), 1);
-    }
-
-    #[test]
-    fn scales_with_clock_rate() {
-        let base_clock = 1_000_000_000;
-        let base_nanos = 1;
-        assert_eq!(
-            get_emulated_cycles(1000 * base_clock, base_nanos),
-            1000 * get_emulated_cycles(base_clock, base_nanos)
-        );
-    }
-
-    #[test]
-    fn scales_with_time() {
-        let base_clock = 1_000_000_000;
-        let base_nanos = 1;
-        assert_eq!(
-            get_emulated_cycles(base_clock, 1000 * base_nanos),
-            1000 * get_emulated_cycles(base_clock, base_nanos)
-        );
-    }
-
-    #[test]
-    fn large_cycle_count() {
-        let one_year_in_seconds: u64 = 365 * 24 * 60 * 60;
-        let ten_b_cycles_per_second: u64 = 10_000_000_000;
-        let expected_cycles = one_year_in_seconds
-            .checked_mul(ten_b_cycles_per_second)
-            .unwrap();
-        let actual_cycles =
-            get_emulated_cycles(ten_b_cycles_per_second, one_year_in_seconds * 1_000_000_000);
-        assert_eq!(actual_cycles, expected_cycles);
-    }
-}
-
 mod export {
     use super::*;
 
@@ -265,5 +201,69 @@ mod export {
     #[no_mangle]
     pub extern "C" fn isRdtscp(ip: *const u8) -> bool {
         unsafe { Tsc::ip_is_rdtscp(ip) }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn get_emulated_cycles(clock: u64, nanos: u64) -> u64 {
+        let tsc = Tsc::new(clock);
+
+        let mut rax = 0;
+        let mut rdx = 0;
+        let mut rcx = 0;
+        let mut rip = 0;
+
+        tsc.emulate_rdtsc(&mut rax, &mut rdx, &mut rip, nanos);
+        assert_eq!(rax >> 32, 0);
+        assert_eq!(rdx >> 32, 0);
+        let rdtsc_res = (rdx << 32) | rax;
+
+        tsc.emulate_rdtscp(&mut rax, &mut rdx, &mut rcx, &mut rip, nanos);
+        assert_eq!(rax >> 32, 0);
+        assert_eq!(rdx >> 32, 0);
+        let rdtscp_res = (rdx << 32) | rax;
+
+        assert_eq!(rdtsc_res, rdtscp_res);
+        rdtsc_res
+    }
+
+    #[test]
+    fn ns_granularity_at_1_ghz() {
+        assert_eq!(get_emulated_cycles(1_000_000_000, 1), 1);
+    }
+
+    #[test]
+    fn scales_with_clock_rate() {
+        let base_clock = 1_000_000_000;
+        let base_nanos = 1;
+        assert_eq!(
+            get_emulated_cycles(1000 * base_clock, base_nanos),
+            1000 * get_emulated_cycles(base_clock, base_nanos)
+        );
+    }
+
+    #[test]
+    fn scales_with_time() {
+        let base_clock = 1_000_000_000;
+        let base_nanos = 1;
+        assert_eq!(
+            get_emulated_cycles(base_clock, 1000 * base_nanos),
+            1000 * get_emulated_cycles(base_clock, base_nanos)
+        );
+    }
+
+    #[test]
+    fn large_cycle_count() {
+        let one_year_in_seconds: u64 = 365 * 24 * 60 * 60;
+        let ten_b_cycles_per_second: u64 = 10_000_000_000;
+        let expected_cycles = one_year_in_seconds
+            .checked_mul(ten_b_cycles_per_second)
+            .unwrap();
+        let actual_cycles =
+            get_emulated_cycles(ten_b_cycles_per_second, one_year_in_seconds * 1_000_000_000);
+        assert_eq!(actual_cycles, expected_cycles);
     }
 }

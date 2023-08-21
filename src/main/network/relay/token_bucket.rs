@@ -199,7 +199,7 @@ mod tests {
 
         for i in 1..=(capacity / increment) {
             // One more interval of time passes
-            let later = now + interval.saturating_mul(i.try_into().unwrap());
+            let later = now + interval.saturating_mul(i);
             // Should cause an increment to the balance
             let result = tb.conforming_remove_inner(0, &later);
             assert!(result.is_ok());

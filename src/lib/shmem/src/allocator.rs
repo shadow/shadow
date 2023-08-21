@@ -398,6 +398,8 @@ unsafe impl Sync for SharedMemDeserializer<'_> {}
 mod tests {
     use super::*;
     use rand::Rng;
+    use std::str::FromStr;
+    use std::string::ToString;
     use std::sync::atomic::{AtomicI32, Ordering};
 
     extern crate std;
@@ -426,8 +428,8 @@ mod tests {
             }
 
             // Then check all blocks
-            for idx in 0..marked_blocks.len() {
-                assert_eq!(marked_blocks[idx].0, *marked_blocks[idx].1);
+            for block in &marked_blocks {
+                assert_eq!(block.0, *block.1);
             }
         };
 
@@ -435,8 +437,7 @@ mod tests {
             execute_round();
         }
 
-        while marked_blocks.len() > 0 {
-            let b = marked_blocks.pop().unwrap();
+        while let Some(b) = marked_blocks.pop() {
             shfree(b.1);
         }
     }
@@ -450,8 +451,8 @@ mod tests {
         let original_block: ShMemBlock<T> = shmalloc(x);
         {
             let serialized_block = original_block.serialize();
-            let serialized_str = serialized_block.into();
-            let serialized_block = ShMemBlockSerialized::from(serialized_str);
+            let serialized_str = serialized_block.to_string();
+            let serialized_block = ShMemBlockSerialized::from_str(&serialized_str).unwrap();
             let block = unsafe { shdeserialize::<i32>(&serialized_block) };
             assert_eq!(*block, 42);
         }

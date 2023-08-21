@@ -28,7 +28,7 @@ impl<'a> SysCallConditionRef<'a> {
         assert!(!ptr.is_null());
         Self {
             c_ptr: ptr,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 

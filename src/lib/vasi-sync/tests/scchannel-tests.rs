@@ -31,10 +31,7 @@ mod scchannel_tests {
                     channel.send(42);
                 })
             };
-            let reader = {
-                let channel = channel.clone();
-                sync::thread::spawn(move || channel.receive())
-            };
+            let reader = sync::thread::spawn(move || channel.receive());
             writer.join().unwrap();
             assert_eq!(reader.join().unwrap(), Ok(42));
         })
@@ -99,10 +96,7 @@ mod scchannel_tests {
             };
             // Simulate a separate watchdog thread that detects that the writer process
             // has exited, and closes the channel in parallel with the other operations.
-            let watchdog = {
-                let channel = channel.clone();
-                sync::thread::spawn(move || channel.close_writer())
-            };
+            let watchdog = sync::thread::spawn(move || channel.close_writer());
             let res = reader.join().unwrap();
             // We should either get the written value, or an error, depending on
             // the execution order.
@@ -152,8 +146,8 @@ mod scchannel_tests {
                 })
             };
             let beta = {
-                let send_channel = beta_to_alpha.clone();
-                let recv_channel = alpha_to_beta.clone();
+                let send_channel = beta_to_alpha;
+                let recv_channel = alpha_to_beta;
                 sync::thread::spawn(move || {
                     let mut v = Vec::new();
                     v.push(recv_channel.receive());
