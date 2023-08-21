@@ -907,6 +907,10 @@ impl Process {
         self.common().id
     }
 
+    pub fn parent_id(&self) -> ProcessId {
+        self.common().parent_pid.get()
+    }
+
     pub fn host_id(&self) -> HostId {
         self.common().host_id
     }
