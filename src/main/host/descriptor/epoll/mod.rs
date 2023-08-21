@@ -159,12 +159,8 @@ impl Epoll {
         // referenced in the descriptor table should never be a closed file, but Shadow's C TCP
         // sockets do close themselves even if there are still file handles (see
         // `_tcp_endOfFileSignalled`), so we need to check this.
-        if key
-            .get_file_ref()
-            .borrow()
-            .state()
-            .contains(FileState::CLOSED)
-        {
+        let file_state = key.get_file_ref().borrow().state();
+        if file_state.contains(FileState::CLOSED) {
             log::warn!("Attempted to add a closed file {} to epoll", key.get_fd());
             return Err(Errno::EBADF.into());
         }
@@ -176,7 +172,7 @@ impl Epoll {
         }
 
         // Create a new epoll entry.
-        let mut entry = Entry::new(events, data);
+        let mut entry = Entry::new(events, data, file_state);
 
         // Set up a listener to notify us when the file status changes.
         Epoll::refresh_entry_listener(weak_self, key.clone(), &mut entry);
@@ -196,7 +192,8 @@ impl Epoll {
     ) -> Result<(), SyscallError> {
         // Change the settings for this entry.
         let entry = self.monitoring.get_mut(&key).ok_or(Errno::ENOENT)?;
-        entry.set_interested_events(events, data);
+        let file_state = key.get_file_ref().borrow().state();
+        entry.reset(events, data, file_state);
 
         // Set a new listener that is consistent with the new events.
         Epoll::refresh_entry_listener(weak_self, key, entry);
@@ -284,7 +281,7 @@ impl Epoll {
                         if let Some(epoll) = weak_self.upgrade() {
                             epoll
                                 .borrow_mut()
-                                .refresh_entry(&key, listen, filter, state, changed, cb_queue);
+                                .refresh_entry(&key, state, changed, cb_queue);
                         }
                     });
             Some(handle)
@@ -294,39 +291,41 @@ impl Epoll {
         entry.set_listener_handle(handle_opt);
     }
 
-    /// The file listener callback for when a monitored entry status changes.
+    /// The file listener callback for when a monitored entry file status changes.
     fn refresh_entry(
         &mut self,
         key: &Key,
-        monitored: FileState,
-        filter: StateListenerFilter,
         state: FileState,
         changed: FileState,
         cb_queue: &mut CallbackQueue,
     ) {
-        if let Some(entry) = self.monitoring.get_mut(key) {
-            // Pass the new file state to the entry.
-            entry.refresh_state(monitored, filter, state, changed);
+        let Some(entry) = self.monitoring.get_mut(key) else {
+            // We stopped monitoring and can ignore the state change.
+            return;
+        };
 
-            // Make sure it's in the ready set if it should be, or not if it shouldn't be.
-            if entry.has_ready_events() {
-                if entry.get_priority().is_none() {
-                    // It's ready but not in the ready set yet.
-                    let pri = self.pri_counter;
-                    self.pri_counter += 1;
-                    self.ready.insert(PriorityKey::new(pri, key.clone()));
-                    entry.set_priority(Some(pri));
-                }
-            } else {
-                if let Some(pri) = entry.get_priority() {
-                    // It's not ready anymore but it's in the ready set.
-                    self.ready.remove(&PriorityKey::new(pri, key.clone()));
-                    entry.set_priority(None);
-                }
+        // Pass the new file state to the entry, which may change its ready status.
+        entry.notify(state, changed);
+
+        // Make sure it's in the ready set if it should be, or not if it shouldn't be.
+        if entry.has_ready_events() {
+            if entry.get_priority().is_none() {
+                // It's ready but not in the ready set yet.
+                let pri = self.pri_counter;
+                self.pri_counter += 1;
+                self.ready.insert(PriorityKey::new(pri, key.clone()));
+                entry.set_priority(Some(pri));
             }
-
-            self.refresh_readable(cb_queue);
+        } else {
+            if let Some(pri) = entry.get_priority() {
+                // It's not ready anymore but it's in the ready set.
+                self.ready.remove(&PriorityKey::new(pri, key.clone()));
+                entry.set_priority(None);
+            }
         }
+
+        // The entry update may change the epoll readability.
+        self.refresh_readable(cb_queue);
     }
 
     pub fn has_ready_events(&self) -> bool {
@@ -350,7 +349,7 @@ impl Epoll {
             debug_assert!(entry.has_ready_events());
 
             // Store the events we should report to the managed process.
-            events.push(entry.collect_ready_events());
+            events.push(entry.collect_ready_events().unwrap());
 
             // It might still be ready even after we report.
             if entry.has_ready_events() {
