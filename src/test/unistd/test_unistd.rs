@@ -47,6 +47,7 @@ fn main() {
     };
 
     test_getpid_nodeps();
+    test_getppid();
     test_gethostname(&expected_name.nodename);
     test_uname(&expected_name);
     test_getpid_kill();
@@ -58,6 +59,17 @@ fn test_getpid_nodeps() {
     let pid = unsafe { libc::getpid() };
     assert!(pid > 0);
     assert_eq!(pid, process::id() as libc::pid_t);
+}
+
+fn test_getppid() {
+    let ppid = unsafe { libc::getppid() };
+    assert!(ppid > 0);
+    assert_ne!(ppid, unsafe { libc::getpid() });
+    if test_utils::running_in_shadow() {
+        // Processes started directly from the shadow config file have ppid=1,
+        // since shadow effectively acts as the init process.
+        assert_eq!(ppid, 1);
+    }
 }
 
 fn test_gethostname(nodename: &CStr) {

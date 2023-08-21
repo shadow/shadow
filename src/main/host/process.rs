@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use linux_api::errno::Errno;
+use linux_api::sched::CloneFlags;
 use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalFromI32Error};
 use log::{debug, trace, warn};
 use nix::fcntl::OFlag;
@@ -52,6 +53,11 @@ use crate::utility::perf_timer::PerfTimer;
 pub struct ProcessId(u32);
 
 impl ProcessId {
+    // The first Process to run after boot is the "init" process, and has pid=1.
+    // In Shadow simulations, this roughly corresponds to Shadow itself. e.g.
+    // processes spawned by Shadow itself have a parent pid of 1.
+    const INIT: Self = ProcessId(1);
+
     /// Returns what the `ProcessId` would be of a `Process` whose thread
     /// group leader has id `thread_group_leader_tid`.
     pub fn from_thread_group_leader_tid(thread_group_leader_tid: ThreadId) -> Self {
@@ -137,6 +143,10 @@ impl StraceLogging {
 struct Common {
     id: ProcessId,
     host_id: HostId,
+
+    // Parent pid, as returned e.g. by `getppid`.
+    // This can change at runtime if the original parent exits and is reaped.
+    parent_pid: Cell<ProcessId>,
 
     // unique id of the program that this process should run
     name: CString,
@@ -532,6 +542,7 @@ impl RunnableProcess {
     pub fn new_forked_process(
         &self,
         host: &Host,
+        flags: CloneFlags,
         new_thread_group_leader: RootedRc<RootedRefCell<Thread>>,
     ) -> RootedRc<RootedRefCell<Process>> {
         let new_tgl_tid;
@@ -549,12 +560,19 @@ impl RunnableProcess {
         let plugin_name = self.common.plugin_name.clone();
         let name = make_name(host, plugin_name.to_str().unwrap(), pid);
 
+        let parent_pid = if flags.contains(CloneFlags::CLONE_PARENT) {
+            self.common.parent_pid.get()
+        } else {
+            self.common.id
+        };
+
         let common = Common {
             id: pid,
             host_id: host.id(),
             name,
             plugin_name,
             working_dir: self.common.working_dir.clone(),
+            parent_pid: Cell::new(parent_pid),
         };
 
         // The child will log to the same strace log file. Entries contain thread IDs,
@@ -856,6 +874,7 @@ impl Process {
             working_dir,
             name,
             plugin_name,
+            parent_pid: Cell::new(ProcessId::INIT),
         };
         RootedRc::new(
             host.root(),
@@ -886,6 +905,10 @@ impl Process {
 
     pub fn id(&self) -> ProcessId {
         self.common().id
+    }
+
+    pub fn parent_id(&self) -> ProcessId {
+        self.common().parent_pid.get()
     }
 
     pub fn host_id(&self) -> HostId {

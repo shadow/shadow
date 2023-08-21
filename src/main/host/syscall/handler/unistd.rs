@@ -478,4 +478,11 @@ impl SyscallHandler {
             }
         }
     }
+
+    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
+    pub fn getppid(
+        ctx: &mut SyscallContext,
+    ) -> Result<linux_api::posix_types::kernel_pid_t, SyscallError> {
+        Ok(ctx.objs.process.parent_id().into())
+    }
 }

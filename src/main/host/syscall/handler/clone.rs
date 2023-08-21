@@ -148,6 +148,12 @@ impl SyscallHandler {
         let do_child_cleartid = flags.contains(CloneFlags::CLONE_CHILD_CLEARTID);
         handled_flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
 
+        if flags.contains(CloneFlags::CLONE_PARENT) {
+            // Handled in `new_forked_process` when creating a new process.
+            // No-op when not creating a new process.
+            handled_flags.insert(CloneFlags::CLONE_PARENT);
+        }
+
         let unhandled_flags = flags.difference(handled_flags);
         if !unhandled_flags.is_empty() {
             warn!("Unhandled clone flags: {unhandled_flags:?}");
@@ -197,7 +203,7 @@ impl SyscallHandler {
                 .process
                 .borrow_runnable()
                 .unwrap()
-                .new_forked_process(ctx.objs.host, childrc);
+                .new_forked_process(ctx.objs.host, flags, childrc);
             child_process_rc = Some(process.clone(ctx.objs.host.root()));
             child_process_borrow = Some(
                 child_process_rc

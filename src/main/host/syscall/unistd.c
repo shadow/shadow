@@ -234,12 +234,6 @@ SyscallReturn syscallhandler_getpid(SysCallHandler* sys, const SysCallArgs* args
     return syscallreturn_makeDoneI64(pid);
 }
 
-SyscallReturn syscallhandler_getppid(SysCallHandler* sys, const SysCallArgs* args) {
-    // We can't handle this natively in the plugin if we want determinism
-    // Just return a constant
-    return syscallreturn_makeDoneI64(1);
-}
-
 SyscallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
     UntypedForeignPtr tidptr = args->args[0].as_ptr; // int*
     thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);

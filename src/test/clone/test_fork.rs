@@ -59,6 +59,63 @@ fn test_fork_runs(
     Ok(())
 }
 
+fn test_clone_parent(set_clone_parent: bool) -> Result<(), Box<dyn Error>> {
+    let (reader, writer) = rustix::pipe::pipe().unwrap();
+
+    let flags = if set_clone_parent {
+        CloneFlags::CLONE_PARENT
+    } else {
+        CloneFlags::empty()
+    };
+
+    let parent_pid = unsafe { libc::getpid() };
+    let parent_ppid = unsafe { libc::getppid() };
+
+    let clone_res = unsafe {
+        linux_api::sched::clone(
+            flags,
+            Some(Signal::SIGCHLD),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        )
+    }
+    .unwrap();
+    match clone_res {
+        CloneResult::CallerIsChild => {
+            // Ensure we exit with non-zero exit code on panic.
+            std::panic::set_hook(Box::new(|info| {
+                eprintln!("panic: {info:?}");
+                unsafe { libc::exit(1) };
+            }));
+            let expected_ppid = if set_clone_parent {
+                parent_ppid
+            } else {
+                parent_pid
+            };
+            assert_eq!(unsafe { libc::getppid() }, expected_ppid);
+
+            assert_eq!(rustix::io::write(&writer, &[0]), Ok(1));
+            unsafe { libc::exit(0) };
+        }
+        CloneResult::CallerIsParent(_) => (),
+    };
+
+    // Close our copy of the writer-end of the pipe, so that parent hang trying
+    // to read from the pipe if the child exited abnormally.
+    drop(writer);
+
+    // Because waitpid isn't implemented yet, we get the "exit code"
+    // from a pipe.
+    // TODO: once waitpid is implemented, use that instead.
+    let mut exit_code = [0xff_u8];
+    assert_eq!(rustix::io::read(&reader, &mut exit_code), Ok(1));
+    assert_eq!(exit_code[0], 0);
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -88,6 +145,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         tests.push(ShadowTest::new(
             &format!("{fork_fn_name}-fork_runs"),
             move || test_fork_runs(&*fork_fn),
+            all_envs.clone(),
+        ));
+    }
+    for value in [true, false] {
+        tests.push(ShadowTest::new(
+            &format!("clone-parent={value}"),
+            move || test_clone_parent(value),
             all_envs.clone(),
         ));
     }

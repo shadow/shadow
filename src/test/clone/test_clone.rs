@@ -309,6 +309,58 @@ fn test_clone_files_dup(use_clone_files_flag: bool) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+fn test_parent(use_clone_parent_flag: bool) -> Result<(), Box<dyn Error>> {
+    extern "C" fn thread_fn(ppid: *mut c_void) -> i32 {
+        // thread-local storage is not set up; don't call libc functions here.
+
+        // SAFETY:
+        let ppid_channel =
+            unsafe { &*(ppid.cast::<SelfContainedChannel<Option<rustix::process::Pid>>>()) };
+        ppid_channel.send(rustix::process::getppid());
+
+        0
+    }
+    let mut tls = make_empty_tls();
+    let stack = ThreadStack::new(CLONE_TEST_STACK_NBYTES);
+    let child_tid = AtomicU32::new(u32::MAX);
+    let mut flags = CloneFlags::CLONE_VM
+        | CloneFlags::CLONE_SIGHAND
+        | CloneFlags::CLONE_THREAD
+        | CloneFlags::CLONE_SETTLS
+        | CloneFlags::CLONE_CHILD_CLEARTID;
+    if use_clone_parent_flag {
+        flags |= CloneFlags::CLONE_FILES;
+    }
+
+    let ppid_channel = SelfContainedChannel::<Option<rustix::process::Pid>>::new();
+    let child = unsafe {
+        libc::clone(
+            thread_fn,
+            stack.top(),
+            flags.bits().try_into().unwrap(),
+            &ppid_channel as *const _ as *mut core::ffi::c_void,
+            core::ptr::null_mut::<i32>(),
+            &mut tls,
+            child_tid.as_ptr(),
+        )
+    };
+    assert!(child > 0);
+
+    // Wait to be notified of child exit via futex wake on `CHILD_TID`.
+    wait_for_clear_tid(&child_tid);
+
+    let res = ppid_channel.receive().unwrap();
+
+    // When creating a thread (CLONE_THREAD), the parent of the child is always
+    // the same as the parent of the parent, regardless of whether CLONE_PARENT
+    // is set.
+    let expected_result = rustix::process::getppid();
+
+    assert_eq!(res, expected_result);
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -339,6 +391,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "clone_files_unset_dup2",
             || test_clone_files_dup(false),
+            all_envs.clone(),
+        ),
+        ShadowTest::new("clone_parent_set", || test_parent(true), all_envs.clone()),
+        ShadowTest::new(
+            "clone_parent_unset",
+            || test_parent(false),
             all_envs.clone(),
         ),
     ];

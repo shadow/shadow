@@ -364,7 +364,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
             HANDLE_C(getpid);
-            HANDLE_C(getppid);
+            HANDLE_RUST(getppid);
             HANDLE_RUST(gettid);
             HANDLE_RUST(getrandom);
             HANDLE_C(get_robust_list);
