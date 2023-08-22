@@ -578,4 +578,50 @@ impl SyscallHandler {
         }
         Ok(0)
     }
+
+    #[log_syscall(/* rv */ kernel_pid_t, /* pid */ kernel_pid_t)]
+    pub fn getsid(
+        ctx: &mut SyscallContext,
+        pid: kernel_pid_t,
+    ) -> Result<kernel_pid_t, SyscallError> {
+        if pid == 0 {
+            return Ok(ctx.objs.process.session_id().into());
+        }
+        let Ok(pid) = ProcessId::try_from(pid) else {
+            return Err(Errno::EINVAL.into())
+        };
+        let Some(processrc) = ctx.objs.host.process_borrow(pid) else {
+            return Err(Errno::ESRCH.into())
+        };
+        let process = processrc.borrow(ctx.objs.host.root());
+        // No need to check that process is in the same session:
+        //
+        // `getsid(2)`: A process with process ID pid exists, but it is not in
+        // the same session as the calling process, and the implementation
+        // considers this an error... **Linux does not return EPERM**.
+
+        Ok(process.session_id().into())
+    }
+
+    #[log_syscall(/* rv */ kernel_pid_t)]
+    pub fn setsid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+        let pid = ctx.objs.process.id();
+        if ctx.objs.host.process_session_id_of_group_id(pid).is_some() {
+            // `setsid(2)`: The process group ID of any process equals the PID
+            // of the calling process.  Thus, in particular, setsid() fails if
+            // the calling process is already a process group leader.
+            return Err(Errno::EPERM.into());
+        }
+
+        // `setsid(2)`: The calling process is the leader of the new session
+        // (i.e., its session ID is made the same as its process ID).
+        ctx.objs.process.set_session_id(pid);
+
+        // `setsid(2)`: The calling  process  also  becomes  the  process group
+        // leader of a new process group in the session (i.e., its process group
+        // ID is made the same as its process ID).
+        ctx.objs.process.set_group_id(pid);
+
+        Ok(pid.into())
+    }
 }
