@@ -151,6 +151,9 @@ struct Common {
     // Process group id (aka `pgid`), as returned e.g. by `getpgid`.
     group_id: Cell<ProcessId>,
 
+    // Session id, as returned e.g. by `getsid`.
+    session_id: Cell<ProcessId>,
+
     // unique id of the program that this process should run
     name: CString,
 
@@ -572,6 +575,9 @@ impl RunnableProcess {
         // Process group is always inherited from the parent process.
         let process_group_id = self.common.group_id.get();
 
+        // Session is always inherited from the parent process.
+        let session_id = self.common.session_id.get();
+
         let common = Common {
             id: pid,
             host_id: host.id(),
@@ -580,6 +586,7 @@ impl RunnableProcess {
             working_dir: self.common.working_dir.clone(),
             parent_pid: Cell::new(parent_pid),
             group_id: Cell::new(process_group_id),
+            session_id: Cell::new(session_id),
         };
 
         // The child will log to the same strace log file. Entries contain thread IDs,
@@ -883,6 +890,7 @@ impl Process {
             plugin_name,
             parent_pid: Cell::new(ProcessId::INIT),
             group_id: Cell::new(ProcessId::INIT),
+            session_id: Cell::new(ProcessId::INIT),
         };
         RootedRc::new(
             host.root(),
