@@ -14,6 +14,7 @@
 #include <linux/sockios.h>
 #include <linux/time.h>
 #include <linux/unistd.h>
+#include <linux/wait.h>
 
 #include <asm/ioctls.h>
 #include <asm/sigcontext.h>
