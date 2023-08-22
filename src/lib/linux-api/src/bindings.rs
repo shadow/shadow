@@ -464,6 +464,55 @@ pub const LINUX_MAP_HUGE_512MB: u32 = 1946157056;
 pub const LINUX_MAP_HUGE_1GB: u32 = 2013265920;
 pub const LINUX_MAP_HUGE_2GB: u32 = 2080374784;
 pub const LINUX_MAP_HUGE_16GB: u32 = 2281701376;
+pub const LINUX_ITIMER_REAL: u32 = 0;
+pub const LINUX_ITIMER_VIRTUAL: u32 = 1;
+pub const LINUX_ITIMER_PROF: u32 = 2;
+pub const LINUX_CLOCK_REALTIME: u32 = 0;
+pub const LINUX_CLOCK_MONOTONIC: u32 = 1;
+pub const LINUX_CLOCK_PROCESS_CPUTIME_ID: u32 = 2;
+pub const LINUX_CLOCK_THREAD_CPUTIME_ID: u32 = 3;
+pub const LINUX_CLOCK_MONOTONIC_RAW: u32 = 4;
+pub const LINUX_CLOCK_REALTIME_COARSE: u32 = 5;
+pub const LINUX_CLOCK_MONOTONIC_COARSE: u32 = 6;
+pub const LINUX_CLOCK_BOOTTIME: u32 = 7;
+pub const LINUX_CLOCK_REALTIME_ALARM: u32 = 8;
+pub const LINUX_CLOCK_BOOTTIME_ALARM: u32 = 9;
+pub const LINUX_CLOCK_SGI_CYCLE: u32 = 10;
+pub const LINUX_CLOCK_TAI: u32 = 11;
+pub const LINUX_MAX_CLOCKS: u32 = 16;
+pub const LINUX_CLOCKS_MASK: u32 = 1;
+pub const LINUX_CLOCKS_MONO: u32 = 1;
+pub const LINUX_TIMER_ABSTIME: u32 = 1;
+pub const LINUX_RUSAGE_SELF: u32 = 0;
+pub const LINUX_RUSAGE_CHILDREN: i32 = -1;
+pub const LINUX_RUSAGE_BOTH: i32 = -2;
+pub const LINUX_RUSAGE_THREAD: u32 = 1;
+pub const LINUX_RLIM64_INFINITY: i32 = -1;
+pub const LINUX_PRIO_MIN: i32 = -20;
+pub const LINUX_PRIO_MAX: u32 = 20;
+pub const LINUX_PRIO_PROCESS: u32 = 0;
+pub const LINUX_PRIO_PGRP: u32 = 1;
+pub const LINUX_PRIO_USER: u32 = 2;
+pub const LINUX__STK_LIM: u32 = 8388608;
+pub const LINUX_MLOCK_LIMIT: u32 = 8388608;
+pub const LINUX_RLIMIT_CPU: u32 = 0;
+pub const LINUX_RLIMIT_FSIZE: u32 = 1;
+pub const LINUX_RLIMIT_DATA: u32 = 2;
+pub const LINUX_RLIMIT_STACK: u32 = 3;
+pub const LINUX_RLIMIT_CORE: u32 = 4;
+pub const LINUX_RLIMIT_RSS: u32 = 5;
+pub const LINUX_RLIMIT_NPROC: u32 = 6;
+pub const LINUX_RLIMIT_NOFILE: u32 = 7;
+pub const LINUX_RLIMIT_MEMLOCK: u32 = 8;
+pub const LINUX_RLIMIT_AS: u32 = 9;
+pub const LINUX_RLIMIT_LOCKS: u32 = 10;
+pub const LINUX_RLIMIT_SIGPENDING: u32 = 11;
+pub const LINUX_RLIMIT_MSGQUEUE: u32 = 12;
+pub const LINUX_RLIMIT_NICE: u32 = 13;
+pub const LINUX_RLIMIT_RTPRIO: u32 = 14;
+pub const LINUX_RLIMIT_RTTIME: u32 = 15;
+pub const LINUX_RLIM_NLIMITS: u32 = 16;
+pub const LINUX_RLIM_INFINITY: i32 = -1;
 pub const LINUX_CSIGNAL: u32 = 255;
 pub const LINUX_CLONE_VM: u32 = 256;
 pub const LINUX_CLONE_FS: u32 = 512;
@@ -512,25 +561,6 @@ pub const LINUX_SCHED_FLAG_UTIL_CLAMP_MAX: u32 = 64;
 pub const LINUX_SCHED_FLAG_KEEP_ALL: u32 = 24;
 pub const LINUX_SCHED_FLAG_UTIL_CLAMP: u32 = 96;
 pub const LINUX_SCHED_FLAG_ALL: u32 = 127;
-pub const LINUX_ITIMER_REAL: u32 = 0;
-pub const LINUX_ITIMER_VIRTUAL: u32 = 1;
-pub const LINUX_ITIMER_PROF: u32 = 2;
-pub const LINUX_CLOCK_REALTIME: u32 = 0;
-pub const LINUX_CLOCK_MONOTONIC: u32 = 1;
-pub const LINUX_CLOCK_PROCESS_CPUTIME_ID: u32 = 2;
-pub const LINUX_CLOCK_THREAD_CPUTIME_ID: u32 = 3;
-pub const LINUX_CLOCK_MONOTONIC_RAW: u32 = 4;
-pub const LINUX_CLOCK_REALTIME_COARSE: u32 = 5;
-pub const LINUX_CLOCK_MONOTONIC_COARSE: u32 = 6;
-pub const LINUX_CLOCK_BOOTTIME: u32 = 7;
-pub const LINUX_CLOCK_REALTIME_ALARM: u32 = 8;
-pub const LINUX_CLOCK_BOOTTIME_ALARM: u32 = 9;
-pub const LINUX_CLOCK_SGI_CYCLE: u32 = 10;
-pub const LINUX_CLOCK_TAI: u32 = 11;
-pub const LINUX_MAX_CLOCKS: u32 = 16;
-pub const LINUX_CLOCKS_MASK: u32 = 1;
-pub const LINUX_CLOCKS_MONO: u32 = 1;
-pub const LINUX_TIMER_ABSTIME: u32 = 1;
 pub const LINUX_NSIG: u32 = 32;
 pub const LINUX_SIGHUP: u32 = 1;
 pub const LINUX_SIGINT: u32 = 2;
@@ -1620,6 +1650,489 @@ fn bindgen_test_layout_sockaddr_in() {
     );
 }
 #[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux___kernel_old_timeval {
+    pub tv_sec: linux___kernel_long_t,
+    pub tv_usec: linux___kernel_long_t,
+}
+#[test]
+fn bindgen_test_layout___kernel_old_timeval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux___kernel_old_timeval> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux___kernel_old_timeval>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux___kernel_old_timeval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux___kernel_old_timeval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux___kernel_old_timeval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_old_timeval),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_usec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_old_timeval),
+            "::",
+            stringify!(tv_usec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_timespec {
+    pub tv_sec: linux___kernel_old_time_t,
+    pub tv_nsec: ::core::ffi::c_long,
+}
+#[test]
+fn bindgen_test_layout_timespec() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_timespec> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_timespec>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_timespec))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_timespec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_timespec))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timespec),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_nsec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timespec),
+            "::",
+            stringify!(tv_nsec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_timeval {
+    pub tv_sec: linux___kernel_old_time_t,
+    pub tv_usec: linux___kernel_suseconds_t,
+}
+#[test]
+fn bindgen_test_layout_timeval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_timeval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_timeval>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_timeval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_timeval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_usec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_timeval),
+            "::",
+            stringify!(tv_usec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_itimerspec {
+    pub it_interval: linux_timespec,
+    pub it_value: linux_timespec,
+}
+#[test]
+fn bindgen_test_layout_itimerspec() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_itimerspec> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_itimerspec>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_itimerspec))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_itimerspec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_itimerspec))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerspec),
+            "::",
+            stringify!(it_value)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_itimerval {
+    pub it_interval: linux_timeval,
+    pub it_value: linux_timeval,
+}
+#[test]
+fn bindgen_test_layout_itimerval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_itimerval> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_itimerval>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_itimerval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_itimerval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_itimerval),
+            "::",
+            stringify!(it_value)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_rusage {
+    pub ru_utime: linux___kernel_old_timeval,
+    pub ru_stime: linux___kernel_old_timeval,
+    pub ru_maxrss: linux___kernel_long_t,
+    pub ru_ixrss: linux___kernel_long_t,
+    pub ru_idrss: linux___kernel_long_t,
+    pub ru_isrss: linux___kernel_long_t,
+    pub ru_minflt: linux___kernel_long_t,
+    pub ru_majflt: linux___kernel_long_t,
+    pub ru_nswap: linux___kernel_long_t,
+    pub ru_inblock: linux___kernel_long_t,
+    pub ru_oublock: linux___kernel_long_t,
+    pub ru_msgsnd: linux___kernel_long_t,
+    pub ru_msgrcv: linux___kernel_long_t,
+    pub ru_nsignals: linux___kernel_long_t,
+    pub ru_nvcsw: linux___kernel_long_t,
+    pub ru_nivcsw: linux___kernel_long_t,
+}
+#[test]
+fn bindgen_test_layout_rusage() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_rusage> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_rusage>(),
+        144usize,
+        concat!("Size of: ", stringify!(linux_rusage))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_rusage>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_rusage))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_utime) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_utime)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_stime) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_stime)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_maxrss) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_maxrss)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_ixrss) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_ixrss)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_idrss) as usize - ptr as usize },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_idrss)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_isrss) as usize - ptr as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_isrss)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_minflt) as usize - ptr as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_minflt)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_majflt) as usize - ptr as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_majflt)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_nswap) as usize - ptr as usize },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_nswap)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_inblock) as usize - ptr as usize },
+        88usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_inblock)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_oublock) as usize - ptr as usize },
+        96usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_oublock)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_msgsnd) as usize - ptr as usize },
+        104usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_msgsnd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_msgrcv) as usize - ptr as usize },
+        112usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_msgrcv)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_nsignals) as usize - ptr as usize },
+        120usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_nsignals)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_nvcsw) as usize - ptr as usize },
+        128usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_nvcsw)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ru_nivcsw) as usize - ptr as usize },
+        136usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rusage),
+            "::",
+            stringify!(ru_nivcsw)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_rlimit {
+    pub rlim_cur: linux___kernel_ulong_t,
+    pub rlim_max: linux___kernel_ulong_t,
+}
+#[test]
+fn bindgen_test_layout_rlimit() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_rlimit> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_rlimit>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_rlimit))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_rlimit>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_rlimit))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rlim_cur) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rlimit),
+            "::",
+            stringify!(rlim_cur)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rlim_max) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rlimit),
+            "::",
+            stringify!(rlim_max)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_rlimit64 {
+    pub rlim_cur: linux___u64,
+    pub rlim_max: linux___u64,
+}
+#[test]
+fn bindgen_test_layout_rlimit64() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_rlimit64> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_rlimit64>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_rlimit64))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_rlimit64>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_rlimit64))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rlim_cur) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rlimit64),
+            "::",
+            stringify!(rlim_cur)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).rlim_max) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_rlimit64),
+            "::",
+            stringify!(rlim_max)
+        )
+    );
+}
+#[repr(C)]
 #[repr(align(32))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_rseq {
@@ -1821,170 +2334,6 @@ fn bindgen_test_layout_clone_args() {
             stringify!(linux_clone_args),
             "::",
             stringify!(cgroup)
-        )
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_timespec {
-    pub tv_sec: linux___kernel_old_time_t,
-    pub tv_nsec: ::core::ffi::c_long,
-}
-#[test]
-fn bindgen_test_layout_timespec() {
-    const UNINIT: ::core::mem::MaybeUninit<linux_timespec> = ::core::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::core::mem::size_of::<linux_timespec>(),
-        16usize,
-        concat!("Size of: ", stringify!(linux_timespec))
-    );
-    assert_eq!(
-        ::core::mem::align_of::<linux_timespec>(),
-        8usize,
-        concat!("Alignment of ", stringify!(linux_timespec))
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_timespec),
-            "::",
-            stringify!(tv_sec)
-        )
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).tv_nsec) as usize - ptr as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_timespec),
-            "::",
-            stringify!(tv_nsec)
-        )
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_timeval {
-    pub tv_sec: linux___kernel_old_time_t,
-    pub tv_usec: linux___kernel_suseconds_t,
-}
-#[test]
-fn bindgen_test_layout_timeval() {
-    const UNINIT: ::core::mem::MaybeUninit<linux_timeval> = ::core::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::core::mem::size_of::<linux_timeval>(),
-        16usize,
-        concat!("Size of: ", stringify!(linux_timeval))
-    );
-    assert_eq!(
-        ::core::mem::align_of::<linux_timeval>(),
-        8usize,
-        concat!("Alignment of ", stringify!(linux_timeval))
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_timeval),
-            "::",
-            stringify!(tv_sec)
-        )
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).tv_usec) as usize - ptr as usize },
-        8usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_timeval),
-            "::",
-            stringify!(tv_usec)
-        )
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_itimerspec {
-    pub it_interval: linux_timespec,
-    pub it_value: linux_timespec,
-}
-#[test]
-fn bindgen_test_layout_itimerspec() {
-    const UNINIT: ::core::mem::MaybeUninit<linux_itimerspec> = ::core::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::core::mem::size_of::<linux_itimerspec>(),
-        32usize,
-        concat!("Size of: ", stringify!(linux_itimerspec))
-    );
-    assert_eq!(
-        ::core::mem::align_of::<linux_itimerspec>(),
-        8usize,
-        concat!("Alignment of ", stringify!(linux_itimerspec))
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_itimerspec),
-            "::",
-            stringify!(it_interval)
-        )
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_itimerspec),
-            "::",
-            stringify!(it_value)
-        )
-    );
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_itimerval {
-    pub it_interval: linux_timeval,
-    pub it_value: linux_timeval,
-}
-#[test]
-fn bindgen_test_layout_itimerval() {
-    const UNINIT: ::core::mem::MaybeUninit<linux_itimerval> = ::core::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::core::mem::size_of::<linux_itimerval>(),
-        32usize,
-        concat!("Size of: ", stringify!(linux_itimerval))
-    );
-    assert_eq!(
-        ::core::mem::align_of::<linux_itimerval>(),
-        8usize,
-        concat!("Alignment of ", stringify!(linux_itimerval))
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_itimerval),
-            "::",
-            stringify!(it_interval)
-        )
-    );
-    assert_eq!(
-        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
-        16usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(linux_itimerval),
-            "::",
-            stringify!(it_value)
         )
     );
 }

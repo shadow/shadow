@@ -85,6 +85,11 @@ bindgen_flags+=("--allowlist-type=flock64")
 # epoll.h
 bindgen_flags+=("--allowlist-type=epoll_event")
 
+# resource.h
+bindgen_flags+=("--allowlist-type=rusage")
+bindgen_flags+=("--allowlist-type=rlimit")
+bindgen_flags+=("--allowlist-type=rlimit64")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
