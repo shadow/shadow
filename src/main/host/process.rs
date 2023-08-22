@@ -56,7 +56,7 @@ impl ProcessId {
     // The first Process to run after boot is the "init" process, and has pid=1.
     // In Shadow simulations, this roughly corresponds to Shadow itself. e.g.
     // processes spawned by Shadow itself have a parent pid of 1.
-    const INIT: Self = ProcessId(1);
+    pub const INIT: Self = ProcessId(1);
 
     /// Returns what the `ProcessId` would be of a `Process` whose thread
     /// group leader has id `thread_group_leader_tid`.
@@ -927,6 +927,10 @@ impl Process {
         self.common().parent_pid.get()
     }
 
+    pub fn set_parent_id(&self, pid: ProcessId) {
+        self.common().parent_pid.set(pid)
+    }
+
     pub fn group_id(&self) -> ProcessId {
         self.common().group_id.get()
     }
@@ -1346,12 +1350,6 @@ impl Process {
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
-
-    /// The parent of this process.
-    pub fn ppid(&self) -> Option<ProcessId> {
-        // We don't yet support child processes, so there is never a ppid.
-        None
-    }
 }
 
 impl Drop for Process {
@@ -1361,7 +1359,7 @@ impl Drop for Process {
         // Shouldn't be dropped while a parent exists.
         // Assuming for now that once we implement parent processes, we'll clear
         // the parent id after the child has been reaped or the parent exits.
-        debug_assert!(self.ppid().is_none());
+        debug_assert_eq!(self.parent_id(), ProcessId::INIT);
     }
 }
 

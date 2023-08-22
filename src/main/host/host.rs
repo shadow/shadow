@@ -458,18 +458,52 @@ impl Host {
             trace!("{pid:?} doesn't exist");
             return;
         };
-        let remove_process = {
+        let died;
+        let is_orphan;
+        {
             Worker::set_active_process(&processrc);
             let process = processrc.borrow(self.root());
             process.resume(self, tid);
             Worker::clear_active_process();
-            process.borrow_zombie().is_some() && process.ppid().is_none()
+            died = process.borrow_zombie().is_some();
+            is_orphan = process.parent_id() == ProcessId::INIT;
         };
         RootedRc::explicit_drop(processrc, &self.root);
-        if remove_process {
+
+        if !died {
+            return;
+        }
+
+        // Reparent children, and collect IDs of children that are dead.
+        let mut orphaned_zombie_pids: Vec<ProcessId> = self
+            .processes
+            .borrow()
+            .iter()
+            .filter_map(|(other_pid, processrc)| {
+                let process = processrc.borrow(&self.root);
+                if process.parent_id() != pid {
+                    // Not a child of the current process
+                    None
+                } else {
+                    process.set_parent_id(ProcessId::INIT);
+                    let is_zombie = process.borrow_zombie().is_some();
+                    is_zombie.then_some(*other_pid)
+                }
+            })
+            .collect();
+
+        // Process we ran is a zombie; is it also an orphan?
+        debug_assert!(died);
+        if is_orphan {
+            orphaned_zombie_pids.push(pid);
+        }
+
+        // Free orphaned zombies.
+        let mut processes = self.processes.borrow_mut();
+        for pid in orphaned_zombie_pids {
             trace!("Dropping orphan zombie process {pid:?}");
-            let process = self.processes.borrow_mut().remove(&pid).unwrap();
-            process.explicit_drop(self.root());
+            let processrc = processes.remove(&pid).unwrap();
+            RootedRc::explicit_drop(processrc, &self.root)
         }
     }
 
@@ -706,6 +740,9 @@ impl Host {
                 let process = processrc.borrow(self.root());
                 process.stop(self);
                 Worker::clear_active_process();
+                // Reparent to Shadow/INIT, since the original parent is or is
+                // about to be dead.
+                process.set_parent_id(ProcessId::INIT);
             }
 
             processrc.explicit_drop(self.root());
