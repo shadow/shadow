@@ -51,6 +51,8 @@ fn main() {
     test_gethostname(&expected_name.nodename);
     test_uname(&expected_name);
     test_getpid_kill();
+    test_getpgrp();
+    test_getsid();
 }
 
 /// Tests that the results are plausible, but can't really validate that it's our
@@ -69,6 +71,28 @@ fn test_getppid() {
         // Processes started directly from the shadow config file have ppid=1,
         // since shadow effectively acts as the init process.
         assert_eq!(ppid, 1);
+    }
+}
+
+fn test_getpgrp() {
+    let pgrp = unsafe { libc::getpgrp() };
+    assert!(pgrp > 0);
+    assert_eq!(unsafe { libc::getpgid(0) }, pgrp);
+    assert_eq!(unsafe { libc::getpgid(libc::getpid()) }, pgrp);
+    if test_utils::running_in_shadow() {
+        // Processes started directly from the shadow config file
+        // belong to INIT's process group.
+        assert_eq!(pgrp, 1);
+    }
+}
+
+fn test_getsid() {
+    let sid = unsafe { libc::getsid(0) };
+    assert!(sid > 0);
+    if test_utils::running_in_shadow() {
+        // Processes started directly from the shadow config file
+        // belong to INIT's session.
+        assert_eq!(sid, 1);
     }
 }
 
