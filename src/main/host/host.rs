@@ -900,6 +900,18 @@ impl Host {
             };
         }
     }
+
+    /// Returns the Session ID for the given process group ID, if it exists.
+    pub fn process_session_id_of_group_id(&self, group_id: ProcessId) -> Option<ProcessId> {
+        let processes = self.processes.borrow();
+        for processrc in processes.values() {
+            let process = processrc.borrow(&self.root);
+            if process.group_id() == group_id {
+                return Some(process.session_id());
+            }
+        }
+        None
+    }
 }
 
 impl Drop for Host {

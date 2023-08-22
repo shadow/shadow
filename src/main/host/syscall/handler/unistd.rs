@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, OFlag};
-use linux_api::posix_types::kernel_off_t;
+use linux_api::posix_types::{kernel_off_t, kernel_pid_t};
 use log::*;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
@@ -12,6 +12,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
+use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::type_formatting::SyscallBufferArg;
@@ -480,9 +481,101 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
-    pub fn getppid(
-        ctx: &mut SyscallContext,
-    ) -> Result<linux_api::posix_types::kernel_pid_t, SyscallError> {
+    pub fn getppid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(ctx.objs.process.parent_id().into())
+    }
+
+    #[log_syscall(/* rv */ kernel_pid_t)]
+    pub fn getpgrp(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+        Ok(ctx.objs.process.group_id().into())
+    }
+
+    #[log_syscall(/* rv */ kernel_pid_t, /* pid*/ kernel_pid_t)]
+    pub fn getpgid(
+        ctx: &mut SyscallContext,
+        pid: kernel_pid_t,
+    ) -> Result<kernel_pid_t, SyscallError> {
+        if pid == 0 || pid == kernel_pid_t::from(ctx.objs.process.id()) {
+            return Ok(ctx.objs.process.group_id().into());
+        }
+        let pid = ProcessId::try_from(pid).map_err(|_| Errno::EINVAL)?;
+        let Some(process) = ctx.objs.host.process_borrow(pid) else {
+            return Err(Errno::ESRCH.into())
+        };
+        let process = process.borrow(ctx.objs.host.root());
+        Ok(process.group_id().into())
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ kernel_pid_t, /* pgid */kernel_pid_t)]
+    pub fn setpgid(
+        ctx: &mut SyscallContext,
+        pid: kernel_pid_t,
+        pgid: kernel_pid_t,
+    ) -> Result<std::ffi::c_int, SyscallError> {
+        let _processrc_borrow;
+        let _process_borrow;
+        let process: &Process;
+        if pid == 0 || pid == kernel_pid_t::from(ctx.objs.process.id()) {
+            _processrc_borrow = None;
+            _process_borrow = None;
+            process = ctx.objs.process;
+        } else {
+            let pid = ProcessId::try_from(pid).map_err(|_| Errno::EINVAL)?;
+            let Some(pbrc) = ctx.objs.host.process_borrow(pid) else {
+                return Err(Errno::ESRCH.into());
+            };
+            _processrc_borrow = Some(pbrc);
+            _process_borrow = Some(
+                _processrc_borrow
+                    .as_ref()
+                    .unwrap()
+                    .borrow(ctx.objs.host.root()),
+            );
+            process = _process_borrow.as_ref().unwrap();
+        }
+        let pgid = if pgid == 0 {
+            None
+        } else {
+            Some(ProcessId::try_from(pgid).map_err(|_| Errno::EINVAL)?)
+        };
+        if process.id() != ctx.objs.process.id() && process.parent_id() != ctx.objs.process.id() {
+            // `setpgid(2)`: pid is not the calling process and not a child  of
+            // the calling process.
+            return Err(Errno::ESRCH.into());
+        }
+        if let Some(pgid) = pgid {
+            if ctx.objs.host.process_session_id_of_group_id(pgid) != Some(process.session_id()) {
+                // An attempt was made to move a process into a process group in
+                // a different session
+                return Err(Errno::EPERM.into());
+            }
+        }
+        if process.session_id() != ctx.objs.process.session_id() {
+            // `setpgid(2)`: ... or to change the process  group  ID of one of
+            // the children of the calling process and the child was in a
+            // different session
+            return Err(Errno::EPERM.into());
+        }
+        if process.session_id() == process.id() {
+            // `setpgid(2)`: ... or to change the process group ID of a session leader
+            return Err(Errno::EPERM.into());
+        }
+        // TODO: Keep track of whether a process has performed an `execve`.
+        // `setpgid(2): EACCES: An attempt was made to change the process group
+        // ID of one of the children of the calling process and the child had
+        // already performed an execve(2).
+        if let Some(pgid) = pgid {
+            if ctx.objs.host.process_session_id_of_group_id(pgid) != Some(process.session_id()) {
+                // `setpgid(2)`: An attempt was made to move a process into a
+                // process group in a different session
+                return Err(Errno::EPERM.into());
+            }
+            process.set_group_id(pgid);
+        } else {
+            // `setpgid(2)`: If pgid is zero, then the PGID of the process
+            // specified by pid is made the same as its process ID.
+            process.set_group_id(process.id());
+        }
+        Ok(0)
     }
 }

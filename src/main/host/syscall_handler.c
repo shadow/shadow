@@ -364,6 +364,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
             HANDLE_C(getpid);
+            HANDLE_RUST(getpgrp);
+            HANDLE_RUST(getpgid);
             HANDLE_RUST(getppid);
             HANDLE_RUST(gettid);
             HANDLE_RUST(getrandom);
@@ -426,6 +428,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(select);
             HANDLE_RUST(sendmsg);
             HANDLE_RUST(sendto);
+            HANDLE_RUST(setpgid);
             HANDLE_RUST(setsockopt);
 #ifdef SYS_sigaction
             // Superseded by rt_sigaction in Linux 2.2
