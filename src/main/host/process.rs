@@ -927,6 +927,22 @@ impl Process {
         self.common().parent_pid.get()
     }
 
+    pub fn group_id(&self) -> ProcessId {
+        self.common().group_id.get()
+    }
+
+    pub fn set_group_id(&self, id: ProcessId) {
+        self.common().group_id.set(id)
+    }
+
+    pub fn session_id(&self) -> ProcessId {
+        self.common().session_id.get()
+    }
+
+    pub fn set_session_id(&self, id: ProcessId) {
+        self.common().session_id.set(id)
+    }
+
     pub fn host_id(&self) -> HostId {
         self.common().host_id
     }
