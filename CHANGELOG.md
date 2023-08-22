@@ -15,6 +15,10 @@ is not a tty but `stderr` is. This helps make errors more visible in the common
 case that `stdout` is redirected to a log file but `stderr` is not. This can
 currently be disabled via the (unstable) option `log-errors-to-tty`.
 
+* Added support for subprocess creation and management.
+  * The `fork` syscall and `fork`-like invocations of the `clone` and `clone3` syscalls.
+  * Process parent pid's, process group IDs, process session IDs, and related syscalls.
+
 PATCH changes (bugfixes):
 
 * Updated documentation and tests to reflect that shadow no longer requires
