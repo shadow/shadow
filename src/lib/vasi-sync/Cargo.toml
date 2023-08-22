@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num_enum = { version = "0.6.1", default-features=false }
+num_enum = { version = "0.7.0", default-features=false }
 rustix = { version = "0.38.4", default-features = false, features=["fs", "thread", "process"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }

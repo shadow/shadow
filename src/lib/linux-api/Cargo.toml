@@ -16,7 +16,7 @@ log = { version = "0.4.18", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
-num_enum = { version = "0.6.1", default-features=false }
+num_enum = { version = "0.7.0", default-features=false }
 memoffset = "0.9.0"
 bytemuck = "1.13.1"
 linux-syscall = "1.0.0"
