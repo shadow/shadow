@@ -60,6 +60,7 @@ pub mod ioctls;
 pub mod ldt;
 pub mod mman;
 pub mod posix_types;
+pub mod resource;
 pub mod rseq;
 pub mod sched;
 pub mod signal;
