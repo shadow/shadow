@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
 linux-api = { path = "../linux-api"}
-num_enum = { version = "0.6.1", default-features=false }
+num_enum = { version = "0.7.0", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
 shadow_tsc = { path = "../tsc" }
