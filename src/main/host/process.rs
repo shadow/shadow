@@ -154,6 +154,9 @@ struct Common {
     // Session id, as returned e.g. by `getsid`.
     session_id: Cell<ProcessId>,
 
+    // Signal to send to parent on death.
+    exit_signal: Option<Signal>,
+
     // unique id of the program that this process should run
     name: CString,
 
@@ -549,6 +552,7 @@ impl RunnableProcess {
         &self,
         host: &Host,
         flags: CloneFlags,
+        exit_signal: Option<Signal>,
         new_thread_group_leader: RootedRc<RootedRefCell<Thread>>,
     ) -> RootedRc<RootedRefCell<Process>> {
         let new_tgl_tid;
@@ -587,6 +591,7 @@ impl RunnableProcess {
             parent_pid: Cell::new(parent_pid),
             group_id: Cell::new(process_group_id),
             session_id: Cell::new(session_id),
+            exit_signal,
         };
 
         // The child will log to the same strace log file. Entries contain thread IDs,
@@ -891,6 +896,9 @@ impl Process {
             parent_pid: Cell::new(ProcessId::INIT),
             group_id: Cell::new(ProcessId::INIT),
             session_id: Cell::new(ProcessId::INIT),
+            // Exit signal is moot; since parent is INIT there will never
+            // be a valid target for it.
+            exit_signal: None,
         };
         RootedRc::new(
             host.root(),
