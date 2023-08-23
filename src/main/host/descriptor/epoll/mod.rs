@@ -19,6 +19,9 @@ use crate::utility::{HostTreePointer, ObjectCounter};
 use self::entry::Entry;
 use self::key::{Key, PriorityKey};
 
+use super::socket::inet::InetSocket;
+use super::socket::Socket;
+
 // Private submodules to help us track the status of items we are monitoring.
 mod entry;
 mod key;
@@ -52,7 +55,7 @@ impl Epoll {
             _counter: ObjectCounter::new("Epoll"),
         };
 
-        CallbackQueue::queue_and_run(|cb_queue| epoll.refresh_readable(cb_queue));
+        CallbackQueue::queue_and_run(|cb_queue| epoll.refresh_state(cb_queue));
 
         Arc::new(AtomicRefCell::new(epoll))
     }
@@ -122,7 +125,12 @@ impl Epoll {
         _arg_ptr: ForeignPtr<()>,
         _mem: &mut MemoryManager,
     ) -> SyscallResult {
-        todo!();
+        // After checking the epoll man pages and the Linux source for eventpoll.c, we don't think
+        // epoll descriptors support any ioctl operations.
+        warn_once_then_trace!("(LOG_ONCE) Epoll does not support any ioctl requests.");
+        // From ioctl(2): ENOTTY The specified request does not apply to the kind of object that the
+        // file descriptor fd references. Verified that epoll descriptors return this on Linux.
+        Err(Errno::ENOTTY.into())
     }
 
     pub fn ctl(
@@ -135,82 +143,54 @@ impl Epoll {
         weak_self: Weak<AtomicRefCell<Epoll>>,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
+        let state = target_file.borrow().state();
         let key = Key::new(target_fd, target_file);
 
-        let result = match op {
-            EpollCtlOp::EPOLL_CTL_ADD => self.ctl_add(key, events, data, weak_self),
-            EpollCtlOp::EPOLL_CTL_MOD => self.ctl_mod(key, events, data, weak_self),
-            EpollCtlOp::EPOLL_CTL_DEL => self.ctl_del(key),
+        log::trace!("Epoll editing fd {target_fd} while in state {state:?}");
+
+        match op {
+            EpollCtlOp::EPOLL_CTL_ADD => {
+                // Check if we're trying to add a file that's already been closed. Typically a file
+                // that is referenced in the descriptor table should never be a closed file, but
+                // Shadow's C TCP sockets do close themselves even if there are still file handles
+                // (see `_tcp_endOfFileSignalled`), so we need to check this.
+                if state.contains(FileState::CLOSED) {
+                    log::warn!("Attempted to add a closed file {target_fd} to epoll");
+                    return Err(Errno::EBADF.into());
+                }
+
+                // From epoll_ctl(2): "op was EPOLL_CTL_ADD, and the supplied file descriptor fd is
+                // already registered with this epoll instance."
+                if self.monitoring.contains_key(&key) {
+                    return Err(Errno::EEXIST.into());
+                }
+
+                let mut entry = Entry::new(events, data, state);
+                // TODO remove when legacy tcp is removed.
+                if is_legacy(key.get_file_ref()) {
+                    entry.set_legacy();
+                }
+                self.monitoring.insert(key.clone(), entry);
+            }
+            EpollCtlOp::EPOLL_CTL_MOD => {
+                let entry = self.monitoring.get_mut(&key).ok_or(Errno::ENOENT)?;
+                entry.reset(events, data, state);
+            }
+            EpollCtlOp::EPOLL_CTL_DEL => {
+                // Stop monitoring this entry. Dropping the entry will cause it to stop listening
+                // for status changes on its inner `File` event source object.
+                let entry = self.monitoring.remove(&key).ok_or(Errno::ENOENT)?;
+
+                // If it has a priority, then we also remove it from the ready set.
+                if let Some(pri) = entry.get_priority() {
+                    self.ready.remove(&PriorityKey::new(pri, key.clone()));
+                }
+            }
         };
 
-        self.refresh_readable(cb_queue);
-
-        result
-    }
-
-    fn ctl_add(
-        &mut self,
-        key: Key,
-        events: EpollEvents,
-        data: u64,
-        weak_self: Weak<AtomicRefCell<Epoll>>,
-    ) -> Result<(), SyscallError> {
-        // Check if we're trying to add a file that's already been closed. Typically a file that is
-        // referenced in the descriptor table should never be a closed file, but Shadow's C TCP
-        // sockets do close themselves even if there are still file handles (see
-        // `_tcp_endOfFileSignalled`), so we need to check this.
-        let file_state = key.get_file_ref().borrow().state();
-        if file_state.contains(FileState::CLOSED) {
-            log::warn!("Attempted to add a closed file {} to epoll", key.get_fd());
-            return Err(Errno::EBADF.into());
-        }
-
-        // From epoll_ctl(2): "op was EPOLL_CTL_ADD, and the supplied file descriptor fd is already
-        // registered with this epoll instance."
-        if self.monitoring.contains_key(&key) {
-            return Err(Errno::EEXIST.into());
-        }
-
-        // Create a new epoll entry.
-        let mut entry = Entry::new(events, data, file_state);
-
-        // Set up a listener to notify us when the file status changes.
-        Epoll::refresh_entry_listener(weak_self, key.clone(), &mut entry);
-
-        // Track the entry.
-        self.monitoring.insert(key, entry);
-
-        Ok(())
-    }
-
-    fn ctl_mod(
-        &mut self,
-        key: Key,
-        events: EpollEvents,
-        data: u64,
-        weak_self: Weak<AtomicRefCell<Epoll>>,
-    ) -> Result<(), SyscallError> {
-        // Change the settings for this entry.
-        let entry = self.monitoring.get_mut(&key).ok_or(Errno::ENOENT)?;
-        let file_state = key.get_file_ref().borrow().state();
-        entry.reset(events, data, file_state);
-
-        // Set a new listener that is consistent with the new events.
-        Epoll::refresh_entry_listener(weak_self, key, entry);
-
-        Ok(())
-    }
-
-    fn ctl_del(&mut self, key: Key) -> Result<(), SyscallError> {
-        // Stop monitoring this entry. Dropping the entry will cause it to stop listening for
-        // status changes on its inner `File` event source object.
-        let entry = self.monitoring.remove(&key).ok_or(Errno::ENOENT)?;
-
-        // If it has a priority, then we also remove it from the ready set.
-        if let Some(pri) = entry.get_priority() {
-            let pri_key = PriorityKey::new(pri, key);
-            self.ready.remove(&pri_key);
-        }
+        self.refresh_ready(key.clone());
+        self.refresh_listener(weak_self, key);
+        self.refresh_state(cb_queue);
 
         Ok(())
     }
@@ -237,7 +217,7 @@ impl Epoll {
         self.state
     }
 
-    fn refresh_readable(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
         let readable = self
             .has_ready_events()
             .then_some(FileState::READABLE)
@@ -265,13 +245,16 @@ impl Epoll {
         }
     }
 
-    fn refresh_entry_listener(weak_self: Weak<AtomicRefCell<Epoll>>, key: Key, entry: &mut Entry) {
+    fn refresh_listener(&mut self, weak_self: Weak<AtomicRefCell<Epoll>>, key: Key) {
+        let Some(entry) = self.monitoring.get_mut(&key) else {
+            return;
+        };
+
         // Check what state we need to listen for this entry.
         let (listen, filter) = entry.get_listener_state();
 
-        let handle_opt = if listen.is_empty() {
-            // We don't need a listener.
-            None
+        if listen.is_empty() {
+            entry.set_listener_handle(None);
         } else {
             // Set up a callback so we get informed when the file changes.
             let file = key.get_file_ref().clone();
@@ -281,51 +264,52 @@ impl Epoll {
                         if let Some(epoll) = weak_self.upgrade() {
                             epoll
                                 .borrow_mut()
-                                .refresh_entry(&key, state, changed, cb_queue);
+                                .notify_entry(&key, state, changed, cb_queue);
                         }
                     });
-            Some(handle)
-        };
-
-        // Sets a new listener while dropping any old one.
-        entry.set_listener_handle(handle_opt);
+            entry.set_listener_handle(Some(handle));
+        }
     }
 
     /// The file listener callback for when a monitored entry file status changes.
-    fn refresh_entry(
+    fn notify_entry(
         &mut self,
         key: &Key,
         state: FileState,
         changed: FileState,
         cb_queue: &mut CallbackQueue,
     ) {
-        let Some(entry) = self.monitoring.get_mut(key) else {
-            // We stopped monitoring and can ignore the state change.
+        // Notify entry of file state change if we're still monitoring it.
+        if let Some(entry) = self.monitoring.get_mut(&key.clone()) {
+            entry.notify(state, changed);
+        };
+
+        // Update our ready set and readability.
+        self.refresh_ready(key.clone());
+        self.refresh_state(cb_queue);
+    }
+
+    /// Ensures that the entry is in the ready set if it should be, or not if it shouldn't be.
+    fn refresh_ready(&mut self, key: Key) {
+        let Some(entry) = self.monitoring.get_mut(&key.clone()) else {
             return;
         };
 
-        // Pass the new file state to the entry, which may change its ready status.
-        entry.notify(state, changed);
-
-        // Make sure it's in the ready set if it should be, or not if it shouldn't be.
         if entry.has_ready_events() {
             if entry.get_priority().is_none() {
                 // It's ready but not in the ready set yet.
                 let pri = self.pri_counter;
                 self.pri_counter += 1;
-                self.ready.insert(PriorityKey::new(pri, key.clone()));
+                self.ready.insert(PriorityKey::new(pri, key));
                 entry.set_priority(Some(pri));
             }
         } else {
             if let Some(pri) = entry.get_priority() {
                 // It's not ready anymore but it's in the ready set.
-                self.ready.remove(&PriorityKey::new(pri, key.clone()));
+                self.ready.remove(&PriorityKey::new(pri, key));
                 entry.set_priority(None);
             }
         }
-
-        // The entry update may change the epoll readability.
-        self.refresh_readable(cb_queue);
     }
 
     pub fn has_ready_events(&self) -> bool {
@@ -374,4 +358,16 @@ impl Epoll {
         // The events to be returned to the managed process.
         events
     }
+}
+
+// TODO remove when legacy tcp is removed.
+fn is_legacy(file: &File) -> bool {
+    if let File::Socket(sock) = file {
+        if let Socket::Inet(inet) = sock {
+            if let InetSocket::LegacyTcp(_) = inet {
+                return true;
+            }
+        }
+    }
+    return false;
 }

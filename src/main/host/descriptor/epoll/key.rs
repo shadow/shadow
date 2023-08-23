@@ -16,10 +16,6 @@ impl Key {
         Self { fd, file }
     }
 
-    pub(super) fn get_fd(&self) -> i32 {
-        self.fd
-    }
-
     pub(super) fn get_file_ref(&self) -> &File {
         &self.file
     }

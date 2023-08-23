@@ -20,6 +20,8 @@ pub(super) struct Entry {
     // The file state changes we have already reported since the state last changed. When a state
     // changes, that event becomes uncollected until `collect_ready_events` is called.
     collected: FileState,
+    // TODO remove when legacy tcp is removed.
+    is_legacy: bool,
 }
 
 impl Entry {
@@ -31,10 +33,17 @@ impl Entry {
             listener_handle: None,
             state,
             collected: FileState::empty(),
+            is_legacy: false,
         }
     }
 
+    // TODO remove when legacy tcp is removed.
+    pub(super) fn set_legacy(&mut self) {
+        self.is_legacy = true;
+    }
+
     pub(super) fn reset(&mut self, interest: EpollEvents, data: u64, state: FileState) {
+        log::trace!("Reset old state {:?}, new state {:?}", self.state, state);
         self.interest = interest;
         self.data = data;
         self.state = state;
@@ -50,13 +59,25 @@ impl Entry {
     }
 
     pub(super) fn notify(&mut self, new_state: FileState, changed: FileState) {
+        log::trace!(
+            "Notify old state {:?}, new state {:?}, changed {:?}",
+            self.state,
+            new_state,
+            changed
+        );
         self.state = new_state;
         self.collected.remove(changed);
     }
 
     pub(super) fn get_listener_state(&self) -> (FileState, StateListenerFilter) {
+        {
+            // TODO remove when legacy tcp is removed.
+            if self.is_legacy {
+                return (FileState::all(), StateListenerFilter::Always);
+            }
+        }
         // Return the file state changes that we want to be notified about.
-        let listening = FileState::all();
+        let listening = Self::state_from_events(self.interest);
         let filter = StateListenerFilter::Always;
         (listening, filter)
     }
@@ -66,6 +87,18 @@ impl Entry {
     }
 
     pub(super) fn has_ready_events(&self) -> bool {
+        {
+            // TODO remove when legacy tcp is removed.
+            if self.is_legacy {
+                if self.state.contains(FileState::CLOSED) {
+                    return false;
+                } else if self.state.contains(FileState::ACTIVE) {
+                    return !self.get_ready_events().is_empty();
+                } else {
+                    return false;
+                }
+            }
+        }
         !self.get_ready_events().is_empty()
     }
 
@@ -81,6 +114,12 @@ impl Entry {
         if self.interest.contains(EpollEvents::EPOLLONESHOT) {
             self.interest.remove(events)
         }
+
+        log::trace!(
+            "Collected ready events {events:?} interest {:?} state {:?}",
+            self.interest,
+            self.state
+        );
 
         Some((events, self.data))
     }

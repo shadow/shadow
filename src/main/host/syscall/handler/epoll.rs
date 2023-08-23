@@ -1,3 +1,4 @@
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 use linux_api::epoll::{EpollCreateFlags, EpollCtlOp, EpollEvents};
@@ -13,8 +14,7 @@ use crate::host::descriptor::epoll::Epoll;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, OpenFile};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallError;
-use crate::host::thread::Thread;
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
@@ -309,76 +309,73 @@ impl SyscallHandler {
 
             // After this call, it is UB if we later fail to write the events_ptr ForeignPointer.
             let ready = epoll.borrow_mut().collect_ready_events(max_events);
-            if ready.len() > max_events as usize {
+            let n_ready = ready.len();
+            if n_ready > max_events as usize {
                 panic!("Epoll should not return more than {max_events} events");
             }
 
             // Write the events out to the managed process memory.
             let mut mem = ctx.objs.process.memory_borrow_mut();
-            write_events_to_ptr(&mut mem, &ready, &events_ptr)?;
+            write_events_to_ptr(&mut mem, ready, events_ptr)?;
 
             // Return the number of events we are reporting.
-            Ok(ready.len().try_into().unwrap())
-        } else {
-            // Our behavior depends on the value of timeout.
-            // Return immediately if timeout is 0.
-            if let Some(timeout) = timeout {
-                if timeout.is_zero() {
-                    log::trace!("No events are ready on epoll {epfd} and the timeout is 0");
+            log::trace!("Epoll {epfd} returning {n_ready} events");
+            return Ok(n_ready.try_into().unwrap());
+        }
+
+        // Our behavior depends on the value of timeout.
+        // Return immediately if timeout is 0.
+        if let Some(timeout) = timeout {
+            if timeout.is_zero() {
+                log::trace!("No events are ready on epoll {epfd} and the timeout is 0");
+                return Ok(0);
+            }
+        }
+
+        // Return immediately if we were already blocked for a while and still have no events.
+        // Condition will only exist after a wakeup.
+        if let Some(cond) = ctx.objs.thread.syscall_condition() {
+            if let Some(abs_timeout) = cond.timeout() {
+                if Worker::current_time().unwrap() >= abs_timeout {
+                    log::trace!("No events are ready on epoll {epfd} and the timeout expired");
                     return Ok(0);
                 }
             }
-
-            // Return immediately if we were already blocked for a while and still have no events.
-            if timeout_expired(ctx.objs.thread) {
-                log::trace!("No events are ready on epoll {epfd} and the timeout expired");
-                return Ok(0);
-            }
-
-            // If there's a signal pending, this syscall will be interrupted.
-            if ctx.objs.thread.unblocked_signal_pending(
-                ctx.objs.process,
-                &ctx.objs.host.shim_shmem_lock_borrow().unwrap(),
-            ) {
-                return Err(SyscallError::new_interrupted(false));
-            }
-
-            // Convert timeout to an EmulatedTime.
-            let Ok(timeout) = timeout
-                .map(|x| Worker::current_time().unwrap().checked_add(x).ok_or(()))
-                .transpose()
-            else {
-                log::trace!("Epoll wait with invalid timeout {timeout:?} (too large)");
-                return Err(Errno::EINVAL.into());
-            };
-
-            log::trace!("No events are ready on epoll {epfd} and we need to block");
-
-            // Block on epoll status; an epoll descriptor is readable when it has events.
-            let mut rv = SyscallError::new_blocked(
-                File::Epoll(Arc::clone(epoll)),
-                FileState::READABLE,
-                /* restartable= */ false,
-            );
-
-            // Set timeout, if provided.
-            rv.blocked_condition().unwrap().set_timeout(timeout);
-
-            Err(rv)
         }
+
+        // If there's a signal pending, this syscall will be interrupted.
+        if ctx.objs.thread.unblocked_signal_pending(
+            ctx.objs.process,
+            &ctx.objs.host.shim_shmem_lock_borrow().unwrap(),
+        ) {
+            return Err(SyscallError::new_interrupted(false));
+        }
+
+        // Convert timeout to an EmulatedTime.
+        let Ok(abs_timeout_opt) = timeout
+            .map(|x| Worker::current_time().unwrap().checked_add(x).ok_or(()))
+            .transpose()
+        else {
+            log::trace!("Epoll wait with invalid timeout {timeout:?} (too large)");
+            return Err(Errno::EINVAL.into());
+        };
+
+        log::trace!("No events are ready on epoll {epfd} and we need to block");
+
+        // Block on epoll status; an epoll descriptor is readable when it has events.
+        let mut rv = SyscallError::new_blocked_on_file(
+            File::Epoll(Arc::clone(epoll)),
+            FileState::READABLE,
+            /* restartable= */ false,
+        );
+
+        // Set timeout, if provided.
+        if abs_timeout_opt.is_some() {
+            rv.blocked_condition().unwrap().set_timeout(abs_timeout_opt);
+        }
+
+        Err(rv)
     }
-}
-
-fn timeout_expired(thread: &Thread) -> bool {
-    let cond = thread.syscall_condition().unwrap();
-    let timeout = cond.timeout();
-
-    let Some(timeout) = timeout else {
-        // there is no timeout
-        return false;
-    };
-
-    Worker::current_time().unwrap() >= timeout
 }
 
 fn timeout_arg_to_maybe_simtime(
@@ -407,9 +404,21 @@ fn epoll_max_events_upper_bound() -> i32 {
 }
 
 fn write_events_to_ptr(
-    _mem: &mut MemoryManager,
-    _ready: &Vec<(EpollEvents, u64)>,
-    _events_ptr: &ForeignPtr<linux_api::epoll::epoll_event>,
+    mem: &mut MemoryManager,
+    ready: Vec<(EpollEvents, u64)>,
+    events_ptr: ForeignPtr<linux_api::epoll::epoll_event>,
 ) -> Result<(), SyscallError> {
-    todo!()
+    let events_ptr = ForeignArrayPtr::new(events_ptr, ready.len());
+    let mut mem_ref = mem.memory_ref_mut(events_ptr)?;
+
+    for i in 0..ready.len() {
+        let (ev, data) = ready[i];
+        let plugin_ev = &mut mem_ref.deref_mut()[i];
+        plugin_ev.events = ev.bits();
+        plugin_ev.data = data;
+    }
+
+    mem_ref.flush()?;
+
+    Ok(())
 }
