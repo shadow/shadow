@@ -1121,7 +1121,7 @@ impl sigaction {
     /// safe to call iff the function pointer in the internal `lsa_handler` is,
     /// and is of the type specified in the internal `lsa_flags`.
     pub unsafe fn handler(&self) -> SignalHandler {
-        let as_usize = self.0.lsa_handler.map(|f| f as usize).unwrap_or(0);
+        let as_usize = self.as_usize();
         if as_usize == Self::SIG_IGN {
             SignalHandler::SigIgn
         } else if as_usize == Self::SIG_DFL {
@@ -1142,6 +1142,18 @@ impl sigaction {
         } else {
             SignalHandler::Handler(self.0.lsa_handler.unwrap())
         }
+    }
+
+    fn as_usize(&self) -> usize {
+        self.0.lsa_handler.map(|f| f as usize).unwrap_or(0)
+    }
+
+    pub fn is_ignore(&self) -> bool {
+        self.as_usize() == Self::SIG_IGN
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.as_usize() == Self::SIG_DFL
     }
 }
 
