@@ -151,7 +151,7 @@ impl SyscallHandler {
             let ev = mem.read(event_ptr)?;
 
             let Some(mut events) = EpollEvents::from_bits(ev.events) else {
-                log::debug!("Invalid epoll_ctl events: {}", ev.events as u32);
+                log::debug!("Invalid epoll_ctl events: {}", {ev.events});
                 return Err(Errno::EINVAL.into());
             };
 
@@ -411,11 +411,10 @@ fn write_events_to_ptr(
     let events_ptr = ForeignArrayPtr::new(events_ptr, ready.len());
     let mut mem_ref = mem.memory_ref_mut(events_ptr)?;
 
-    for i in 0..ready.len() {
-        let (ev, data) = ready[i];
+    for (i, (ev, data)) in ready.iter().enumerate() {
         let plugin_ev = &mut mem_ref.deref_mut()[i];
         plugin_ev.events = ev.bits();
-        plugin_ev.data = data;
+        plugin_ev.data = *data;
     }
 
     mem_ref.flush()?;

@@ -303,12 +303,10 @@ impl Epoll {
                 self.ready.insert(PriorityKey::new(pri, key));
                 entry.set_priority(Some(pri));
             }
-        } else {
-            if let Some(pri) = entry.get_priority() {
-                // It's not ready anymore but it's in the ready set.
-                self.ready.remove(&PriorityKey::new(pri, key));
-                entry.set_priority(None);
-            }
+        } else if let Some(pri) = entry.get_priority() {
+            // It's not ready anymore but it's in the ready set.
+            self.ready.remove(&PriorityKey::new(pri, key));
+            entry.set_priority(None);
         }
     }
 
@@ -320,7 +318,7 @@ impl Epoll {
         let mut events = vec![];
         let mut keep = vec![];
 
-        while self.ready.len() > 0 && events.len() < max_events as usize {
+        while !self.ready.is_empty() && events.len() < max_events as usize {
             // Get the next ready entry.
             let pri_key = self.ready.pop_first().unwrap();
             let key = Key::from(pri_key);
@@ -351,8 +349,8 @@ impl Epoll {
         }
 
         // Add everything that is still ready back to the ready set.
-        while !keep.is_empty() {
-            self.ready.insert(keep.pop().unwrap());
+        while let Some(pri_key) = keep.pop() {
+            self.ready.insert(pri_key);
         }
 
         // The events to be returned to the managed process.
