@@ -313,12 +313,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(dup);
             HANDLE_RUST(dup2);
             HANDLE_RUST(dup3);
-            HANDLE_C(epoll_create);
-            HANDLE_C(epoll_create1);
-            HANDLE_C(epoll_ctl);
-            HANDLE_C(epoll_pwait);
-            HANDLE_C(epoll_pwait2);
-            HANDLE_C(epoll_wait);
+            HANDLE_RUST(epoll_create);
+            HANDLE_RUST(epoll_create1);
+            HANDLE_RUST(epoll_ctl);
+            HANDLE_RUST(epoll_pwait);
+            HANDLE_RUST(epoll_pwait2);
+            HANDLE_RUST(epoll_wait);
             HANDLE_RUST(eventfd);
             HANDLE_RUST(eventfd2);
             HANDLE_RUST(execve);
