@@ -22,7 +22,6 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/process.h"
-#include "main/host/syscall/epoll.h"
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
