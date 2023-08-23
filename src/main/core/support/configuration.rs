@@ -1036,12 +1036,24 @@ impl<'de> serde::Deserialize<'de> for ProcessArgs {
     }
 }
 
+// TODO: use linux_api's Signal internally, which we control and which supports
+// realtime signals. We need to implement conversion to and from strings to do
+// so, while being careful that the conversion is compatible with nix's so as
+// not to be a breaking change to our configuration format.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Signal(nix::sys::signal::Signal);
 
 impl From<nix::sys::signal::Signal> for Signal {
     fn from(value: nix::sys::signal::Signal) -> Self {
         Self(value)
+    }
+}
+
+impl TryFrom<linux_api::signal::Signal> for Signal {
+    type Error = <nix::sys::signal::Signal as TryFrom<i32>>::Error;
+    fn try_from(value: linux_api::signal::Signal) -> Result<Self, Self::Error> {
+        let signal = nix::sys::signal::Signal::try_from(value.as_i32())?;
+        Ok(Self(signal))
     }
 }
 

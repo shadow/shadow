@@ -1317,7 +1317,12 @@ impl Process {
             if let Some(expected_final_state) = runnable.expected_final_state {
                 let actual_final_state = match exit_status {
                     ExitStatus::Normal(i) => ProcessFinalState::Exited { exited: i },
-                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled { signaled: s.into() },
+                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled {
+                        // This conversion will fail on realtime signals, but that
+                        // should currently be impossible since we don't support
+                        // sending realtime signals.
+                        signaled: s.try_into().unwrap(),
+                    },
                     ExitStatus::StoppedByShadow => ProcessFinalState::Running(RunningVal::Running),
                 };
                 if expected_final_state == actual_final_state {
