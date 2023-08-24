@@ -1,11 +1,14 @@
 use std::error::Error;
 use std::sync::Arc;
 
+use libc::{c_int, c_void, siginfo_t, CLD_EXITED};
 use linux_api::errno::Errno;
 use linux_api::posix_types::Pid;
 use linux_api::sched::{CloneFlags, CloneResult};
 use linux_api::signal::Signal;
-use test_utils::TestEnvironment as TestEnv;
+use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigmaskHow};
+use nix::sys::signalfd::SigSet;
+use test_utils::{ensure_ord, TestEnvironment as TestEnv};
 use test_utils::{set, ShadowTest};
 
 fn fork_via_clone_syscall() -> Result<CloneResult, Errno> {
@@ -37,9 +40,7 @@ fn fork_via_libc() -> Result<CloneResult, Errno> {
     }
 }
 
-fn test_fork_runs(
-    fork_fn: impl FnOnce() -> Result<CloneResult, Errno>,
-) -> Result<(), Box<dyn Error>> {
+fn test_fork_runs(fork_fn: impl FnOnce() -> Result<CloneResult, Errno>) -> anyhow::Result<()> {
     let (reader, writer) = rustix::pipe::pipe().unwrap();
 
     let res = fork_fn()?;
@@ -59,7 +60,7 @@ fn test_fork_runs(
     Ok(())
 }
 
-fn test_clone_parent(set_clone_parent: bool) -> Result<(), Box<dyn Error>> {
+fn test_clone_parent(set_clone_parent: bool) -> anyhow::Result<()> {
     let (reader, writer) = rustix::pipe::pipe().unwrap();
 
     let flags = if set_clone_parent {
@@ -116,7 +117,7 @@ fn test_clone_parent(set_clone_parent: bool) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn test_child_change_session() -> Result<(), Box<dyn Error>> {
+fn test_child_change_session() -> anyhow::Result<()> {
     let (reader, writer) = rustix::pipe::pipe().unwrap();
 
     let parent_sid = unsafe { libc::getsid(0) };
@@ -167,7 +168,7 @@ fn test_child_change_session() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn test_child_change_group() -> Result<(), Box<dyn Error>> {
+fn test_child_change_group() -> anyhow::Result<()> {
     let (reader, writer) = rustix::pipe::pipe().unwrap();
 
     let parent_sid = unsafe { libc::getsid(0) };
@@ -220,6 +221,168 @@ fn test_child_change_group() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Helper to run the given test function in a child process. This is helpful to
+/// avoid cross-test interference. e.g. `f` can manipulate signal handlers and
+/// masks without having to restore them, and will only have child processes
+/// that it spawns itself.
+///
+/// Returns `Ok(())` if `f` completes without panicking, and an error if `f`
+/// panicked.
+fn run_test_in_subprocess(f: impl FnOnce()) -> anyhow::Result<()> {
+    let (reader, writer) = rustix::pipe::pipe().unwrap();
+    let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
+    let _child_pid = match clone_res {
+        CloneResult::CallerIsChild => {
+            // Ensure we exit with non-zero exit code on panic.
+            std::panic::set_hook(Box::new(|info| {
+                eprintln!("panic: {info:?}");
+                unsafe { libc::exit(1) };
+            }));
+            f();
+            assert_eq!(rustix::io::write(&writer, &[0]), Ok(1));
+            unsafe { libc::exit(0) };
+        }
+        CloneResult::CallerIsParent(child_pid) => child_pid,
+    };
+
+    // Close our copy of the writer-end of the pipe, so that parent doesn't hang trying
+    // to read from the pipe if the child exited abnormally.
+    drop(writer);
+
+    // Because waitpid isn't implemented yet, we get the "exit code"
+    // from a pipe.
+    // TODO: once waitpid is implemented, use that instead.
+    let mut exit_code = [0xff_u8];
+    ensure_ord!(rustix::io::read(&reader, &mut exit_code), ==, Ok(1));
+    ensure_ord!(exit_code[0], ==, 0);
+
+    Ok(())
+}
+
+fn test_exit_signal_normal_exit(exit_signal: nix::sys::signal::Signal) -> anyhow::Result<()> {
+    run_test_in_subprocess(|| {
+        static mut SIGNO: c_int = 0;
+        static mut INFO: Option<siginfo_t> = None;
+        extern "C" fn sigchld_handler(signo: c_int, info: *mut siginfo_t, _ctx: *mut c_void) {
+            unsafe { SIGNO = signo };
+            unsafe { INFO = Some(*info) };
+        }
+        unsafe {
+            nix::sys::signal::sigaction(
+                exit_signal,
+                &SigAction::new(
+                    SigHandler::SigAction(sigchld_handler),
+                    SaFlags::SA_SIGINFO,
+                    SigSet::empty(),
+                ),
+            )
+        }
+        .unwrap();
+
+        let mut sigset = SigSet::empty();
+        sigset.add(exit_signal);
+        nix::sys::signal::sigprocmask(SigmaskHow::SIG_UNBLOCK, Some(&sigset), None).unwrap();
+
+        const CHILD_EXIT_STATUS: i32 = 42;
+        let clone_res = unsafe {
+            linux_api::sched::clone(
+                CloneFlags::empty(),
+                Some(Signal::try_from(exit_signal as i32).unwrap()),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+            )
+        }
+        .unwrap();
+        let child_pid = match clone_res {
+            CloneResult::CallerIsChild => {
+                unsafe { libc::exit(CHILD_EXIT_STATUS) };
+            }
+            CloneResult::CallerIsParent(child_pid) => child_pid,
+        };
+
+        match rustix::thread::nanosleep(&rustix::fs::Timespec {
+            tv_sec: 2,
+            tv_nsec: 0,
+        }) {
+            rustix::thread::NanosleepRelativeResult::Interrupted(_) => (),
+            other => panic!("Unexpected nanosleep result: {other:?}"),
+        }
+
+        let signo = unsafe { SIGNO };
+        let info = unsafe { INFO.unwrap() };
+        assert_eq!(nix::sys::signal::Signal::try_from(signo), Ok(exit_signal));
+        assert_eq!(info.si_signo, signo);
+        assert_eq!(info.si_errno, 0);
+        assert_eq!(info.si_code, CLD_EXITED);
+        assert_eq!(unsafe { info.si_pid() }, child_pid.as_raw_nonzero().get());
+        assert_eq!(unsafe { info.si_status() }, CHILD_EXIT_STATUS);
+    })
+}
+
+fn test_exit_signal_with_fatal_signal(exit_signal: nix::sys::signal::Signal) -> anyhow::Result<()> {
+    run_test_in_subprocess(|| {
+        static mut SIGNO: c_int = 0;
+        static mut INFO: Option<siginfo_t> = None;
+        extern "C" fn sigchld_handler(signo: c_int, info: *mut siginfo_t, _ctx: *mut c_void) {
+            unsafe { SIGNO = signo };
+            unsafe { INFO = Some(*info) };
+        }
+        unsafe {
+            nix::sys::signal::sigaction(
+                exit_signal,
+                &SigAction::new(
+                    SigHandler::SigAction(sigchld_handler),
+                    SaFlags::SA_SIGINFO,
+                    SigSet::empty(),
+                ),
+            )
+        }
+        .unwrap();
+
+        let mut sigset = SigSet::empty();
+        sigset.add(exit_signal);
+        nix::sys::signal::sigprocmask(SigmaskHow::SIG_UNBLOCK, Some(&sigset), None).unwrap();
+
+        let clone_res = unsafe {
+            linux_api::sched::clone(
+                CloneFlags::empty(),
+                Some(Signal::try_from(exit_signal as i32).unwrap()),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+            )
+        }
+        .unwrap();
+        let child_pid = match clone_res {
+            CloneResult::CallerIsChild => {
+                unsafe { libc::kill(libc::getpid(), libc::SIGKILL) };
+                unreachable!()
+            }
+            CloneResult::CallerIsParent(child_pid) => child_pid,
+        };
+
+        match rustix::thread::nanosleep(&rustix::fs::Timespec {
+            tv_sec: 2,
+            tv_nsec: 0,
+        }) {
+            rustix::thread::NanosleepRelativeResult::Interrupted(_) => (),
+            other => panic!("Unexpected nanosleep result: {other:?}"),
+        }
+
+        let signo = unsafe { SIGNO };
+        let info = unsafe { INFO.unwrap() };
+        assert_eq!(nix::sys::signal::Signal::try_from(signo), Ok(exit_signal));
+        assert_eq!(info.si_signo, signo);
+        assert_eq!(info.si_errno, 0);
+        assert_eq!(info.si_code, libc::CLD_KILLED);
+        assert_eq!(unsafe { info.si_pid() }, child_pid.as_raw_nonzero().get());
+        assert_eq!(unsafe { info.si_status() }, libc::SIGKILL);
+    })
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // should we restrict the tests we run?
     let filter_shadow_passing = std::env::args().any(|x| x == "--shadow-passing");
@@ -243,7 +406,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         (stringify!(fork_via_libc), Arc::new(fork_via_libc)),
     ];
 
-    let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = Vec::new();
+    let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = Vec::new();
     for (fork_fn_name, fork_fn) in &fork_fns {
         let fork_fn = fork_fn.clone();
         tests.push(ShadowTest::new(
@@ -269,6 +432,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         test_child_change_group,
         all_envs.clone(),
     ));
+
+    for exit_signal in &[nix::sys::signal::SIGCHLD, nix::sys::signal::SIGUSR1] {
+        tests.push(ShadowTest::new(
+            &format!("test_exit_signal_normal_exit-{exit_signal:?}"),
+            move || test_exit_signal_normal_exit(*exit_signal),
+            all_envs.clone(),
+        ));
+        tests.push(ShadowTest::new(
+            &format!("test_exit_signal_with_fatal_signal-{exit_signal:?}"),
+            move || test_exit_signal_with_fatal_signal(*exit_signal),
+            all_envs.clone(),
+        ));
+    }
 
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.
