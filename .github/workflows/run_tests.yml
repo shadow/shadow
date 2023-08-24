@@ -72,8 +72,10 @@ jobs:
       ## sccache doesn't work on incrmentally compiled crates, and incremental
       ## compilation doesn't help us here anyway.
       CARGO_INCREMENTAL: false
-      ## Uncomment this to clear cache, then comment it back out
-      # SCCACHE_RECACHE: 1
+      ## Increment to force eviction of previous caches, e.g. if the sccache configuration
+      ## or usage has changed in a way to make the previous cache not useful.
+      ## Keep in sync with same variable in `extra_tests.yml`.
+      SCCACHE_CACHE_VERSION: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -124,9 +126,9 @@ jobs:
           # won't cache crates that link with platform libraries, then I think we can merge
           # the caches. I'm not sure whether or not it does, though.
           # https://github.com/mozilla/sccache#rust
-          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ hashFiles('src/Cargo.lock') }}
+          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-${{ hashFiles('src/Cargo.lock') }}
           restore-keys: |
-                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-
+                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-
       - name: Install sccache
         env:
           LINK: https://github.com/mozilla/sccache/releases/download

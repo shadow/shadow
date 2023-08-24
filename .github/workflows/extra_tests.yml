@@ -38,7 +38,10 @@ jobs:
       # sccache doesn't work on incrementally compiled crates, and incremental
       # compilation doesn't help us here anyway.
       CARGO_INCREMENTAL: false
-      # SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
+      ## Increment to force eviction of previous caches, e.g. if the sccache configuration
+      ## or usage has changed in a way to make the previous cache not useful.
+      ## Keep in sync with same variable in `run_tests.yml`.
+      SCCACHE_CACHE_VERSION: 1
     # runs in a container; just use the latest base image.
     runs-on: ubuntu-latest
     container:
@@ -86,9 +89,9 @@ jobs:
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ hashFiles('shadow/src/Cargo.lock') }}
+          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-${{ hashFiles('shadow/src/Cargo.lock') }}
           restore-keys: |
-                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-
+                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-
       - name: Install sccache
         env:
           LINK: https://github.com/mozilla/sccache/releases/download
