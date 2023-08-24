@@ -35,6 +35,9 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 2G
       SCCACHE_DIR: /home/runner/.cache/sccache
+      # sccache doesn't work on incrementally compiled crates, and incremental
+      # compilation doesn't help us here anyway.
+      CARGO_INCREMENTAL: false
       # SCCACHE_RECACHE: 1 # Uncomment this to clear cache, then comment it back out
     # runs in a container; just use the latest base image.
     runs-on: ubuntu-latest
