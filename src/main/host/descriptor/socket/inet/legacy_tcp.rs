@@ -914,7 +914,9 @@ impl LegacyTcpSocket {
         // sanity check: make sure new socket peer address matches address returned from
         // tcp_acceptServerPeer() above
         {
-            let File::Socket(Socket::Inet(InetSocket::LegacyTcp(new_socket))) = open_file.inner_file() else {
+            let File::Socket(Socket::Inet(InetSocket::LegacyTcp(new_socket))) =
+                open_file.inner_file()
+            else {
                 panic!("Expected this to be a LegacyTcpSocket");
             };
 

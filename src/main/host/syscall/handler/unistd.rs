@@ -500,7 +500,7 @@ impl SyscallHandler {
         }
         let pid = ProcessId::try_from(pid).map_err(|_| Errno::EINVAL)?;
         let Some(process) = ctx.objs.host.process_borrow(pid) else {
-            return Err(Errno::ESRCH.into())
+            return Err(Errno::ESRCH.into());
         };
         let process = process.borrow(ctx.objs.host.root());
         Ok(process.group_id().into())
@@ -588,10 +588,10 @@ impl SyscallHandler {
             return Ok(ctx.objs.process.session_id().into());
         }
         let Ok(pid) = ProcessId::try_from(pid) else {
-            return Err(Errno::EINVAL.into())
+            return Err(Errno::EINVAL.into());
         };
         let Some(processrc) = ctx.objs.host.process_borrow(pid) else {
-            return Err(Errno::ESRCH.into())
+            return Err(Errno::ESRCH.into());
         };
         let process = processrc.borrow(ctx.objs.host.root());
         // No need to check that process is in the same session:

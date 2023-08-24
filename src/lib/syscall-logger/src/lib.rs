@@ -96,19 +96,27 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
         }
 
         // get the names of the function arguments
-        syscall_args = input_fn.sig.inputs.iter().map(|arg| {
-            let syn::FnArg::Typed(arg) = arg else {
-                panic!("Expected a typed arg. Does the function take `self`?");
-            };
+        syscall_args = input_fn
+            .sig
+            .inputs
+            .iter()
+            .map(|arg| {
+                let syn::FnArg::Typed(arg) = arg else {
+                    panic!("Expected a typed arg. Does the function take `self`?");
+                };
 
-            // rust functions can be complicated (for example struct destructured args), but syscall
-            // arguments will be simple
-            let syn::Pat::Ident(ident_pat) = &*arg.pat else {
-                panic!("Function arguments must be identities (ex: `name: Type`), not {:?}", arg.pat);
-            };
+                // rust functions can be complicated (for example struct destructured args), but syscall
+                // arguments will be simple
+                let syn::Pat::Ident(ident_pat) = &*arg.pat else {
+                    panic!(
+                        "Function arguments must be identities (ex: `name: Type`), not {:?}",
+                        arg.pat
+                    );
+                };
 
-            ident_pat.ident.clone()
-        }).collect();
+                ident_pat.ident.clone()
+            })
+            .collect();
 
         syscall_ret_type = input_fn.sig.output.clone();
 
