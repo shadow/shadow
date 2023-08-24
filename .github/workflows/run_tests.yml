@@ -62,6 +62,18 @@ jobs:
       CONTAINER: ${{ matrix.container }}
       BUILDTYPE: ${{ matrix.buildtype }}
 
+      # for sccache:
+      ## Invoke cargo via sccache
+      RUSTC_WRAPPER: sccache
+      ## Set max cache size
+      SCCACHE_CACHE_SIZE: 2G
+      ## Set cache path
+      SCCACHE_DIR: /home/runner/.cache/sccache
+      ## sccache doesn't work on incrmentally compiled crates, and incremental
+      ## compilation doesn't help us here anyway.
+      CARGO_INCREMENTAL: false
+      ## Uncomment this to clear cache, then comment it back out
+      # SCCACHE_RECACHE: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -95,6 +107,39 @@ jobs:
           key: cargo-registry-${{ steps.get-month.outputs.month }}-${{ hashFiles('src/Cargo.lock') }}
           restore-keys: |
             cargo-registry-${{ steps.get-month.outputs.month }}
+
+      - name: Get rust version
+        id: get-rustv
+        run: |
+          echo rustv=\"$(rustc --version)\" >> $GITHUB_OUTPUT
+      - name: Restore sccache cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          # TODO: Consider whether we can safely drop e.g. CC, CONTAINER, and/or BUILDTYPE,
+          # merging those caches.
+          #
+          # sccache won't cache crates that "invoke the system linker". If that means it
+          # won't cache crates that link with platform libraries, then I think we can merge
+          # the caches. I'm not sure whether or not it does, though.
+          # https://github.com/mozilla/sccache#rust
+          key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ hashFiles('src/Cargo.lock') }}
+          restore-keys: |
+                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-
+      - name: Install sccache
+        env:
+          LINK: https://github.com/mozilla/sccache/releases/download
+          SCCACHE_VERSION: v0.3.1
+        run: |
+          SCCACHE_FILE=sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl
+          mkdir -p $HOME/.local/bin
+          curl -v -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+          mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+          chmod +x $HOME/.local/bin/sccache
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Start sccache server
+        run: sccache --start-server
 
       - name: Build
         run: . ci/container_scripts/build_and_install.sh
