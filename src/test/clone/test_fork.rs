@@ -102,8 +102,8 @@ fn test_clone_parent(set_clone_parent: bool) -> Result<(), Box<dyn Error>> {
         CloneResult::CallerIsParent(_) => (),
     };
 
-    // Close our copy of the writer-end of the pipe, so that parent hang trying
-    // to read from the pipe if the child exited abnormally.
+    // Close our copy of the writer-end of the pipe, so that parent doesn't hang
+    // trying to read from the pipe if the child exited abnormally.
     drop(writer);
 
     // Because waitpid isn't implemented yet, we get the "exit code"
@@ -112,6 +112,110 @@ fn test_clone_parent(set_clone_parent: bool) -> Result<(), Box<dyn Error>> {
     let mut exit_code = [0xff_u8];
     assert_eq!(rustix::io::read(&reader, &mut exit_code), Ok(1));
     assert_eq!(exit_code[0], 0);
+
+    Ok(())
+}
+
+fn test_child_change_session() -> Result<(), Box<dyn Error>> {
+    let (reader, writer) = rustix::pipe::pipe().unwrap();
+
+    let parent_sid = unsafe { libc::getsid(0) };
+    let parent_pgrp = unsafe { libc::getpgrp() };
+
+    let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
+    let child_pid = match clone_res {
+        CloneResult::CallerIsChild => {
+            // Ensure we exit with non-zero exit code on panic.
+            std::panic::set_hook(Box::new(|info| {
+                eprintln!("panic: {info:?}");
+                unsafe { libc::exit(1) };
+            }));
+
+            // Should initially be in same session and group as parent.
+            assert_eq!(unsafe { libc::getpgrp() }, parent_pgrp);
+            assert_eq!(unsafe { libc::getsid(0) }, parent_sid);
+
+            // Change session
+            let pid = unsafe { libc::getpid() };
+            assert_eq!(unsafe { libc::setsid() }, pid);
+
+            // Should now be session and group leader.
+            assert_eq!(unsafe { libc::getpgrp() }, pid);
+            assert_eq!(unsafe { libc::getsid(0) }, pid);
+
+            assert_eq!(rustix::io::write(&writer, &[0]), Ok(1));
+            unsafe { libc::exit(0) };
+        }
+        CloneResult::CallerIsParent(child_pid) => child_pid,
+    };
+
+    // Close our copy of the writer-end of the pipe, so that parent doesn't hang
+    // trying to read from the pipe if the child exited abnormally.
+    drop(writer);
+
+    // Because waitpid isn't implemented yet, we get the "exit code"
+    // from a pipe.
+    // TODO: once waitpid is implemented, use that instead.
+    let mut exit_code = [0xff_u8];
+    assert_eq!(rustix::io::read(&reader, &mut exit_code), Ok(1));
+    assert_eq!(exit_code[0], 0);
+
+    let child_pid_c: libc::pid_t = child_pid.as_raw_nonzero().into();
+    assert_eq!(unsafe { libc::getpgid(child_pid_c) }, child_pid_c);
+    assert_eq!(unsafe { libc::getsid(child_pid_c) }, child_pid_c);
+
+    Ok(())
+}
+
+fn test_child_change_group() -> Result<(), Box<dyn Error>> {
+    let (reader, writer) = rustix::pipe::pipe().unwrap();
+
+    let parent_sid = unsafe { libc::getsid(0) };
+    let parent_pgrp = unsafe { libc::getpgrp() };
+
+    let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
+    let child_pid = match clone_res {
+        CloneResult::CallerIsChild => {
+            // Ensure we exit with non-zero exit code on panic.
+            std::panic::set_hook(Box::new(|info| {
+                eprintln!("panic: {info:?}");
+                unsafe { libc::exit(1) };
+            }));
+
+            // Should initially be in same session and group as parent.
+            assert_eq!(unsafe { libc::getpgrp() }, parent_pgrp);
+            assert_eq!(unsafe { libc::getsid(0) }, parent_sid);
+
+            // Change group
+            assert_eq!(unsafe { libc::setpgid(0, 0) }, 0);
+
+            // Should now be group leader.
+            let pid = unsafe { libc::getpid() };
+            assert_eq!(unsafe { libc::getpgrp() }, pid);
+
+            // Should still be in parent's session
+            assert_eq!(unsafe { libc::getsid(0) }, parent_sid);
+
+            assert_eq!(rustix::io::write(&writer, &[0]), Ok(1));
+            unsafe { libc::exit(0) };
+        }
+        CloneResult::CallerIsParent(child_pid) => child_pid,
+    };
+
+    // Close our copy of the writer-end of the pipe, so that parent doesn't hang
+    // trying to read from the pipe if the child exited abnormally.
+    drop(writer);
+
+    // Because waitpid isn't implemented yet, we get the "exit code"
+    // from a pipe.
+    // TODO: once waitpid is implemented, use that instead.
+    let mut exit_code = [0xff_u8];
+    assert_eq!(rustix::io::read(&reader, &mut exit_code), Ok(1));
+    assert_eq!(exit_code[0], 0);
+
+    let child_pid_c: libc::pid_t = child_pid.as_raw_nonzero().into();
+    assert_eq!(unsafe { libc::getpgid(child_pid_c) }, child_pid_c);
+    assert_eq!(unsafe { libc::getsid(child_pid_c) }, parent_sid);
 
     Ok(())
 }
@@ -155,6 +259,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             all_envs.clone(),
         ));
     }
+    tests.push(ShadowTest::new(
+        stringify!(test_child_change_session),
+        test_child_change_session,
+        all_envs.clone(),
+    ));
+    tests.push(ShadowTest::new(
+        stringify!(test_child_change_group),
+        test_child_change_group,
+        all_envs.clone(),
+    ));
 
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.

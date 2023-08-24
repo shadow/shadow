@@ -56,7 +56,7 @@ impl ProcessId {
     // The first Process to run after boot is the "init" process, and has pid=1.
     // In Shadow simulations, this roughly corresponds to Shadow itself. e.g.
     // processes spawned by Shadow itself have a parent pid of 1.
-    const INIT: Self = ProcessId(1);
+    pub const INIT: Self = ProcessId(1);
 
     /// Returns what the `ProcessId` would be of a `Process` whose thread
     /// group leader has id `thread_group_leader_tid`.
@@ -144,9 +144,15 @@ struct Common {
     id: ProcessId,
     host_id: HostId,
 
-    // Parent pid, as returned e.g. by `getppid`.
-    // This can change at runtime if the original parent exits and is reaped.
+    // Parent pid (aka `ppid`), as returned e.g. by `getppid`.  This can change
+    // at runtime if the original parent exits and is reaped.
     parent_pid: Cell<ProcessId>,
+
+    // Process group id (aka `pgid`), as returned e.g. by `getpgid`.
+    group_id: Cell<ProcessId>,
+
+    // Session id, as returned e.g. by `getsid`.
+    session_id: Cell<ProcessId>,
 
     // unique id of the program that this process should run
     name: CString,
@@ -566,6 +572,12 @@ impl RunnableProcess {
             self.common.id
         };
 
+        // Process group is always inherited from the parent process.
+        let process_group_id = self.common.group_id.get();
+
+        // Session is always inherited from the parent process.
+        let session_id = self.common.session_id.get();
+
         let common = Common {
             id: pid,
             host_id: host.id(),
@@ -573,6 +585,8 @@ impl RunnableProcess {
             plugin_name,
             working_dir: self.common.working_dir.clone(),
             parent_pid: Cell::new(parent_pid),
+            group_id: Cell::new(process_group_id),
+            session_id: Cell::new(session_id),
         };
 
         // The child will log to the same strace log file. Entries contain thread IDs,
@@ -875,6 +889,8 @@ impl Process {
             name,
             plugin_name,
             parent_pid: Cell::new(ProcessId::INIT),
+            group_id: Cell::new(ProcessId::INIT),
+            session_id: Cell::new(ProcessId::INIT),
         };
         RootedRc::new(
             host.root(),
@@ -909,6 +925,26 @@ impl Process {
 
     pub fn parent_id(&self) -> ProcessId {
         self.common().parent_pid.get()
+    }
+
+    pub fn set_parent_id(&self, pid: ProcessId) {
+        self.common().parent_pid.set(pid)
+    }
+
+    pub fn group_id(&self) -> ProcessId {
+        self.common().group_id.get()
+    }
+
+    pub fn set_group_id(&self, id: ProcessId) {
+        self.common().group_id.set(id)
+    }
+
+    pub fn session_id(&self) -> ProcessId {
+        self.common().session_id.get()
+    }
+
+    pub fn set_session_id(&self, id: ProcessId) {
+        self.common().session_id.set(id)
     }
 
     pub fn host_id(&self) -> HostId {
@@ -1314,12 +1350,6 @@ impl Process {
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
-
-    /// The parent of this process.
-    pub fn ppid(&self) -> Option<ProcessId> {
-        // We don't yet support child processes, so there is never a ppid.
-        None
-    }
 }
 
 impl Drop for Process {
@@ -1329,7 +1359,7 @@ impl Drop for Process {
         // Shouldn't be dropped while a parent exists.
         // Assuming for now that once we implement parent processes, we'll clear
         // the parent id after the child has been reaped or the parent exits.
-        debug_assert!(self.ppid().is_none());
+        debug_assert_eq!(self.parent_id(), ProcessId::INIT);
     }
 }
 
