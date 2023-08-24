@@ -709,17 +709,23 @@ impl ZombieProcess {
             return;
         };
         let parent = parent_rc.borrow(host.root());
-        // FIXME: Update to support signals other than SIGCHLD.
-        if exit_signal != Signal::SIGCHLD {
-            warn!("Exit signal other than SIGCHLD not supported")
-        }
         let siginfo = match self.exit_status {
-            ExitStatus::Normal(exit_code) => {
-                siginfo_t::new_for_sigchld_exited(self.common.id.into(), 0, exit_code, 0, 0)
-            }
-            ExitStatus::Signaled(fatal_signal) => {
-                siginfo_t::new_for_sigchld_killed(self.common.id.into(), 0, fatal_signal, 0, 0)
-            }
+            ExitStatus::Normal(exit_code) => siginfo_t::new_for_sigchld_exited(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                exit_code,
+                0,
+                0,
+            ),
+            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                fatal_signal,
+                0,
+                0,
+            ),
             ExitStatus::StoppedByShadow => unreachable!(),
         };
         parent.signal(host, None, &siginfo);
