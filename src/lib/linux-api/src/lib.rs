@@ -60,12 +60,14 @@ pub mod ioctls;
 pub mod ldt;
 pub mod mman;
 pub mod posix_types;
+pub mod resource;
 pub mod rseq;
 pub mod sched;
 pub mod signal;
 pub mod sysinfo;
 pub mod time;
 pub mod ucontext;
+pub mod wait;
 
 // Internally we often end up needing to convert from types that bindgen inferred, in const
 // contexts.

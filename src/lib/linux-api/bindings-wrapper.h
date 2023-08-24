@@ -7,12 +7,14 @@
 #include <linux/fcntl.h>
 #include <linux/in.h>
 #include <linux/mman.h>
+#include <linux/resource.h>
 #include <linux/rseq.h>
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/sockios.h>
 #include <linux/time.h>
 #include <linux/unistd.h>
+#include <linux/wait.h>
 
 #include <asm/ioctls.h>
 #include <asm/sigcontext.h>
