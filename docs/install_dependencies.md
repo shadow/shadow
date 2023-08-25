@@ -24,8 +24,9 @@ sudo apt-get install -y \
     libglib2.0-0 \
     libglib2.0-dev \
     make \
+    netbase \
     python3 \
-    python3-pip \
+    python3-networkx \
     xz-utils \
     util-linux \
     gcc \
@@ -57,7 +58,7 @@ sudo dnf install -y \
     glib2-devel \
     make \
     python3 \
-    python3-pip \
+    python3-networkx \
     xz \
     xz-devel \
     yum-utils \
