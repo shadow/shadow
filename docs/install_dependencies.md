@@ -24,6 +24,7 @@ sudo apt-get install -y \
     libglib2.0-0 \
     libglib2.0-dev \
     make \
+    netbase \
     python3 \
     python3-networkx \
     xz-utils \

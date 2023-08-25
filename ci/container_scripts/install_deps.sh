@@ -12,6 +12,7 @@ APT_PACKAGES=(
   libglib2.0-0
   libglib2.0-dev
   make
+  netbase
   pkg-config
   python3
   python3-networkx
