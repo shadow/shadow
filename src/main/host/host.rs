@@ -17,6 +17,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::rootedcell::cell::RootedCell;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -188,6 +189,8 @@ pub struct Host {
     // `self.shim_shmem...protected.lock()` will fail if the lock is already
     // held.
     shim_shmem: UnsafeCell<ShMemBlock<'static, HostShmem>>,
+
+    in_notify_socket_has_packets: RootedCell<bool>,
 }
 
 /// Host must be `Send`.
@@ -296,6 +299,8 @@ impl Host {
             net_ns.localhost.borrow().get_address(),
         );
 
+        let in_notify_socket_has_packets = RootedCell::new(&root, false);
+
         let res = Self {
             info: OnceCell::new(),
             root,
@@ -323,6 +328,7 @@ impl Host {
             processes: RefCell::new(BTreeMap::new()),
             #[cfg(feature = "perf_timers")]
             execution_timer,
+            in_notify_socket_has_packets,
         };
 
         res.stop_execution_timer();
@@ -936,11 +942,19 @@ impl Host {
     /// Call to trigger the forwarding of packets from the network interface to
     /// the next hop (either back to the network interface for loopback, or up to
     /// the router for internet-bound packets).
+    ///
+    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
+    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
+    /// code called in any indirect way from here.
     pub fn notify_socket_has_packets(
         &self,
         addr: Ipv4Addr,
         socket_ptr: *const cshadow::CompatSocket,
     ) {
+        if self.in_notify_socket_has_packets.replace(&self.root, true) {
+            panic!("Recursively calling host.notify_socket_has_packets()");
+        }
+
         if let Some(iface) = self.interface_borrow(addr) {
             iface.add_data_source(socket_ptr);
             match addr {
@@ -948,6 +962,8 @@ impl Host {
                 _ => self.relay_inet_out.notify(self),
             };
         }
+
+        self.in_notify_socket_has_packets.set(&self.root, false);
     }
 
     /// Returns the Session ID for the given process group ID, if it exists.
