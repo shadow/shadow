@@ -14,7 +14,6 @@ APT_PACKAGES=(
   make
   pkg-config
   python3
-  python3-yaml
   python3-networkx
   xz-utils
   util-linux
@@ -51,7 +50,6 @@ RPM_PACKAGES=(
   make
   pkg-config
   python3
-  python3-yaml
   python3-networkx
   xz
   xz-devel
