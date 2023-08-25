@@ -14,7 +14,8 @@ APT_PACKAGES=(
   make
   pkg-config
   python3
-  python3-pip
+  python3-yaml
+  python3-networkx
   xz-utils
   util-linux
   )
@@ -50,7 +51,8 @@ RPM_PACKAGES=(
   make
   pkg-config
   python3
-  python3-pip
+  python3-yaml
+  python3-networkx
   xz
   xz-devel
   yum-utils
@@ -63,11 +65,6 @@ RPM_PACKAGES=(
 RPM_CI_PACKAGES=(
   curl
   rsync
-  )
-
-PYTHON_PACKAGES=(
-  PyYaml
-  "networkx>=2.5"
   )
 
 case "$CONTAINER" in
@@ -99,6 +96,3 @@ case "$CONTAINER" in
         exit 1
         ;;
 esac
-
-
-python3 -m pip install -- "${PYTHON_PACKAGES[@]}"
