@@ -18,6 +18,7 @@ currently be disabled via the (unstable) option `log-errors-to-tty`.
 * Added support for subprocess creation and management.
   * The `fork` syscall and `fork`-like invocations of the `clone` and `clone3` syscalls.
   * Process parent pid's, process group IDs, process session IDs, and related syscalls.
+  * Child exit signals (e.g. SIGCHLD)
 
 * Added Debian 12 (Bookworm) to our supported platforms.
 

@@ -622,6 +622,7 @@ impl siginfo_t {
     }
 
     pub fn new_for_sigchld_exited(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         child_exit_status: i32,
@@ -639,7 +640,7 @@ impl siginfo_t {
         // > waited-for  children  (unlike  getrusage(2) and times(2)).
         unsafe {
             Self::new(
-                Signal::SIGCHLD,
+                exit_signal,
                 0,
                 SigInfoCodeCld::CLD_EXITED.into(),
                 SigInfoDetailsFields {
@@ -666,6 +667,7 @@ impl siginfo_t {
     // > child process; these fields do not  include  the  times  used  by
     // > waited-for  children  (unlike  getrusage(2) and times(2)).
     fn new_for_sigchld_signaled(
+        exit_signal: Signal,
         code: SigInfoCodeCld,
         child_pid: i32,
         child_uid: u32,
@@ -675,7 +677,7 @@ impl siginfo_t {
     ) -> Self {
         unsafe {
             Self::new(
-                Signal::SIGCHLD,
+                exit_signal,
                 0,
                 code.into(),
                 SigInfoDetailsFields {
@@ -692,6 +694,7 @@ impl siginfo_t {
     }
 
     pub fn new_for_sigchld_killed(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         fatal_signal: Signal,
@@ -699,6 +702,7 @@ impl siginfo_t {
         child_stime: i64,
     ) -> Self {
         Self::new_for_sigchld_signaled(
+            exit_signal,
             SigInfoCodeCld::CLD_KILLED,
             child_pid,
             child_uid,
@@ -708,6 +712,7 @@ impl siginfo_t {
         )
     }
     pub fn new_for_sigchld_dumped(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         fatal_signal: Signal,
@@ -715,6 +720,7 @@ impl siginfo_t {
         child_stime: i64,
     ) -> Self {
         Self::new_for_sigchld_signaled(
+            exit_signal,
             SigInfoCodeCld::CLD_DUMPED,
             child_pid,
             child_uid,
@@ -724,12 +730,14 @@ impl siginfo_t {
         )
     }
     pub fn new_for_sigchld_trapped(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         child_utime: i64,
         child_stime: i64,
     ) -> Self {
         Self::new_for_sigchld_signaled(
+            exit_signal,
             SigInfoCodeCld::CLD_TRAPPED,
             child_pid,
             child_uid,
@@ -739,12 +747,14 @@ impl siginfo_t {
         )
     }
     pub fn new_for_sigchld_stopped(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         child_utime: i64,
         child_stime: i64,
     ) -> Self {
         Self::new_for_sigchld_signaled(
+            exit_signal,
             SigInfoCodeCld::CLD_STOPPED,
             child_pid,
             child_uid,
@@ -754,12 +764,14 @@ impl siginfo_t {
         )
     }
     pub fn new_for_sigchld_continued(
+        exit_signal: Signal,
         child_pid: i32,
         child_uid: u32,
         child_utime: i64,
         child_stime: i64,
     ) -> Self {
         Self::new_for_sigchld_signaled(
+            exit_signal,
             SigInfoCodeCld::CLD_CONTINUED,
             child_pid,
             child_uid,
@@ -1121,7 +1133,7 @@ impl sigaction {
     /// safe to call iff the function pointer in the internal `lsa_handler` is,
     /// and is of the type specified in the internal `lsa_flags`.
     pub unsafe fn handler(&self) -> SignalHandler {
-        let as_usize = self.0.lsa_handler.map(|f| f as usize).unwrap_or(0);
+        let as_usize = self.as_usize();
         if as_usize == Self::SIG_IGN {
             SignalHandler::SigIgn
         } else if as_usize == Self::SIG_DFL {
@@ -1142,6 +1154,18 @@ impl sigaction {
         } else {
             SignalHandler::Handler(self.0.lsa_handler.unwrap())
         }
+    }
+
+    fn as_usize(&self) -> usize {
+        self.0.lsa_handler.map(|f| f as usize).unwrap_or(0)
+    }
+
+    pub fn is_ignore(&self) -> bool {
+        self.as_usize() == Self::SIG_IGN
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.as_usize() == Self::SIG_DFL
     }
 }
 

@@ -468,8 +468,14 @@ impl Host {
             let process = processrc.borrow(self.root());
             process.resume(self, tid);
             Worker::clear_active_process();
-            died = process.borrow_zombie().is_some();
-            is_orphan = process.parent_id() == ProcessId::INIT;
+            let zombie_state = process.borrow_zombie();
+            if let Some(zombie) = zombie_state {
+                died = true;
+                is_orphan = zombie.reaper(self).is_none();
+            } else {
+                died = false;
+                is_orphan = false;
+            }
         };
         RootedRc::explicit_drop(processrc, &self.root);
 
@@ -489,8 +495,11 @@ impl Host {
                     None
                 } else {
                     process.set_parent_id(ProcessId::INIT);
-                    let is_zombie = process.borrow_zombie().is_some();
-                    is_zombie.then_some(*other_pid)
+                    process
+                        .borrow_zombie()
+                        .and_then(|z| z.reaper(self))
+                        .is_none()
+                        .then_some(*other_pid)
                 }
             })
             .collect();

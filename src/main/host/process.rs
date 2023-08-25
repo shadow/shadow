@@ -111,7 +111,7 @@ impl From<ThreadId> for ProcessId {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ExitStatus {
     Normal(i32),
-    Signaled(nix::sys::signal::Signal),
+    Signaled(Signal),
     /// The process was killed by Shadow rather than exiting "naturally" as part
     /// of the simulation. Currently this only happens when the process is still
     /// running when the simulation stop_time is reached.
@@ -153,6 +153,9 @@ struct Common {
 
     // Session id, as returned e.g. by `getsid`.
     session_id: Cell<ProcessId>,
+
+    // Signal to send to parent on death.
+    exit_signal: Option<Signal>,
 
     // unique id of the program that this process should run
     name: CString,
@@ -549,6 +552,7 @@ impl RunnableProcess {
         &self,
         host: &Host,
         flags: CloneFlags,
+        exit_signal: Option<Signal>,
         new_thread_group_leader: RootedRc<RootedRefCell<Thread>>,
     ) -> RootedRc<RootedRefCell<Process>> {
         let new_tgl_tid;
@@ -587,6 +591,7 @@ impl RunnableProcess {
             parent_pid: Cell::new(parent_pid),
             group_id: Cell::new(process_group_id),
             session_id: Cell::new(session_id),
+            exit_signal,
         };
 
         // The child will log to the same strace log file. Entries contain thread IDs,
@@ -646,6 +651,85 @@ pub struct ZombieProcess {
 impl ZombieProcess {
     pub fn exit_status(&self) -> ExitStatus {
         self.exit_status
+    }
+
+    /// Process that can reap this zombie process, if any.
+    pub fn reaper<'host>(
+        &self,
+        host: &'host Host,
+    ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + 'host> {
+        let Some(exit_signal) = self.common.exit_signal else {
+            return None;
+        };
+        let parent_pid = self.common.parent_pid.get();
+        if parent_pid == ProcessId::INIT {
+            return None;
+        }
+        let parentrc = host.process_borrow(parent_pid)?;
+
+        // If the parent has *explicitly* ignored the exit signal, then it
+        // doesn't reap.
+        //
+        // `waitpid(2)`:
+        // > POSIX.1-2001 specifies that if the disposition of SIGCHLD is set to SIG_IGN or the SA_NOCLDWAIT flag is set for SIGCHLD  (see
+        // > sigaction(2)),  then  children  that  terminate  do not become zombies and a call to wait() or waitpid() will block until all
+        // > children have terminated, and then fail with errno set to ECHILD.  (The original POSIX standard left the behavior of  setting
+        // > SIGCHLD to SIG_IGN unspecified.  Note that even though the default disposition of SIGCHLD is "ignore", explicitly setting the
+        // > disposition to SIG_IGN results in different treatment of zombie process children.)
+        //
+        // TODO: validate that this applies to whatever signal is configured as the exit
+        // signal, even if it's not SIGCHLD.
+        {
+            let parent = parentrc.borrow(host.root());
+            let parent_shmem = parent.shmem();
+            let host_shmem_lock = host.shim_shmem_lock_borrow().unwrap();
+            let parent_shmem_protected = parent_shmem.protected.borrow(&host_shmem_lock.root);
+            // SAFETY: We don't dereference function pointers.
+            let action = unsafe { parent_shmem_protected.signal_action(exit_signal) };
+            if action.is_ignore() {
+                return None;
+            }
+        }
+
+        Some(parentrc)
+    }
+
+    fn notify_parent_of_exit(&self, host: &Host) {
+        let Some(exit_signal) = self.common.exit_signal else {
+            trace!("Not notifying parent of exit: no signal specified");
+            return;
+        };
+        let parent_pid = self.common.parent_pid.get();
+        if parent_pid == ProcessId::INIT {
+            trace!("Not notifying parent of exit: parent is 'init'");
+            return;
+        }
+        let Some(parent_rc) = host.process_borrow(parent_pid) else {
+            trace!("Not notifying parent of exit: parent {parent_pid:?} not found");
+            return;
+        };
+        let parent = parent_rc.borrow(host.root());
+        let siginfo = match self.exit_status {
+            ExitStatus::Normal(exit_code) => siginfo_t::new_for_sigchld_exited(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                exit_code,
+                0,
+                0,
+            ),
+            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                fatal_signal,
+                0,
+                0,
+            ),
+            ExitStatus::StoppedByShadow => unreachable!(),
+        };
+        parent.signal(host, None, &siginfo);
+        // TODO: also notify parent's syscallcondition if it's blocked in e.g. waitpid.
     }
 }
 
@@ -891,6 +975,9 @@ impl Process {
             parent_pid: Cell::new(ProcessId::INIT),
             group_id: Cell::new(ProcessId::INIT),
             session_id: Cell::new(ProcessId::INIT),
+            // Exit signal is moot; since parent is INIT there will never
+            // be a valid target for it.
+            exit_signal: None,
         };
         RootedRc::new(
             host.root(),
@@ -1291,6 +1378,7 @@ impl Process {
             }
             (false, Ok(WaitStatus::Exited(_pid, code))) => ExitStatus::Normal(code),
             (false, Ok(WaitStatus::Signaled(_pid, signal, _core_dump))) => {
+                let signal = Signal::try_from(signal as i32).unwrap();
                 ExitStatus::Signaled(signal)
             }
             (false, Ok(status)) => {
@@ -1309,7 +1397,12 @@ impl Process {
             if let Some(expected_final_state) = runnable.expected_final_state {
                 let actual_final_state = match exit_status {
                     ExitStatus::Normal(i) => ProcessFinalState::Exited { exited: i },
-                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled { signaled: s.into() },
+                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled {
+                        // This conversion will fail on realtime signals, but that
+                        // should currently be impossible since we don't support
+                        // sending realtime signals.
+                        signaled: s.try_into().unwrap(),
+                    },
                     ExitStatus::StoppedByShadow => ProcessFinalState::Running(RunningVal::Running),
                 };
                 if expected_final_state == actual_final_state {
@@ -1325,10 +1418,13 @@ impl Process {
         };
         log::log!(log_level, "{}", main_result_string);
 
-        *opt_state = Some(ProcessState::Zombie(ZombieProcess {
+        let zombie = ZombieProcess {
             common: runnable.into_common(),
             exit_status,
-        }))
+        };
+        zombie.notify_parent_of_exit(host);
+
+        *opt_state = Some(ProcessState::Zombie(zombie));
     }
 
     /// Deprecated wrapper for `RunnableProcess::add_thread`
@@ -1356,10 +1452,6 @@ impl Drop for Process {
     fn drop(&mut self) {
         // Should only be dropped in the zombie state.
         debug_assert!(self.zombie().is_some());
-        // Shouldn't be dropped while a parent exists.
-        // Assuming for now that once we implement parent processes, we'll clear
-        // the parent id after the child has been reaped or the parent exits.
-        debug_assert_eq!(self.parent_id(), ProcessId::INIT);
     }
 }
 

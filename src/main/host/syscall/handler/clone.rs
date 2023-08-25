@@ -1,8 +1,8 @@
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
+use linux_api::signal::Signal;
 use log::{debug, trace, warn};
-use nix::sys::signal::Signal;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -203,7 +203,7 @@ impl SyscallHandler {
                 .process
                 .borrow_runnable()
                 .unwrap()
-                .new_forked_process(ctx.objs.host, flags, childrc);
+                .new_forked_process(ctx.objs.host, flags, exit_signal, childrc);
             child_process_rc = Some(process.clone(ctx.objs.host.root()));
             child_process_borrow = Some(
                 child_process_rc
