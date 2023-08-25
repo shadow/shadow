@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{HashMap, BTreeSet};
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
@@ -36,7 +36,7 @@ pub struct Epoll {
     // A counter for sorting entries, to guarantee fairness and determinism when reporting events.
     pri_counter: u64,
     // Stores entries for all descriptors we are currently monitoring for events.
-    monitoring: BTreeMap<Key, Entry>,
+    monitoring: HashMap<Key, Entry>,
     // Stores keys for entries with events that are ready to be reported.
     ready: BTreeSet<PriorityKey>,
     _counter: ObjectCounter,
@@ -50,7 +50,7 @@ impl Epoll {
             state: FileState::ACTIVE,
             has_open_file: false,
             pri_counter: 1,
-            monitoring: BTreeMap::new(),
+            monitoring: HashMap::new(),
             ready: BTreeSet::new(),
             _counter: ObjectCounter::new("Epoll"),
         };

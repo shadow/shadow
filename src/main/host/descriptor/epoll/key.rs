@@ -1,3 +1,4 @@
+use core::hash::Hash;
 use std::cmp::Ordering;
 
 use crate::host::descriptor::File;
@@ -5,7 +6,7 @@ use crate::host::descriptor::File;
 /// A `Key` helps us find an epoll entry given the fd and `File` object available at the time that a
 /// syscall is made. Epoll uses `Key`s to be able to add the same `File` multiple times under
 /// different fds, and add the same fd multiple times as long as the `File` is different.
-#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone)]
 pub(super) struct Key {
     fd: i32,
     file: File,
@@ -18,6 +19,21 @@ impl Key {
 
     pub(super) fn get_file_ref(&self) -> &File {
         &self.file
+    }
+}
+
+impl Eq for Key {}
+
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.fd == other.fd && self.file.canonical_handle() == other.file.canonical_handle()
+    }
+}
+
+impl Hash for Key {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fd.hash(state);
+        self.file.canonical_handle().hash(state);
     }
 }
 
@@ -46,9 +62,7 @@ impl PartialEq for PriorityKey {
 
 impl Ord for PriorityKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.pri
-            .cmp(&other.pri)
-            .then_with(|| self.key.cmp(&other.key))
+        self.pri.cmp(&other.pri)
     }
 }
 
