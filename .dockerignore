@@ -8,4 +8,7 @@
 **/target
 # local selection of rust toolchain
 rust-toolchain.toml
+# TODO: rename this directory to just `build` or move it under the primary
+# build dir
+src/lib/linux-api/bindings-build
 
