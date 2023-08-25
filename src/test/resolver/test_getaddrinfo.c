@@ -167,7 +167,9 @@ bool addrinfo_equals(const struct addrinfo* lhs, const struct addrinfo* rhs) {
                    getaddrinfo_rv_string(buf1_##__LINE__, expected),                               \
                    getaddrinfo_rv_string(buf2_##__LINE__, rv##__LINE__),                           \
                    (rv##__LINE__ == EAI_SYSTEM) ? strerror(errno) : "N/A");                        \
+            /* Abort the rest of the test to avoid accessing an invalid addrinfo pointer */        \
             g_test_fail();                                                                         \
+            return;                                                                                \
         }                                                                                          \
     }
 
