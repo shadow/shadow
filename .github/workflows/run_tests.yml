@@ -28,6 +28,8 @@ jobs:
           - 'debian:10-slim'
           # EOL ~June 2026 https://wiki.debian.org/LTS
           - 'debian:11-slim'
+          # EOL TBA https://wiki.debian.org/LTS
+          - 'debian:12-slim'
           # EOL Dec 15 2023 https://endoflife.date/fedora
           - 'fedora:37'
         cc: ['gcc']
