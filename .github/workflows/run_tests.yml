@@ -128,7 +128,7 @@ jobs:
           # https://github.com/mozilla/sccache#rust
           key: sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-${{ hashFiles('src/Cargo.lock') }}
           restore-keys: |
-                        sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-
+               sccache-${{ steps.get-month.outputs.month }}-${{ steps.get-rustv.outputs.rustv }}-${{ env.CONTAINER }}-${{ env.CC }}-${{ env.BUILDTYPE }}-${{ env.SCCACHE_CACHE_VERSION}}-
       - name: Install sccache
         env:
           LINK: https://github.com/mozilla/sccache/releases/download
