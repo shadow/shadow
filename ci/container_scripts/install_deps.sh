@@ -72,7 +72,11 @@ PYTHON_PACKAGES=(
 
 case "$CONTAINER" in
     ubuntu:*|debian:*)
-        sed -i '/deb-src/s/^# //' /etc/apt/sources.list
+        # Try to avoid downloading source packages, which we don't need.
+        # TODO: Update to work with deb822 format, as used in bookworm?
+        # https://manpages.debian.org/bookworm/apt/sources.list.5.en.html#DEB822-STYLE_FORMAT
+        sed -i '/deb-src/s/^# //' /etc/apt/sources.list || true
+
         DEBIAN_FRONTEND=noninteractive apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y -- "${APT_PACKAGES[@]}" "${APT_CI_PACKAGES[@]}"
 
