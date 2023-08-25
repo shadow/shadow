@@ -167,7 +167,10 @@ impl Epoll {
 
                 let mut entry = Entry::new(events, data, state);
                 // TODO remove when legacy tcp is removed.
-                if is_legacy(key.get_file_ref()) {
+                if matches!(
+                    key.get_file_ref(),
+                    File::Socket(Socket::Inet(InetSocket::LegacyTcp(_)))
+                ) {
                     entry.set_legacy();
                 }
                 self.monitoring.insert(key.clone(), entry);
@@ -356,16 +359,4 @@ impl Epoll {
         // The events to be returned to the managed process.
         events
     }
-}
-
-// TODO remove when legacy tcp is removed.
-fn is_legacy(file: &File) -> bool {
-    if let File::Socket(sock) = file {
-        if let Socket::Inet(inet) = sock {
-            if let InetSocket::LegacyTcp(_) = inet {
-                return true;
-            }
-        }
-    }
-    return false;
 }
