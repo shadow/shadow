@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;

@@ -151,7 +151,7 @@ impl SyscallHandler {
             let ev = mem.read(event_ptr)?;
 
             let Some(mut events) = EpollEvents::from_bits(ev.events) else {
-                log::debug!("Invalid epoll_ctl events: {}", {ev.events});
+                log::debug!("Invalid epoll_ctl events: {}", { ev.events });
                 return Err(Errno::EINVAL.into());
             };
 
