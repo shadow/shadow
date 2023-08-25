@@ -34,7 +34,8 @@ impl<'fd> core::fmt::Write for BorrowedFdWriter<'fd> {
     fn write_str(&mut self, s: &str) -> Result<(), core::fmt::Error> {
         let mut bytes_slice = s.as_bytes();
         while !bytes_slice.is_empty() {
-            let Ok(written) = rustix::io::retry_on_intr(|| rustix::io::write(self.fd, bytes_slice)) else {
+            let Ok(written) = rustix::io::retry_on_intr(|| rustix::io::write(self.fd, bytes_slice))
+            else {
                 return Err(core::fmt::Error);
             };
             if written == 0 {

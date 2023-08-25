@@ -459,7 +459,9 @@ fn associate_socket(
     let local_addr = if local_addr.port() != 0 {
         local_addr
     } else {
-        let Some(new_port) = net_ns.get_random_free_port(protocol, *local_addr.ip(), peer_addr, rng) else {
+        let Some(new_port) =
+            net_ns.get_random_free_port(protocol, *local_addr.ip(), peer_addr, rng)
+        else {
             log::debug!("Association required an ephemeral port but none are available");
             return Err(Errno::EADDRINUSE.into());
         };
@@ -610,7 +612,8 @@ mod export {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
         #[allow(irrefutable_let_patterns)]
-        let InetSocket::LegacyTcp(socket) = socket else {
+        let InetSocket::LegacyTcp(socket) = socket
+        else {
             panic!("Socket was not a legacy TCP socket: {socket:?}");
         };
 

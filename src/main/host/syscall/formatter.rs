@@ -294,7 +294,7 @@ mod export {
         let logging_mode = logging_mode.into();
         let Some(logging_mode) = logging_mode else {
             // logging was disabled
-            return result.into()
+            return result.into();
         };
 
         let proc = unsafe { proc.as_ref().unwrap() };

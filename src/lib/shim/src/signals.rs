@@ -107,9 +107,11 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
     let mut restartable = true;
 
     loop {
-        let Some((sig, siginfo)) = tls_process_shmem::with(|process| tls_thread_shmem::with(|thread| {
-            shim_shmem::take_pending_unblocked_signal(&host_lock, process, thread)
-        })) else {
+        let Some((sig, siginfo)) = tls_process_shmem::with(|process| {
+            tls_thread_shmem::with(|thread| {
+                shim_shmem::take_pending_unblocked_signal(&host_lock, process, thread)
+            })
+        }) else {
             break;
         };
 

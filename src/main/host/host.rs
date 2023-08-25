@@ -454,7 +454,10 @@ impl Host {
     }
 
     pub fn resume(&self, pid: ProcessId, tid: ThreadId) {
-        let Some(processrc) = self.process_borrow(pid).map(|p| RootedRc::clone(&p, &self.root)) else {
+        let Some(processrc) = self
+            .process_borrow(pid)
+            .map(|p| RootedRc::clone(&p, &self.root))
+        else {
             trace!("{pid:?} doesn't exist");
             return;
         };

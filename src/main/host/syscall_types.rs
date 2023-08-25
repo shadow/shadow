@@ -352,7 +352,7 @@ mod export {
         scr: *mut SyscallReturn,
     ) -> *mut SyscallReturnBlocked {
         let scr = unsafe { scr.as_mut().unwrap() };
-        let SyscallReturn::Block(b)= scr else {
+        let SyscallReturn::Block(b) = scr else {
             panic!("Unexpected scr {:?}", scr);
         };
         b
@@ -361,7 +361,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn syscallreturn_done(scr: *mut SyscallReturn) -> *mut SyscallReturnDone {
         let scr = unsafe { scr.as_mut().unwrap() };
-        let SyscallReturn::Done(d)= scr else {
+        let SyscallReturn::Done(d) = scr else {
             panic!("Unexpected scr {:?}", scr);
         };
         d
