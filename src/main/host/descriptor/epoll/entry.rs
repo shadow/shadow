@@ -1,6 +1,6 @@
 use linux_api::epoll::EpollEvents;
 
-use crate::host::descriptor::{FileState, StateListenerFilter};
+use crate::host::descriptor::FileState;
 use crate::utility::callback_queue::Handle;
 
 /// Used to track the status of a file we are monitoring for events. Any complicated logic for
@@ -69,17 +69,15 @@ impl Entry {
         self.collected.remove(changed);
     }
 
-    pub(super) fn get_listener_state(&self) -> (FileState, StateListenerFilter) {
+    pub(super) fn get_listener_state(&self) -> FileState {
         {
             // TODO remove when legacy tcp is removed.
             if self.is_legacy {
-                return (FileState::all(), StateListenerFilter::Always);
+                return FileState::all();
             }
         }
         // Return the file state changes that we want to be notified about.
-        let listening = Self::state_from_events(self.interest);
-        let filter = StateListenerFilter::Always;
-        (listening, filter)
+        Self::state_from_events(self.interest).union(FileState::CLOSED)
     }
 
     pub(super) fn set_listener_handle(&mut self, handle: Option<Handle<(FileState, FileState)>>) {
@@ -99,7 +97,7 @@ impl Entry {
                 }
             }
         }
-        !self.get_ready_events().is_empty()
+        !self.state.contains(FileState::CLOSED) && !self.get_ready_events().is_empty()
     }
 
     pub(super) fn collect_ready_events(&mut self) -> Option<(EpollEvents, u64)> {

@@ -254,24 +254,22 @@ impl Epoll {
         };
 
         // Check what state we need to listen for this entry.
-        let (listen, filter) = entry.get_listener_state();
+        // We always listen for closed so we know when to stop monitoring the entry.
+        let listen = entry.get_listener_state().union(FileState::CLOSED);
+        let filter = StateListenerFilter::Always;
 
-        if listen.is_empty() {
-            entry.set_listener_handle(None);
-        } else {
-            // Set up a callback so we get informed when the file changes.
-            let file = key.get_file_ref().clone();
-            let handle =
-                file.borrow_mut()
-                    .add_listener(listen, filter, move |state, changed, cb_queue| {
-                        if let Some(epoll) = weak_self.upgrade() {
-                            epoll
-                                .borrow_mut()
-                                .notify_entry(&key, state, changed, cb_queue);
-                        }
-                    });
-            entry.set_listener_handle(Some(handle));
-        }
+        // Set up a callback so we get informed when the file changes.
+        let file = key.get_file_ref().clone();
+        let handle =
+            file.borrow_mut()
+                .add_listener(listen, filter, move |state, changed, cb_queue| {
+                    if let Some(epoll) = weak_self.upgrade() {
+                        epoll
+                            .borrow_mut()
+                            .notify_entry(&key, state, changed, cb_queue);
+                    }
+                });
+        entry.set_listener_handle(Some(handle));
     }
 
     /// The file listener callback for when a monitored entry file status changes.
@@ -287,8 +285,15 @@ impl Epoll {
             entry.notify(state, changed);
         };
 
-        // Update our ready set and readability.
+        // Update our ready set.
         self.refresh_ready(key.clone());
+
+        // Also stop monitoring if the file was closed.
+        if state.contains(FileState::CLOSED) {
+            self.monitoring.remove(key);
+        }
+
+        // Update the readability of the epoll descriptor.
         self.refresh_state(cb_queue);
     }
 
