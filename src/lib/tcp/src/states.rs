@@ -5,6 +5,7 @@ use std::net::SocketAddrV4;
 use bytes::Bytes;
 
 use crate::connection::Connection;
+use crate::seq::Seq;
 use crate::util::remove_from_list;
 use crate::util::time::Duration;
 use crate::{
@@ -45,55 +46,55 @@ pub struct ListenState<X: Dependencies> {
 #[derive(Debug)]
 pub struct SynSentState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct SynReceivedState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct EstablishedState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct FinWaitOneState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct FinWaitTwoState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct ClosingState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct TimeWaitState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct CloseWaitState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 #[derive(Debug)]
 pub struct LastAckState<X: Dependencies> {
     pub(crate) common: Common<X>,
-    pub(crate) connection: Connection,
+    pub(crate) connection: Connection<X::Instant>,
 }
 
 /// A state for sockets that need to send RST packets before closing. While it's not a part of the
@@ -271,31 +272,7 @@ impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
 
         assert!(!local_addr.ip().is_unspecified());
 
-        let syn_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *local_addr.ip(),
-                dst: *remote_addr.ip(),
-            },
-            flags: TcpFlags::SYN,
-            src_port: local_addr.port(),
-            dst_port: remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-
-        let mut connection = Connection {
-            local_addr,
-            remote_addr,
-            send_buffer: LinkedList::new(),
-            recv_buffer: LinkedList::new(),
-        };
-
-        connection.send_buffer.push_back((syn_packet, Bytes::new()));
+        let connection = Connection::new(local_addr, remote_addr, Seq::new(0));
 
         let new_state = SynSentState::new(self.common, connection);
         (new_state.into(), Ok(assoc_result))
@@ -346,27 +323,7 @@ impl<X: Dependencies> ListenState<X> {
     }
 
     /// Register a new child TCP state for a new incoming connection.
-    fn register_child(&mut self, header: &TcpHeader) -> ChildTcpKey {
-        // TODO: need to be able to re-send the SYN+ACK if not acknowledged
-
-        // send a SYN+ACK back
-        let response = TcpHeader {
-            ip: Ipv4Header {
-                src: header.ip.dst,
-                dst: header.ip.src,
-            },
-            flags: TcpFlags::SYN | TcpFlags::ACK,
-            src_port: header.dst_port,
-            dst_port: header.src_port,
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-
+    fn register_child(&mut self, header: &TcpHeader, payload: impl Into<Bytes>) -> ChildTcpKey {
         let conn_addrs = RemoteLocalPair::new(header.src(), header.dst());
 
         let key = self.children.insert_with_key(|key| {
@@ -376,15 +333,8 @@ impl<X: Dependencies> ListenState<X> {
                 error: None,
             };
 
-            let mut connection = Connection {
-                local_addr: header.dst(),
-                remote_addr: header.src(),
-                send_buffer: LinkedList::new(),
-                recv_buffer: LinkedList::new(),
-            };
-
-            // queue the response
-            connection.send_buffer.push_back((response, Bytes::new()));
+            let mut connection = Connection::new(header.dst(), header.src(), Seq::new(0));
+            connection.push_packet(header, payload).unwrap();
 
             let new_tcp = SynReceivedState::new(common, connection);
 
@@ -671,7 +621,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
         }
 
         // we received a SYN packet, so register a new child in the "syn-received" state
-        self.register_child(header);
+        self.register_child(header, payload);
 
         (self.into(), Ok(()))
     }
@@ -726,7 +676,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
 }
 
 impl<X: Dependencies> SynSentState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         let state = SynSentState { common, connection };
 
         // if still in the "syn-sent" state after 60 seconds, close it
@@ -778,7 +728,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -786,72 +736,36 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
             return (self.into(), Ok(()));
         }
 
-        // if received SYN and ACK (active open)
-        if header.flags.contains(TcpFlags::SYN | TcpFlags::ACK) {
-            // ACK the received SYN
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: header.ip.dst,
-                    dst: header.ip.src,
-                },
-                flags: TcpFlags::ACK,
-                src_port: header.dst_port,
-                dst_port: header.src_port,
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
+        }
 
-            // move to the "established" state
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received SYN and ACK (active open), move to the "established" state
+        if self.connection.received_syn() && self.connection.syn_was_acked() {
             let new_state = EstablishedState::new(self.common, self.connection);
-
             return (new_state.into(), Ok(()));
         }
 
-        // if received SYN and no ACK (simultaneous open)
-        if header.flags.contains(TcpFlags::SYN) {
-            // ACK the received SYN
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: header.ip.dst,
-                    dst: header.ip.src,
-                },
-                flags: TcpFlags::ACK,
-                src_port: header.dst_port,
-                dst_port: header.src_port,
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
-
-            // move to the "syn-received" state
+        // if received SYN and no ACK (simultaneous open), move to the "syn-received" state
+        if self.connection.received_syn() {
             let new_state = SynReceivedState::new(self.common, self.connection);
-
             return (new_state.into(), Ok(()));
         }
 
-        // TODO: unsure what to do here; just dropping the packet
+        // TODO: unsure what to do otherwise; just dropping the packet
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -869,7 +783,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -878,7 +792,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
 }
 
 impl<X: Dependencies> SynReceivedState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         let state = SynReceivedState { common, connection };
 
         // if still in the "syn-received" state after 60 seconds, close it with a RST
@@ -902,25 +816,7 @@ impl<X: Dependencies> SynReceivedState<X> {
 impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
         // send a FIN packet
-        let fin_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *self.connection.local_addr.ip(),
-                dst: *self.connection.remote_addr.ip(),
-            },
-            flags: TcpFlags::FIN,
-            src_port: self.connection.local_addr.port(),
-            dst_port: self.connection.remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-        self.connection
-            .send_buffer
-            .push_back((fin_packet, Bytes::new()));
+        self.connection.send_fin();
 
         let new_state = FinWaitOneState::new(self.common, self.connection);
         (new_state.into(), Ok(()))
@@ -966,9 +862,9 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     }
 
     fn push_packet(
-        self,
+        mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // waiting for the ACK for our SYN
 
@@ -978,21 +874,28 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
             return (self.into(), Ok(()));
         }
 
-        if !header.flags.contains(TcpFlags::ACK) {
-            // TODO: unsure whether to drop or RST; dropping for now
-            return (self.into(), Ok(()));
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
         }
 
-        let new_state = EstablishedState::new(self.common, self.connection);
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
 
-        (new_state.into(), Ok(()))
+        // if received ACK, move to the "established" state
+        if self.connection.syn_was_acked() {
+            let new_state = EstablishedState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        // check if we have a packet queued
-        let packet = self.connection.send_buffer.pop_front();
-
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1010,7 +913,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1019,7 +922,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
 }
 
 impl<X: Dependencies> EstablishedState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         EstablishedState { common, connection }
     }
 }
@@ -1027,25 +930,7 @@ impl<X: Dependencies> EstablishedState<X> {
 impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
         // send a FIN packet
-        let fin_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *self.connection.local_addr.ip(),
-                dst: *self.connection.remote_addr.ip(),
-            },
-            flags: TcpFlags::FIN,
-            src_port: self.connection.local_addr.port(),
-            dst_port: self.connection.remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-        self.connection
-            .send_buffer
-            .push_back((fin_packet, Bytes::new()));
+        self.connection.send_fin();
 
         let new_state = FinWaitOneState::new(self.common, self.connection);
         (new_state.into(), Ok(()))
@@ -1111,43 +996,28 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::FIN) {
-            // send the ACK
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: *self.connection.local_addr.ip(),
-                    dst: *self.connection.remote_addr.ip(),
-                },
-                flags: TcpFlags::ACK,
-                src_port: self.connection.local_addr.port(),
-                dst_port: self.connection.remote_addr.port(),
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
-
-            // move to the "close-wait" state
-            let new_state = CloseWaitState::new(self.common, self.connection);
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
             return (new_state.into(), Ok(()));
         }
 
-        self.connection
-            .recv_buffer
-            .push_back((*header, payload.into()));
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received FIN, move to the "close-wait" state
+        if self.connection.received_fin() {
+            let new_state = CloseWaitState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1173,7 +1043,7 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1182,7 +1052,7 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
 }
 
 impl<X: Dependencies> FinWaitOneState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         FinWaitOneState { common, connection }
     }
 }
@@ -1217,7 +1087,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1225,76 +1095,40 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::FIN | TcpFlags::ACK) {
-            // send the ACK
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: *self.connection.local_addr.ip(),
-                    dst: *self.connection.remote_addr.ip(),
-                },
-                flags: TcpFlags::ACK,
-                src_port: self.connection.local_addr.port(),
-                dst_port: self.connection.remote_addr.port(),
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
+        }
 
-            // move to the "time-wait" state
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received FIN and ACK, move to the "time-wait" state
+        if self.connection.received_fin() && self.connection.fin_was_acked() {
             let new_state = TimeWaitState::new(self.common, self.connection);
             return (new_state.into(), Ok(()));
         }
 
-        // simultaneous close
-        if header.flags.contains(TcpFlags::FIN) {
-            // send the ACK
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: *self.connection.local_addr.ip(),
-                    dst: *self.connection.remote_addr.ip(),
-                },
-                flags: TcpFlags::ACK,
-                src_port: self.connection.local_addr.port(),
-                dst_port: self.connection.remote_addr.port(),
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
-
-            // move to the "closing" state
+        // if received FIN, move to the "closing" state
+        if self.connection.received_fin() {
             let new_state = ClosingState::new(self.common, self.connection);
             return (new_state.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::ACK) {
-            // move to the "fin-wait-two" state
+        // if received ACK, move to the "fin-wait-two" state
+        if self.connection.fin_was_acked() {
             let new_state = FinWaitTwoState::new(self.common, self.connection);
             return (new_state.into(), Ok(()));
         }
-
-        // drop all other packets
-        // TODO: handle RST packets
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1320,7 +1154,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1329,7 +1163,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
 }
 
 impl<X: Dependencies> FinWaitTwoState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         FinWaitTwoState { common, connection }
     }
 }
@@ -1364,7 +1198,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1372,42 +1206,28 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::FIN) {
-            // send the ACK
-            let response = TcpHeader {
-                ip: Ipv4Header {
-                    src: *self.connection.local_addr.ip(),
-                    dst: *self.connection.remote_addr.ip(),
-                },
-                flags: TcpFlags::ACK,
-                src_port: self.connection.local_addr.port(),
-                dst_port: self.connection.remote_addr.port(),
-                seq: 0,
-                ack: 0,
-                window_size: 0,
-                selective_acks: None,
-                window_scale: None,
-                timestamp: None,
-                timestamp_echo: None,
-            };
-            self.connection
-                .send_buffer
-                .push_back((response, Bytes::new()));
-
-            // move to the "time-wait" state
-            let new_state = TimeWaitState::new(self.common, self.connection);
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
             return (new_state.into(), Ok(()));
         }
 
-        // drop all other packets
-        // TODO: handle RST packets
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received FIN, move to the "time-wait" state
+        if self.connection.received_fin() {
+            let new_state = TimeWaitState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1433,7 +1253,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1442,7 +1262,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
 }
 
 impl<X: Dependencies> ClosingState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         ClosingState { common, connection }
     }
 }
@@ -1482,9 +1302,9 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
     }
 
     fn push_packet(
-        self,
+        mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1492,21 +1312,30 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::ACK) {
-            // move to the "time-wait" state
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
+        }
+
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received ACK, move to the "time-wait" state
+        if self.connection.fin_was_acked() {
             let new_state = TimeWaitState::new(self.common, self.connection);
             return (new_state.into(), Ok(()));
         }
 
         // drop all other packets
-        // TODO: handle RST packets
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1534,7 +1363,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1543,7 +1372,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
 }
 
 impl<X: Dependencies> TimeWaitState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         let state = TimeWaitState { common, connection };
 
         // taken from /proc/sys/net/ipv4/tcp_fin_timeout
@@ -1599,9 +1428,9 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
     }
 
     fn push_packet(
-        self,
+        mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1609,15 +1438,23 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
             return (self.into(), Ok(()));
         }
 
+        if header.flags.contains(TcpFlags::RST) {
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
+        }
+
         // TODO: send RST for all packets?
-        // TODO: handle RST packets
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1645,7 +1482,7 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1654,7 +1491,7 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
 }
 
 impl<X: Dependencies> CloseWaitState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         Self { common, connection }
     }
 }
@@ -1662,25 +1499,7 @@ impl<X: Dependencies> CloseWaitState<X> {
 impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
         // send a FIN packet
-        let fin_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *self.connection.local_addr.ip(),
-                dst: *self.connection.remote_addr.ip(),
-            },
-            flags: TcpFlags::FIN,
-            src_port: self.connection.local_addr.port(),
-            dst_port: self.connection.remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-        self.connection
-            .send_buffer
-            .push_back((fin_packet, Bytes::new()));
+        self.connection.send_fin();
 
         let new_state = LastAckState::new(self.common, self.connection);
         (new_state.into(), Ok(()))
@@ -1720,9 +1539,9 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     }
 
     fn push_packet(
-        self,
+        mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1731,17 +1550,21 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
         }
 
         if header.flags.contains(TcpFlags::RST) {
-            todo!();
+            // move to the "closed" state
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
         }
 
-        // otherwise drop the packet since we shouldn't be receiving data
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1769,7 +1592,7 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
@@ -1778,7 +1601,7 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
 }
 
 impl<X: Dependencies> LastAckState<X> {
-    fn new(common: Common<X>, connection: Connection) -> Self {
+    fn new(common: Common<X>, connection: Connection<X::Instant>) -> Self {
         Self { common, connection }
     }
 }
@@ -1818,9 +1641,9 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
     }
 
     fn push_packet(
-        self,
+        mut self,
         header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        payload: impl Into<Bytes>,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1829,24 +1652,27 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
         }
 
         if header.flags.contains(TcpFlags::RST) {
-            todo!();
-        }
-
-        // if the ACK for the FIN
-        if header.flags.contains(TcpFlags::ACK) {
+            // move to the "closed" state
             let new_state = ClosedState::new(self.common);
             return (new_state.into(), Ok(()));
         }
 
-        // otherwise drop the packet since we shouldn't be receiving data
+        if let Err(e) = self.connection.push_packet(header, payload) {
+            return (self.into(), Err(e));
+        }
+
+        // if received ACK, move to the "closed" state
+        if self.connection.fin_was_acked() {
+            let new_state = ClosedState::new(self.common);
+            return (new_state.into(), Ok(()));
+        }
 
         (self.into(), Ok(()))
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        // we may still have data packets and the FIN to send
-        let packet = self.connection.send_buffer.pop_front();
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        let rv = self.connection.pop_packet(self.common.current_time());
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1874,7 +1700,7 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.connection.send_buffer.is_empty()
+        self.connection.wants_to_send()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
