@@ -38,6 +38,8 @@ pub struct ListenState<X: Dependencies> {
     pub(crate) conn_map: HashMap<RemoteLocalPair, ChildTcpKey>,
     /// A queue of child TCP states in the "established" state, ready to be accept()ed.
     pub(crate) accept_queue: LinkedList<ChildTcpKey>,
+    /// A list of child TCP states that want to send a packet.
+    pub(crate) to_send: LinkedList<ChildTcpKey>,
 }
 
 #[derive(Debug)]
@@ -339,6 +341,7 @@ impl<X: Dependencies> ListenState<X> {
             children: slotmap::DenseSlotMap::with_key(),
             conn_map: HashMap::new(),
             accept_queue: LinkedList::new(),
+            to_send: LinkedList::new(),
         }
     }
 
@@ -409,22 +412,16 @@ impl<X: Dependencies> ListenState<X> {
             let child = &mut entry.state;
             let conn_addrs = &entry.conn_addrs;
 
-            // get any packets that it wants to send and add them to our send buffer
-            while child.as_ref().unwrap().wants_to_send() {
-                let rv;
-                let mut state = child.take().unwrap();
-                (state, rv) = state.pop_packet();
-                *child = Some(state);
-
-                let (header, payload) = rv.unwrap();
-
-                assert!(payload.is_empty());
-                assert_eq!(
-                    &RemoteLocalPair::new(header.dst(), header.src()),
-                    conn_addrs
-                );
-
-                self.send_buffer.push_back(header);
+            // add to or remove from the `to_send` list
+            if child.as_ref().unwrap().wants_to_send() {
+                // if it wants to send a packet but is not in the `to_send` list
+                if !self.to_send.contains(&key) {
+                    // add to the `to_send` list
+                    self.to_send.push_back(key);
+                }
+            } else {
+                // doesn't want to send a packet, remove from the `to_send` list
+                remove_from_list(&mut self.to_send, &key);
             }
 
             // add to or remove from the accept queue
@@ -467,6 +464,7 @@ impl<X: Dependencies> ListenState<X> {
         // remove the child from any other lists/maps
 
         remove_from_list(&mut self.accept_queue, &key);
+        remove_from_list(&mut self.to_send, &key);
         assert_eq!(self.conn_map.remove(&conn_addrs), Some(key));
 
         Some(child)
@@ -515,13 +513,21 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
             self.with_child(key, |child| child.rst_close())
                 .unwrap()
                 .unwrap();
+
+            // get any packets that it wants to send and add them to our send buffer; removing a
+            // packet may cause the child to close which will make `key` invalid, which is why we
+            // don't unwrap here
+            while let Ok(Ok((header, payload))) = self.with_child(key, |child| child.pop_packet()) {
+                assert!(payload.is_empty());
+                self.send_buffer.push_back(header);
+            }
         }
 
         // The `rst_close` should have moved the child states to either "closed" or "rst" and
-        // possibly queued some RST packets. The `with_child` would have taken those packets from
-        // the child state and moved them to our buffer, which would have then moved all child
-        // states to "closed". Finally `with_child` would have seen that they closed and removed
-        // them from `self.children`.
+        // possibly queued some RST packets. Then we should have taken those packets from the child
+        // state and moved them to our buffer, which would have then moved all child states to
+        // "closed". Finally `with_child` would have seen that they closed and removed them from
+        // `self.children`.
         assert!(self.children.is_empty());
 
         // get all rst packets from our send buffer
@@ -671,12 +677,25 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
     }
 
     fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
-        let packet = self
-            .send_buffer
-            .pop_front()
-            .map(|header| (header, Bytes::new()));
+        if let Some(header) = self.send_buffer.pop_front() {
+            return (self.into(), Ok((header, Bytes::new())));
+        }
 
-        (self.into(), packet.ok_or(PopPacketError::NoPacket))
+        if let Some(child_key) = self.to_send.pop_front() {
+            let rv = self
+                .with_child(child_key, |state| state.pop_packet())
+                .unwrap();
+
+            // if the child was in the list, then we'll assume it must have a packet to send
+            let (header, payload) = rv.unwrap();
+
+            // might as well check this
+            debug_assert!(payload.is_empty());
+
+            return (self.into(), Ok((header, payload)));
+        }
+
+        (self.into(), Err(PopPacketError::NoPacket))
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -698,7 +717,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
     }
 
     fn wants_to_send(&self) -> bool {
-        !self.send_buffer.is_empty()
+        !self.send_buffer.is_empty() || !self.to_send.is_empty()
     }
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
