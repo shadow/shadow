@@ -85,6 +85,7 @@ use bytes::Bytes;
 pub mod util;
 
 mod connection;
+mod seq;
 mod states;
 
 #[cfg(test)]
