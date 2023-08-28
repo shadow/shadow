@@ -54,7 +54,7 @@ else
 fi
 
 result="${network} net expected ${expected} got client=${client_Bps_read} server=${server_Bps_read}"
-if [[ ${client_Bps_read} < ${expected} || ${server_Bps_read} < ${expected} ]]; then
+if [[ ${client_Bps_read} -lt ${expected} || ${server_Bps_read} -lt ${expected} ]]; then
     printf "Verification %bfailed%b: ${result}\n" "$RED" "$NC"
     exit 1
 else
