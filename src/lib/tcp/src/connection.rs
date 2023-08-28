@@ -240,7 +240,16 @@ impl<I: Instant> Connection<I> {
                 #[cfg(debug_assertions)]
                 debug_assert!(wants_to_send);
 
-                break 'packet (self.send.buffer.next_seq(), TcpFlags::empty(), Bytes::new());
+                // use the sequence number of the next unsent message if we have one buffered,
+                // otherwise get the next sequence number from the buffer
+                let seq = self
+                    .send
+                    .buffer
+                    .next_not_transmitted()
+                    .map(|x| x.0)
+                    .unwrap_or(self.send.buffer.next_seq());
+
+                break 'packet (seq, TcpFlags::empty(), Bytes::new());
             }
 
             #[cfg(debug_assertions)]
