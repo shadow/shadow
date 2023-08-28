@@ -39,8 +39,8 @@ echo "Client bytes per second=${client_Bps_read}"
 expected=0
 if [[ "${network}" == "1mbit"* ]]; then
     # 1 Mbit/s = 125000 bytes/s
-    # 125000 bytes/s * 0.84 = 105000 bytes/s
-    expected=105000
+    # 125000 bytes/s * 0.7 = 87500 bytes/s
+    expected=87500
 elif [[ "${network}" == "10mbit"* ]]; then
     # 10 Mbit/s = 1250000 bytes/s
     # 1250000 bytes/s * 0.88 = 1100000 bytes/s
