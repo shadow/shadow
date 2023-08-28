@@ -25,6 +25,8 @@ enum _Status {
     /* a listening socket is allowing connections; only applicable to connection-oriented unix
      * sockets */
     STATUS_SOCKET_ALLOWING_CONNECT = 1 << 5,
+    /* a child process had an event reportable via e.g. waitpid */
+    STATUS_CHILD_EVENT = 1 << 6,
 };
 
 #endif // SRC_MAIN_HOST_STATUS_H

@@ -20,6 +20,8 @@ enum _TriggerType {
     TRIGGER_DESCRIPTOR,
     TRIGGER_FILE,
     TRIGGER_FUTEX,
+    /* A child-process event, as for waitpid */
+    TRIGGER_CHILD,
 };
 
 /* Pointer to the object whose status we monitor for changes */

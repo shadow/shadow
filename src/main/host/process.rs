@@ -30,6 +30,7 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
+use super::descriptor::{FileState, StateEventSource};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
@@ -45,6 +46,7 @@ use crate::host::descriptor::Descriptor;
 use crate::host::managed_thread::ManagedThread;
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility;
+use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
 
@@ -271,6 +273,10 @@ pub struct RunnableProcess {
     // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
     // Boxed to avoid invalidating those if Self is moved.
     memory_manager: Box<RefCell<MemoryManager>>,
+
+    // Listeners for child-events.
+    // e.g. these listeners are notified when a child of this process exits.
+    child_process_event_listeners: RefCell<StateEventSource>,
 }
 
 impl RunnableProcess {
@@ -628,6 +634,7 @@ impl RunnableProcess {
             unsafe_borrow_mut: RefCell::new(None),
             unsafe_borrows: RefCell::new(Vec::new()),
             memory_manager: Box::new(RefCell::new(unsafe { MemoryManager::new(native_pid) })),
+            child_process_event_listeners: Default::default(),
         };
         let child_process = Process {
             state: RefCell::new(Some(ProcessState::Runnable(runnable_process))),
@@ -728,8 +735,25 @@ impl ZombieProcess {
             ),
             ExitStatus::StoppedByShadow => unreachable!(),
         };
-        parent.signal(host, None, &siginfo);
-        // TODO: also notify parent's syscallcondition if it's blocked in e.g. waitpid.
+
+        let Some(parent_runnable) = parent.runnable() else {
+            trace!("Not notifying parent of exit: {parent_pid:?} not running");
+            debug_panic!("Non-running parent process shouldn't be possible.");
+            #[allow(unreachable_code)]
+            {
+                return;
+            }
+        };
+        parent_runnable.signal(host, None, &siginfo);
+        CallbackQueue::queue_and_run(|q| {
+            let mut parent_child_listeners =
+                parent_runnable.child_process_event_listeners.borrow_mut();
+            parent_child_listeners.notify_listeners(
+                FileState::CHILD_EVENT,
+                FileState::CHILD_EVENT,
+                q,
+            );
+        });
     }
 }
 
@@ -1000,6 +1024,7 @@ impl Process {
                         cpu_delay_timer,
                         #[cfg(feature = "perf_timers")]
                         total_run_time: Cell::new(Duration::ZERO),
+                        child_process_event_listeners: Default::default(),
                     }))),
                 },
             ),
@@ -1667,6 +1692,7 @@ mod export {
     use crate::host::context::ThreadContext;
     use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
     use crate::host::thread::Thread;
+    use crate::utility::HostTreePointer;
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
@@ -2141,5 +2167,37 @@ mod export {
         let siginfo_t = unsafe { siginfo_t::wrap_ref_assume_initd(siginfo_t.as_ref().unwrap()) };
         Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo_t))
             .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_addChildEventListener(
+        host: *const Host,
+        process: *const Process,
+        listener: *mut cshadow::StatusListener,
+    ) {
+        let host = unsafe { host.as_ref().unwrap() };
+        let process = unsafe { process.as_ref().unwrap() };
+        let listener = HostTreePointer::new_for_host(host.id(), listener);
+        process
+            .borrow_runnable()
+            .unwrap()
+            .child_process_event_listeners
+            .borrow_mut()
+            .add_legacy_listener(listener)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_removeChildEventListener(
+        _host: *const Host,
+        process: *const Process,
+        listener: *mut cshadow::StatusListener,
+    ) {
+        let process = unsafe { process.as_ref().unwrap() };
+        process
+            .borrow_runnable()
+            .unwrap()
+            .child_process_event_listeners
+            .borrow_mut()
+            .remove_legacy_listener(listener)
     }
 }
