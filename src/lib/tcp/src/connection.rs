@@ -218,52 +218,12 @@ impl<I: Instant> Connection<I> {
     }
 
     pub fn pop_packet(&mut self, now: I) -> Result<(TcpHeader, Bytes), PopPacketError> {
-        let (seq_range, mut flags, payload) = 'packet: {
-            let send_window = self.send.window_range();
+        let (seq_range, mut flags, payload) =
+            self.next_segment().ok_or(PopPacketError::NoPacket)?;
 
-            // make sure that `wants_to_send()` agrees with this code
-            #[cfg(debug_assertions)]
-            let wants_to_send = self.wants_to_send();
-
-            if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
-                // if segment fits in the send window
-                if send_window.contains(seq + metadata.segment().len()) {
-                    let (flags, payload) = match metadata.segment() {
-                        Segment::Syn => (TcpFlags::SYN, Bytes::new()),
-                        Segment::Fin => (TcpFlags::FIN, Bytes::new()),
-                        Segment::Data(bytes) => (TcpFlags::empty(), bytes.clone()),
-                    };
-
-                    #[cfg(debug_assertions)]
-                    debug_assert!(wants_to_send);
-
-                    let seq_range = SeqRange::new(seq, seq + metadata.segment().len());
-                    break 'packet (seq_range, flags, payload);
-                }
-            }
-
-            if self.need_to_ack || self.need_to_send_window_update {
-                #[cfg(debug_assertions)]
-                debug_assert!(wants_to_send);
-
-                // use the sequence number of the next unsent message if we have one buffered,
-                // otherwise get the next sequence number from the buffer
-                let seq = self
-                    .send
-                    .buffer
-                    .next_not_transmitted()
-                    .map(|x| x.0)
-                    .unwrap_or(self.send.buffer.next_seq());
-
-                let seq_range = SeqRange::new(seq, seq);
-                break 'packet (seq_range, TcpFlags::empty(), Bytes::new());
-            }
-
-            #[cfg(debug_assertions)]
-            debug_assert!(!wants_to_send);
-
-            return Err(PopPacketError::NoPacket);
-        };
+        // After this point we must always send a packet. If we don't, then we're not being
+        // consistent with `self.wants_to_send()`.
+        debug_assert!(self.wants_to_send());
 
         let ack = if let Some(recv) = self.recv.as_ref() {
             // we've received a SYN packet, so should always acknowledge
@@ -316,6 +276,63 @@ impl<I: Instant> Connection<I> {
         Ok((header, payload))
     }
 
+    fn next_segment(&self) -> Option<(SeqRange, TcpFlags, Bytes)> {
+        // should be inlined
+        self._next_segment()
+    }
+
+    pub fn wants_to_send(&self) -> bool {
+        // should be inlined
+        self._next_segment().is_some()
+    }
+
+    /// Do not call directly. Use either `next_segment()` or `wants_to_send()`.
+    ///
+    /// Since `wants_to_send()` is only interested in whether the result is `Some`, by inlining this
+    /// function the compiler should hopefully optimize it to remove unnecessary values that will be
+    /// immediately discarded. I'm uncertain whether there's really much that can be optimized here
+    /// though, but splitting it into functions will at least help us notice if either function is
+    /// showing up in a profile/heatmap. Since the function is large and is `inline(always)` we only
+    /// call it from two functions, `next_segment()` and `wants_to_send()`.
+    #[inline(always)]
+    fn _next_segment(&self) -> Option<(SeqRange, TcpFlags, Bytes)> {
+        let (seq_range, flags, payload) = 'packet: {
+            let send_window = self.send.window_range();
+
+            if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
+                // if segment fits in the send window
+                if send_window.contains(seq + metadata.segment().len()) {
+                    let (flags, payload) = match metadata.segment() {
+                        Segment::Syn => (TcpFlags::SYN, Bytes::new()),
+                        Segment::Fin => (TcpFlags::FIN, Bytes::new()),
+                        Segment::Data(bytes) => (TcpFlags::empty(), bytes.clone()),
+                    };
+
+                    let seq_range = SeqRange::new(seq, seq + metadata.segment().len());
+                    break 'packet (seq_range, flags, payload);
+                }
+            }
+
+            if self.need_to_ack || self.need_to_send_window_update {
+                // use the sequence number of the next unsent message if we have one buffered,
+                // otherwise get the next sequence number from the buffer
+                let seq = self
+                    .send
+                    .buffer
+                    .next_not_transmitted()
+                    .map(|x| x.0)
+                    .unwrap_or(self.send.buffer.next_seq());
+
+                let seq_range = SeqRange::new(seq, seq);
+                break 'packet (seq_range, TcpFlags::empty(), Bytes::new());
+            }
+
+            return None;
+        };
+
+        Some((seq_range, flags, payload))
+    }
+
     /// Returns true if we received a SYN packet from the peer.
     pub fn received_syn(&self) -> bool {
         // we don't construct the receive part of the connection until we've received the SYN
@@ -335,22 +352,6 @@ impl<I: Instant> Connection<I> {
     /// Returns true if the peer acknowledged the FIN packet we sent.
     pub fn fin_was_acked(&self) -> bool {
         self.send.is_closed && self.send.buffer.start_seq() == self.send.buffer.next_seq()
-    }
-
-    pub fn wants_to_send(&self) -> bool {
-        let send_window = self.send.window_range();
-        if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
-            let range = SeqRange::new(seq, seq + metadata.segment().len());
-            if send_window.contains(range.end) {
-                return true;
-            }
-        }
-
-        if self.need_to_ack || self.need_to_send_window_update {
-            return true;
-        }
-
-        false
     }
 
     /// Returns true if the send buffer has space available. Does not consider whether the
