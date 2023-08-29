@@ -76,6 +76,8 @@
 //   `TcpStateEnum` enum that encapsulates all individual states. Its methods usually take owned
 //   state objects and return owned `TcpStateEnum` objects.
 
+#![forbid(unsafe_code)]
+
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4};
