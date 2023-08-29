@@ -365,11 +365,12 @@ impl<I: Instant> Connection<I> {
     /// Returns true if the recv buffer has data to read. Does not consider whether the connection
     /// is open/closed, either due to FIN packets or `shutdown()`.
     pub fn recv_buf_has_data(&self) -> bool {
-        !self
+        let is_empty = self
             .recv
             .as_ref()
             .map(|x| x.buffer.is_empty())
-            .unwrap_or(false)
+            .unwrap_or(true);
+        !is_empty
     }
 }
 
