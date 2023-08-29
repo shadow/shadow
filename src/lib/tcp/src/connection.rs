@@ -218,7 +218,7 @@ impl<I: Instant> Connection<I> {
     }
 
     pub fn pop_packet(&mut self, now: I) -> Result<(TcpHeader, Bytes), PopPacketError> {
-        let (seq, mut flags, payload) = 'packet: {
+        let (seq_range, mut flags, payload) = 'packet: {
             let send_window = self.send.window_range();
 
             // make sure that `wants_to_send()` agrees with this code
@@ -234,13 +234,11 @@ impl<I: Instant> Connection<I> {
                         Segment::Data(bytes) => (TcpFlags::empty(), bytes.clone()),
                     };
 
-                    // inform the buffer that we transmitted this segment
-                    metadata.transmitted(now);
-
                     #[cfg(debug_assertions)]
                     debug_assert!(wants_to_send);
 
-                    break 'packet (seq, flags, payload);
+                    let seq_range = SeqRange::new(seq, seq + metadata.segment().len());
+                    break 'packet (seq_range, flags, payload);
                 }
             }
 
@@ -257,7 +255,8 @@ impl<I: Instant> Connection<I> {
                     .map(|x| x.0)
                     .unwrap_or(self.send.buffer.next_seq());
 
-                break 'packet (seq, TcpFlags::empty(), Bytes::new());
+                let seq_range = SeqRange::new(seq, seq);
+                break 'packet (seq_range, TcpFlags::empty(), Bytes::new());
             }
 
             #[cfg(debug_assertions)]
@@ -298,7 +297,7 @@ impl<I: Instant> Connection<I> {
             flags,
             src_port: self.local_addr.port(),
             dst_port: self.remote_addr.port(),
-            seq: seq.into(),
+            seq: seq_range.start.into(),
             ack: ack.into(),
             window_size,
             selective_acks: None,
@@ -310,6 +309,9 @@ impl<I: Instant> Connection<I> {
         // we're sending the most up-to-date acknowledgement and window size
         self.need_to_ack = false;
         self.need_to_send_window_update = false;
+
+        // inform the buffer that we transmitted this segment
+        self.send.buffer.mark_as_transmitted(seq_range.end, now);
 
         Ok((header, payload))
     }
@@ -337,7 +339,8 @@ impl<I: Instant> Connection<I> {
 
     pub fn wants_to_send(&self) -> bool {
         let send_window = self.send.window_range();
-        if let Some(range) = self.send.buffer.next_nontransmitted_range() {
+        if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
+            let range = SeqRange::new(seq, seq + metadata.segment().len());
             if send_window.contains(range.end) {
                 return true;
             }
