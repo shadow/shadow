@@ -471,6 +471,28 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     );
     let tcp_header = unsafe { tcp_header.as_ref() }.unwrap();
 
+    // process TCP options
+
+    let window_scale = tcp_header.windowScaleSet.then_some(tcp_header.windowScale);
+
+    // options can be a max of 40 bytes
+    let mut options = [0u8; 40];
+    let mut options_len = 0;
+
+    if let Some(window_scale) = window_scale {
+        // option-kind = 3, option-len = 3, option-data = window-scale
+        options[options_len..][..3].copy_from_slice(&[3, 3, window_scale]);
+        options_len += 3;
+    }
+
+    if options_len % 4 != 0 {
+        // need to add padding (our options array was already initialized with zeroes)
+        let padding = 4 - (options_len % 4);
+        options_len += padding;
+    }
+
+    let options = &options[..options_len];
+
     // write the TCP header
 
     let source_port: [u8; 2] =
@@ -488,6 +510,7 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     // words, so we divide by 4. The left-shift of 4 is because the header len is represented
     // in the top 4 bits.
     let mut header_len: u8 = c::CONFIG_HEADER_SIZE_TCP.try_into().unwrap();
+    header_len += u8::try_from(options.len()).unwrap();
     header_len /= 4;
     header_len <<= 4;
 
@@ -525,6 +548,8 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     writer.write_all(&checksum.to_be_bytes())?;
 
     writer.write_all(&urgent_pointer.to_be_bytes())?;
+
+    writer.write_all(options)?;
 
     Ok(())
 }
