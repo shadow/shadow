@@ -6,12 +6,14 @@ use crate::buffer::Segment;
 use crate::seq::{Seq, SeqRange};
 use crate::util::time::Instant;
 use crate::{
-    Ipv4Header, PopPacketError, PushPacketError, RecvError, SendError, TcpFlags, TcpHeader,
+    Ipv4Header, PopPacketError, PushPacketError, RecvError, SendError, TcpConfig, TcpFlags,
+    TcpHeader,
 };
 
 /// Information for a TCP connection. Equivalent to the Transmission Control Block (TCB).
 #[derive(Debug)]
 pub(crate) struct Connection<I: Instant> {
+    pub(crate) _config: TcpConfig,
     pub(crate) local_addr: SocketAddrV4,
     pub(crate) remote_addr: SocketAddrV4,
     pub(crate) send: ConnectionSend<I>,
@@ -25,8 +27,14 @@ impl<I: Instant> Connection<I> {
     /// temporarily until we implement a proper TCP queue.
     const SEND_BUF_MAX: usize = 100_000;
 
-    pub fn new(local_addr: SocketAddrV4, remote_addr: SocketAddrV4, send_initial_seq: Seq) -> Self {
+    pub fn new(
+        local_addr: SocketAddrV4,
+        remote_addr: SocketAddrV4,
+        send_initial_seq: Seq,
+        config: TcpConfig,
+    ) -> Self {
         Self {
+            _config: config,
             local_addr,
             remote_addr,
             send: ConnectionSend::new(send_initial_seq),

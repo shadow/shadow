@@ -54,7 +54,7 @@ impl TcpSocket {
             };
 
             AtomicRefCell::new(Self {
-                tcp_state: tcp::TcpState::new(tcp_dependencies),
+                tcp_state: tcp::TcpState::new(tcp_dependencies, tcp::TcpConfig::default()),
                 socket_weak: weak.clone(),
                 event_source: StateEventSource::new(),
                 status,

@@ -10,8 +10,8 @@ use crate::util::remove_from_list;
 use crate::util::time::Duration;
 use crate::{
     AcceptError, AcceptedTcpState, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError,
-    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpError,
-    TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait, TimerRegisteredBy,
+    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
+    TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait, TimerRegisteredBy,
 };
 
 // state structs
@@ -22,11 +22,13 @@ use crate::{
 #[derive(Debug)]
 pub struct InitState<X: Dependencies> {
     pub(crate) common: Common<X>,
+    pub(crate) config: TcpConfig,
 }
 
 #[derive(Debug)]
 pub struct ListenState<X: Dependencies> {
     pub(crate) common: Common<X>,
+    pub(crate) config: TcpConfig,
     pub(crate) max_backlog: u32,
     pub(crate) send_buffer: LinkedList<TcpHeader>,
     /// Child TCP states.
@@ -218,14 +220,14 @@ pub(crate) struct ChildEntry<X: Dependencies> {
 // state implementations
 
 impl<X: Dependencies> InitState<X> {
-    pub fn new(deps: X) -> Self {
+    pub fn new(deps: X, config: TcpConfig) -> Self {
         let common = Common {
             deps,
             child_key: None,
             error: None,
         };
 
-        InitState { common }
+        InitState { common, config }
     }
 }
 
@@ -254,7 +256,7 @@ impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
         // linux uses a queue limit of one greater than the provided backlog
         let max_backlog = backlog.saturating_add(1);
 
-        let new_state = ListenState::new(self.common, max_backlog);
+        let new_state = ListenState::new(self.common, self.config, max_backlog);
         (new_state.into(), Ok(rv))
     }
 
@@ -272,7 +274,7 @@ impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
 
         assert!(!local_addr.ip().is_unspecified());
 
-        let connection = Connection::new(local_addr, remote_addr, Seq::new(0));
+        let connection = Connection::new(local_addr, remote_addr, Seq::new(0), self.config);
 
         let new_state = SynSentState::new(self.common, connection);
         (new_state.into(), Ok(assoc_result))
@@ -310,9 +312,10 @@ impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
 }
 
 impl<X: Dependencies> ListenState<X> {
-    fn new(common: Common<X>, max_backlog: u32) -> Self {
+    fn new(common: Common<X>, config: TcpConfig, max_backlog: u32) -> Self {
         ListenState {
             common,
+            config,
             max_backlog,
             send_buffer: LinkedList::new(),
             children: slotmap::DenseSlotMap::with_key(),
@@ -333,7 +336,8 @@ impl<X: Dependencies> ListenState<X> {
                 error: None,
             };
 
-            let mut connection = Connection::new(header.dst(), header.src(), Seq::new(0));
+            let mut connection =
+                Connection::new(header.dst(), header.src(), Seq::new(0), self.config);
             connection.push_packet(header, payload).unwrap();
 
             let new_tcp = SynReceivedState::new(common, connection);
