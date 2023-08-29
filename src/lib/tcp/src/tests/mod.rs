@@ -7,6 +7,7 @@
 
 mod send_recv;
 mod transitions;
+mod window_scale;
 
 pub mod util;
 

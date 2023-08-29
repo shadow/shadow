@@ -5,6 +5,7 @@ use std::net::SocketAddrV4;
 use crate::buffer::Segment;
 use crate::seq::{Seq, SeqRange};
 use crate::util::time::Instant;
+use crate::window_scaling::WindowScaling;
 use crate::{
     Ipv4Header, PopPacketError, PushPacketError, RecvError, SendError, TcpConfig, TcpFlags,
     TcpHeader,
@@ -13,19 +14,21 @@ use crate::{
 /// Information for a TCP connection. Equivalent to the Transmission Control Block (TCB).
 #[derive(Debug)]
 pub(crate) struct Connection<I: Instant> {
-    pub(crate) _config: TcpConfig,
+    pub(crate) config: TcpConfig,
     pub(crate) local_addr: SocketAddrV4,
     pub(crate) remote_addr: SocketAddrV4,
     pub(crate) send: ConnectionSend<I>,
     pub(crate) recv: Option<ConnectionRecv>,
     pub(crate) need_to_ack: bool,
-    pub(crate) need_to_send_window_update: bool,
+    pub(crate) last_advertised_window: Option<u32>,
+    pub(crate) window_scaling: WindowScaling,
 }
 
 impl<I: Instant> Connection<I> {
-    /// The max number of bytes allowed in the send buffer. This is an arbitrary number used
-    /// temporarily until we implement a proper TCP queue.
+    /// The max number of bytes allowed in the send and receive buffers. These should be made
+    /// dynamic in the future.
     const SEND_BUF_MAX: usize = 100_000;
+    const RECV_BUF_MAX: u32 = 100_000;
 
     pub fn new(
         local_addr: SocketAddrV4,
@@ -33,15 +36,23 @@ impl<I: Instant> Connection<I> {
         send_initial_seq: Seq,
         config: TcpConfig,
     ) -> Self {
-        Self {
-            _config: config,
+        let mut rv = Self {
+            config,
             local_addr,
             remote_addr,
             send: ConnectionSend::new(send_initial_seq),
             recv: None,
             need_to_ack: true,
-            need_to_send_window_update: false,
+            last_advertised_window: None,
+            window_scaling: WindowScaling::new(),
+        };
+
+        // disable window scaling if it's disabled in the config
+        if !rv.config.window_scaling_enabled {
+            rv.window_scaling.disable();
         }
+
+        rv
     }
 
     /// Returns `true` if the packet header src/dst addresses match this connection.
@@ -88,7 +99,9 @@ impl<I: Instant> Connection<I> {
 
     pub fn recv(&mut self, mut writer: impl Write, len: usize) -> Result<usize, RecvError> {
         let mut bytes_copied = 0;
-        let has_data = !self.recv.as_ref().unwrap().buffer.is_empty();
+        let recv = self.recv.as_mut().unwrap();
+
+        let has_data = !recv.buffer.is_empty();
 
         if !has_data {
             return Err(RecvError::Empty);
@@ -98,7 +111,7 @@ impl<I: Instant> Connection<I> {
             let remaining = len - bytes_copied;
             let remaining_u32 = remaining.try_into().unwrap_or(u32::MAX);
 
-            let Some((_seq, data)) = self.recv.as_mut().unwrap().buffer.pop(remaining_u32) else {
+            let Some((_seq, data)) = recv.buffer.pop(remaining_u32) else {
                 break;
             };
 
@@ -112,10 +125,6 @@ impl<I: Instant> Connection<I> {
             bytes_copied += data.len();
         }
 
-        if bytes_copied > 0 {
-            self.need_to_send_window_update = true;
-        }
-
         Ok(bytes_copied)
     }
 
@@ -127,15 +136,34 @@ impl<I: Instant> Connection<I> {
         if self.recv.is_none() && header.flags.contains(TcpFlags::SYN) {
             // we needed to know the sender's initial sequence number before we could initialize the
             // receiving part of the connection
-            self.recv = Some(ConnectionRecv::new(Seq::new(header.seq) + 1));
+            let seq = Seq::new(header.seq);
+            self.recv = Some(ConnectionRecv::new(seq));
+
+            self.window_scaling.received_syn(header.window_scale);
+        }
+
+        // We need to keep track of if the original packet had the SYN flag set, even if we trim a
+        // old retransmitted SYN flag from the packet below. If it was sent with a SYN flag, then we
+        // must not apply the window scale to the window size in the packet, even if the SYN's
+        // sequence number isn't within the receive window.
+        //
+        // RFC 7323 2.2.:
+        // > The window field in a segment where the SYN bit is set (i.e., a <SYN> or <SYN,ACK>)
+        // > MUST NOT be scaled.
+        //
+        // TODO: be careful about this if we support a reassembly queue in the future
+        let original_packet_had_syn = header.flags.contains(TcpFlags::SYN);
+
+        let payload = payload.into();
+
+        let recv_window = self.recv_window().unwrap();
+        let Some((header, payload)) = trim_segment(header, payload, &recv_window) else {
+            // the sequence range of the segment does not overlap with the receive window, so we
+            // must drop the packet and send an ACK
             self.need_to_ack = true;
 
-            // remove the SYN flag, increase the sequence number, and restart
-            let mut header = *header;
-            header.flags.remove(TcpFlags::SYN);
-            header.seq = (Seq::new(header.seq) + 1).into();
-            return self.push_packet(&header, payload);
-        }
+            return Ok(());
+        };
 
         let Some(recv) = self.recv.as_mut() else {
             // we received a non-SYN packet before the first SYN packet
@@ -149,37 +177,40 @@ impl<I: Instant> Connection<I> {
             return Ok(());
         };
 
-        let payload = payload.into();
-
-        let Some((header, payload)) = trim_segment(header, payload, &recv.window_range()) else {
-            // the sequence range of the segment does not overlap with the receive window, so we
-            // must drop the packet and send an ACK
-            self.need_to_ack = true;
-
-            return Ok(());
-        };
+        // the receive buffer's initial next sequence number; useful so we can check if we need to
+        // acknowledge or not
+        let initial_seq = recv.buffer.next_seq();
 
         if !recv.is_closed {
             if header.flags.contains(TcpFlags::SYN) {
-                // this is the second SYN we've received
+                if recv.buffer.syn_added() {
+                    // this is the second SYN we've received
 
-                // TODO: We can follow RFC 793 or RFC 5961 here. 793 is probably easiest, and we
-                // should send an RST and move to the "closed" state.
+                    // TODO: We can follow RFC 793 or RFC 5961 here. 793 is probably easiest, and we
+                    // should send an RST and move to the "closed" state.
 
-                return Ok(());
+                    return Ok(());
+                }
+
+                recv.buffer.add_syn();
             }
 
+            let syn_len = if header.flags.contains(TcpFlags::SYN) {
+                1
+            } else {
+                0
+            };
+
             let payload_len: u32 = payload.len().try_into().unwrap();
-            let payload_seq = (payload_len != 0).then_some(Seq::new(header.seq));
+            let payload_seq = (payload_len != 0).then_some(Seq::new(header.seq) + syn_len);
             let fin_seq = header
                 .flags
                 .contains(TcpFlags::FIN)
-                .then_some(Seq::new(header.seq) + payload_len);
+                .then_some(Seq::new(header.seq) + syn_len + payload_len);
 
             if let Some(payload_seq) = payload_seq {
                 if payload_seq == recv.buffer.next_seq() {
                     recv.buffer.add(payload);
-                    self.need_to_ack = true;
                 } else {
                     // TODO: store (truncated?) out-of-order packet
                 }
@@ -187,14 +218,27 @@ impl<I: Instant> Connection<I> {
 
             if let Some(fin_seq) = fin_seq {
                 if fin_seq == recv.buffer.next_seq() {
+                    recv.buffer.add_fin();
                     recv.is_closed = true;
-                    self.need_to_ack = true;
                 } else {
                     // TODO: store (truncated?) out of order packet
                 }
             }
+        }
 
-            self.send.window = header.window_size.try_into().unwrap();
+        // we've added to the receive buffer (payload, syn, or fin), so we need to send an
+        // acknowledgement
+        if recv.buffer.next_seq() != initial_seq {
+            self.need_to_ack = true;
+        }
+
+        // update the send window, applying the window scale shift only if it wasn't a SYN packet
+        // TODO: should we still update the window if the ACK was not in the valid range?
+        if original_packet_had_syn {
+            self.send.window = u32::try_from(header.window_size).unwrap();
+        } else {
+            self.send.window = u32::try_from(header.window_size).unwrap()
+                << self.window_scaling.send_window_scale_shift();
         }
 
         if header.flags.contains(TcpFlags::ACK) {
@@ -225,29 +269,58 @@ impl<I: Instant> Connection<I> {
         // consistent with `self.wants_to_send()`.
         debug_assert!(self.wants_to_send());
 
-        let ack = if let Some(recv) = self.recv.as_ref() {
-            // we've received a SYN packet, so should always acknowledge
+        let header_ack = if let Some(recv) = self.recv.as_ref() {
+            // we've received a SYN packet (either now or in the past), so should always acknowledge
             flags.insert(TcpFlags::ACK);
-
-            // if we received a FIN, we need to ack the FIN as well
-            if recv.is_closed {
-                recv.buffer.next_seq() + 1
-            } else {
-                recv.buffer.next_seq()
-            }
+            recv.buffer.next_seq()
         } else {
             // not setting the ACK flag, so this can probably be anything
             Seq::new(0)
         };
 
-        // TODO: what default to use here?
-        let window_size = self
-            .recv
-            .as_ref()
-            .map(|x| x.window_range().len())
-            .unwrap_or(100)
-            .try_into()
-            .unwrap();
+        let header_window_size;
+        let header_window_scale;
+
+        if flags.contains(TcpFlags::SYN) {
+            if self.window_scaling.can_send_window_scale() {
+                // The receive buffer capacity at the time the SYN is sent decides the window
+                // scaling to use. This effectively limits future receive buffer capacity increases
+                // since the receive window will forever have a ceiling set here by the window
+                // scale.
+                let shift = WindowScaling::scale_shift_for_max_window(self.recv_buffer_capacity());
+                header_window_scale = Some(shift);
+            } else {
+                header_window_scale = None;
+            }
+
+            // don't actually apply this window scale in the SYN packet
+            //
+            // RFC 7323 2.2.:
+            // > The window field in a segment where the SYN bit is set (i.e., a <SYN> or <SYN,ACK>)
+            // > MUST NOT be scaled.
+            header_window_size = self.recv_window_len();
+            self.last_advertised_window = Some(header_window_size);
+
+            // Make sure we're sending a valid 2-byte window size. We haven't called
+            // `WindowScaling::sent_syn()` yet, so `Self::recv_window_len()` should not have
+            // returned a window size larger than `u16::MAX`.
+            debug_assert!(header_window_size <= u16::MAX as u32);
+
+            self.window_scaling.sent_syn(header_window_scale);
+        } else {
+            // don't send a window scale
+            //
+            // RFC 7323 2.1.:
+            // > The exponent of the scale factor is carried in a TCP option, Window Scale. This
+            // > option is sent only in a <SYN> segment (a segment with the SYN bit on), [...]
+            header_window_scale = None;
+
+            let shift = self.window_scaling.recv_window_scale_shift();
+            header_window_size = self.recv_window_len() >> shift;
+
+            // this is the value the peer will see (precision is intentionally lost due to bit-shift)
+            self.last_advertised_window = Some(header_window_size << shift);
+        }
 
         let header = TcpHeader {
             ip: Ipv4Header {
@@ -258,17 +331,16 @@ impl<I: Instant> Connection<I> {
             src_port: self.local_addr.port(),
             dst_port: self.remote_addr.port(),
             seq: seq_range.start.into(),
-            ack: ack.into(),
-            window_size,
+            ack: header_ack.into(),
+            window_size: header_window_size.try_into().unwrap(),
             selective_acks: None,
-            window_scale: None,
+            window_scale: header_window_scale,
             timestamp: None,
             timestamp_echo: None,
         };
 
-        // we're sending the most up-to-date acknowledgement and window size
+        // we're sending the most up-to-date acknowledgement
         self.need_to_ack = false;
-        self.need_to_send_window_update = false;
 
         // inform the buffer that we transmitted this segment
         self.send.buffer.mark_as_transmitted(seq_range.end, now);
@@ -296,24 +368,44 @@ impl<I: Instant> Connection<I> {
     /// call it from two functions, `next_segment()` and `wants_to_send()`.
     #[inline(always)]
     fn _next_segment(&self) -> Option<(SeqRange, TcpFlags, Bytes)> {
-        let (seq_range, flags, payload) = 'packet: {
-            let send_window = self.send.window_range();
-
+        let (seq_range, syn_fin_flags, payload) = 'packet: {
+            // do we have a syn/fin/payload packet to send?
             if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
-                // if segment fits in the send window
+                let send_window = self.send_window();
+
+                // does the segment fit in the send window?
                 if send_window.contains(seq + metadata.segment().len()) {
-                    let (flags, payload) = match metadata.segment() {
+                    debug_assert!(send_window.contains(seq));
+                    let (syn_fin_flags, payload) = match metadata.segment() {
                         Segment::Syn => (TcpFlags::SYN, Bytes::new()),
                         Segment::Fin => (TcpFlags::FIN, Bytes::new()),
                         Segment::Data(bytes) => (TcpFlags::empty(), bytes.clone()),
                     };
 
                     let seq_range = SeqRange::new(seq, seq + metadata.segment().len());
-                    break 'packet (seq_range, flags, payload);
+                    break 'packet (seq_range, syn_fin_flags, payload);
                 }
             }
 
-            if self.need_to_ack || self.need_to_send_window_update {
+            let mut send_empty_packet = false;
+
+            // do we need to send an acknowledgement?
+            if self.need_to_ack {
+                send_empty_packet = true;
+            }
+
+            // do we need to send a window update?
+            if let Some(window) = self.recv_window().map(|x| x.len()) {
+                let window_scale = self.window_scaling.recv_window_scale_shift();
+
+                let apparent_window = window >> window_scale << window_scale;
+
+                if self.last_advertised_window != Some(apparent_window) {
+                    send_empty_packet = true;
+                }
+            }
+
+            if send_empty_packet {
                 // use the sequence number of the next unsent message if we have one buffered,
                 // otherwise get the next sequence number from the buffer
                 let seq = self
@@ -330,7 +422,14 @@ impl<I: Instant> Connection<I> {
             return None;
         };
 
-        Some((seq_range, flags, payload))
+        // if not sending a SYN packet and window scaling isn't yet confirmed
+        if !syn_fin_flags.contains(TcpFlags::SYN) && !self.window_scaling.is_configured() {
+            // we cannot send a non-SYN packet since non-SYN packets must apply window scaling, but
+            // we haven't yet confirmed if we're using window scaling or not
+            return None;
+        }
+
+        Some((seq_range, syn_fin_flags, payload))
     }
 
     /// Returns true if we received a SYN packet from the peer.
@@ -372,6 +471,41 @@ impl<I: Instant> Connection<I> {
             .unwrap_or(true);
         !is_empty
     }
+
+    pub(crate) fn send_window(&self) -> SeqRange {
+        // the buffer stores unsent/unacked data, so the buffer starts at the lowest unacked
+        // sequence number
+        let window_left = self.send.buffer.start_seq();
+        SeqRange::new(window_left, window_left + self.send.window)
+    }
+
+    /// Returns the size of the receive window. This is useful when we only need the size of the
+    /// window and we may not have received the SYN packet yet, so cannot construct the range.
+    pub(crate) fn recv_window_len(&self) -> u32 {
+        if let Some(recv_window) = self.recv_window() {
+            return recv_window.len();
+        }
+
+        let window_max = self.window_scaling.recv_window_max();
+        std::cmp::min(self.recv_buffer_capacity(), window_max)
+    }
+
+    /// Returns the receive window if we've received a SYN packet.
+    pub(crate) fn recv_window(&self) -> Option<SeqRange> {
+        let recv = self.recv.as_ref()?;
+        let window_left = recv.buffer.next_seq();
+        let window_max = self.window_scaling.recv_window_max();
+        let window_len = self
+            .recv_buffer_capacity()
+            .saturating_sub(recv.buffer.len());
+        let window_len = std::cmp::min(window_len, window_max);
+        Some(SeqRange::new(window_left, window_left + window_len))
+    }
+
+    /// The total capacity of the receive buffer.
+    fn recv_buffer_capacity(&self) -> u32 {
+        Self::RECV_BUF_MAX
+    }
 }
 
 #[derive(Debug)]
@@ -386,17 +520,11 @@ impl<I: Instant> ConnectionSend<I> {
     pub fn new(initial_seq: Seq) -> Self {
         Self {
             buffer: super::buffer::SendQueue::new(initial_seq),
-            window: 5000,
+            // we don't know the peer's receive window, so choose something conservative
+            window: 2048,
             is_closed: false,
             syn_acked: false,
         }
-    }
-
-    pub fn window_range(&self) -> SeqRange {
-        // the buffer stores unsent/unacked data, so the buffer starts at the lowest unacked
-        // sequence number
-        let window_left = self.buffer.start_seq();
-        SeqRange::new(window_left, window_left + self.window)
     }
 }
 
@@ -412,13 +540,6 @@ impl ConnectionRecv {
             buffer: super::buffer::RecvQueue::new(initial_seq),
             is_closed: false,
         }
-    }
-
-    pub fn window_range(&self) -> SeqRange {
-        const MAX_BUFSIZE: u32 = 10000;
-        let window_left = self.buffer.next_seq();
-        let window_len = MAX_BUFSIZE.saturating_sub(self.buffer.len());
-        SeqRange::new(window_left, window_left + window_len)
     }
 }
 

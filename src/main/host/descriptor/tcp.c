@@ -1237,7 +1237,8 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet*
     CSimulationTime now = worker_getCurrentSimulationTime();
 
     /* update TCP header to our current advertised window and acknowledgment and timestamps */
-    packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, now, tcp->receive.lastTimestamp);
+    packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, 0,
+                     false, now, tcp->receive.lastTimestamp);
 
     /* keep track of the last things we sent them */
     tcp->send.lastAcknowledgment = tcp->receive.next;

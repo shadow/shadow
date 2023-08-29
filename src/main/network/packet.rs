@@ -123,6 +123,8 @@ impl PacketRc {
                 header.ack,
                 selective_acks_glist,
                 header.window_size.into(),
+                header.window_scale.unwrap_or(0),
+                header.window_scale.is_some(),
                 timestamp.into(),
                 timestamp_echo.into(),
             );
@@ -180,6 +182,8 @@ impl PacketRc {
             None
         };
 
+        let window_scale = header.windowScaleSet.then_some(header.windowScale);
+
         let src_ip = Ipv4Addr::from(u32::from_be(header.sourceIP));
         let src_port = u16::from_be(header.sourcePort);
 
@@ -198,8 +202,7 @@ impl PacketRc {
             ack: header.acknowledgment,
             window_size: header.window.try_into().unwrap(),
             selective_acks,
-            // TODO: add a window scale field to the C packet header
-            window_scale: None,
+            window_scale,
             timestamp: Some(timestamp.try_into().unwrap()),
             timestamp_echo: Some(timestamp_echo.try_into().unwrap()),
         })

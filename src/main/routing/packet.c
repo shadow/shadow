@@ -359,6 +359,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
 }
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
+                      unsigned char windowScale, bool windowScaleSet,
                       CSimulationTime timestampValue, CSimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->header && (packet->protocol == PTCP));
@@ -379,6 +380,8 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
 
     header->acknowledgment = acknowledgement;
     header->window = window;
+    header->windowScale = windowScale;
+    header->windowScaleSet = windowScaleSet;
     header->timestampValue = timestampValue;
     header->timestampEcho = timestampEcho;
 }
@@ -401,10 +404,29 @@ gsize packet_getPayloadSize(const Packet* packet) {
 
 gsize packet_getHeaderSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    gsize size = packet->protocol == PUDP   ? CONFIG_HEADER_SIZE_UDPIP
-                 : packet->protocol == PTCP ? CONFIG_HEADER_SIZE_TCPIP
-                                            : 0;
-    return size;
+
+    if (packet->protocol == PUDP) {
+        return CONFIG_HEADER_SIZE_UDPIP;
+    } else if (packet->protocol == PTCP) {
+        gsize size = CONFIG_HEADER_SIZE_TCPIP;
+
+        // tcp options use additional bytes
+        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        utility_alwaysAssert(header != NULL);
+        if (header->windowScaleSet) {
+            // window scale option is 3 bytes
+            size += 3;
+        }
+
+        // add padding bytes if needed
+        if ((size % 4) != 0) {
+            size += 4 - (size % 4);
+        }
+
+        return size;
+    } else {
+        return 0;
+    }
 }
 
 uint64_t packet_getPriority(const Packet* packet) {

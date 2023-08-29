@@ -90,6 +90,7 @@ mod buffer;
 mod connection;
 mod seq;
 mod states;
+mod window_scaling;
 
 #[cfg(test)]
 mod tests;

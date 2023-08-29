@@ -152,6 +152,8 @@ pub(crate) struct RecvQueue {
     start_seq: Seq,
     // exclusive
     end_seq: Seq,
+    syn_added: bool,
+    fin_added: bool,
 }
 
 impl RecvQueue {
@@ -160,12 +162,31 @@ impl RecvQueue {
             segments: LinkedList::new(),
             start_seq: initial_seq,
             end_seq: initial_seq,
+            syn_added: false,
+            fin_added: false,
         }
     }
 
+    pub fn add_syn(&mut self) {
+        assert!(!self.syn_added);
+        self.syn_added = true;
+
+        self.start_seq += 1;
+        self.end_seq += 1;
+    }
+
+    pub fn add_fin(&mut self) {
+        assert!(self.syn_added);
+        assert!(!self.fin_added);
+        self.fin_added = true;
+
+        self.start_seq += 1;
+        self.end_seq += 1;
+    }
+
     pub fn add(&mut self, data: Bytes) {
-        // TODO: should take the sequence number, and can possibly discard data that's already
-        // received or that is too far in the future
+        assert!(self.syn_added);
+        assert!(!self.fin_added);
 
         let len: u32 = data.len().try_into().unwrap();
 
@@ -175,6 +196,10 @@ impl RecvQueue {
 
         self.end_seq += len;
         self.segments.push_back(data);
+    }
+
+    pub fn syn_added(&self) -> bool {
+        self.syn_added
     }
 
     pub fn len(&self) -> u32 {

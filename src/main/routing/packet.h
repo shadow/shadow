@@ -35,6 +35,8 @@ struct _PacketTCPHeader {
     guint acknowledgment;
     GList* selectiveACKs;
     guint window;
+    unsigned char windowScale;
+    bool windowScaleSet;
     CSimulationTime timestampValue;
     CSimulationTime timestampEcho;
 };
@@ -78,6 +80,7 @@ void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
         in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
+                      unsigned char windowScale, bool windowScaleSet,
                       CSimulationTime timestampValue, CSimulationTime timestampEcho);
 
 gsize packet_getTotalSize(const Packet* packet);
