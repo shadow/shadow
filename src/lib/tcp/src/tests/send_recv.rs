@@ -96,8 +96,7 @@ fn test_ack_with_empty_usable_send_window() {
         .as_established()
         .unwrap()
         .connection
-        .send
-        .window_range()
+        .send_window()
         .len();
 
     let mut buffered = 0;

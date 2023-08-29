@@ -7,6 +7,7 @@
 
 mod send_recv;
 mod transitions;
+mod window_scale;
 
 pub mod util;
 
@@ -24,8 +25,8 @@ use crate::tests::util::time::{Duration, Instant};
 #[allow(unused_imports)]
 use crate::{
     AcceptError, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError, PollState,
-    PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpFlags, TcpHeader,
-    TcpState, TimerRegisteredBy,
+    PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig, TcpFlags,
+    TcpHeader, TcpState, TimerRegisteredBy,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -311,7 +312,7 @@ struct TcpSocket {
 }
 
 impl TcpSocket {
-    pub fn new(scheduler: &Scheduler) -> Rc<RefCell<Self>> {
+    pub fn new(scheduler: &Scheduler, config: TcpConfig) -> Rc<RefCell<Self>> {
         // passed to the state machine so that it can scheduler tasks in the future
         let event_queue_rc = scheduler.event_queue_rc();
         // passed to the state machine so that it can get the current time
@@ -329,7 +330,7 @@ impl TcpSocket {
             };
 
             RefCell::new(Self {
-                tcp_state: TcpState::new(test_env_state),
+                tcp_state: TcpState::new(test_env_state, config),
                 socket_weak: weak.clone(),
                 // the file state shouldn't matter here since we run `with_tcp_state` below to
                 // update it
@@ -730,7 +731,7 @@ fn test_timer() {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::listen(&tcp, &mut host, 10).unwrap();
@@ -811,7 +812,7 @@ fn establish_helper(scheduler: &Scheduler, host: &mut Host) -> Rc<RefCell<TcpSoc
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(scheduler);
+    let tcp = TcpSocket::new(scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::bind(&tcp, SocketAddrV4::new(host.ip_addr, 10), host).unwrap();

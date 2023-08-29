@@ -103,9 +103,9 @@ impl<T: Instant> SendQueue<T> {
         }
     }
 
-    pub fn next_not_transmitted(&mut self) -> Option<(Seq, &mut SegmentMetadata<T>)> {
+    pub fn next_not_transmitted(&self) -> Option<(Seq, &SegmentMetadata<T>)> {
         let mut seq_cursor = self.start_seq;
-        for seg in &mut self.segments {
+        for seg in &self.segments {
             if seg.transmit_count == 0 {
                 return Some((seq_cursor, seg));
             }
@@ -116,17 +116,32 @@ impl<T: Instant> SendQueue<T> {
         None
     }
 
-    pub fn next_nontransmitted_range(&self) -> Option<SeqRange> {
+    pub fn mark_as_transmitted(&mut self, up_to: Seq, time: T) {
         let mut seq_cursor = self.start_seq;
-        for seg in &self.segments {
-            if seg.transmit_count == 0 {
-                return Some(SeqRange::new(seq_cursor, seq_cursor + seg.segment().len()));
-            }
 
-            seq_cursor += seg.seg.len();
+        if up_to == seq_cursor {
+            return;
         }
 
-        None
+        for seg in &mut self.segments {
+            let range = SeqRange::new(self.start_seq, seq_cursor + seg.seg.len());
+
+            // we only support `up_to` values along a chunk boundary, so `up_to` must be >=
+            // `range.end`
+            // TODO: support arbitary positions that aren't aligned with chunks
+            assert!(!range.contains(up_to));
+
+            if seg.transmit_count == 0 {
+                seg.transmit_count = 1;
+                seg.original_transmit_time = Some(time);
+            }
+
+            if range.end == up_to {
+                break;
+            }
+
+            seq_cursor = range.end;
+        }
     }
 }
 
@@ -137,6 +152,8 @@ pub(crate) struct RecvQueue {
     start_seq: Seq,
     // exclusive
     end_seq: Seq,
+    syn_added: bool,
+    fin_added: bool,
 }
 
 impl RecvQueue {
@@ -145,12 +162,31 @@ impl RecvQueue {
             segments: LinkedList::new(),
             start_seq: initial_seq,
             end_seq: initial_seq,
+            syn_added: false,
+            fin_added: false,
         }
     }
 
+    pub fn add_syn(&mut self) {
+        assert!(!self.syn_added);
+        self.syn_added = true;
+
+        self.start_seq += 1;
+        self.end_seq += 1;
+    }
+
+    pub fn add_fin(&mut self) {
+        assert!(self.syn_added);
+        assert!(!self.fin_added);
+        self.fin_added = true;
+
+        self.start_seq += 1;
+        self.end_seq += 1;
+    }
+
     pub fn add(&mut self, data: Bytes) {
-        // TODO: should take the sequence number, and can possibly discard data that's already
-        // received or that is too far in the future
+        assert!(self.syn_added);
+        assert!(!self.fin_added);
 
         let len: u32 = data.len().try_into().unwrap();
 
@@ -160,6 +196,10 @@ impl RecvQueue {
 
         self.end_seq += len;
         self.segments.push_back(data);
+    }
+
+    pub fn syn_added(&self) -> bool {
+        self.syn_added
     }
 
     pub fn len(&self) -> u32 {
@@ -215,14 +255,6 @@ impl<T: Instant> SegmentMetadata<T> {
             transmit_count: 0,
             original_transmit_time: None,
         }
-    }
-
-    pub fn transmitted(&mut self, time: T) {
-        if self.transmit_count == 0 {
-            self.original_transmit_time = Some(time);
-        }
-
-        self.transmit_count += 1;
     }
 
     pub fn segment(&self) -> &Segment {

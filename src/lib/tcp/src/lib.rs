@@ -45,7 +45,7 @@
 //!     let dependencies = TcpDependencies {
 //!         state: weak.clone(),
 //!     };
-//!     RefCell::new(tcp::TcpState::new(dependencies))
+//!     RefCell::new(tcp::TcpState::new(dependencies, tcp::TcpConfig::default()))
 //! });
 //!
 //! let mut tcp_state = tcp_state.borrow_mut();
@@ -76,6 +76,8 @@
 //   `TcpStateEnum` enum that encapsulates all individual states. Its methods usually take owned
 //   state objects and return owned `TcpStateEnum` objects.
 
+#![forbid(unsafe_code)]
+
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -88,6 +90,7 @@ mod buffer;
 mod connection;
 mod seq;
 mod states;
+mod window_scaling;
 
 #[cfg(test)]
 mod tests;
@@ -225,8 +228,8 @@ pub struct TcpState<X: Dependencies>(Option<TcpStateEnum<X>>);
 // this exposes many of the methods from `TcpStateTrait`, but not necessarily all of them (for
 // example we don't expose `rst_close()`).
 impl<X: Dependencies> TcpState<X> {
-    pub fn new(deps: X) -> Self {
-        let new_state = InitState::new(deps);
+    pub fn new(deps: X, config: TcpConfig) -> Self {
+        let new_state = InitState::new(deps, config);
         Self(Some(new_state.into()))
     }
 
@@ -582,6 +585,25 @@ bitflags::bitflags! {
         /// and now is in the "fin-wait-1" state. This does not include the initial state (we don't
         /// consider a new TCP to be "closed").
         const CLOSED = 1 << 7;
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TcpConfig {
+    pub(crate) window_scaling_enabled: bool,
+}
+
+impl TcpConfig {
+    pub fn window_scaling(&mut self, enable: bool) {
+        self.window_scaling_enabled = enable;
+    }
+}
+
+impl Default for TcpConfig {
+    fn default() -> Self {
+        Self {
+            window_scaling_enabled: true,
+        }
     }
 }
 

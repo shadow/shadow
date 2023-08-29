@@ -7,13 +7,13 @@ use bytes::Bytes;
 
 use crate::tests::util::time::Duration;
 use crate::tests::{establish_helper, Errno, Host, Scheduler, TcpSocket, TestEnvState};
-use crate::{Ipv4Header, TcpFlags, TcpHeader, TcpState};
+use crate::{Ipv4Header, TcpConfig, TcpFlags, TcpHeader, TcpState};
 
 #[test]
 fn test_close() {
     let scheduler = Scheduler::new();
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     let mut tcp_ref = tcp.borrow_mut();
     assert!(tcp_ref.tcp_state().as_init().is_some());
 
@@ -26,7 +26,7 @@ fn test_listen() {
     let scheduler = Scheduler::new();
     let mut host = Host::new();
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(tcp.borrow().tcp_state().as_init().is_some());
 
     TcpSocket::listen(&tcp, &mut host, 10).unwrap();
@@ -50,7 +50,7 @@ fn test_accept() {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::listen(&tcp, &mut host, 10).unwrap();
@@ -124,7 +124,7 @@ fn test_accept_close_wait() {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::listen(&tcp, &mut host, 10).unwrap();
@@ -215,7 +215,7 @@ fn test_connect_active_open() {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::connect(&tcp, "5.6.7.8:10".parse().unwrap(), &mut host).unwrap();
@@ -263,7 +263,7 @@ fn test_connect_simultaneous_open() {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
-    let tcp = TcpSocket::new(&scheduler);
+    let tcp = TcpSocket::new(&scheduler, TcpConfig::default());
     assert!(s(&tcp).as_init().is_some());
 
     TcpSocket::connect(&tcp, "5.6.7.8:10".parse().unwrap(), &mut host).unwrap();
