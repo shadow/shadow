@@ -82,7 +82,7 @@ use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 
 pub mod util;
 
@@ -650,4 +650,75 @@ impl TcpHeader {
 pub struct Ipv4Header {
     pub src: Ipv4Addr,
     pub dst: Ipv4Addr,
+}
+
+/// A packet payload containing a list of [byte](Bytes) chunks. The sum of the lengths of each chunk
+/// must be at most [`u32::MAX`], otherwise operations on the payload or other code using the
+/// payload may panic.
+// TODO: Intuitively this seems like a good place to use a `SmallVec` to optimize the common case
+// where there are a small number of chunks per packet. But I'm leaving this until we can test `Vec`
+// vs `SmallVec` in a benchmark to see if there's any performance improvement in practice.
+#[derive(Clone, Debug, Default)]
+pub struct Payload(pub Vec<Bytes>);
+
+// We don't implement `PartialEq` or `Eq` since it's not clear what equality means. Are payloads
+// equal if they just contain the same bytes, or are they equal only if the chunks are exactly the
+// same? For example is the payload `["hello", "world"]` the same as `["helloworld"]`?
+static_assertions::assert_not_impl_any!(Payload: PartialEq, Eq);
+
+impl Payload {
+    /// Returns the number of bytes in the payload.
+    pub fn len(&self) -> u32 {
+        self.0
+            .iter()
+            // `fold` rather than `sum` so that we always panic on overflow
+            .fold(0usize, |acc, x| acc.checked_add(x.len()).unwrap())
+            .try_into()
+            .unwrap()
+    }
+
+    /// Returns true if the payload has no data (no byte chunks or only empty byte chunks).
+    pub fn is_empty(&self) -> bool {
+        // should be faster than checking `self.len() == 0`
+        self.0.iter().all(|x| x.len() == 0)
+    }
+
+    /// Concatenate the byte chunks into a single byte chunk. Unless the payload is empty or has a
+    /// single chunk, this will allocate a large buffer and copy all of the individual chunks to
+    /// this new buffer.
+    pub fn concat(&self) -> Bytes {
+        let num_bytes = self.len() as usize;
+        let num_chunks = self.0.len();
+
+        if num_bytes == 0 {
+            return Bytes::new();
+        }
+
+        if num_chunks == 1 {
+            // there's only one chunk, so just return a reference to the chunk
+            return self.0[0].clone();
+        }
+
+        let mut bytes = BytesMut::with_capacity(num_bytes);
+
+        for chunk in &self.0 {
+            bytes.extend_from_slice(chunk);
+        }
+
+        debug_assert_eq!(bytes.len(), bytes.capacity());
+
+        bytes.freeze()
+    }
+}
+
+impl From<Bytes> for Payload {
+    fn from(bytes: Bytes) -> Self {
+        Self(vec![bytes])
+    }
+}
+
+impl From<BytesMut> for Payload {
+    fn from(bytes: BytesMut) -> Self {
+        bytes.freeze().into()
+    }
 }
