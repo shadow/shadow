@@ -7,8 +7,8 @@ use crate::seq::{Seq, SeqRange};
 use crate::util::time::Instant;
 use crate::window_scaling::WindowScaling;
 use crate::{
-    Ipv4Header, PopPacketError, PushPacketError, RecvError, SendError, TcpConfig, TcpFlags,
-    TcpHeader,
+    Ipv4Header, Payload, PopPacketError, PushPacketError, RecvError, SendError, TcpConfig,
+    TcpFlags, TcpHeader,
 };
 
 /// Information for a TCP connection. Equivalent to the Transmission Control Block (TCB).
@@ -592,6 +592,45 @@ fn trim_segment(
     Some((new_header, new_payload))
 }
 
+/// Trims `payload`, which starts at a given `seq` number, such that only bytes in the sequence
+/// `range` remain.
+///
+/// If the two ranges do not intersect `None` will be returned. A `None` is also returned if the
+/// range intersects the payload twice, for example if the payload covers the range 100..200 and the
+/// given range covers 180..120, but this shouldn't occur for reasonable TCP sequence number ranges.
+/// The returned payload may be empty if the original `payload` was empty or the `range` was empty,
+/// but they still intersect according to [`SeqRange::intersection`].
+fn trim_payload(seq: Seq, mut payload: Payload, range: &SeqRange) -> Option<(Seq, Payload)> {
+    let payload_range = SeqRange::new(seq, seq + payload.len());
+    let intersection = payload_range.intersection(range)?;
+
+    if payload_range == intersection {
+        // in the common case where the payload is completely contained within the range, return
+        // early without any modifications
+        return Some((seq, payload));
+    }
+
+    // the sequence number of the current chunk
+    let mut seq_cursor = seq;
+
+    // we could use `retain` here and remove empty/out-of-bounds chunks, but it's simpler and
+    // probably faster to avoid shifting elements around and just leave empty chunks (and replace
+    // out-of-bounds chunks with empty chunks)
+    for chunk in &mut payload.0 {
+        let original_chunk_len = chunk.len().try_into().unwrap();
+
+        // `take` will replace the current chunk with an empty chunk
+        if let Some((_seq, new_chunk)) = trim_chunk(seq_cursor, std::mem::take(chunk), range) {
+            *chunk = new_chunk;
+        }
+
+        seq_cursor += original_chunk_len;
+    }
+
+    debug_assert_eq!(payload.len(), intersection.len());
+    Some((intersection.start, payload))
+}
+
 /// Trims `chunk`, which starts at a given `seq` number, such that only bytes in the sequence
 /// `range` remain.
 ///
@@ -637,6 +676,19 @@ mod tests {
     // helper to make the tests fit on a single line
     fn bytes<const N: usize>(x: &[u8; N]) -> Bytes {
         Box::<[u8]>::from(x.as_slice()).into()
+    }
+
+    // helper to make the tests fit on a single line
+    macro_rules! payload {
+        () => {
+            Payload([].into())
+        };
+        ($($slices:literal),+) => {
+            {
+                let iter = ([$(&$slices[..]),+]).into_iter().map(|x| Bytes::copy_from_slice(&x));
+                Payload(iter.collect())
+            }
+        };
     }
 
     #[test]
@@ -731,6 +783,103 @@ mod tests {
         assert_eq!(
             test_trim(SYN | FIN | ACK, seq(3), bytes(b"123"), range(0, 5)),
             Some((SYN | ACK, seq(3), bytes(b"1"))),
+        );
+    }
+
+    #[test]
+    fn test_trim_payload() {
+        fn test_trim(seq: Seq, payload: Payload, range: SeqRange) -> Option<(Seq, Vec<Bytes>)> {
+            let (seq, payload) = trim_payload(seq, payload, &range)?;
+            Some((seq, payload.0))
+        }
+
+        assert_eq!(
+            test_trim(seq(0), payload![b""], range(0, 0)),
+            Some((seq(0), payload![b""].0)),
+        );
+        assert_eq!(
+            test_trim(seq(0), payload![], range(0, 0)),
+            Some((seq(0), vec![])),
+        );
+        assert_eq!(test_trim(seq(1), payload![b""], range(0, 0)), None);
+        assert_eq!(test_trim(seq(1), payload![b""], range(0, 1)), None);
+        assert_eq!(
+            test_trim(seq(1), payload![b""], range(0, 2)),
+            Some((seq(1), payload![b""].0)),
+        );
+        assert_eq!(
+            test_trim(seq(0), payload![b"a"], range(0, 0)),
+            Some((seq(0), payload![b""].0)),
+        );
+        assert_eq!(
+            test_trim(seq(0), payload![b"a"], range(0, 1)),
+            Some((seq(0), payload![b"a"].0)),
+        );
+        assert_eq!(
+            test_trim(seq(0), payload![b"ab"], range(0, 1)),
+            Some((seq(0), payload![b"a"].0)),
+        );
+        assert_eq!(
+            test_trim(seq(0), payload![b"abcdefg"], range(2, 4)),
+            Some((seq(2), payload![b"cd"].0)),
+        );
+        assert_eq!(
+            test_trim(seq(3), payload![b"abcdefg"], range(2, 4)),
+            Some((seq(3), payload![b"a"].0)),
+        );
+        assert_eq!(
+            test_trim(seq(3), payload![b"abcdefg"], range(2, 20)),
+            Some((seq(3), payload![b"abcdefg"].0)),
+        );
+        assert_eq!(
+            test_trim(seq(3), payload![b"abcdefg"], range(9, 20)),
+            Some((seq(9), payload![b"g"].0)),
+        );
+        assert_eq!(test_trim(seq(3), payload![b"abcdefg"], range(10, 20)), None);
+
+        // second test intersects twice, so returns `None`
+        assert_eq!(
+            test_trim(seq(5), payload![b"abcdefg"], range(8, 5)),
+            Some((seq(8), payload![b"defg"].0)),
+        );
+        assert_eq!(test_trim(seq(5), payload![b"abcdefg"], range(8, 7)), None);
+
+        // cut off right edge
+        assert_eq!(
+            test_trim(seq(0), payload![b"a", b"bcd"], range(0, 3)),
+            Some((seq(0), payload![b"a", b"bc"].0)),
+        );
+        // cut off left edge
+        assert_eq!(
+            test_trim(seq(0), payload![b"abc", b"d"], range(1, 4)),
+            Some((seq(1), payload![b"bc", b"d"].0)),
+        );
+        // cut off left and right edge
+        assert_eq!(
+            test_trim(seq(0), payload![b"abc", b"def", b"ghi"], range(1, 8)),
+            Some((seq(1), payload![b"bc", b"def", b"gh"].0)),
+        );
+        // cut off left and right chunks
+        assert_eq!(
+            test_trim(seq(0), payload![b"abc", b"def", b"ghi"], range(3, 6)),
+            Some((seq(3), payload![b"", b"def", b""].0)),
+        );
+        // cut off left and right edges of same chunk
+        assert_eq!(
+            test_trim(seq(0), payload![b"abc", b"def", b"ghi"], range(4, 5)),
+            Some((seq(4), payload![b"", b"e", b""].0)),
+        );
+
+        assert_eq!(
+            test_trim(
+                seq(0),
+                payload![b"", b"abc", b"", b"de", b"", b"f", b"", b"ghi"],
+                range(3, 6)
+            ),
+            Some((
+                seq(3),
+                payload![b"", b"", b"", b"de", b"", b"f", b"", b""].0
+            )),
         );
     }
 
