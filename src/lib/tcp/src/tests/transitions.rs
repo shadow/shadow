@@ -3,11 +3,9 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use bytes::Bytes;
-
 use crate::tests::util::time::Duration;
 use crate::tests::{establish_helper, Errno, Host, Scheduler, TcpSocket, TestEnvState};
-use crate::{Ipv4Header, TcpConfig, TcpFlags, TcpHeader, TcpState};
+use crate::{Ipv4Header, Payload, TcpConfig, TcpFlags, TcpHeader, TcpState};
 
 #[test]
 fn test_close() {
@@ -74,7 +72,7 @@ fn test_accept() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // read the SYN+ACK
@@ -104,7 +102,7 @@ fn test_accept() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // the connection is now established
@@ -148,7 +146,7 @@ fn test_accept_close_wait() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // read the SYN+ACK
@@ -172,7 +170,7 @@ fn test_accept_close_wait() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // send a FIN to move the child to the "close-wait" state
@@ -192,7 +190,7 @@ fn test_accept_close_wait() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // read the ACK
@@ -245,7 +243,7 @@ fn test_connect_active_open() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -293,7 +291,7 @@ fn test_connect_simultaneous_open() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_syn_received().is_some());
 
     // read the ACK
@@ -317,7 +315,7 @@ fn test_connect_simultaneous_open() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 }
 
@@ -351,7 +349,7 @@ fn test_passive_close() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_close_wait().is_some());
 
     // check the ACK packet sent by the socket
@@ -363,7 +361,7 @@ fn test_passive_close() {
 
     // check the data packet sent by the socket
     let (_, payload) = scheduler.pop_packet().unwrap();
-    assert_eq!(payload[..], b"hello"[..]);
+    assert_eq!(payload.concat()[..], b"hello"[..]);
 
     // close the socket (move tcp to the "last-ack" state)
     tcp.borrow_mut().close().unwrap();
@@ -390,7 +388,7 @@ fn test_passive_close() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_closed().is_some());
 }
 
@@ -432,7 +430,7 @@ fn test_active_close_1() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_fin_wait_two().is_some());
 
     // send a FIN (move tcp to the "time-wait" state)
@@ -452,7 +450,7 @@ fn test_active_close_1() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_time_wait().is_some());
 
     // check the ACK packet sent by the socket
@@ -506,7 +504,7 @@ fn test_active_close_2() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_time_wait().is_some());
 
     // check the ACK packet sent by the socket
@@ -560,7 +558,7 @@ fn test_active_close_3() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_closing().is_some());
 
     // check the ACK packet sent by the socket
@@ -584,7 +582,7 @@ fn test_active_close_3() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_time_wait().is_some());
 
     // at 59 seconds, the socket is still in time-wait

@@ -1,13 +1,17 @@
 use std::collections::LinkedList;
+use std::io::Read;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes, BytesMut};
 
 use crate::seq::{Seq, SeqRange};
 use crate::util::time::Instant;
 
 #[derive(Debug)]
 pub(crate) struct SendQueue<T: Instant> {
-    segments: LinkedList<SegmentMetadata<T>>,
+    segments: LinkedList<Segment>,
+    time_last_segment_sent: Option<T>,
+    // exclusive
+    transmitted_up_to: Seq,
     // inclusive
     start_seq: Seq,
     // exclusive
@@ -19,6 +23,8 @@ impl<T: Instant> SendQueue<T> {
     pub fn new(initial_seq: Seq) -> Self {
         let mut queue = Self {
             segments: LinkedList::new(),
+            time_last_segment_sent: None,
+            transmitted_up_to: initial_seq,
             start_seq: initial_seq,
             end_seq: initial_seq,
             fin_added: false,
@@ -37,8 +43,27 @@ impl<T: Instant> SendQueue<T> {
         self.add_segment(Segment::Fin);
     }
 
-    pub fn add_data(&mut self, data: Bytes) {
-        self.add_segment(Segment::Data(data));
+    pub fn add_data(
+        &mut self,
+        mut reader: impl Read,
+        mut len: usize,
+    ) -> Result<(), std::io::Error> {
+        // this value shouldn't affect the tcp behaviour, only how the underlying bytes are
+        // allocated
+        const MAX_BYTES_PER_CHUNK: usize = 10_000;
+
+        while len > 0 {
+            let to_read = std::cmp::min(len, MAX_BYTES_PER_CHUNK);
+
+            let mut data = BytesMut::from_iter(std::iter::repeat(0).take(to_read));
+            reader.read_exact(&mut data[..])?;
+
+            self.add_segment(Segment::Data(data.into()));
+
+            len -= to_read;
+        }
+
+        Ok(())
     }
 
     fn add_segment(&mut self, seg: Segment) {
@@ -52,9 +77,7 @@ impl<T: Instant> SendQueue<T> {
             return;
         }
 
-        let seg = SegmentMetadata::new(seg);
-
-        self.end_seq += seg.seg.len();
+        self.end_seq += seg.len();
         self.segments.push_back(seg);
     }
 
@@ -78,70 +101,82 @@ impl<T: Instant> SendQueue<T> {
         assert!(self.contains(new_start) || new_start == self.end_seq);
 
         while self.start_seq != new_start {
+            let advance_by = new_start - self.start_seq;
+
             // this shouldn't panic due to the assertion above
             let front = self.segments.front_mut().unwrap();
 
-            let advance_by = new_start - self.start_seq;
-
-            // if the chunk is too small
-            if front.seg.len() <= advance_by {
-                self.start_seq += front.seg.len();
+            // if the chunk would be completely removed
+            if front.len() <= advance_by {
+                self.start_seq += front.len();
                 self.segments.pop_front();
                 continue;
             }
 
-            let Segment::Data(data) = &mut front.seg else {
+            let Segment::Data(data) = front else {
+                // syn and fin segments have a length of only 1 byte, so they should have been
+                // popped by the check above
                 unreachable!();
             };
 
-            let advance_by_usize: usize = advance_by.try_into().unwrap();
-            *data = data.slice(advance_by_usize..);
-
+            // update the existing `Bytes` object rather than using `slice()` to avoid an atomic
+            // operation
+            data.advance(advance_by.try_into().unwrap());
             assert!(!data.is_empty());
 
-            self.start_seq = new_start;
+            self.start_seq += advance_by;
         }
     }
 
-    pub fn next_not_transmitted(&self) -> Option<(Seq, &SegmentMetadata<T>)> {
-        let mut seq_cursor = self.start_seq;
-        for seg in &self.segments {
-            if seg.transmit_count == 0 {
-                return Some((seq_cursor, seg));
-            }
+    /// Get the next segment that has not yet been transmitted. The `offset` argument can be used to
+    /// return the next segment starting at `offset` bytes from the next non-transmitted segment.
+    // TODO: this is slow and is called often
+    pub fn next_not_transmitted(&self, offset: u32) -> Option<(Seq, Segment)> {
+        // the sequence number of the segment we want to return
+        let target_seq = self.transmitted_up_to + offset;
 
-            seq_cursor += seg.seg.len();
+        // check if we've already transmitted everything in the buffer
+        if !self.contains(target_seq) {
+            return None;
         }
 
-        None
+        let mut seq_cursor = self.start_seq;
+        for seg in &self.segments {
+            let len = seg.len();
+
+            // if the target sequence number is within this segment
+            if SeqRange::new(seq_cursor, seq_cursor + len).contains(target_seq) {
+                let new_segment = match seg {
+                    Segment::Syn => Segment::Syn,
+                    Segment::Fin => Segment::Fin,
+                    Segment::Data(chunk) => {
+                        // the target sequence number might be somewhere within this chunk, so we
+                        // need to trim any bytes with a lower sequence number
+                        let chunk_offset = target_seq - seq_cursor;
+                        let chunk_offset: usize = chunk_offset.try_into().unwrap();
+                        Segment::Data(chunk.slice(chunk_offset..))
+                    }
+                };
+
+                return Some((target_seq, new_segment));
+            }
+
+            seq_cursor += len;
+        }
+
+        // we confirmed above that the target sequence number is contained within the buffer, but we
+        // looped over all segments in the buffer and didn't find it
+        unreachable!();
     }
 
     pub fn mark_as_transmitted(&mut self, up_to: Seq, time: T) {
-        let mut seq_cursor = self.start_seq;
+        assert!(self.contains(up_to) || up_to == self.end_seq);
 
-        if up_to == seq_cursor {
-            return;
+        if up_to != self.transmitted_up_to {
+            self.time_last_segment_sent = Some(time);
         }
 
-        for seg in &mut self.segments {
-            let range = SeqRange::new(self.start_seq, seq_cursor + seg.seg.len());
-
-            // we only support `up_to` values along a chunk boundary, so `up_to` must be >=
-            // `range.end`
-            // TODO: support arbitary positions that aren't aligned with chunks
-            assert!(!range.contains(up_to));
-
-            if seg.transmit_count == 0 {
-                seg.transmit_count = 1;
-                seg.original_transmit_time = Some(time);
-            }
-
-            if range.end == up_to {
-                break;
-            }
-
-            seq_cursor = range.end;
-        }
+        self.transmitted_up_to = up_to;
     }
 }
 
@@ -238,27 +273,6 @@ impl RecvQueue {
         self.start_seq += advance_by;
 
         Some((seq, segment))
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct SegmentMetadata<T: Instant> {
-    seg: Segment,
-    transmit_count: u8,
-    original_transmit_time: Option<T>,
-}
-
-impl<T: Instant> SegmentMetadata<T> {
-    pub fn new(seg: Segment) -> Self {
-        Self {
-            seg,
-            transmit_count: 0,
-            original_transmit_time: None,
-        }
-    }
-
-    pub fn segment(&self) -> &Segment {
-        &self.seg
     }
 }
 

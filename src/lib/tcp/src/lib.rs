@@ -204,12 +204,17 @@ where
     fn push_packet(
         self,
         _header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        _payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         (self.into(), Err(PushPacketError::InvalidState))
     }
 
-    fn pop_packet(self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         (self.into(), Err(PopPacketError::InvalidState))
     }
 
@@ -286,13 +291,13 @@ impl<X: Dependencies> TcpState<X> {
     pub fn push_packet(
         &mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> Result<(), PushPacketError> {
         self.with_state(|state| state.push_packet(header, payload))
     }
 
     #[inline]
-    pub fn pop_packet(&mut self) -> Result<(TcpHeader, Bytes), PopPacketError> {
+    pub fn pop_packet(&mut self) -> Result<(TcpHeader, Payload), PopPacketError> {
         self.with_state(|state| state.pop_packet())
     }
 

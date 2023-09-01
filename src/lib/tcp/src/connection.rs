@@ -1,4 +1,4 @@
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, Bytes};
 use std::io::{Read, Write};
 use std::net::SocketAddrV4;
 
@@ -65,7 +65,7 @@ impl<I: Instant> Connection<I> {
         self.send.is_closed = true;
     }
 
-    pub fn send(&mut self, mut reader: impl Read, len: usize) -> Result<usize, SendError> {
+    pub fn send(&mut self, reader: impl Read, len: usize) -> Result<usize, SendError> {
         // if the buffer is full
         if !self.send_buf_has_space() {
             return Err(SendError::Full);
@@ -75,23 +75,8 @@ impl<I: Instant> Connection<I> {
         let send_buffer_space = Self::SEND_BUF_MAX.saturating_sub(send_buffer_len);
 
         let len = std::cmp::min(len, send_buffer_space);
-        let mut remaining = len;
-
-        // The max number of payload bytes allowed per packet. This is an arbitrary number used
-        // temporarily until we add code that considers the MSS.
-        const MAX_PER_PACKET: usize = 1500;
-
-        while remaining > 0 {
-            let to_read = std::cmp::min(remaining, MAX_PER_PACKET);
-            let mut payload = BytesMut::from_iter(std::iter::repeat(0).take(to_read));
-            if let Err(e) = reader.read_exact(&mut payload[..]) {
-                return Err(SendError::Io(e));
-            }
-
-            let payload = payload.into();
-            self.send.buffer.add_data(payload);
-
-            remaining -= to_read;
+        if let Err(e) = self.send.buffer.add_data(reader, len) {
+            return Err(SendError::Io(e));
         }
 
         Ok(len)
@@ -101,9 +86,7 @@ impl<I: Instant> Connection<I> {
         let mut bytes_copied = 0;
         let recv = self.recv.as_mut().unwrap();
 
-        let has_data = !recv.buffer.is_empty();
-
-        if !has_data {
+        if recv.buffer.is_empty() {
             return Err(RecvError::Empty);
         }
 
@@ -112,6 +95,7 @@ impl<I: Instant> Connection<I> {
             let remaining_u32 = remaining.try_into().unwrap_or(u32::MAX);
 
             let Some((_seq, data)) = recv.buffer.pop(remaining_u32) else {
+                // no more data available
                 break;
             };
 
@@ -131,7 +115,7 @@ impl<I: Instant> Connection<I> {
     pub fn push_packet(
         &mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> Result<(), PushPacketError> {
         if self.recv.is_none() && header.flags.contains(TcpFlags::SYN) {
             // we needed to know the sender's initial sequence number before we could initialize the
@@ -153,8 +137,6 @@ impl<I: Instant> Connection<I> {
         //
         // TODO: be careful about this if we support a reassembly queue in the future
         let original_packet_had_syn = header.flags.contains(TcpFlags::SYN);
-
-        let payload = payload.into();
 
         let recv_window = self.recv_window().unwrap();
         let Some((header, payload)) = trim_segment(header, payload, &recv_window) else {
@@ -201,7 +183,7 @@ impl<I: Instant> Connection<I> {
                 0
             };
 
-            let payload_len: u32 = payload.len().try_into().unwrap();
+            let payload_len = payload.len();
             let payload_seq = (payload_len != 0).then_some(Seq::new(header.seq) + syn_len);
             let fin_seq = header
                 .flags
@@ -210,7 +192,9 @@ impl<I: Instant> Connection<I> {
 
             if let Some(payload_seq) = payload_seq {
                 if payload_seq == recv.buffer.next_seq() {
-                    recv.buffer.add(payload);
+                    for chunk in payload.0 {
+                        recv.buffer.add(chunk);
+                    }
                 } else {
                     // TODO: store (truncated?) out-of-order packet
                 }
@@ -261,7 +245,7 @@ impl<I: Instant> Connection<I> {
         Ok(())
     }
 
-    pub fn pop_packet(&mut self, now: I) -> Result<(TcpHeader, Bytes), PopPacketError> {
+    pub fn pop_packet(&mut self, now: I) -> Result<(TcpHeader, Payload), PopPacketError> {
         let (seq_range, mut flags, payload) =
             self.next_segment().ok_or(PopPacketError::NoPacket)?;
 
@@ -348,11 +332,16 @@ impl<I: Instant> Connection<I> {
         Ok((header, payload))
     }
 
-    fn next_segment(&self) -> Option<(SeqRange, TcpFlags, Bytes)> {
+    /// Returns a segment that is ready to send. This may be a data segment (a segment containing a
+    /// SYN/FIN flag and/or payload data) or an empty segment. Even if this returns an empty
+    /// segment, it must be sent with the correct acknowledgement number, window size, etc as it may
+    /// represent an acknowledgement or window update.
+    fn next_segment(&self) -> Option<(SeqRange, TcpFlags, Payload)> {
         // should be inlined
         self._next_segment()
     }
 
+    /// Returns true if ready to send a packet.
     pub fn wants_to_send(&self) -> bool {
         // should be inlined
         self._next_segment().is_some()
@@ -367,24 +356,11 @@ impl<I: Instant> Connection<I> {
     /// showing up in a profile/heatmap. Since the function is large and is `inline(always)` we only
     /// call it from two functions, `next_segment()` and `wants_to_send()`.
     #[inline(always)]
-    fn _next_segment(&self) -> Option<(SeqRange, TcpFlags, Bytes)> {
+    fn _next_segment(&self) -> Option<(SeqRange, TcpFlags, Payload)> {
         let (seq_range, syn_fin_flags, payload) = 'packet: {
-            // do we have a syn/fin/payload packet to send?
-            if let Some((seq, metadata)) = self.send.buffer.next_not_transmitted() {
-                let send_window = self.send_window();
-
-                // does the segment fit in the send window?
-                if send_window.contains(seq + metadata.segment().len()) {
-                    debug_assert!(send_window.contains(seq));
-                    let (syn_fin_flags, payload) = match metadata.segment() {
-                        Segment::Syn => (TcpFlags::SYN, Bytes::new()),
-                        Segment::Fin => (TcpFlags::FIN, Bytes::new()),
-                        Segment::Data(bytes) => (TcpFlags::empty(), bytes.clone()),
-                    };
-
-                    let seq_range = SeqRange::new(seq, seq + metadata.segment().len());
-                    break 'packet (seq_range, syn_fin_flags, payload);
-                }
+            // if we have syn/fin/payload data to send
+            if let Some((seq_range, syn_fin_flags, payload)) = self.next_data_segment() {
+                break 'packet (seq_range, syn_fin_flags, payload);
             }
 
             let mut send_empty_packet = false;
@@ -411,12 +387,12 @@ impl<I: Instant> Connection<I> {
                 let seq = self
                     .send
                     .buffer
-                    .next_not_transmitted()
+                    .next_not_transmitted(0)
                     .map(|x| x.0)
                     .unwrap_or(self.send.buffer.next_seq());
 
                 let seq_range = SeqRange::new(seq, seq);
-                break 'packet (seq_range, TcpFlags::empty(), Bytes::new());
+                break 'packet (seq_range, TcpFlags::empty(), Payload::default());
             }
 
             return None;
@@ -430,6 +406,76 @@ impl<I: Instant> Connection<I> {
         }
 
         Some((seq_range, syn_fin_flags, payload))
+    }
+
+    /// Returns a data segment that is ready to send. This is a segment containing a SYN/FIN flag
+    /// and/or payload data. Even if this returns `None`, we may still want to send some other
+    /// segment such as an acknowledgement or window update (see `Self::next_segment`).
+    fn next_data_segment(&self) -> Option<(SeqRange, TcpFlags, Payload)> {
+        let send_window = self.send_window();
+
+        let mut chunks = Vec::new();
+        let mut syn_fin_flags = TcpFlags::empty();
+        let mut seq_start = None;
+        let mut seq_len = 0;
+        let mut payload_bytes_len = 0;
+
+        // roughly represents the MSS
+        // TODO: handle the MSS properly
+        const MAX_BYTES_PER_PACKET: u32 = 1500;
+
+        // do we have syn/fin/payload data to send?
+        while let Some((seq, segment)) = self.send.buffer.next_not_transmitted(seq_len) {
+            // if no bytes of this segment fit within the send window
+            if !send_window.contains(seq) {
+                break;
+            }
+
+            // if we can't send any more payload bytes
+            if payload_bytes_len == MAX_BYTES_PER_PACKET {
+                break;
+            }
+
+            // if this is the first returned segment, keep track of the start
+            if seq_start.is_none() {
+                seq_start = Some(seq);
+            }
+
+            match segment {
+                Segment::Syn => {
+                    syn_fin_flags.insert(TcpFlags::SYN);
+                    seq_len += segment.len();
+                }
+                Segment::Fin => {
+                    syn_fin_flags.insert(TcpFlags::FIN);
+                    seq_len += segment.len();
+                }
+                Segment::Data(mut chunk) => {
+                    let allowed_len =
+                        MAX_BYTES_PER_PACKET.saturating_sub(payload_bytes_len) as usize;
+                    let allowed_len = std::cmp::min(allowed_len, send_window.len() as usize);
+
+                    chunk.truncate(std::cmp::min(chunk.len(), allowed_len));
+
+                    let chunk_len: u32 = chunk.len().try_into().unwrap();
+                    payload_bytes_len += chunk_len;
+                    seq_len += chunk_len;
+
+                    chunks.push(chunk);
+                }
+            };
+
+            // we shouldn't be sending more than allowed
+            debug_assert!(payload_bytes_len <= MAX_BYTES_PER_PACKET);
+        }
+
+        if !chunks.is_empty() || !syn_fin_flags.is_empty() {
+            let seq_start = seq_start.unwrap();
+            let seq_range = SeqRange::new(seq_start, seq_start + seq_len);
+            return Some((seq_range, syn_fin_flags, Payload(chunks)));
+        }
+
+        None
     }
 
     /// Returns true if we received a SYN packet from the peer.
@@ -543,11 +589,13 @@ impl ConnectionRecv {
     }
 }
 
+/// Trims the segment `header` and `payload` such that only bytes in the sequence `range` remain.
+/// This may modify the segment sequence number, SYN/FIN flags, or payload.
 fn trim_segment(
     header: &TcpHeader,
-    payload: Bytes,
+    payload: Payload,
     range: &SeqRange,
-) -> Option<(TcpHeader, Bytes)> {
+) -> Option<(TcpHeader, Payload)> {
     let seq = Seq::new(header.seq);
     let syn_len = if header.flags.contains(TcpFlags::SYN) {
         1
@@ -559,16 +607,22 @@ fn trim_segment(
     } else {
         0
     };
-    let payload_len = payload.len().try_into().unwrap();
+    let payload_len = payload.len();
+
     let header_range = SeqRange::new(seq, seq + syn_len + payload_len + fin_len);
+    let intersection = header_range.intersection(range)?;
+
+    if intersection == header_range {
+        // in the common case where the segment is completely contained within the range, return
+        // early without any modifications
+        return Some((*header, payload));
+    }
 
     let include_syn = syn_len == 1 && range.contains(header_range.start);
     let include_fin = fin_len == 1 && range.contains(header_range.end - 1);
 
-    let intersection = header_range.intersection(range)?;
-
     let payload_seq = seq + syn_len;
-    let new_payload = match trim_chunk(payload_seq, payload, range) {
+    let new_payload = match trim_payload(payload_seq, payload, range) {
         Some((new_seq, new_payload)) => {
             assert_eq!(
                 new_seq,
@@ -576,7 +630,7 @@ fn trim_segment(
             );
             new_payload
         }
-        None => Bytes::new(),
+        None => Payload::default(),
     };
 
     let mut new_flags = header.flags;
@@ -696,7 +750,7 @@ mod tests {
         fn test_trim(
             flags: TcpFlags,
             seq: Seq,
-            payload: impl Into<Bytes>,
+            payload: impl Into<Payload>,
             range: SeqRange,
         ) -> Option<(TcpFlags, Seq, Bytes)> {
             let header = TcpHeader {
@@ -717,6 +771,7 @@ mod tests {
             };
 
             let (header, payload) = trim_segment(&header, payload.into(), &range)?;
+            let payload = payload.concat();
 
             Some((header.flags, Seq::new(header.seq), payload))
         }
