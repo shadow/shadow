@@ -568,7 +568,7 @@ fn trim_segment(
     let intersection = header_range.intersection(range)?;
 
     let payload_seq = seq + syn_len;
-    let new_payload = match trim_payload(payload_seq, payload, range) {
+    let new_payload = match trim_chunk(payload_seq, payload, range) {
         Some((new_seq, new_payload)) => {
             assert_eq!(
                 new_seq,
@@ -592,18 +592,18 @@ fn trim_segment(
     Some((new_header, new_payload))
 }
 
-/// Trims `payload`, which starts at a given `seq` number, such that only bytes in the sequence
+/// Trims `chunk`, which starts at a given `seq` number, such that only bytes in the sequence
 /// `range` remain.
 ///
 /// If the two ranges do not intersect `None` will be returned. A `None` is also returned if the
-/// range intersects the payload twice, for example if the payload covers the range 100..200 and the
+/// range intersects the chunk twice, for example if the chunk covers the range 100..200 and the
 /// given range covers 180..120, but this shouldn't occur for reasonable TCP sequence number ranges.
-/// The returned payload may be empty if the original `payload` was empty or the `range` was empty,
-/// but they still intersect according to [`SeqRange::intersection`].
-fn trim_payload(seq: Seq, mut payload: Bytes, range: &SeqRange) -> Option<(Seq, Bytes)> {
-    let payload_range = SeqRange::new(seq, seq + payload.len().try_into().unwrap());
+/// The returned chunk may be empty if the original `chunk` was empty or the `range` was empty, but
+/// they still intersect according to [`SeqRange::intersection`].
+fn trim_chunk(seq: Seq, mut chunk: Bytes, range: &SeqRange) -> Option<(Seq, Bytes)> {
+    let chunk_range = SeqRange::new(seq, seq + chunk.len().try_into().unwrap());
 
-    let intersection = payload_range.intersection(range)?;
+    let intersection = chunk_range.intersection(range)?;
 
     let new_offset = intersection.start - seq;
     let new_len = intersection.len();
@@ -612,10 +612,10 @@ fn trim_payload(seq: Seq, mut payload: Bytes, range: &SeqRange) -> Option<(Seq, 
     let new_len: usize = new_len.try_into().unwrap();
 
     // update the existing `Bytes` object rather than using `slice()` to avoid an atomic operation
-    payload.advance(new_offset);
-    payload.truncate(new_len);
+    chunk.advance(new_offset);
+    chunk.truncate(new_len);
 
-    Some((intersection.start, payload))
+    Some((intersection.start, chunk))
 }
 
 #[cfg(test)]
@@ -735,9 +735,9 @@ mod tests {
     }
 
     #[test]
-    fn test_trim_payload() {
-        fn test_trim(seq: Seq, payload: impl Into<Bytes>, range: SeqRange) -> Option<(Seq, Bytes)> {
-            trim_payload(seq, payload.into(), &range)
+    fn test_trim_chunk() {
+        fn test_trim(seq: Seq, chunk: Bytes, range: SeqRange) -> Option<(Seq, Bytes)> {
+            trim_chunk(seq, chunk, &range)
         }
 
         assert_eq!(
