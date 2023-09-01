@@ -309,6 +309,7 @@ struct TcpSocket {
     outgoing_packet_queue: Rc<RefCell<VecDeque<(TcpHeader, Bytes)>>>,
     // a handle for the association of this socket with the host's network interface
     association_handle: Option<AssociationHandle>,
+    collect_packets: bool,
 }
 
 impl TcpSocket {
@@ -338,6 +339,7 @@ impl TcpSocket {
                 event_source: StateEventSource::new(),
                 outgoing_packet_queue: outgoint_packet_queue_rc,
                 association_handle: None,
+                collect_packets: true,
             })
         });
 
@@ -362,33 +364,35 @@ impl TcpSocket {
     ) -> T {
         let rv = f(&mut self.tcp_state);
 
-        // if the tcp state wants to send a packet
-        while self.tcp_state.wants_to_send() {
-            if let Some(_socket) = self.socket_weak.upgrade() {
-                // in shadow we would add a closure to the callback queue, which would call
-                // `host.notify_socket_has_packets()` with `socket`
+        // if packet collecting is enabled and the tcp state wants to send a packet
+        if self.collect_packets {
+            while self.tcp_state.wants_to_send() {
+                if let Some(_socket) = self.socket_weak.upgrade() {
+                    // in shadow we would add a closure to the callback queue, which would call
+                    // `host.notify_socket_has_packets()` with `socket`
 
-                // pop a packet from the socket
-                let rv = self.tcp_state.pop_packet();
+                    // pop a packet from the socket
+                    let rv = self.tcp_state.pop_packet();
 
-                let (header, packet) = match rv {
-                    Ok(x) => x,
-                    Err(PopPacketError::NoPacket) => {
-                        // the packet said it wants to send, so why didn't it give us a packet?
-                        eprintln!("No packet available when popping packet");
-                        break;
-                    }
-                    Err(e) => {
-                        // the packet said it wants to send, but returned an error when doing so
-                        eprintln!("Unexpected error when popping packet: {e:?}");
-                        break;
-                    }
-                };
+                    let (header, packet) = match rv {
+                        Ok(x) => x,
+                        Err(PopPacketError::NoPacket) => {
+                            // the packet said it wants to send, so why didn't it give us a packet?
+                            eprintln!("No packet available when popping packet");
+                            break;
+                        }
+                        Err(e) => {
+                            // the packet said it wants to send, but returned an error when doing so
+                            eprintln!("Unexpected error when popping packet: {e:?}");
+                            break;
+                        }
+                    };
 
-                // push the packet to the global queue so that the current test can access it
-                self.outgoing_packet_queue
-                    .borrow_mut()
-                    .push_back((header, packet));
+                    // push the packet to the global queue so that the current test can access it
+                    self.outgoing_packet_queue
+                        .borrow_mut()
+                        .push_back((header, packet));
+                }
             }
         }
 
@@ -396,6 +400,16 @@ impl TcpSocket {
         self.mirror_tcp_state(self.tcp_state.poll());
 
         rv
+    }
+
+    /// Set to `true` if we should collect any packets the tcp state wants to send and give them to
+    /// the scheduler. Can be useful to disable if you want to test packet coalescing.
+    pub fn collect_packets(&mut self, collect_packets: bool) {
+        self.collect_packets = collect_packets;
+
+        // run a no-op function on the state, which will force the socket to update its file state
+        // to match the tcp state, and will also collect any packets it wants to send (if enabled)
+        self.with_tcp_state(|_state| {});
     }
 
     fn emit_file_state(&mut self, new_state: FileState) {
@@ -543,6 +557,7 @@ impl TcpSocket {
                 event_source: StateEventSource::new(),
                 outgoing_packet_queue: self.outgoing_packet_queue.clone(),
                 association_handle: None,
+                collect_packets: true,
             })
         });
 
