@@ -6,9 +6,7 @@ use std::sync::Mutex;
 use std::thread;
 
 use nix::errno::Errno;
-use nix::sys::epoll::{
-    epoll_create1, epoll_ctl, epoll_wait, EpollCreateFlags, EpollEvent, EpollFlags, EpollOp,
-};
+use nix::sys::epoll::{Epoll, EpollCreateFlags, EpollEvent, EpollFlags};
 use nix::unistd::Pid;
 
 // TODO: consider using std::os::linux::process::PidFd once it's stabilized.
@@ -24,7 +22,7 @@ fn pidfd_open(pid: Pid) -> nix::Result<File> {
 #[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
-    epoll: Arc<File>,
+    epoll: Arc<Epoll>,
 }
 
 pub type WatchHandle = u64;
@@ -66,7 +64,7 @@ impl Inner {
         nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
     }
 
-    fn unwatch_pid(&mut self, epoll: &File, pid: Pid) {
+    fn unwatch_pid(&mut self, epoll: &Epoll, pid: Pid) {
         let Some(piddata) = self.pids.get_mut(&pid) else {
             // Already unregistered the pid
             return;
@@ -75,20 +73,14 @@ impl Inner {
             // Already unwatched the pid
             return;
         };
-        epoll_ctl(
-            epoll.as_raw_fd(),
-            EpollOp::EpollCtlDel,
-            fd.as_raw_fd(),
-            None,
-        )
-        .unwrap();
+        epoll.delete(fd).unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
         self.pids.get(&pid).unwrap().pidfd.is_none()
     }
 
-    fn remove_pid(&mut self, epoll: &File, pid: Pid) {
+    fn remove_pid(&mut self, epoll: &Epoll, pid: Pid) {
         debug_assert!(self.should_remove_pid(pid));
         self.unwatch_pid(epoll, pid);
         self.pids.remove(&pid);
@@ -105,7 +97,7 @@ impl Inner {
         pid_data.callbacks.is_empty() && pid_data.unregistered
     }
 
-    fn maybe_remove_pid(&mut self, epoll: &File, pid: Pid) {
+    fn maybe_remove_pid(&mut self, epoll: &Epoll, pid: Pid) {
         if self.should_remove_pid(pid) {
             self.remove_pid(epoll, pid)
         }
@@ -116,23 +108,14 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = {
-            let raw = epoll_create1(EpollCreateFlags::empty()).unwrap();
-            Arc::new(unsafe { File::from_raw_fd(raw) })
-        };
+        let epoll = Arc::new(Epoll::new(EpollCreateFlags::empty()).unwrap());
         let command_notifier = {
             let raw =
                 nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
-            unsafe { File::from_raw_fd(raw) }
+            File::from(raw)
         };
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
-        epoll_ctl(
-            epoll.as_raw_fd(),
-            EpollOp::EpollCtlAdd,
-            command_notifier.as_raw_fd(),
-            Some(&mut event),
-        )
-        .unwrap();
+        let event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
+        epoll.add(&command_notifier, event).unwrap();
         let watcher = ChildPidWatcher {
             inner: Arc::new(Mutex::new(Inner {
                 next_handle: 1,
@@ -155,12 +138,12 @@ impl ChildPidWatcher {
         watcher
     }
 
-    fn thread_loop(inner: &Mutex<Inner>, epoll: &File) {
+    fn thread_loop(inner: &Mutex<Inner>, epoll: &Epoll) {
         let mut events = [EpollEvent::empty(); 10];
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = match epoll_wait(epoll.as_raw_fd(), &mut events, -1) {
+            let nevents = match epoll.wait(&mut events, -1) {
                 Ok(n) => n,
                 Err(Errno::EINTR) => {
                     // Just try again.
@@ -267,7 +250,10 @@ impl ChildPidWatcher {
     pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
         let pidfd = pidfd_open(pid).unwrap();
-        let raw_pidfd = pidfd.as_raw_fd();
+
+        let event = EpollEvent::new(EpollFlags::EPOLLIN, pid.as_raw().try_into().unwrap());
+        self.epoll.add(&pidfd, event).unwrap();
+
         let prev = inner.pids.insert(
             pid,
             PidData {
@@ -277,14 +263,6 @@ impl ChildPidWatcher {
             },
         );
         assert!(prev.is_none());
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, pid.as_raw().try_into().unwrap());
-        epoll_ctl(
-            self.epoll.as_raw_fd(),
-            EpollOp::EpollCtlAdd,
-            raw_pidfd,
-            Some(&mut event),
-        )
-        .unwrap();
     }
 
     // TODO: Re-enable when Rust supports vfork: https://github.com/rust-lang/rust/issues/58314
@@ -396,7 +374,7 @@ mod tests {
             watcher.fork_watchable(|| {
                 let mut buf = [0; 8];
                 // Wait for parent to register its callback.
-                nix::unistd::read(notifier, &mut buf).unwrap();
+                nix::unistd::read(notifier.as_raw_fd(), &mut buf).unwrap();
                 libc::_exit(42);
             })
         }
@@ -430,7 +408,7 @@ mod tests {
         assert!(!*callback_ran.0.lock().unwrap());
 
         // Let the child exit.
-        nix::unistd::write(notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
 
         // Wait for our callback to run.
         let mut callback_ran_lock = callback_ran.0.lock().unwrap();
@@ -558,7 +536,7 @@ mod tests {
             watcher.fork_watchable(|| {
                 let mut buf = [0; 8];
                 // Wait for parent to register its callback.
-                nix::unistd::read(notifier, &mut buf).unwrap();
+                nix::unistd::read(notifier.as_raw_fd(), &mut buf).unwrap();
                 libc::_exit(42);
             })
         }
@@ -588,7 +566,7 @@ mod tests {
         watcher.unregister_callback(child, handles[0]);
 
         // Let the child exit.
-        nix::unistd::write(notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
 
         // Wait for the still-registered callback to run.
         let mut cb_ran_lock = cb2_ran.0.lock().unwrap();

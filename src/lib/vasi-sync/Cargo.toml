@@ -17,10 +17,11 @@ criterion = "0.5.1"
 rand = "0.8.5"
 rustix = { version = "0.38.4", default-features = false, features=["process"] }
 libc = "0.2"
-nix =  "0.26.2"
+nix =  "0.27.1"
 
 [target.'cfg(loom)'.dependencies]
 loom = { version = "0.7", features = ["checkpoint"] }
+nix = { version = "0.27.1", features = ["process"] }
 
 [target.'cfg(miri)'.dependencies]
 libc = { version ="0.2", default-features = false }
