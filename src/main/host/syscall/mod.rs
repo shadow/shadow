@@ -32,4 +32,14 @@ impl Trigger {
             status: status.into(),
         })
     }
+
+    pub fn child() -> Self {
+        Self(c::Trigger {
+            type_: c::_TriggerType_TRIGGER_CHILD,
+            object: c::TriggerObject {
+                as_pointer: core::ptr::null_mut(),
+            },
+            status: c::_Status_STATUS_CHILD_EVENT,
+        })
+    }
 }

@@ -220,6 +220,13 @@ impl SyscallError {
         })
     }
 
+    pub fn new_blocked_on_child(restartable: bool) -> Self {
+        Self::Blocked(Blocked {
+            condition: SysCallCondition::new(Trigger::child()),
+            restartable,
+        })
+    }
+
     pub fn new_blocked_until(unblock_time: EmulatedTime, restartable: bool) -> Self {
         Self::Blocked(Blocked {
             condition: SysCallCondition::new_from_wakeup_time(unblock_time),
