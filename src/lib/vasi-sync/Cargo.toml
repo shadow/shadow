@@ -21,6 +21,7 @@ nix =  "0.26.2"
 
 [target.'cfg(loom)'.dependencies]
 loom = { version = "0.7", features = ["checkpoint"] }
+nix = { version = "0.27.1", features = ["process"] }
 
 [target.'cfg(miri)'.dependencies]
 libc = { version ="0.2", default-features = false }
