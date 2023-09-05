@@ -539,6 +539,21 @@ impl Host {
         self.processes.borrow_mut().remove(&id)
     }
 
+    /// Borrow the set of processes. Generally this should only be used to
+    /// iterate over the set of processes. e.g. fetching a specific process
+    /// should be done via via `process_borrow`.
+    // TODO: It would be preferable to return an iterator instead of the
+    // collection itself. There has to be an intermediate object though since we
+    // need both the borrowed map of processes, and an iterator that borrows
+    // from that. I suppose we could create an abstract "Iterator factory" and
+    // return that here instead of exposing BTreeMap type.
+    #[track_caller]
+    pub fn processes_borrow(
+        &self,
+    ) -> impl Deref<Target = BTreeMap<ProcessId, RootedRc<RootedRefCell<Process>>>> + '_ {
+        self.processes.borrow()
+    }
+
     pub fn cpu_borrow(&self) -> impl Deref<Target = Cpu> + '_ {
         self.cpu.borrow()
     }
