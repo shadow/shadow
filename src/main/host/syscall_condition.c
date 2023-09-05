@@ -446,7 +446,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
     }
 
     /* Now set up the listeners. */
-    if (cond->trigger.object.as_pointer && !cond->triggerListener) {
+    if (!cond->triggerListener) {
         /* We listen for status change on the trigger object. */
         cond->triggerListener = statuslistener_new(_syscallcondition_notifyStatusChanged, cond,
                                                    _syscallcondition_unrefcb, NULL, NULL, host);
