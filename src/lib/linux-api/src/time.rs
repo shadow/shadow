@@ -68,6 +68,10 @@ pub use bindings::linux_timeval;
 #[allow(non_camel_case_types)]
 pub type timeval = linux_timeval;
 
+pub use bindings::linux___kernel_old_timeval;
+#[allow(non_camel_case_types)]
+pub type old_timeval = linux___kernel_old_timeval;
+
 pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<timespec, Errno> {
     let mut t = shadow_pod::zeroed();
     unsafe { syscall!(linux_syscall::SYS_clock_gettime, clockid, &mut t) }
