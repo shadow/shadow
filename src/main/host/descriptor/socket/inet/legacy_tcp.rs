@@ -428,7 +428,7 @@ impl LegacyTcpSocket {
 
         // if the syscall would block and we don't have the MSG_DONTWAIT flag
         if result == Err(Errno::EWOULDBLOCK) && !flags.contains(MsgFlags::MSG_DONTWAIT) {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
                 FileState::WRITABLE,
                 socket_ref.supports_sa_restart(),
@@ -544,7 +544,7 @@ impl LegacyTcpSocket {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::LegacyTcp(socket.clone()))),
                 FileState::READABLE,
                 socket_ref.supports_sa_restart(),
@@ -817,7 +817,7 @@ impl LegacyTcpSocket {
                 // This is the first time we ever called connect, and so we need to wait for the
                 // 3-way handshake to complete. We will wait indefinitely for a success or failure.
 
-                let err = SyscallError::new_blocked(
+                let err = SyscallError::new_blocked_on_file(
                     File::Socket(Socket::Inet(InetSocket::LegacyTcp(Arc::clone(socket)))),
                     FileState::ACTIVE | FileState::WRITABLE,
                     socket_ref.supports_sa_restart(),

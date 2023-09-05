@@ -213,7 +213,7 @@ impl From<std::io::Error> for SyscallError {
 }
 
 impl SyscallError {
-    pub fn new_blocked(file: File, state: FileState, restartable: bool) -> Self {
+    pub fn new_blocked_on_file(file: File, state: FileState, restartable: bool) -> Self {
         Self::Blocked(Blocked {
             condition: SysCallCondition::new(Trigger::from_file(file, state)),
             restartable,

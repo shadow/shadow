@@ -400,7 +400,7 @@ impl TcpSocket {
 
         // if the syscall would block and we don't have the MSG_DONTWAIT flag
         if result == Err(Errno::EWOULDBLOCK) && !flags.contains(MsgFlags::MSG_DONTWAIT) {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Tcp(socket.clone()))),
                 FileState::WRITABLE | FileState::CLOSED,
                 socket_ref.supports_sa_restart(),
@@ -456,7 +456,7 @@ impl TcpSocket {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Tcp(socket.clone()))),
                 FileState::READABLE | FileState::CLOSED,
                 socket_ref.supports_sa_restart(),
@@ -656,7 +656,7 @@ impl TcpSocket {
         if socket_ref.status.contains(FileStatus::NONBLOCK) {
             Err(Errno::EINPROGRESS.into())
         } else {
-            let err = SyscallError::new_blocked(
+            let err = SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Tcp(Arc::clone(socket)))),
                 FileState::WRITABLE | FileState::CLOSED,
                 socket_ref.supports_sa_restart(),

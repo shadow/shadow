@@ -703,7 +703,7 @@ impl SyscallHandler {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())
             && !file_status.contains(FileStatus::NONBLOCK)
         {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
                 FileState::READABLE,
                 socket.borrow().supports_sa_restart(),
