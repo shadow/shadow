@@ -4,7 +4,6 @@ use std::ffi::CString;
 use std::fmt::Debug;
 use std::fs::File;
 use std::num::NonZeroUsize;
-use std::os::fd::FromRawFd;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
@@ -107,7 +106,7 @@ impl ShmFile {
         // Unlike calling fallocate or posix_fallocate, this does not pre-reserve
         // any space. The OS will allocate the space on-demand as it's written.
         if needed_len > self.len {
-            nix::unistd::ftruncate(self.shm_file.as_raw_fd(), needed_len).unwrap();
+            nix::unistd::ftruncate(&self.shm_file, needed_len).unwrap();
             self.len = needed_len;
         }
     }
@@ -133,7 +132,7 @@ impl ShmFile {
                 NonZeroUsize::new(interval.len()).unwrap(),
                 sys::mman::ProtFlags::from_bits(prot).unwrap(),
                 sys::mman::MapFlags::MAP_SHARED,
-                self.shm_file.as_raw_fd(),
+                Some(&self.shm_file),
                 interval.start as i64,
             )
         }
@@ -387,7 +386,7 @@ impl MemoryMapper {
         .unwrap();
         let raw_file =
             nix::sys::memfd::memfd_create(&shm_name, MemFdCreateFlag::MFD_CLOEXEC).unwrap();
-        let shm_file = unsafe { File::from_raw_fd(raw_file) };
+        let shm_file = File::from(raw_file);
 
         // Other processes can open the file via /proc.
         let shm_path = format!("/proc/{}/fd/{}\0", process::id(), shm_file.as_raw_fd());

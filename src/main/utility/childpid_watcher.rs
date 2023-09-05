@@ -123,7 +123,7 @@ impl ChildPidWatcher {
         let command_notifier = {
             let raw =
                 nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
-            unsafe { File::from_raw_fd(raw) }
+            File::from(raw)
         };
         let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
         epoll_ctl(
@@ -396,7 +396,7 @@ mod tests {
             watcher.fork_watchable(|| {
                 let mut buf = [0; 8];
                 // Wait for parent to register its callback.
-                nix::unistd::read(notifier, &mut buf).unwrap();
+                nix::unistd::read(notifier.as_raw_fd(), &mut buf).unwrap();
                 libc::_exit(42);
             })
         }
@@ -430,7 +430,7 @@ mod tests {
         assert!(!*callback_ran.0.lock().unwrap());
 
         // Let the child exit.
-        nix::unistd::write(notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
 
         // Wait for our callback to run.
         let mut callback_ran_lock = callback_ran.0.lock().unwrap();
@@ -558,7 +558,7 @@ mod tests {
             watcher.fork_watchable(|| {
                 let mut buf = [0; 8];
                 // Wait for parent to register its callback.
-                nix::unistd::read(notifier, &mut buf).unwrap();
+                nix::unistd::read(notifier.as_raw_fd(), &mut buf).unwrap();
                 libc::_exit(42);
             })
         }
@@ -588,7 +588,7 @@ mod tests {
         watcher.unregister_callback(child, handles[0]);
 
         // Let the child exit.
-        nix::unistd::write(notifier, &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
 
         // Wait for the still-registered callback to run.
         let mut cb_ran_lock = cb2_ran.0.lock().unwrap();
