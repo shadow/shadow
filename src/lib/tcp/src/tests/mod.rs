@@ -18,15 +18,13 @@ use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::rc::{Rc, Weak};
 
-use bytes::Bytes;
-
 use crate::tests::util::time::{Duration, Instant};
 
 #[allow(unused_imports)]
 use crate::{
-    AcceptError, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError, PollState,
-    PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig, TcpFlags,
-    TcpHeader, TcpState, TimerRegisteredBy,
+    AcceptError, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError, Payload,
+    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
+    TcpFlags, TcpHeader, TcpState, TimerRegisteredBy,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -152,7 +150,7 @@ struct Scheduler {
     /// The current simulation time.
     current_time: Rc<Cell<Instant>>,
     /// A queue of all outgoing packets sent by sockets.
-    outgoing_packet_queue: Rc<RefCell<VecDeque<(TcpHeader, Bytes)>>>,
+    outgoing_packet_queue: Rc<RefCell<VecDeque<(TcpHeader, Payload)>>>,
 }
 
 impl Scheduler {
@@ -184,7 +182,7 @@ impl Scheduler {
         self.advance_to(self.current_time.get() + duration);
     }
 
-    pub fn pop_packet(&self) -> Option<(TcpHeader, Bytes)> {
+    pub fn pop_packet(&self) -> Option<(TcpHeader, Payload)> {
         self.outgoing_packet_queue.borrow_mut().pop_front()
     }
 
@@ -196,7 +194,7 @@ impl Scheduler {
         Rc::clone(&self.current_time)
     }
 
-    pub fn outgoing_packet_queue_rc(&self) -> Rc<RefCell<VecDeque<(TcpHeader, Bytes)>>> {
+    pub fn outgoing_packet_queue_rc(&self) -> Rc<RefCell<VecDeque<(TcpHeader, Payload)>>> {
         Rc::clone(&self.outgoing_packet_queue)
     }
 }
@@ -306,9 +304,10 @@ struct TcpSocket {
     file_state: FileState,
     event_source: StateEventSource,
     /// A global queue of all outgoing packets shared with all sockets.
-    outgoing_packet_queue: Rc<RefCell<VecDeque<(TcpHeader, Bytes)>>>,
+    outgoing_packet_queue: Rc<RefCell<VecDeque<(TcpHeader, Payload)>>>,
     // a handle for the association of this socket with the host's network interface
     association_handle: Option<AssociationHandle>,
+    collect_packets: bool,
 }
 
 impl TcpSocket {
@@ -317,7 +316,7 @@ impl TcpSocket {
         let event_queue_rc = scheduler.event_queue_rc();
         // passed to the state machine so that it can get the current time
         let current_time_rc = scheduler.current_time_rc();
-        let outgoint_packet_queue_rc = scheduler.outgoing_packet_queue_rc();
+        let outgoing_packet_queue_rc = scheduler.outgoing_packet_queue_rc();
 
         let rv = Rc::new_cyclic(|weak: &Weak<RefCell<Self>>| {
             let test_env_state = TestEnvState {
@@ -336,8 +335,9 @@ impl TcpSocket {
                 // update it
                 file_state: FileState::empty(),
                 event_source: StateEventSource::new(),
-                outgoing_packet_queue: outgoint_packet_queue_rc,
+                outgoing_packet_queue: outgoing_packet_queue_rc,
                 association_handle: None,
+                collect_packets: true,
             })
         });
 
@@ -362,33 +362,35 @@ impl TcpSocket {
     ) -> T {
         let rv = f(&mut self.tcp_state);
 
-        // if the tcp state wants to send a packet
-        while self.tcp_state.wants_to_send() {
-            if let Some(_socket) = self.socket_weak.upgrade() {
-                // in shadow we would add a closure to the callback queue, which would call
-                // `host.notify_socket_has_packets()` with `socket`
+        // if the tcp state wants to send a packet and we should collect packets
+        if self.collect_packets {
+            while self.tcp_state.wants_to_send() {
+                if let Some(_socket) = self.socket_weak.upgrade() {
+                    // in shadow we would add a closure to the callback queue, which would call
+                    // `host.notify_socket_has_packets()` with `socket`
 
-                // pop a packet from the socket
-                let rv = self.tcp_state.pop_packet();
+                    // pop a packet from the socket
+                    let rv = self.tcp_state.pop_packet();
 
-                let (header, packet) = match rv {
-                    Ok(x) => x,
-                    Err(PopPacketError::NoPacket) => {
-                        // the packet said it wants to send, so why didn't it give us a packet?
-                        eprintln!("No packet available when popping packet");
-                        break;
-                    }
-                    Err(e) => {
-                        // the packet said it wants to send, but returned an error when doing so
-                        eprintln!("Unexpected error when popping packet: {e:?}");
-                        break;
-                    }
-                };
+                    let (header, packet) = match rv {
+                        Ok(x) => x,
+                        Err(PopPacketError::NoPacket) => {
+                            // the packet said it wants to send, so why didn't it give us a packet?
+                            eprintln!("No packet available when popping packet");
+                            break;
+                        }
+                        Err(e) => {
+                            // the packet said it wants to send, but returned an error when doing so
+                            eprintln!("Unexpected error when popping packet: {e:?}");
+                            break;
+                        }
+                    };
 
-                // push the packet to the global queue so that the current test can access it
-                self.outgoing_packet_queue
-                    .borrow_mut()
-                    .push_back((header, packet));
+                    // push the packet to the global queue so that the current test can access it
+                    self.outgoing_packet_queue
+                        .borrow_mut()
+                        .push_back((header, packet));
+                }
             }
         }
 
@@ -396,6 +398,16 @@ impl TcpSocket {
         self.mirror_tcp_state(self.tcp_state.poll());
 
         rv
+    }
+
+    /// Set to `true` if we should collect any packets the tcp state wants to send and give them to
+    /// the scheduler. Can be useful to disable if you want to test packet coalescing.
+    pub fn collect_packets(&mut self, collect_packets: bool) {
+        self.collect_packets = collect_packets;
+
+        // run a no-op function on the state, which will force the socket to update its file state
+        // to match the tcp state, and will also collect any packets it wants to send (if enabled)
+        self.with_tcp_state(|_state| {});
     }
 
     fn emit_file_state(&mut self, new_state: FileState) {
@@ -434,7 +446,7 @@ impl TcpSocket {
         self.emit_file_state(file_state);
     }
 
-    pub fn push_in_packet(&mut self, header: &TcpHeader, payload: Bytes) {
+    pub fn push_in_packet(&mut self, header: &TcpHeader, payload: Payload) {
         self.with_tcp_state(|s| s.push_packet(header, payload))
             .unwrap();
     }
@@ -543,6 +555,7 @@ impl TcpSocket {
                 event_source: StateEventSource::new(),
                 outgoing_packet_queue: self.outgoing_packet_queue.clone(),
                 association_handle: None,
+                collect_packets: true,
             })
         });
 
@@ -753,7 +766,7 @@ fn test_timer() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // the new child state set a timer event at 60 seconds to close if still in the "syn-received"
@@ -841,7 +854,7 @@ fn establish_helper(scheduler: &Scheduler, host: &mut Host) -> Rc<RefCell<TcpSoc
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK

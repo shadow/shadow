@@ -26,9 +26,9 @@ fn test_send_recv() {
 
     // check the packet sent by the socket
     let (_, payload) = scheduler.pop_packet().unwrap();
-    assert_eq!(payload[..], b"hello"[..]);
+    assert_eq!(payload.concat()[..], b"hello"[..]);
 
-    // send two packets to the socket
+    // send a packet to the socket
     let header = TcpHeader {
         ip: Ipv4Header {
             src: "5.6.7.8".parse().unwrap(),
@@ -46,30 +46,12 @@ fn test_send_recv() {
         timestamp_echo: None,
     };
     tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]));
-    let header = TcpHeader {
-        ip: Ipv4Header {
-            src: "5.6.7.8".parse().unwrap(),
-            dst: host.ip_addr,
-        },
-        flags: TcpFlags::empty(),
-        src_port: 20,
-        dst_port: 10,
-        seq: 6,
-        ack: 6,
-        window_size: 10000,
-        selective_acks: None,
-        window_scale: None,
-        timestamp: None,
-        timestamp_echo: None,
-    };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"world"[..]));
+        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
 
     // recv on the socket
-    let mut recv_buf = vec![0; 10];
-    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 10).unwrap();
-    assert_eq!(recv_buf, b"helloworld");
+    let mut recv_buf = vec![0; 5];
+    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 5).unwrap();
+    assert_eq!(recv_buf, b"world");
 }
 
 /// This test tries to make sure that an acknowledgement sent while the socket's usable send window
@@ -113,7 +95,7 @@ fn test_ack_with_empty_usable_send_window() {
 
         let next_seq = next_seq.as_mut().unwrap();
         assert_eq!(*next_seq, header.seq as usize);
-        *next_seq += payload.len();
+        *next_seq += payload.len() as usize;
     }
 
     // send a packet with a payload to trigger an acknowledgement
@@ -134,7 +116,7 @@ fn test_ack_with_empty_usable_send_window() {
         timestamp_echo: None,
     };
     tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"world"[..]));
+        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
 
     // check the packet sent by the socket
     let (header, payload) = scheduler.pop_packet().unwrap();
@@ -147,4 +129,104 @@ fn test_ack_with_empty_usable_send_window() {
     // we haven't acked any of the data it sent, so its usable send window should still be empty and
     // should not have sent any data
     assert!(payload.is_empty());
+}
+
+#[test]
+fn test_coalesce_send() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    // PART 1: We test with `collect_packets == true`, which will immediately pop a packet as soon
+    // as its ready. We expect two `sendmsg` calls to result in two packets.
+
+    // write two small buffers to the socket
+    TcpSocket::sendmsg(&tcp, &b"hello"[..], 5).unwrap();
+    TcpSocket::sendmsg(&tcp, &b"world"[..], 5).unwrap();
+
+    // check that both buffers were sent in separate packets
+    let (_, payload) = scheduler.pop_packet().unwrap();
+    assert_eq!(payload.concat()[..], b"hello"[..]);
+    let (_, payload) = scheduler.pop_packet().unwrap();
+    assert_eq!(payload.concat()[..], b"world"[..]);
+
+    // PART 2: We test with `collect_packets == false`, which will not pop a packet until we later
+    // re-enable `collect_packets`. We expect two `sendmsg` calls to result in a single packet.
+
+    tcp.borrow_mut().collect_packets(false);
+
+    // write two small buffers to the socket
+    TcpSocket::sendmsg(&tcp, &b"hello"[..], 5).unwrap();
+    TcpSocket::sendmsg(&tcp, &b"world"[..], 5).unwrap();
+
+    tcp.borrow_mut().collect_packets(true);
+
+    // check that both buffers were sent in a single packet
+    let (_, payload) = scheduler.pop_packet().unwrap();
+    assert_eq!(payload.concat()[..], b"helloworld"[..]);
+}
+
+#[test]
+fn test_coalesce_recv() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    // send two packets to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 1,
+        ack: 6,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 6,
+        ack: 6,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
+
+    // recv on the socket
+    let mut recv_buf = vec![0; 10];
+    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 10).unwrap();
+    assert_eq!(recv_buf, b"helloworld");
 }

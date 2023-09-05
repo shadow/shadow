@@ -2,16 +2,15 @@ use std::collections::{HashMap, LinkedList};
 use std::io::{Read, Write};
 use std::net::SocketAddrV4;
 
-use bytes::Bytes;
-
 use crate::connection::Connection;
 use crate::seq::Seq;
 use crate::util::remove_from_list;
 use crate::util::time::Duration;
 use crate::{
     AcceptError, AcceptedTcpState, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError,
-    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
-    TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait, TimerRegisteredBy,
+    Payload, PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError,
+    TcpConfig, TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait,
+    TimerRegisteredBy,
 };
 
 // state structs
@@ -326,7 +325,7 @@ impl<X: Dependencies> ListenState<X> {
     }
 
     /// Register a new child TCP state for a new incoming connection.
-    fn register_child(&mut self, header: &TcpHeader, payload: impl Into<Bytes>) -> ChildTcpKey {
+    fn register_child(&mut self, header: &TcpHeader, payload: Payload) -> ChildTcpKey {
         let conn_addrs = RemoteLocalPair::new(header.src(), header.dst());
 
         let key = self.children.insert_with_key(|key| {
@@ -553,7 +552,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // In Linux there is conceptually the syn queue and the accept queue. When the application
         // calls `listen()`, it passes a `backlog` argument. The question is: does this backlog
@@ -630,9 +629,14 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         if let Some(header) = self.send_buffer.pop_front() {
-            return (self.into(), Ok((header, Bytes::new())));
+            return (self.into(), Ok((header, Payload::default())));
         }
 
         if let Some(child_key) = self.to_send.pop_front() {
@@ -732,7 +736,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -767,7 +771,12 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -868,7 +877,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // waiting for the ACK for our SYN
 
@@ -897,7 +906,12 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -992,7 +1006,7 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1019,7 +1033,12 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1091,7 +1110,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1130,7 +1149,12 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1202,7 +1226,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1229,7 +1253,12 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1308,7 +1337,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1337,7 +1366,12 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1434,7 +1468,7 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1456,7 +1490,12 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1545,7 +1584,7 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1566,7 +1605,12 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1647,7 +1691,7 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
     fn push_packet(
         mut self,
         header: &TcpHeader,
-        payload: impl Into<Bytes>,
+        payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
@@ -1674,7 +1718,12 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         let rv = self.connection.pop_packet(self.common.current_time());
         (self.into(), rv)
     }
@@ -1754,16 +1803,21 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
     fn push_packet(
         self,
         _header: &TcpHeader,
-        _payload: impl Into<Bytes>,
+        _payload: Payload,
     ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
         // do nothing; drop all packets received in this state
         (self.into(), Ok(()))
     }
 
-    fn pop_packet(mut self) -> (TcpStateEnum<X>, Result<(TcpHeader, Bytes), PopPacketError>) {
+    fn pop_packet(
+        mut self,
+    ) -> (
+        TcpStateEnum<X>,
+        Result<(TcpHeader, Payload), PopPacketError>,
+    ) {
         // if we're in this state we must have a packet queued
         let header = self.send_buffer.pop_front().unwrap();
-        let packet = (header, Bytes::new());
+        let packet = (header, Payload::default());
 
         // we're only supposed to send RST packets in this state
         assert!(packet.0.flags.contains(TcpFlags::RST));

@@ -3,10 +3,8 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use bytes::Bytes;
-
 use crate::tests::{Host, Scheduler, TcpSocket, TestEnvState};
-use crate::{Ipv4Header, TcpConfig, TcpFlags, TcpHeader, TcpState};
+use crate::{Ipv4Header, Payload, TcpConfig, TcpFlags, TcpHeader, TcpState};
 
 #[test]
 fn test_peer_no_window_scaling() {
@@ -53,7 +51,7 @@ fn test_peer_no_window_scaling() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -114,7 +112,7 @@ fn test_local_no_window_scaling() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -175,7 +173,7 @@ fn test_both_without_window_scaling() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -236,7 +234,7 @@ fn test_both_with_window_scaling() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -300,7 +298,7 @@ fn test_large_window_scale() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK
@@ -354,7 +352,7 @@ fn test_window_scale_after_receiving_syn_without() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // read the SYN+ACK and make sure it didn't set the window scale option
@@ -379,7 +377,7 @@ fn test_window_scale_after_receiving_syn_without() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // the connection is now established so can accept it
@@ -435,7 +433,7 @@ fn test_window_scale_after_receiving_syn_with() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // read the SYN+ACK and make sure it did set the window scale option
@@ -460,7 +458,7 @@ fn test_window_scale_after_receiving_syn_with() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // the connection is now established so can accept it
@@ -525,7 +523,7 @@ fn test_duplicate_syn_with_different_window_scale() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // send the SYN+ACK again with a different window scale
@@ -545,7 +543,7 @@ fn test_duplicate_syn_with_different_window_scale() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Bytes::new());
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK

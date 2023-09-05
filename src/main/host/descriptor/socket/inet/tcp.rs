@@ -196,14 +196,16 @@ impl TcpSocket {
             .get_tcp()
             .expect("TCP socket received a non-tcp packet");
 
-        // in the future, the packet could contain the `Bytes` object itself and we could simply
-        // transfer the `Bytes` directly from the packet to the tcp state without copying the bytes
+        // in the future, the packet could contain an array of `Bytes` objects and we could simply
+        // transfer the `Bytes` objects directly from the payload to the tcp state without copying
+        // the bytes themselves
 
         let mut payload = BytesMut::zeroed(packet.payload_size());
         let num_bytes_copied = packet.get_payload(&mut payload);
         assert_eq!(num_bytes_copied, packet.payload_size());
+        let payload = tcp::Payload(vec![payload.freeze()]);
 
-        self.with_tcp_state(cb_queue, |s| s.push_packet(&header, payload.freeze()))
+        self.with_tcp_state(cb_queue, |s| s.push_packet(&header, payload))
             .unwrap();
 
         packet.add_status(PacketStatus::RcvSocketBuffered);
@@ -239,8 +241,12 @@ impl TcpSocket {
 
         let mut packet = PacketRc::new();
 
-        // in the future, the packet could contain the `Bytes` object itself and we could simply
-        // transfer the `Bytes` directly from the tcp state to the packet without copying the bytes
+        // TODO: This is expensive. Here we allocate a new buffer, copy all of the payload bytes to
+        // this new buffer, and then copy the bytes in this new buffer to the packet's buffer. In
+        // the future, the packet could contain an array of `Bytes` objects and we could simply
+        // transfer the `Bytes` objects directly from the tcp state's `Payload` object to the packet
+        // without copying the bytes themselves.
+        let payload = payload.concat();
 
         packet.set_tcp(&header);
         // TODO: set packet priority?
