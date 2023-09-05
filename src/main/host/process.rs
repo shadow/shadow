@@ -716,25 +716,7 @@ impl ZombieProcess {
             return;
         };
         let parent = parent_rc.borrow(host.root());
-        let siginfo = match self.exit_status {
-            ExitStatus::Normal(exit_code) => siginfo_t::new_for_sigchld_exited(
-                exit_signal,
-                self.common.id.into(),
-                0,
-                exit_code,
-                0,
-                0,
-            ),
-            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
-                exit_signal,
-                self.common.id.into(),
-                0,
-                fatal_signal,
-                0,
-                0,
-            ),
-            ExitStatus::StoppedByShadow => unreachable!(),
-        };
+        let siginfo = self.exit_siginfo(exit_signal);
 
         let Some(parent_runnable) = parent.runnable() else {
             trace!("Not notifying parent of exit: {parent_pid:?} not running");
@@ -754,6 +736,33 @@ impl ZombieProcess {
                 q,
             );
         });
+    }
+
+    /// Construct a siginfo containing information about how the process exited.
+    /// Used internally to send a signal to the parent process, and by the
+    /// `waitid` syscall handler.
+    ///
+    /// `exit_signal` is the signal to set in the `siginfo_t`.
+    pub fn exit_siginfo(&self, exit_signal: Signal) -> siginfo_t {
+        match self.exit_status {
+            ExitStatus::Normal(exit_code) => siginfo_t::new_for_sigchld_exited(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                exit_code,
+                0,
+                0,
+            ),
+            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
+                exit_signal,
+                self.common.id.into(),
+                0,
+                fatal_signal,
+                0,
+                0,
+            ),
+            ExitStatus::StoppedByShadow => unreachable!(),
+        }
     }
 }
 
@@ -1507,6 +1516,11 @@ impl Process {
             ru_nvcsw: 0,
             ru_nivcsw: 0,
         }
+    }
+
+    /// Signal that will be sent to parent process on exit. Typically `Some(SIGCHLD)`.
+    pub fn exit_signal(&self) -> Option<Signal> {
+        self.common().exit_signal
     }
 }
 
