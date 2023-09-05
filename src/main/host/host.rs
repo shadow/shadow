@@ -533,6 +533,12 @@ impl Host {
         Ref::filter_map(self.processes.borrow(), |processes| processes.get(&id)).ok()
     }
 
+    /// Remove the given process from the Host, if it exists.
+    #[track_caller]
+    pub fn process_remove(&self, id: ProcessId) -> Option<RootedRc<RootedRefCell<Process>>> {
+        self.processes.borrow_mut().remove(&id)
+    }
+
     pub fn cpu_borrow(&self) -> impl Deref<Target = Cpu> + '_ {
         self.cpu.borrow()
     }
