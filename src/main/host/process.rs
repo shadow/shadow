@@ -1471,6 +1471,43 @@ impl Process {
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
+
+    /// Resource usage, as returned e.g. by the `getrusage` syscall.
+    pub fn rusage(&self) -> linux_api::resource::rusage {
+        warn_once_then_debug!(
+            "resource usage (rusage) tracking unimplemented; Returning bogus zeroed values"
+        );
+        // TODO: Actually track some of these.
+        // Assuming we want to support `RUSAGE_THREAD` in the `getrusage`
+        // syscall, we'll actually want to track at the thread level, and either
+        // increment at both thread and process level at the points where we do
+        // the tracking, or dynamically iterate over the threads here and sum
+        // the results.
+        linux_api::resource::rusage {
+            ru_utime: linux_api::time::old_timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
+            ru_stime: linux_api::time::old_timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
+            ru_maxrss: 0,
+            ru_ixrss: 0,
+            ru_idrss: 0,
+            ru_isrss: 0,
+            ru_minflt: 0,
+            ru_majflt: 0,
+            ru_nswap: 0,
+            ru_inblock: 0,
+            ru_oublock: 0,
+            ru_msgsnd: 0,
+            ru_msgrcv: 0,
+            ru_nsignals: 0,
+            ru_nvcsw: 0,
+            ru_nivcsw: 0,
+        }
+    }
 }
 
 impl Drop for Process {
