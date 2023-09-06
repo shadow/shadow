@@ -665,9 +665,6 @@ impl ZombieProcess {
         &self,
         host: &'host Host,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + 'host> {
-        let Some(exit_signal) = self.common.exit_signal else {
-            return None;
-        };
         let parent_pid = self.common.parent_pid.get();
         if parent_pid == ProcessId::INIT {
             return None;
@@ -686,7 +683,7 @@ impl ZombieProcess {
         //
         // TODO: validate that this applies to whatever signal is configured as the exit
         // signal, even if it's not SIGCHLD.
-        {
+        if let Some(exit_signal) = self.common.exit_signal {
             let parent = parentrc.borrow(host.root());
             let parent_shmem = parent.shmem();
             let host_shmem_lock = host.shim_shmem_lock_borrow().unwrap();
