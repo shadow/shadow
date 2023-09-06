@@ -498,14 +498,19 @@ impl Host {
                 let process = processrc.borrow(&self.root);
                 if process.parent_id() != pid {
                     // Not a child of the current process
+                    return None;
+                }
+                process.set_parent_id(ProcessId::INIT);
+                let Some(z) = process.borrow_zombie() else {
+                    // Not a zombie
+                    return None;
+                };
+                if z.reaper(self).is_some() {
+                    // Not an orphan
                     None
                 } else {
-                    process.set_parent_id(ProcessId::INIT);
-                    process
-                        .borrow_zombie()
-                        .and_then(|z| z.reaper(self))
-                        .is_none()
-                        .then_some(*other_pid)
+                    // Is a zombie orphan child
+                    Some(*other_pid)
                 }
             })
             .collect();
