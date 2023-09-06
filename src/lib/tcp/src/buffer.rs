@@ -17,6 +17,7 @@ pub(crate) struct SendQueue<T: Instant> {
     // exclusive
     end_seq: Seq,
     fin_added: bool,
+    unused: BytesMut,
 }
 
 impl<T: Instant> SendQueue<T> {
@@ -28,6 +29,7 @@ impl<T: Instant> SendQueue<T> {
             start_seq: initial_seq,
             end_seq: initial_seq,
             fin_added: false,
+            unused: BytesMut::new(),
         };
 
         queue.add_syn();
@@ -48,19 +50,47 @@ impl<T: Instant> SendQueue<T> {
         mut reader: impl Read,
         mut len: usize,
     ) -> Result<(), std::io::Error> {
-        // this value shouldn't affect the tcp behaviour, only how the underlying bytes are
-        // allocated
-        const MAX_BYTES_PER_CHUNK: usize = 10_000;
+        // These values shouldn't affect the tcp behaviour, only how the underlying bytes are
+        // allocated. The numbers are chosen arbitrarily.
+        const MAX_BYTES_PER_ALLOC: usize = 10_000;
+        const MIN_BYTES_PER_ALLOC: usize = 2000;
+        static_assertions::const_assert!(MIN_BYTES_PER_ALLOC <= MAX_BYTES_PER_ALLOC);
 
         while len > 0 {
-            let to_read = std::cmp::min(len, MAX_BYTES_PER_CHUNK);
+            if self.unused.is_empty() {
+                // Allocate a new buffer with a size equal to the number of bytes to read, clamped
+                // to the range `[MIN_BYTES_PER_ALLOC, MAX_BYTES_PER_ALLOC]`. Any allocated bytes of
+                // the buffer that aren't used will be re-used the next time that this method is
+                // called. This allows us to avoid making many small allocations if the application
+                // sends only a small number of bytes at a time.
+                let next_alloc_size = len;
+                let next_alloc_size = std::cmp::min(next_alloc_size, MAX_BYTES_PER_ALLOC);
+                let next_alloc_size = std::cmp::max(next_alloc_size, MIN_BYTES_PER_ALLOC);
+                self.unused = BytesMut::zeroed(next_alloc_size);
+            }
 
-            let mut data = BytesMut::from_iter(std::iter::repeat(0).take(to_read));
-            reader.read_exact(&mut data[..])?;
+            // break off a piece of the `unused` buffer
+            let to_read = std::cmp::min(len, self.unused.len());
+            let mut chunk = self.unused.split_to(to_read);
 
-            self.add_segment(Segment::Data(data.into()));
+            // It would be nice if we could merge the segment with the previous data segment (if
+            // they are part of the same allocation), but `unsplit` (and `try_unsplit` in our fork)
+            // is only available for `BytesMut` and not `Bytes`. If it was available it would allow
+            // us to combine several small writes into a larger chunk, which would reduce the number
+            // of chunks we need to send in packets.
+
+            reader.read_exact(&mut chunk[..])?;
+            self.add_segment(Segment::Data(chunk.into()));
 
             len -= to_read;
+        }
+
+        // If the `unused` buffer is empty, replace it with a new empty `BytesMut`. The old
+        // `BytesMut`, while empty, may still point to the old allocation and hold a reference to
+        // it, preventing it from being deallocated. We replace it with a new `BytesMut` that does
+        // not point to any allocation to make sure that the old allocation can be deallocated.
+        if self.unused.is_empty() {
+            self.unused = BytesMut::new();
         }
 
         Ok(())
