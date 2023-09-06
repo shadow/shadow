@@ -113,7 +113,7 @@ impl From<ThreadId> for ProcessId {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ExitStatus {
     Normal(i32),
-    Signaled(Signal),
+    Signaled(Signal, /* coredump */ bool),
     /// The process was killed by Shadow rather than exiting "naturally" as part
     /// of the simulation. Currently this only happens when the process is still
     /// running when the simulation stop_time is reached.
@@ -753,14 +753,28 @@ impl ZombieProcess {
                 0,
                 0,
             ),
-            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
-                exit_signal,
-                self.common.id.into(),
-                0,
-                fatal_signal,
-                0,
-                0,
-            ),
+            ExitStatus::Signaled(fatal_signal, core_dump) => {
+                if core_dump {
+                    siginfo_t::new_for_sigchld_dumped(
+                        exit_signal,
+                        self.common.id.into(),
+                        0,
+                        fatal_signal,
+                        0,
+                        0,
+                    )
+                } else {
+                    siginfo_t::new_for_sigchld_killed(
+                        exit_signal,
+                        self.common.id.into(),
+                        0,
+                        fatal_signal,
+                        0,
+                        0,
+                    )
+                }
+            }
+
             ExitStatus::StoppedByShadow => unreachable!(),
         }
     }
@@ -1411,9 +1425,9 @@ impl Process {
                 ExitStatus::StoppedByShadow
             }
             (false, Ok(WaitStatus::Exited(_pid, code))) => ExitStatus::Normal(code),
-            (false, Ok(WaitStatus::Signaled(_pid, signal, _core_dump))) => {
+            (false, Ok(WaitStatus::Signaled(_pid, signal, core_dump))) => {
                 let signal = Signal::try_from(signal as i32).unwrap();
-                ExitStatus::Signaled(signal)
+                ExitStatus::Signaled(signal, core_dump)
             }
             (false, Ok(status)) => {
                 panic!("Unexpected status: {status:?}");
@@ -1431,7 +1445,7 @@ impl Process {
             if let Some(expected_final_state) = runnable.expected_final_state {
                 let actual_final_state = match exit_status {
                     ExitStatus::Normal(i) => ProcessFinalState::Exited { exited: i },
-                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled {
+                    ExitStatus::Signaled(s, _core_dump) => ProcessFinalState::Signaled {
                         // This conversion will fail on realtime signals, but that
                         // should currently be impossible since we don't support
                         // sending realtime signals.
