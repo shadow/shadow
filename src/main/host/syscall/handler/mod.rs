@@ -23,6 +23,7 @@ mod time;
 mod timerfd;
 mod uio;
 mod unistd;
+mod wait;
 
 type LegacySyscallFn =
     unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
@@ -109,6 +110,8 @@ impl SyscallHandler {
             libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
             libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
+            libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),
+            libc::SYS_wait4 => SyscallHandlerFn::call(Self::wait4, &mut ctx),
             libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
             libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
             _ => {

@@ -264,7 +264,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
                 FileState::READABLE,
                 file.borrow().supports_sa_restart(),
@@ -523,7 +523,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
                 FileState::WRITABLE,
                 file.borrow().supports_sa_restart(),

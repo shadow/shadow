@@ -461,7 +461,7 @@ impl UdpSocket {
 
         // if the syscall would block and we don't have the MSG_DONTWAIT flag
         if result == Err(Errno::EWOULDBLOCK) && !flags.contains(MsgFlags::MSG_DONTWAIT) {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Udp(socket.clone()))),
                 FileState::WRITABLE,
                 socket_ref.supports_sa_restart(),
@@ -558,7 +558,7 @@ impl UdpSocket {
                 });
             }
 
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Udp(socket.clone()))),
                 FileState::READABLE,
                 socket_ref.supports_sa_restart(),

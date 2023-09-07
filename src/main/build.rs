@@ -13,6 +13,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "Process".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
+            "StatusListener".into(),
             "NetworkInterface".into(),
             "Tsc".into(),
         ]);
@@ -202,9 +203,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("shadow_logger_shouldFilter")
         .allowlist_function("logger_get_global_start_time_micros")
         .allowlist_function("regularfile_.*")
-        .allowlist_function("statuslistener_ref")
-        .allowlist_function("statuslistener_unref")
-        .allowlist_function("statuslistener_onStatusChanged")
+        .allowlist_function("statuslistener_.*")
+        .allowlist_function("status_listener_.*")
         .allowlist_function("syscallcondition_.*")
         .allowlist_function("syscallhandler_.*")
         .allowlist_function("tracker_*")

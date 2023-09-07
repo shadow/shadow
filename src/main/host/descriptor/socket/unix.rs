@@ -1125,7 +1125,7 @@ impl Protocol for ConnOrientedInitial {
                 }
 
                 // block until the server has room for new connections, or is closed
-                let err = SyscallError::new_blocked(
+                let err = SyscallError::new_blocked_on_file(
                     File::Socket(Socket::Unix(Arc::clone(&server))),
                     FileState::SOCKET_ALLOWING_CONNECT | FileState::CLOSED,
                     server_mut.supports_sa_restart(),
@@ -2074,7 +2074,7 @@ impl UnixSocketCommon {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Unix(socket.clone())),
                 FileState::WRITABLE,
                 self.supports_sa_restart(),
@@ -2153,7 +2153,7 @@ impl UnixSocketCommon {
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK)
             && !flags.contains(MsgFlags::MSG_DONTWAIT)
         {
-            return Err(SyscallError::new_blocked(
+            return Err(SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Unix(socket.clone())),
                 FileState::READABLE,
                 self.supports_sa_restart(),

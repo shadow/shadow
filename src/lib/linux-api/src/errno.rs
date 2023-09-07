@@ -204,6 +204,7 @@ const fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::ENOENT => Some("ENOENT"),
         Errno::ENOTTY => Some("ENOTTY"),
         Errno::EEXIST => Some("EEXIST"),
+        Errno::ECHILD => Some("ECHILD"),
         _ => None,
     }
 }
@@ -340,6 +341,7 @@ impl Errno {
     pub const ENOENT: Self = Self::from_u32_const(bindings::LINUX_ENOENT);
     pub const ENOTTY: Self = Self::from_u32_const(bindings::LINUX_ENOTTY);
     pub const EEXIST: Self = Self::from_u32_const(bindings::LINUX_EEXIST);
+    pub const ECHILD: Self = Self::from_u32_const(bindings::LINUX_ECHILD);
 
     // Aliases
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);

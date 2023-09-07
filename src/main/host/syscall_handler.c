@@ -470,6 +470,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(unlinkat);
             HANDLE_C(utimensat);
             HANDLE_RUST(vfork);
+            HANDLE_RUST(waitid);
+            HANDLE_RUST(wait4);
             HANDLE_RUST(write);
             HANDLE_RUST(writev);
 
@@ -483,7 +485,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             UNSUPPORTED(fchdir);
 
             UNSUPPORTED(io_getevents);
-            UNSUPPORTED(waitid);
             UNSUPPORTED(msync);
 
             // copying data between various types of fds

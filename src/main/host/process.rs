@@ -30,6 +30,7 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
+use super::descriptor::{FileState, StateEventSource};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
@@ -45,6 +46,7 @@ use crate::host::descriptor::Descriptor;
 use crate::host::managed_thread::ManagedThread;
 use crate::host::syscall::formatter::FmtOptions;
 use crate::utility;
+use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
 
@@ -111,7 +113,7 @@ impl From<ThreadId> for ProcessId {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ExitStatus {
     Normal(i32),
-    Signaled(Signal),
+    Signaled(Signal, /* coredump */ bool),
     /// The process was killed by Shadow rather than exiting "naturally" as part
     /// of the simulation. Currently this only happens when the process is still
     /// running when the simulation stop_time is reached.
@@ -271,6 +273,10 @@ pub struct RunnableProcess {
     // SAFETY: Must come after `unsafe_borrows` and `unsafe_borrow_mut`.
     // Boxed to avoid invalidating those if Self is moved.
     memory_manager: Box<RefCell<MemoryManager>>,
+
+    // Listeners for child-events.
+    // e.g. these listeners are notified when a child of this process exits.
+    child_process_event_listeners: RefCell<StateEventSource>,
 }
 
 impl RunnableProcess {
@@ -628,6 +634,7 @@ impl RunnableProcess {
             unsafe_borrow_mut: RefCell::new(None),
             unsafe_borrows: RefCell::new(Vec::new()),
             memory_manager: Box::new(RefCell::new(unsafe { MemoryManager::new(native_pid) })),
+            child_process_event_listeners: Default::default(),
         };
         let child_process = Process {
             state: RefCell::new(Some(ProcessState::Runnable(runnable_process))),
@@ -658,9 +665,6 @@ impl ZombieProcess {
         &self,
         host: &'host Host,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Process>>> + 'host> {
-        let Some(exit_signal) = self.common.exit_signal else {
-            return None;
-        };
         let parent_pid = self.common.parent_pid.get();
         if parent_pid == ProcessId::INIT {
             return None;
@@ -679,7 +683,7 @@ impl ZombieProcess {
         //
         // TODO: validate that this applies to whatever signal is configured as the exit
         // signal, even if it's not SIGCHLD.
-        {
+        if let Some(exit_signal) = self.common.exit_signal {
             let parent = parentrc.borrow(host.root());
             let parent_shmem = parent.shmem();
             let host_shmem_lock = host.shim_shmem_lock_borrow().unwrap();
@@ -709,7 +713,35 @@ impl ZombieProcess {
             return;
         };
         let parent = parent_rc.borrow(host.root());
-        let siginfo = match self.exit_status {
+        let siginfo = self.exit_siginfo(exit_signal);
+
+        let Some(parent_runnable) = parent.runnable() else {
+            trace!("Not notifying parent of exit: {parent_pid:?} not running");
+            debug_panic!("Non-running parent process shouldn't be possible.");
+            #[allow(unreachable_code)]
+            {
+                return;
+            }
+        };
+        parent_runnable.signal(host, None, &siginfo);
+        CallbackQueue::queue_and_run(|q| {
+            let mut parent_child_listeners =
+                parent_runnable.child_process_event_listeners.borrow_mut();
+            parent_child_listeners.notify_listeners(
+                FileState::CHILD_EVENT,
+                FileState::CHILD_EVENT,
+                q,
+            );
+        });
+    }
+
+    /// Construct a siginfo containing information about how the process exited.
+    /// Used internally to send a signal to the parent process, and by the
+    /// `waitid` syscall handler.
+    ///
+    /// `exit_signal` is the signal to set in the `siginfo_t`.
+    pub fn exit_siginfo(&self, exit_signal: Signal) -> siginfo_t {
+        match self.exit_status {
             ExitStatus::Normal(exit_code) => siginfo_t::new_for_sigchld_exited(
                 exit_signal,
                 self.common.id.into(),
@@ -718,18 +750,30 @@ impl ZombieProcess {
                 0,
                 0,
             ),
-            ExitStatus::Signaled(fatal_signal) => siginfo_t::new_for_sigchld_killed(
-                exit_signal,
-                self.common.id.into(),
-                0,
-                fatal_signal,
-                0,
-                0,
-            ),
+            ExitStatus::Signaled(fatal_signal, core_dump) => {
+                if core_dump {
+                    siginfo_t::new_for_sigchld_dumped(
+                        exit_signal,
+                        self.common.id.into(),
+                        0,
+                        fatal_signal,
+                        0,
+                        0,
+                    )
+                } else {
+                    siginfo_t::new_for_sigchld_killed(
+                        exit_signal,
+                        self.common.id.into(),
+                        0,
+                        fatal_signal,
+                        0,
+                        0,
+                    )
+                }
+            }
+
             ExitStatus::StoppedByShadow => unreachable!(),
-        };
-        parent.signal(host, None, &siginfo);
-        // TODO: also notify parent's syscallcondition if it's blocked in e.g. waitpid.
+        }
     }
 }
 
@@ -1000,6 +1044,7 @@ impl Process {
                         cpu_delay_timer,
                         #[cfg(feature = "perf_timers")]
                         total_run_time: Cell::new(Duration::ZERO),
+                        child_process_event_listeners: Default::default(),
                     }))),
                 },
             ),
@@ -1377,9 +1422,9 @@ impl Process {
                 ExitStatus::StoppedByShadow
             }
             (false, Ok(WaitStatus::Exited(_pid, code))) => ExitStatus::Normal(code),
-            (false, Ok(WaitStatus::Signaled(_pid, signal, _core_dump))) => {
+            (false, Ok(WaitStatus::Signaled(_pid, signal, core_dump))) => {
                 let signal = Signal::try_from(signal as i32).unwrap();
-                ExitStatus::Signaled(signal)
+                ExitStatus::Signaled(signal, core_dump)
             }
             (false, Ok(status)) => {
                 panic!("Unexpected status: {status:?}");
@@ -1397,7 +1442,7 @@ impl Process {
             if let Some(expected_final_state) = runnable.expected_final_state {
                 let actual_final_state = match exit_status {
                     ExitStatus::Normal(i) => ProcessFinalState::Exited { exited: i },
-                    ExitStatus::Signaled(s) => ProcessFinalState::Signaled {
+                    ExitStatus::Signaled(s, _core_dump) => ProcessFinalState::Signaled {
                         // This conversion will fail on realtime signals, but that
                         // should currently be impossible since we don't support
                         // sending realtime signals.
@@ -1445,6 +1490,48 @@ impl Process {
     /// Deprecated wrapper for `RunnableProcess::shmem`
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
+    }
+
+    /// Resource usage, as returned e.g. by the `getrusage` syscall.
+    pub fn rusage(&self) -> linux_api::resource::rusage {
+        warn_once_then_debug!(
+            "resource usage (rusage) tracking unimplemented; Returning bogus zeroed values"
+        );
+        // TODO: Actually track some of these.
+        // Assuming we want to support `RUSAGE_THREAD` in the `getrusage`
+        // syscall, we'll actually want to track at the thread level, and either
+        // increment at both thread and process level at the points where we do
+        // the tracking, or dynamically iterate over the threads here and sum
+        // the results.
+        linux_api::resource::rusage {
+            ru_utime: linux_api::time::old_timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
+            ru_stime: linux_api::time::old_timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
+            ru_maxrss: 0,
+            ru_ixrss: 0,
+            ru_idrss: 0,
+            ru_isrss: 0,
+            ru_minflt: 0,
+            ru_majflt: 0,
+            ru_nswap: 0,
+            ru_inblock: 0,
+            ru_oublock: 0,
+            ru_msgsnd: 0,
+            ru_msgrcv: 0,
+            ru_nsignals: 0,
+            ru_nvcsw: 0,
+            ru_nivcsw: 0,
+        }
+    }
+
+    /// Signal that will be sent to parent process on exit. Typically `Some(SIGCHLD)`.
+    pub fn exit_signal(&self) -> Option<Signal> {
+        self.common().exit_signal
     }
 }
 
@@ -1667,6 +1754,7 @@ mod export {
     use crate::host::context::ThreadContext;
     use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
     use crate::host::thread::Thread;
+    use crate::utility::HostTreePointer;
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
@@ -2141,5 +2229,37 @@ mod export {
         let siginfo_t = unsafe { siginfo_t::wrap_ref_assume_initd(siginfo_t.as_ref().unwrap()) };
         Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo_t))
             .unwrap()
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_addChildEventListener(
+        host: *const Host,
+        process: *const Process,
+        listener: *mut cshadow::StatusListener,
+    ) {
+        let host = unsafe { host.as_ref().unwrap() };
+        let process = unsafe { process.as_ref().unwrap() };
+        let listener = HostTreePointer::new_for_host(host.id(), listener);
+        process
+            .borrow_runnable()
+            .unwrap()
+            .child_process_event_listeners
+            .borrow_mut()
+            .add_legacy_listener(listener)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn process_removeChildEventListener(
+        _host: *const Host,
+        process: *const Process,
+        listener: *mut cshadow::StatusListener,
+    ) {
+        let process = unsafe { process.as_ref().unwrap() };
+        process
+            .borrow_runnable()
+            .unwrap()
+            .child_process_event_listeners
+            .borrow_mut()
+            .remove_legacy_listener(listener)
     }
 }

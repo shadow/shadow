@@ -99,6 +99,9 @@ bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")
 # Derive Eq and PartialEq when possible
 bindgen_flags+=("--with-derive-eq" "--with-derive-partialeq")
 
+# Create a Debug impl if it can't be derived
+bindgen_flags+=("--impl-debug")
+
 # --- Begin positional params ---
 
 # Input (positional)

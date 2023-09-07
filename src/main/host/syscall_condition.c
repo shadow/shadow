@@ -74,6 +74,9 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
                 futex_ref(cond->trigger.object.as_futex);
                 return cond;
             }
+            case TRIGGER_CHILD: {
+                return cond;
+            }
             case TRIGGER_NONE: {
                 return cond;
             }
@@ -134,6 +137,12 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
                 futex_removeListener(cond->trigger.object.as_futex, cond->triggerListener);
                 break;
             }
+            case TRIGGER_CHILD: {
+                const Host* host = worker_getCurrentHost();
+                const Process* proc = worker_getCurrentProcess();
+                process_removeChildEventListener(host, proc, cond->triggerListener);
+                break;
+            }
             case TRIGGER_NONE: {
                 break;
             }
@@ -180,6 +189,10 @@ static void _syscallcondition_free(SysCallCondition* cond) {
             }
             case TRIGGER_FUTEX: {
                 futex_unref(cond->trigger.object.as_futex);
+                break;
+            }
+            case TRIGGER_CHILD: {
+                // Not a pointer; nothing to unref.
                 break;
             }
             case TRIGGER_NONE: {
@@ -243,6 +256,11 @@ static void _syscallcondition_logListeningState(SysCallCondition* cond, const Pr
                                        cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
                 break;
             }
+            case TRIGGER_CHILD: {
+                g_string_append_printf(string, "status on child-process-listener %s",
+                            cond->timeoutExpiration != EMUTIME_INVALID ? " and " : "");
+                break;
+            }
             case TRIGGER_NONE: {
                 break;
             }
@@ -285,6 +303,9 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
         }
         case TRIGGER_FUTEX: {
             // Futex status doesn't change
+            return true;
+        }
+        case TRIGGER_CHILD: {
             return true;
         }
         case TRIGGER_NONE: {
@@ -446,7 +467,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
     }
 
     /* Now set up the listeners. */
-    if (cond->trigger.object.as_pointer && !cond->triggerListener) {
+    if (!cond->triggerListener) {
         /* We listen for status change on the trigger object. */
         cond->triggerListener = statuslistener_new(_syscallcondition_notifyStatusChanged, cond,
                                                    _syscallcondition_unrefcb, NULL, NULL, host);
@@ -480,6 +501,16 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
 
                 /* Attach the listener to the descriptor. */
                 futex_addListener(cond->trigger.object.as_futex, cond->triggerListener);
+                break;
+            }
+            case TRIGGER_CHILD: {
+                /* Monitor the requested status an every status change. */
+                statuslistener_setMonitorStatus(
+                    cond->triggerListener, cond->trigger.status, SLF_ALWAYS);
+
+                /* Attach the listener to current process. */
+                process_addChildEventListener(host, proc, cond->triggerListener);
+
                 break;
             }
             case TRIGGER_NONE: {

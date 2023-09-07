@@ -2,6 +2,7 @@ use bytemuck::TransparentWrapper;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use shadow_pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::bindings::{self, linux_sigval};
@@ -395,13 +396,14 @@ pub enum SigInfoDetails {
 /// may result in garbage pointers, but the safe methods of this type will never
 /// dereference those itself). For example, `unsafe {
 /// SigInfo::wrap_assume_initd(core::mem::zeroed()) }` is sound.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 #[allow(non_camel_case_types)]
 pub struct siginfo_t(linux_siginfo_t);
 // Contains pointers, but they are understood to not necessarily be valid in the
 // current address space.
 unsafe impl Send for siginfo_t {}
+unsafe impl Pod for siginfo_t {}
 
 impl siginfo_t {
     /// The bindings end up with a couple extra outer layers of unions.
