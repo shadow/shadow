@@ -873,7 +873,7 @@ impl Process {
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
         expected_final_state: ProcessFinalState,
-    ) -> RootedRc<RootedRefCell<Process>> {
+    ) -> nix::Result<RootedRc<RootedRefCell<Process>>> {
         debug!("starting process '{:?}'", plugin_name);
 
         let main_thread_id = host.get_new_thread_id();
@@ -972,7 +972,7 @@ impl Process {
             &working_dir,
             strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
             &shimlog_path,
-        );
+        )?;
         let native_pid = mthread.native_pid();
         let main_thread =
             Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id).unwrap();
@@ -1023,7 +1023,7 @@ impl Process {
             // be a valid target for it.
             exit_signal: None,
         };
-        RootedRc::new(
+        Ok(RootedRc::new(
             host.root(),
             RootedRefCell::new(
                 host.root(),
@@ -1048,7 +1048,7 @@ impl Process {
                     }))),
                 },
             ),
-        )
+        ))
     }
 
     pub fn id(&self) -> ProcessId {

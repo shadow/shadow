@@ -410,7 +410,8 @@ impl Host {
                 pause_for_debugging,
                 host.params.strace_logging_options,
                 expected_final_state,
-            );
+            )
+            .expect("Failed to initialize application {plugin_name:?}");
             let (process_id, thread_id) = {
                 let process = process.borrow(host.root());
                 (process.id(), process.thread_group_leader_id())

@@ -91,7 +91,7 @@ impl ManagedThread {
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
         log_path: &CStr,
-    ) -> Self {
+    ) -> nix::Result<Self> {
         let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
         envv.push(CString::new(format!("SHADOW_IPC_BLK={}", ipc_shmem.serialize())).unwrap());
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
@@ -104,7 +104,7 @@ impl ManagedThread {
         .unwrap();
 
         let child_pid =
-            Self::spawn_native(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd);
+            Self::spawn_native(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd)?;
 
         // should be opened in the shim, so no need for it anymore
         nix::unistd::close(shimlog_fd).unwrap();
@@ -115,15 +115,14 @@ impl ManagedThread {
 
         // Configure the child_pid_watcher to close the IPC channel when the child dies.
         {
+            let worker = WORKER_SHARED.borrow();
+            let watcher = worker.as_ref().unwrap().child_pid_watcher();
+
+            watcher.register_pid(child_pid);
             let ipc = ipc_shmem.clone();
-            WORKER_SHARED
-                .borrow()
-                .as_ref()
-                .unwrap()
-                .child_pid_watcher()
-                .register_callback(child_pid, move |_pid| {
-                    ipc.from_plugin().close_writer();
-                })
+            watcher.register_callback(child_pid, move |_pid| {
+                ipc.from_plugin().close_writer();
+            })
         };
 
         trace!(
@@ -132,11 +131,47 @@ impl ManagedThread {
         );
         let start_req = ipc_shmem.from_plugin().receive().unwrap();
         match &start_req {
-            ShimEventToShadow::StartReq(_) => (),
+            ShimEventToShadow::StartReq(_) => {
+                // Expected result; shim is ready to initialize.
+            }
+            ShimEventToShadow::ProcessDeath => {
+                // The process died before initializing the shim.
+                //
+                // Reap the dead process and return an error.
+                let status = nix::sys::wait::waitpid(native_pid, None).unwrap();
+                match status {
+                    nix::sys::wait::WaitStatus::Exited(pid, 127) if pid == native_pid => {
+                        // posix_spawn(3):
+                        // > If  the child  fails  in  any  of the
+                        // > housekeeping steps described below, or fails to
+                        // > execute the desired file, it exits with a status of
+                        // > 127.
+                        debug!("posix_spawn failed to exec the process");
+                        // Assume that execve failed, and return a plausible reason
+                        // why it might have done so.
+                        // TODO: replace our usage of posix_spawn with a custom
+                        // implementation that can return the execve failure code?
+                        return Err(nix::errno::Errno::EPERM);
+                    }
+                    other => {
+                        // TODO: handle more gracefully.
+                        // * The native stdout/stderr might have a clue as to
+                        // why the process died.  Consider logging a hint to
+                        // check it (currently in the corresponding shimlog), or
+                        // directly capture it and display it here.
+                        // https://github.com/shadow/shadow/issues/3142
+                        // * Consider logging a warning here and continuing on to handle
+                        // the managed process exit normally. e.g. when this happens
+                        // as part of an emulated `execve`, we might want to continue
+                        // the simulation.
+                        panic!("Child process died unexpectedly before initialization: {other:?}");
+                    }
+                }
+            }
             other => panic!("Unexpected result from shim: {other:?}"),
         };
 
-        Self {
+        Ok(Self {
             ipc_shmem,
             is_running: Cell::new(true),
             return_code: Cell::new(None),
@@ -144,7 +179,7 @@ impl ManagedThread {
             native_pid,
             native_tid,
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
-        }
+        })
     }
 
     pub fn resume(&self, ctx: &ThreadContext) -> ResumeResult {
@@ -503,7 +538,7 @@ impl ManagedThread {
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
         shimlog_fd: RawFd,
-    ) -> nix::unistd::Pid {
+    ) -> nix::Result<nix::unistd::Pid> {
         // Tell the shim to change the working dir.
         //
         // TODO: Instead use posix_spawn_file_actions_addchdir_np, which was added
@@ -605,7 +640,7 @@ impl ManagedThread {
         })
         .unwrap();
 
-        let child_pid = {
+        let child_pid_res = {
             let mut child_pid = -1;
             Errno::result(unsafe {
                 libc::posix_spawn(
@@ -617,22 +652,12 @@ impl ManagedThread {
                     envv_ptrs.as_ptr(),
                 )
             })
-            .unwrap();
-            nix::unistd::Pid::from_raw(child_pid)
+            .map(|_| nix::unistd::Pid::from_raw(child_pid))
         };
 
         Errno::result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) })
             .unwrap();
         Errno::result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
-
-        // register the read-end of the pipe, so that we'll be notified of the
-        // child's death when the write-end is closed.
-        WORKER_SHARED
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .child_pid_watcher()
-            .register_pid(child_pid);
 
         // Drop the cloned argv and env.
         drop(
@@ -649,11 +674,11 @@ impl ManagedThread {
         );
 
         debug!(
-            "started process {} with PID {child_pid:?}",
+            "starting process {}, result: {child_pid_res:?}",
             plugin_path.to_str().unwrap()
         );
 
-        child_pid
+        child_pid_res
     }
 }
 
