@@ -21,12 +21,15 @@ pub mod stream_len;
 pub mod synchronization;
 pub mod syscall;
 
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
+use once_cell::sync::Lazy;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::worker::Worker;
@@ -299,6 +302,101 @@ pub fn pathbuf_to_nul_term_cstring(buf: PathBuf) -> CString {
 pub fn return_code_for_signal(signal: nix::sys::signal::Signal) -> i32 {
     // bash adds 128 to to the signal
     (signal as i32).checked_add(128).unwrap()
+}
+
+#[derive(Debug)]
+pub enum VerifyPluginPathError {
+    NotFound,
+    // Not a file.
+    NotFile,
+    // File isn't executable.
+    NotExecutable,
+    // File isn't a dynamically linked ELF.
+    // TODO: split these errors, and/or support `#!` interpreters?
+    NotDynamicallyLinkedElf,
+    // Permission denied traversing the path.
+    PathPermissionDenied,
+    UnhandledIoError(std::io::Error),
+}
+impl std::error::Error for VerifyPluginPathError {}
+
+impl std::fmt::Display for VerifyPluginPathError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VerifyPluginPathError::NotFound => f.write_str("path not found"),
+            VerifyPluginPathError::NotFile => f.write_str("not a file"),
+            VerifyPluginPathError::NotExecutable => f.write_str("not executable"),
+            VerifyPluginPathError::NotDynamicallyLinkedElf => {
+                f.write_str("not a dynamically linked ELF")
+            }
+            VerifyPluginPathError::PathPermissionDenied => {
+                f.write_str("permission denied traversing path")
+            }
+            VerifyPluginPathError::UnhandledIoError(e) => write!(f, "unhandled io error: {e}"),
+        }
+    }
+}
+
+/// Check that the plugin path is executable under Shadow.
+pub fn verify_plugin_path(path: impl AsRef<std::path::Path>) -> Result<(), VerifyPluginPathError> {
+    let path = path.as_ref();
+
+    let metadata = std::fs::metadata(path).map_err(|e| {
+        match e.kind() {
+            std::io::ErrorKind::NotFound => VerifyPluginPathError::NotFound,
+            std::io::ErrorKind::PermissionDenied => VerifyPluginPathError::PathPermissionDenied,
+            // TODO handle TooManyLinks when stabilized
+            // TODO handle InvalidFileName when stabilized
+            k => {
+                log::warn!("Unhandled error getting metadata for {path:?}: {k:?}");
+                VerifyPluginPathError::UnhandledIoError(e)
+            }
+        }
+    })?;
+
+    if !metadata.is_file() {
+        return Err(VerifyPluginPathError::NotFile);
+    }
+
+    // this mask doesn't guarantee that we can execute the file (the file might have S_IXUSR
+    // but be owned by a different user), but it should catch most errors
+    let mask = libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH;
+    if (metadata.mode() & mask) == 0 {
+        return Err(VerifyPluginPathError::NotExecutable);
+    }
+
+    // a cache so we don't check the same path multiple times (assuming the user doesn't move any
+    // binaries while shadow is running)
+    // TODO: maybe move this into `sim_config.rs`? This seems slightly more
+    // possible to go stale for paths exec'd by managed code.
+    static CHECKED_DYNAMIC_BINS: Lazy<RwLock<HashSet<PathBuf>>> =
+        Lazy::new(|| RwLock::new(HashSet::new()));
+
+    let is_known_dynamic = CHECKED_DYNAMIC_BINS.read().unwrap().contains(path);
+
+    // check if the binary is dynamically linked
+    if !is_known_dynamic {
+        let ld_path = "/lib64/ld-linux-x86-64.so.2";
+        let ld_output = std::process::Command::new(ld_path)
+            .arg("--verify")
+            .arg(path)
+            .output()
+            .expect("Unable to run '{ld_path}'");
+
+        if ld_output.status.success() {
+            CHECKED_DYNAMIC_BINS
+                .write()
+                .unwrap()
+                .insert(path.to_path_buf());
+        } else {
+            log::debug!("ld stderr: {:?}", ld_output.stderr);
+            // technically ld-linux could return errors for other reasons, but this is the most
+            // likely reason given that we already checked that the file exists
+            return Err(VerifyPluginPathError::NotDynamicallyLinkedElf);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
