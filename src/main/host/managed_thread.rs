@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::os::fd::RawFd;
+use std::os::unix::prelude::OsStrExt;
 use std::sync::{atomic, Arc};
 
 use linux_api::sched::CloneFlags;
@@ -24,7 +25,7 @@ use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall_types::SyscallReturn;
-use crate::utility::syscall;
+use crate::utility::{syscall, verify_plugin_path, VerifyPluginPathError};
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -539,6 +540,37 @@ impl ManagedThread {
         strace_fd: Option<RawFd>,
         shimlog_fd: RawFd,
     ) -> nix::Result<nix::unistd::Pid> {
+        // Preemptively check for likely reasons that execve might fail.
+        // In particular we want to ensure that we  don't launch a statically
+        // linked executable, since we'd then deadlock the whole simulation
+        // waiting for the plugin to initialize.
+        //
+        // This is also helpful since we can't retrieve specific `execve` errors
+        // through `posix_spawn`.
+        verify_plugin_path(std::ffi::OsStr::from_bytes(plugin_path.to_bytes())).map_err(|e| {
+            debug!("Failed to verify path {plugin_path:?}");
+            match e {
+                // execve(2): ENOENT The file pathname [...] does not exist.
+                VerifyPluginPathError::NotFound => Errno::ENOENT,
+                // execve(2): EACCES The file or a script interpreter is not a regular file.
+                VerifyPluginPathError::NotFile => Errno::EACCES,
+                // execve(2): EACCES Execute permission is denied for the file or a script or ELF interpreter.
+                VerifyPluginPathError::NotExecutable => Errno::EACCES,
+                // execve(2): ENOEXEC An executable is not in a recognized
+                // format, is for the wrong architecture, or has some other
+                // format error that means it cannot be executed.
+                VerifyPluginPathError::NotDynamicallyLinkedElf => Errno::ENOEXEC,
+                // execve(2): EACCES Search permission is denied on a component
+                // of the path prefix of pathname or the name of a script
+                // interpreter.
+                VerifyPluginPathError::PathPermissionDenied => Errno::EACCES,
+                VerifyPluginPathError::UnhandledIoError(_) => {
+                    // Arbitrary error that should be handled by callers.
+                    Errno::ENOEXEC
+                }
+            }
+        })?;
+
         // Tell the shim to change the working dir.
         //
         // TODO: Instead use posix_spawn_file_actions_addchdir_np, which was added
