@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 bindgen = { version = "0.66.1" }
-cbindgen = { version = "0.24.5" }
+cbindgen = { version = "0.26.0" }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.1"
 
