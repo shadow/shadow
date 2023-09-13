@@ -1584,6 +1584,7 @@ dependencies = [
  "once_cell",
  "rand",
  "shadow-build-common",
+ "shadow-pod",
  "shadow_shmem",
  "static_assertions",
  "system-deps",

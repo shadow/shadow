@@ -20,7 +20,8 @@ pub type UntypedForeignPtr = ForeignPtr<()>;
 // do not change the definition of `ForeignPtr` without changing the C definition of
 // `UntypedForeignPtr` in the build script
 #[derive(Eq, PartialEq, VirtualAddressSpaceIndependent)]
-#[repr(C)]
+// repr(transparent) to make this ABI-compatible with a raw pointer
+#[repr(transparent)]
 pub struct ForeignPtr<T> {
     val: usize,
     // `ForeignPtr` behaves as if it holds a pointer to a `T`, and we want this `ForeignPtr` to be
@@ -28,6 +29,8 @@ pub struct ForeignPtr<T> {
     #[unsafe_assume_virtual_address_space_independent]
     _phantom: std::marker::PhantomData<SyncSendPointer<T>>,
 }
+
+unsafe impl<T> shadow_pod::Pod for ForeignPtr<T> where T: 'static {}
 
 impl<T> ForeignPtr<T> {
     const fn new_with_type_inference(val: usize) -> Self {
