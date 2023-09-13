@@ -4,4 +4,4 @@ set_property(TARGET nop PROPERTY EXCLUDE_FROM_ALL true)
 add_dependencies(extra_tests nop)
 
 # cmake will ignore the exit code and only search for the regex
-add_shadow_tests(BASENAME static-bin PROPERTIES PASS_REGULAR_EXPRESSION "path is not dynamically linked" CONFIGURATIONS extra)
+add_shadow_tests(BASENAME static-bin PROPERTIES PASS_REGULAR_EXPRESSION "not a dynamically linked ELF" CONFIGURATIONS extra)
