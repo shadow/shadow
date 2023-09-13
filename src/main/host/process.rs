@@ -1533,6 +1533,10 @@ impl Process {
     pub fn exit_signal(&self) -> Option<Signal> {
         self.common().exit_signal
     }
+
+    pub fn current_working_dir(&self) -> impl Deref<Target = CString> + '_ {
+        Ref::map(self.common(), |common| &common.working_dir)
+    }
 }
 
 impl Drop for Process {
