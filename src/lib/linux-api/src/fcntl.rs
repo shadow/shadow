@@ -149,3 +149,12 @@ impl DescriptorFlags {
         (flags, remaining)
     }
 }
+
+bitflags::bitflags! {
+    /// flags for execveat.
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct ExecveAtFlags: i32 {
+        const AT_EMPTY_PATH = const_conversions::i32_from_u32(bindings::LINUX_AT_EMPTY_PATH);
+        const AT_SYMLINK_NOFOLLOW = const_conversions::i32_from_u32(bindings::LINUX_AT_SYMLINK_NOFOLLOW);
+    }
+}
