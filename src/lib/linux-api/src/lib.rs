@@ -58,6 +58,7 @@ pub mod fcntl;
 pub mod inet;
 pub mod ioctls;
 pub mod ldt;
+pub mod limits;
 pub mod mman;
 pub mod posix_types;
 pub mod resource;
@@ -80,6 +81,11 @@ mod const_conversions {
     pub const fn u64_from_u32(val: u32) -> u64 {
         // Guaranteed not to truncate
         val as u64
+    }
+
+    pub const fn usize_from_u32(val: u32) -> usize {
+        // Guaranteed not to truncate
+        val as usize
     }
 
     pub const fn i32_from_u32(val: u32) -> i32 {
