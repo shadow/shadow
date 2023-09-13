@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cell::{Cell, RefCell};
+use core::ffi::CStr;
 use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
@@ -410,14 +411,27 @@ fn init_process() {
 
 /// Wait for "start" event from Shadow, use it to initialize the thread shared
 /// memory block, and optionally to initialize the process shared memory block.
-fn wait_for_start_event() {
+fn wait_for_start_event(get_initial_working_dir: bool) {
     log::trace!("waiting for start event");
+
+    let mut working_dir = [0u8; linux_api::limits::PATH_MAX];
+    let working_dir_ptr;
+    let working_dir_len;
+    if get_initial_working_dir {
+        working_dir_ptr = ForeignPtr::from_raw_ptr(working_dir.as_mut_ptr());
+        working_dir_len = working_dir.len();
+    } else {
+        working_dir_ptr = ForeignPtr::null();
+        working_dir_len = 0;
+    }
 
     let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
         thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_blk_serialized.as_mut_ptr()),
         process_shmem_block_to_init: ForeignPtr::from_raw_ptr(process_blk_serialized.as_mut_ptr()),
+        initial_working_dir_to_init: working_dir_ptr,
+        initial_working_dir_to_init_len: working_dir_len,
     });
     let res = tls_ipc::with(|ipc| {
         ipc.to_shadow().send(start_req);
@@ -434,6 +448,14 @@ fn wait_for_start_event() {
     let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
     // SAFETY: blk should be of the correct type and outlive this process.
     unsafe { tls_process_shmem::set(&process_blk_serialized) };
+
+    // TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
+    // which was added in glibc 2.29. Currently this is blocked on debian-10, which
+    // uses glibc 2.28.
+    if get_initial_working_dir {
+        let working_dir = CStr::from_bytes_until_nul(&working_dir).unwrap();
+        rustix::process::chdir(working_dir).unwrap();
+    }
 }
 
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
@@ -639,12 +661,12 @@ pub mod export {
     /// Wait for start event from shadow, from a newly spawned thread.
     #[no_mangle]
     pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
-        wait_for_start_event();
+        wait_for_start_event(false);
     }
 
     #[no_mangle]
     pub extern "C" fn _shim_ipc_wait_for_start_event() {
-        wait_for_start_event();
+        wait_for_start_event(true);
     }
 
     #[no_mangle]

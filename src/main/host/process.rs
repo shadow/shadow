@@ -969,7 +969,6 @@ impl Process {
             plugin_path,
             argv,
             envv,
-            &working_dir,
             strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
             &shimlog_path,
         )?;
