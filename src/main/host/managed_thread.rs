@@ -93,9 +93,9 @@ impl ManagedThread {
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) -> nix::Result<Self> {
-        let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
-        envv.push(CString::new(format!("SHADOW_IPC_BLK={}", ipc_shmem.serialize())).unwrap());
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
+
+        let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
 
         let shimlog_fd = nix::fcntl::open(
             log_path,
@@ -104,8 +104,15 @@ impl ManagedThread {
         )
         .unwrap();
 
-        let child_pid =
-            Self::spawn_native(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd)?;
+        let child_pid = Self::spawn_native(
+            plugin_path,
+            argv,
+            envv,
+            working_dir,
+            strace_fd,
+            shimlog_fd,
+            &ipc_shmem,
+        )?;
 
         // should be opened in the shim, so no need for it anymore
         nix::unistd::close(shimlog_fd).unwrap();
@@ -539,6 +546,7 @@ impl ManagedThread {
         working_dir: &CStr,
         strace_fd: Option<RawFd>,
         shimlog_fd: RawFd,
+        shmem_block: &ShMemBlock<IPCData>,
     ) -> nix::Result<nix::unistd::Pid> {
         // Preemptively check for likely reasons that execve might fail.
         // In particular we want to ensure that we  don't launch a statically
@@ -604,6 +612,18 @@ impl ManagedThread {
 
         let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
         Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
+
+        // Set up stdin
+        let (stdin_reader, stdin_writer) =
+            nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC).unwrap();
+        Errno::result(unsafe {
+            libc::posix_spawn_file_actions_adddup2(
+                &mut file_actions,
+                stdin_reader,
+                libc::STDIN_FILENO,
+            )
+        })
+        .unwrap();
 
         // Dup straceFd; the dup'd descriptor won't have O_CLOEXEC set.
         //
@@ -686,6 +706,29 @@ impl ManagedThread {
             })
             .map(|_| nix::unistd::Pid::from_raw(child_pid))
         };
+
+        // Write the serialized shmem descriptor to the stdin pipe. The pipe
+        // buffer should be large enough that we can write it all without having
+        // to wait for data to be read.
+        if child_pid_res.is_ok() {
+            // we avoid using the nix write wrapper here, since we can't guarantee
+            // that all bytes of the serialized shmem block are initd, and hence
+            // can't safely construct the &[u8] that the nix wrapper wants.
+            let serialized = shmem_block.serialize();
+            let serialized_bytes = shadow_pod::as_u8_slice(&serialized);
+            let written = nix::errno::Errno::result(unsafe {
+                libc::write(
+                    stdin_writer,
+                    serialized_bytes.as_ptr().cast(),
+                    serialized_bytes.len(),
+                )
+            })
+            .unwrap();
+            // TODO: loop if needed. Shouldn't be in practice, though.
+            assert_eq!(written, isize::try_from(serialized_bytes.len()).unwrap());
+            nix::unistd::close(stdin_writer).unwrap();
+            nix::unistd::close(stdin_reader).unwrap();
+        }
 
         Errno::result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) })
             .unwrap();

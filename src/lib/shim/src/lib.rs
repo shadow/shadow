@@ -4,7 +4,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cell::{Cell, RefCell};
-use core::ffi::CStr;
 use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
@@ -543,22 +542,19 @@ pub mod export {
 
     /// # Safety
     ///
-    /// Environment variable SHADOW_IPC_BLK must contained a serialized block of
+    /// stdin must contained a serialized block of
     /// type `IPCData`, which outlives the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn _shim_parent_init_ipc() {
-        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
-        // SAFETY: Kind of not. We should pass this some other way than an environment
-        // variable. Ok in practice as long as we do our initialization after libc's early
-        // initialization, and nothing else mutates this environment variable.
-        // https://github.com/shadow/shadow/issues/2848
-        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
-        assert!(!ipc_blk.is_null());
-        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
-        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
-
-        use core::str::FromStr;
-        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
+        let mut bytes = [0; core::mem::size_of::<ShMemBlockSerialized>()];
+        let bytes_read = rustix::io::read(
+            unsafe { rustix::fd::BorrowedFd::borrow_raw(libc::STDIN_FILENO) },
+            &mut bytes,
+        )
+        .unwrap();
+        // Implement looping? We should get it all in one read, though.
+        assert_eq!(bytes_read, bytes.len());
+        let ipc_blk = unsafe { core::mem::transmute(bytes) };
         // SAFETY: caller is responsible for `set`'s preconditions.
         unsafe { tls_ipc::set(&ipc_blk) };
     }
