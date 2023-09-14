@@ -6,11 +6,8 @@ use std::{
 use shadow_build_common::ShadowBuildCommon;
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
-    let base_config = build_common.cbindgen_base_config();
-    let config = cbindgen::Config {
-        include_guard: Some("tsc_rs_h".into()),
-        ..base_config
-    };
+    let mut config = build_common.cbindgen_base_config();
+    config.include_guard = Some("tsc_rs_h".into());
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     cbindgen::Builder::new()
         .with_crate(crate_dir)
