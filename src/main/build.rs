@@ -5,8 +5,8 @@ use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = {
         let mut c = build_common.cbindgen_base_config();
-        // Avoid re-exporting C types
         c.export.exclude.extend_from_slice(&[
+            // Avoid re-exporting C types
             "LogLevel".into(),
             "SysCallCondition".into(),
             "Packet".into(),
@@ -16,6 +16,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "StatusListener".into(),
             "NetworkInterface".into(),
             "Tsc".into(),
+            // We define manually with varargs
+            "thread_nativeSyscall".into(),
         ]);
         c.add_opaque_types(&["RootedRefCell_StateEventSource", "InetSocketWeak"]);
         c
