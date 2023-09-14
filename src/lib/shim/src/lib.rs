@@ -576,7 +576,7 @@ pub mod export {
         .unwrap();
         // Implement looping? We should get it all in one read, though.
         assert_eq!(bytes_read, bytes.len());
-        let ipc_blk = unsafe { core::mem::transmute(bytes) };
+        let ipc_blk = shadow_pod::from_array(&bytes);
         // SAFETY: caller is responsible for `set`'s preconditions.
         unsafe { tls_ipc::set(&ipc_blk) };
     }

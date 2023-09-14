@@ -104,6 +104,37 @@ where
     unsafe { core::mem::zeroed() }
 }
 
+/// Wrapper type to support associated compile-time size checks
+struct PodTransmute<const N: usize, T> {
+    _t: core::marker::PhantomData<T>,
+}
+
+impl<const N: usize, T: Pod> PodTransmute<N, T> {
+    const CHECK: () = assert!(N == core::mem::size_of::<T>());
+    #[inline(always)]
+    fn transmute_array(x: &[u8; N]) -> T {
+        // this should perform a compile-time check
+        #[allow(clippy::let_unit_value)]
+        {
+            let _ = Self::CHECK;
+        }
+        // this should perform a runtime check in case the above compile-time check didn't run, but
+        // should be compiled out if the compile-time check did run
+        assert_eq!(N, core::mem::size_of::<T>());
+
+        // It'd be nice to use `transmute` here, and take the array by value,
+        // but there's no way to convince the type system that the input and output
+        // sizes are guaranteed to be equal. So, we use `transmute_copy` which
+        // doesn't require this to be statically guaranteed.
+        unsafe { core::mem::transmute_copy(x) }
+    }
+}
+
+/// Interpret the bytes of `x` as a value of type `T`.
+pub fn from_array<const N: usize, T: Pod>(x: &[u8; N]) -> T {
+    PodTransmute::transmute_array(x)
+}
+
 // Integer primitives
 unsafe impl Pod for u8 {}
 unsafe impl Pod for u16 {}
