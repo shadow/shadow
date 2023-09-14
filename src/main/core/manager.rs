@@ -46,14 +46,7 @@ pub struct Manager<'a> {
     data_path: PathBuf,
     hosts_path: PathBuf,
 
-    // path to the injector lib that we preload for managed processes (if no other lib is preloaded)
-    preload_injector_path: PathBuf,
-    // path to the libc lib that we preload for managed processes
-    preload_libc_path: Option<PathBuf>,
-    // path to the openssl rng lib that we preload for managed processes
-    preload_openssl_rng_path: Option<PathBuf>,
-    // path to the openssl crypto lib that we preload for managed processes
-    preload_openssl_crypto_path: Option<PathBuf>,
+    preload_paths: Arc<Vec<PathBuf>>,
 
     check_fd_usage: bool,
     check_mem_usage: bool,
@@ -89,50 +82,49 @@ impl<'a> Manager<'a> {
             raw_frequency
         };
 
+        let mut preload_paths = Vec::new();
+
         // we always preload the injector lib to ensure that the shim is loaded into the managed
         // processes
         const PRELOAD_INJECTOR_LIB: &str = "libshadow_injector.so";
-        let preload_injector_path =
+        preload_paths.push(
             get_required_preload_path(PRELOAD_INJECTOR_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_INJECTOR_LIB}'")
-            })?;
+            })?,
+        );
 
         // preload libc lib if option is enabled
         const PRELOAD_LIBC_LIB: &str = "libshadow_libc.so";
-        let preload_libc_path = if config.experimental.use_preload_libc.unwrap() {
+        if config.experimental.use_preload_libc.unwrap() {
             let path = get_required_preload_path(PRELOAD_LIBC_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_LIBC_LIB}'")
             })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the libc library is disabled");
-            None
         };
 
         // preload openssl rng lib if option is enabled
         const PRELOAD_OPENSSL_RNG_LIB: &str = "libshadow_openssl_rng.so";
-        let preload_openssl_rng_path = if config.experimental.use_preload_openssl_rng.unwrap() {
+        if config.experimental.use_preload_openssl_rng.unwrap() {
             let path = get_required_preload_path(PRELOAD_OPENSSL_RNG_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_OPENSSL_RNG_LIB}'")
             })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the openssl rng library is disabled");
-            None
         };
 
         // preload openssl crypto lib if option is enabled
         const PRELOAD_OPENSSL_CRYPTO_LIB: &str = "libshadow_openssl_crypto.so";
-        let preload_openssl_crypto_path = if config.experimental.use_preload_openssl_crypto.unwrap()
-        {
+        if config.experimental.use_preload_openssl_crypto.unwrap() {
             let path =
                 get_required_preload_path(PRELOAD_OPENSSL_CRYPTO_LIB).with_context(|| {
                     format!("Failed to get path to preload library '{PRELOAD_OPENSSL_CRYPTO_LIB}'")
                 })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the openssl crypto library is disabled");
-            None
         };
 
         // use the working dir to generate absolute paths
@@ -213,36 +205,12 @@ impl<'a> Manager<'a> {
             end_time,
             data_path,
             hosts_path,
-            preload_injector_path,
-            preload_libc_path,
-            preload_openssl_rng_path,
-            preload_openssl_crypto_path,
+            preload_paths: Arc::new(preload_paths),
             check_fd_usage: true,
             check_mem_usage: true,
             meminfo_file,
             shmem,
         })
-    }
-
-    /// The list of paths to be added to LD_PRELOAD.
-    fn make_preload_paths(&self) -> Vec<PathBuf> {
-        let mut preload = vec![];
-
-        preload.push(self.preload_injector_path.clone());
-
-        if let Some(ref path) = self.preload_libc_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_rng_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_crypto_path {
-            preload.push(path.clone());
-        }
-
-        preload
     }
 
     pub fn run(
@@ -638,7 +606,7 @@ impl<'a> Manager<'a> {
                     self.raw_frequency,
                     dns,
                     self.shmem(),
-                    self.make_preload_paths(),
+                    self.preload_paths.clone(),
                 )
             })
         };

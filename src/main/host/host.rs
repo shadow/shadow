@@ -218,7 +218,7 @@ impl Host {
         raw_cpu_freq_khz: u64,
         dns: *mut cshadow::DNS,
         manager_shmem: &ShMemBlock<ManagerShmem>,
-        preload_paths: Vec<PathBuf>,
+        preload_paths: Arc<Vec<PathBuf>>,
     ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
@@ -333,7 +333,7 @@ impl Host {
             #[cfg(feature = "perf_timers")]
             execution_timer,
             in_notify_socket_has_packets,
-            preload_paths: Arc::new(preload_paths),
+            preload_paths,
         };
 
         res.stop_execution_timer();
