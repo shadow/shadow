@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
+use std::io::Write;
 use std::os::fd::RawFd;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::{atomic, Arc};
@@ -24,7 +25,7 @@ use super::syscall_condition::SysCallCondition;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
-use crate::host::syscall_types::SyscallReturn;
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
 use crate::utility::{syscall, verify_plugin_path, VerifyPluginPathError};
 
 /// The ManagedThread's state after having been allowed to execute some code.
@@ -88,14 +89,13 @@ impl ManagedThread {
     pub fn spawn(
         plugin_path: &CStr,
         argv: Vec<CString>,
-        mut envv: Vec<CString>,
-        working_dir: &CStr,
+        envv: Vec<CString>,
         strace_fd: Option<RawFd>,
         log_path: &CStr,
     ) -> nix::Result<Self> {
+        debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
+
         let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
-        envv.push(CString::new(format!("SHADOW_IPC_BLK={}", ipc_shmem.serialize())).unwrap());
-        debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}', and working directory '{working_dir:?}'");
 
         let shimlog_fd = nix::fcntl::open(
             log_path,
@@ -105,7 +105,7 @@ impl ManagedThread {
         .unwrap();
 
         let child_pid =
-            Self::spawn_native(plugin_path, argv, envv, working_dir, strace_fd, shimlog_fd)?;
+            Self::spawn_native(plugin_path, argv, envv, strace_fd, shimlog_fd, &ipc_shmem)?;
 
         // should be opened in the shim, so no need for it anymore
         nix::unistd::close(shimlog_fd).unwrap();
@@ -217,6 +217,19 @@ impl ManagedThread {
                                 &ctx.process.shmem().serialize(),
                             )
                             .unwrap();
+                    }
+
+                    if !start_req.initial_working_dir_to_init.is_null() {
+                        // Write the working dir.
+                        let mut mem = ctx.process.memory_borrow_mut();
+                        let mut writer = mem.writer(ForeignArrayPtr::new(
+                            start_req.initial_working_dir_to_init,
+                            start_req.initial_working_dir_to_init_len,
+                        ));
+                        writer
+                            .write_all(ctx.process.current_working_dir().to_bytes_with_nul())
+                            .unwrap();
+                        writer.flush().unwrap();
                     }
 
                     // send the message to the shim to call main().
@@ -535,10 +548,10 @@ impl ManagedThread {
     fn spawn_native(
         plugin_path: &CStr,
         argv: Vec<CString>,
-        mut envv: Vec<CString>,
-        working_dir: &CStr,
+        envv: Vec<CString>,
         strace_fd: Option<RawFd>,
         shimlog_fd: RawFd,
+        shmem_block: &ShMemBlock<IPCData>,
     ) -> nix::Result<nix::unistd::Pid> {
         // Preemptively check for likely reasons that execve might fail.
         // In particular we want to ensure that we  don't launch a statically
@@ -571,20 +584,6 @@ impl ManagedThread {
             }
         })?;
 
-        // Tell the shim to change the working dir.
-        //
-        // TODO: Instead use posix_spawn_file_actions_addchdir_np, which was added
-        // in glibc 2.29. We should be able to do so once we've dropped support
-        // for some platforms, as planned for the shadow 3.0 release.
-        // https://github.com/shadow/shadow/discussions/2496
-        envv.push(
-            CString::new(format!(
-                "SHADOW_WORKING_DIR={}",
-                working_dir.to_str().unwrap()
-            ))
-            .unwrap(),
-        );
-
         // posix_spawn is documented as taking pointers to *mutable* char for argv and
         // envv. It *probably* doesn't actually mutate them, but we
         // conservatively give it what it asks for. We have to "reconstitute"
@@ -604,6 +603,18 @@ impl ManagedThread {
 
         let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
         Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
+
+        // Set up stdin
+        let (stdin_reader, stdin_writer) =
+            nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC).unwrap();
+        Errno::result(unsafe {
+            libc::posix_spawn_file_actions_adddup2(
+                &mut file_actions,
+                stdin_reader,
+                libc::STDIN_FILENO,
+            )
+        })
+        .unwrap();
 
         // Dup straceFd; the dup'd descriptor won't have O_CLOEXEC set.
         //
@@ -686,6 +697,29 @@ impl ManagedThread {
             })
             .map(|_| nix::unistd::Pid::from_raw(child_pid))
         };
+
+        // Write the serialized shmem descriptor to the stdin pipe. The pipe
+        // buffer should be large enough that we can write it all without having
+        // to wait for data to be read.
+        if child_pid_res.is_ok() {
+            // we avoid using the nix write wrapper here, since we can't guarantee
+            // that all bytes of the serialized shmem block are initd, and hence
+            // can't safely construct the &[u8] that the nix wrapper wants.
+            let serialized = shmem_block.serialize();
+            let serialized_bytes = shadow_pod::as_u8_slice(&serialized);
+            let written = nix::errno::Errno::result(unsafe {
+                libc::write(
+                    stdin_writer,
+                    serialized_bytes.as_ptr().cast(),
+                    serialized_bytes.len(),
+                )
+            })
+            .unwrap();
+            // TODO: loop if needed. Shouldn't be in practice, though.
+            assert_eq!(written, isize::try_from(serialized_bytes.len()).unwrap());
+            nix::unistd::close(stdin_writer).unwrap();
+            nix::unistd::close(stdin_reader).unwrap();
+        }
 
         Errno::result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) })
             .unwrap();

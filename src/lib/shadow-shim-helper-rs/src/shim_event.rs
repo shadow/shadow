@@ -52,6 +52,16 @@ pub struct ShimEventStartReq {
     pub thread_shmem_block_to_init: ForeignPtr<ShMemBlockSerialized>,
     /// Shim pointer to be initd by Shadow. Optional.
     pub process_shmem_block_to_init: ForeignPtr<ShMemBlockSerialized>,
+
+    /// Shim pointer to be initd by Shadow. Optional.
+    /// If set, shadow will write a null-terminated path.
+    // TODO: Consider putting in persistent shared memory instead.
+    // This has the drawback though of requiring us to statically allocate
+    // the maximum path size (e.g. linux_api::limits::PATH_MAX == 4k).
+    // Whether and how to do this also depends how we end up implementing
+    // `chdir` https://github.com/shadow/shadow/issues/2960
+    pub initial_working_dir_to_init: ForeignPtr<u8>,
+    pub initial_working_dir_to_init_len: usize,
 }
 
 /// A message between Shadow and the Shim.

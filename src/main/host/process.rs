@@ -969,7 +969,6 @@ impl Process {
             plugin_path,
             argv,
             envv,
-            &working_dir,
             strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
             &shimlog_path,
         )?;
@@ -1532,6 +1531,10 @@ impl Process {
     /// Signal that will be sent to parent process on exit. Typically `Some(SIGCHLD)`.
     pub fn exit_signal(&self) -> Option<Signal> {
         self.common().exit_signal
+    }
+
+    pub fn current_working_dir(&self) -> impl Deref<Target = CString> + '_ {
+        Ref::map(self.common(), |common| &common.working_dir)
     }
 }
 

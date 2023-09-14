@@ -114,22 +114,6 @@ static void _shim_parent_init_rdtsc_emu() {
     shim_rdtsc_init();
 }
 
-// Sets the working directory. Should only need to be done for the first thread
-// of the process.
-//
-// TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
-// which was added in glibc 2.29. Currently this is blocked on debian-10, which
-// uses glibc 2.28.
-static void _shim_parent_set_working_dir() {
-    const char* path = getenv("SHADOW_WORKING_DIR");
-    if (!path) {
-        panic("SHADOW_WORKING_DIR not set");
-    }
-    if (chdir(path) != 0) {
-        panic("chdir: %s", strerror(errno));
-    }
-}
-
 void _shim_parent_init_preload() {
     bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
 
@@ -141,12 +125,12 @@ void _shim_parent_init_preload() {
     _shim_parent_init_host_shm();
     _shim_parent_init_manager_shm();
     _shim_parent_init_logging();
-    _shim_parent_set_working_dir();
     _shim_init_signal_stack();
     _shim_init_death_signal();
     _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
+    _shim_parent_close_stdin();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }

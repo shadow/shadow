@@ -411,14 +411,27 @@ fn init_process() {
 
 /// Wait for "start" event from Shadow, use it to initialize the thread shared
 /// memory block, and optionally to initialize the process shared memory block.
-fn wait_for_start_event() {
+fn wait_for_start_event(get_initial_working_dir: bool) {
     log::trace!("waiting for start event");
+
+    let mut working_dir = [0u8; linux_api::limits::PATH_MAX];
+    let working_dir_ptr;
+    let working_dir_len;
+    if get_initial_working_dir {
+        working_dir_ptr = ForeignPtr::from_raw_ptr(working_dir.as_mut_ptr());
+        working_dir_len = working_dir.len();
+    } else {
+        working_dir_ptr = ForeignPtr::null();
+        working_dir_len = 0;
+    }
 
     let mut thread_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let mut process_blk_serialized = MaybeUninit::<ShMemBlockSerialized>::uninit();
     let start_req = ShimEventToShadow::StartReq(ShimEventStartReq {
         thread_shmem_block_to_init: ForeignPtr::from_raw_ptr(thread_blk_serialized.as_mut_ptr()),
         process_shmem_block_to_init: ForeignPtr::from_raw_ptr(process_blk_serialized.as_mut_ptr()),
+        initial_working_dir_to_init: working_dir_ptr,
+        initial_working_dir_to_init_len: working_dir_len,
     });
     let res = tls_ipc::with(|ipc| {
         ipc.to_shadow().send(start_req);
@@ -435,6 +448,14 @@ fn wait_for_start_event() {
     let process_blk_serialized = unsafe { process_blk_serialized.assume_init() };
     // SAFETY: blk should be of the correct type and outlive this process.
     unsafe { tls_process_shmem::set(&process_blk_serialized) };
+
+    // TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
+    // which was added in glibc 2.29. Currently this is blocked on debian-10, which
+    // uses glibc 2.28.
+    if get_initial_working_dir {
+        let working_dir = CStr::from_bytes_until_nul(&working_dir).unwrap();
+        rustix::process::chdir(working_dir).unwrap();
+    }
 }
 
 // Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
@@ -543,22 +564,19 @@ pub mod export {
 
     /// # Safety
     ///
-    /// Environment variable SHADOW_IPC_BLK must contained a serialized block of
+    /// stdin must contained a serialized block of
     /// type `IPCData`, which outlives the current thread.
     #[no_mangle]
     pub unsafe extern "C" fn _shim_parent_init_ipc() {
-        let envname = CStr::from_bytes_with_nul(b"SHADOW_IPC_BLK\0").unwrap();
-        // SAFETY: Kind of not. We should pass this some other way than an environment
-        // variable. Ok in practice as long as we do our initialization after libc's early
-        // initialization, and nothing else mutates this environment variable.
-        // https://github.com/shadow/shadow/issues/2848
-        let ipc_blk = unsafe { libc::getenv(envname.as_ptr()) };
-        assert!(!ipc_blk.is_null());
-        let ipc_blk = unsafe { CStr::from_ptr(ipc_blk) };
-        let ipc_blk = core::str::from_utf8(ipc_blk.to_bytes()).unwrap();
-
-        use core::str::FromStr;
-        let ipc_blk = ShMemBlockSerialized::from_str(ipc_blk).unwrap();
+        let mut bytes = [0; core::mem::size_of::<ShMemBlockSerialized>()];
+        let bytes_read = rustix::io::read(
+            unsafe { rustix::fd::BorrowedFd::borrow_raw(libc::STDIN_FILENO) },
+            &mut bytes,
+        )
+        .unwrap();
+        // Implement looping? We should get it all in one read, though.
+        assert_eq!(bytes_read, bytes.len());
+        let ipc_blk = shadow_pod::from_array(&bytes);
         // SAFETY: caller is responsible for `set`'s preconditions.
         unsafe { tls_ipc::set(&ipc_blk) };
     }
@@ -643,12 +661,12 @@ pub mod export {
     /// Wait for start event from shadow, from a newly spawned thread.
     #[no_mangle]
     pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
-        wait_for_start_event();
+        wait_for_start_event(false);
     }
 
     #[no_mangle]
     pub extern "C" fn _shim_ipc_wait_for_start_event() {
-        wait_for_start_event();
+        wait_for_start_event(true);
     }
 
     #[no_mangle]
@@ -659,5 +677,10 @@ pub mod export {
     #[no_mangle]
     pub extern "C" fn _shim_parent_init_host_shm() {
         tls_process_shmem::with(|process| unsafe { global_host_shmem::set(&process.host_shmem) });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_close_stdin() {
+        unsafe { rustix::io::close(libc::STDIN_FILENO) };
     }
 }
