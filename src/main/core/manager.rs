@@ -224,6 +224,27 @@ impl<'a> Manager<'a> {
         })
     }
 
+    /// The list of paths to be added to LD_PRELOAD.
+    fn make_preload_paths(&self) -> Vec<PathBuf> {
+        let mut preload = vec![];
+
+        preload.push(self.preload_injector_path.clone());
+
+        if let Some(ref path) = self.preload_libc_path {
+            preload.push(path.clone());
+        }
+
+        if let Some(ref path) = self.preload_openssl_rng_path {
+            preload.push(path.clone());
+        }
+
+        if let Some(ref path) = self.preload_openssl_crypto_path {
+            preload.push(path.clone());
+        }
+
+        preload
+    }
+
     pub fn run(
         mut self,
         status_logger_state: Option<&Arc<Status<ShadowStatusBarState>>>,
@@ -677,21 +698,7 @@ impl<'a> Manager<'a> {
         //   - preload path of the openssl crypto lib
         //   - preload values from LD_PRELOAD entries in the environment process option
 
-        let mut preload = vec![];
-
-        preload.push(self.preload_injector_path.clone());
-
-        if let Some(ref path) = self.preload_libc_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_rng_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_crypto_path {
-            preload.push(path.clone());
-        }
+        let preload = self.make_preload_paths();
 
         for path in &preload {
             let path = path.as_os_str().as_bytes();
