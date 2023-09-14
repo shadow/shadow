@@ -155,7 +155,7 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::recvmsg(socket, args, memory_manager, cb_queue),
             Self::Inet(socket) => InetSocket::recvmsg(socket, args, memory_manager, cb_queue),
-            Self::Netlink(_) => todo!(),
+            Self::Netlink(socket) => NetlinkSocket::recvmsg(socket, args, memory_manager, cb_queue),
         }
     }
 }
