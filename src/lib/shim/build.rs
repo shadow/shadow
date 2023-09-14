@@ -45,46 +45,44 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = build_common.cbindgen_base_config();
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let config = cbindgen::Config {
-        sys_includes: vec![
-            "ifaddrs.h".into(),
-            "netdb.h".into(),
-            "stdarg.h".into(),
-            "sys/socket.h".into(),
-            "sys/types.h".into(),
-            "netdb.h".into(),
-        ],
-        includes: vec![
-            "lib/log-c2rust/rustlogger.h".into(),
-            "lib/shadow-shim-helper-rs/shim_helper.h".into(),
-        ],
-        after_includes: {
-            let mut v = base_config.after_includes.clone().unwrap_or_default();
-            // We have to manually create the vararg declaration.
-            v.push_str("long shim_api_syscall(long n, ...);\n");
-            // We have to define the ALIGNED macro to support aligned structs.
-            v.push_str("#define ALIGNED(n) __attribute__((aligned(n)))\n");
-            Some(v)
-        },
-        export: cbindgen::ExportConfig {
-            rename: HashMap::from([
-                ("addrinfo".into(), "struct addrinfo".into()),
-                ("ifaddrs".into(), "struct ifaddrs".into()),
-            ]),
-            exclude: vec![
-                // Manual declaration above
-                "shim_api_syscall".into(),
-            ],
-            include: vec!["TlsOneThreadStorageAllocation".into()],
-            ..base_config.export.clone()
-        },
-        layout: cbindgen::LayoutConfig {
-            aligned_n: Some("ALIGNED".into()),
-            ..base_config.layout.clone()
-        },
-        include_guard: Some("shim_shim_api_h".into()),
-        ..base_config
+    let mut config = base_config.clone();
+    config.sys_includes = vec![
+        "ifaddrs.h".into(),
+        "netdb.h".into(),
+        "stdarg.h".into(),
+        "sys/socket.h".into(),
+        "sys/types.h".into(),
+        "netdb.h".into(),
+    ];
+    config.includes = vec![
+        "lib/log-c2rust/rustlogger.h".into(),
+        "lib/shadow-shim-helper-rs/shim_helper.h".into(),
+    ];
+    config.after_includes = {
+        let mut v = base_config.after_includes.clone().unwrap_or_default();
+        // We have to manually create the vararg declaration.
+        v.push_str("long shim_api_syscall(long n, ...);\n");
+        // We have to define the ALIGNED macro to support aligned structs.
+        v.push_str("#define ALIGNED(n) __attribute__((aligned(n)))\n");
+        Some(v)
     };
+    config.export = cbindgen::ExportConfig {
+        rename: HashMap::from([
+            ("addrinfo".into(), "struct addrinfo".into()),
+            ("ifaddrs".into(), "struct ifaddrs".into()),
+        ]),
+        exclude: vec![
+            // Manual declaration above
+            "shim_api_syscall".into(),
+        ],
+        include: vec!["TlsOneThreadStorageAllocation".into()],
+        ..base_config.export.clone()
+    };
+    config.layout = cbindgen::LayoutConfig {
+        aligned_n: Some("ALIGNED".into()),
+        ..base_config.layout.clone()
+    };
+    config.include_guard = Some("shim_shim_api_h".into());
 
     cbindgen::Builder::new()
         .with_crate(crate_dir)

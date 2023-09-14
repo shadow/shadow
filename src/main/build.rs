@@ -40,94 +40,96 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     // there will be no circular include dependency.
 
     // bindings.h:
-    cbindgen::Builder::new()
-        .with_crate(crate_dir.clone())
-        .with_config(cbindgen::Config {
-            include_guard: Some("main_bindings_h".into()),
-            // Some of our function signatures reference types defined in C headers,
-            // so we need to include those here.
-            includes: vec![
-                "lib/logger/log_level.h".into(),
-                "lib/shadow-shim-helper-rs/shim_helper.h".into(),
-                "lib/tsc/tsc.h".into(),
-                "main/bindings/c/bindings-opaque.h".into(),
-                "main/core/worker.h".into(),
-                "main/host/descriptor/descriptor_types.h".into(),
-                "main/host/descriptor/tcp.h".into(),
-                "main/host/futex_table.h".into(),
-                "main/host/network/network_interface.h".into(),
-                "main/host/protocol.h".into(),
-                "main/host/status_listener.h".into(),
-                "main/host/syscall_handler.h".into(),
-                "main/host/syscall_types.h".into(),
-                "main/host/tracker_types.h".into(),
-                "main/routing/dns.h".into(),
-                "main/routing/packet.minimal.h".into(),
+    {
+        let mut config = base_config.clone();
+        config.include_guard = Some("main_bindings_h".into());
+        // Some of our function signatures reference types defined in C headers,
+        // so we need to include those here.
+        config.includes = vec![
+            "lib/logger/log_level.h".into(),
+            "lib/shadow-shim-helper-rs/shim_helper.h".into(),
+            "lib/tsc/tsc.h".into(),
+            "main/bindings/c/bindings-opaque.h".into(),
+            "main/core/worker.h".into(),
+            "main/host/descriptor/descriptor_types.h".into(),
+            "main/host/descriptor/tcp.h".into(),
+            "main/host/futex_table.h".into(),
+            "main/host/network/network_interface.h".into(),
+            "main/host/protocol.h".into(),
+            "main/host/status_listener.h".into(),
+            "main/host/syscall_handler.h".into(),
+            "main/host/syscall_types.h".into(),
+            "main/host/tracker_types.h".into(),
+            "main/routing/dns.h".into(),
+            "main/routing/packet.minimal.h".into(),
+        ];
+        config.sys_includes = vec![
+            "sys/socket.h".into(),
+            "netinet/in.h".into(),
+            "arpa/inet.h".into(),
+        ];
+        config.after_includes = {
+            let mut v = base_config.after_includes.clone().unwrap();
+            // We have to manually create the vararg declaration.
+            // See crate::main::host::thread::export::thread_nativeSyscall.
+            v.push_str("long thread_nativeSyscall(const Thread* thread, long n, ...);\n");
+            Some(v)
+        };
+        config.export = cbindgen::ExportConfig {
+            // This header's primary purpose is to export function
+            // declarations.  We also need to export OpaqueItems here, or
+            // else cbindgen generates bad type names when referencing those
+            // types.
+            item_types: vec![
+                cbindgen::ItemType::Functions,
+                cbindgen::ItemType::OpaqueItems,
             ],
-            sys_includes: vec![
-                "sys/socket.h".into(),
-                "netinet/in.h".into(),
-                "arpa/inet.h".into(),
-            ],
-            after_includes: {
-                let mut v = base_config.after_includes.clone().unwrap();
-                // We have to manually create the vararg declaration.
-                // See crate::main::host::thread::export::thread_nativeSyscall.
-                v.push_str("long thread_nativeSyscall(const Thread* thread, long n, ...);\n");
-                Some(v)
-            },
-            export: cbindgen::ExportConfig {
-                // This header's primary purpose is to export function
-                // declarations.  We also need to export OpaqueItems here, or
-                // else cbindgen generates bad type names when referencing those
-                // types.
-                item_types: vec![
-                    cbindgen::ItemType::Functions,
-                    cbindgen::ItemType::OpaqueItems,
-                ],
-                ..base_config.export.clone()
-            },
-            ..base_config.clone()
-        })
-        .generate()
-        .expect("Unable to generate bindings")
-        .write_to_file("../../build/src/main/bindings/c/bindings.h");
+            ..base_config.export.clone()
+        };
+        cbindgen::Builder::new()
+            .with_crate(crate_dir.clone())
+            .with_config(config)
+            .generate()
+            .expect("Unable to generate bindings")
+            .write_to_file("../../build/src/main/bindings/c/bindings.h");
+    }
 
     // bindings-opaque.h
-    cbindgen::Builder::new()
-        .with_crate(crate_dir)
-        .with_config(cbindgen::Config {
-            // We want to avoid including any C headers from this crate here,
-            // which lets us avoid circular dependencies. Ok to depend on headers
-            // generated by crates that this one depends on.
-            includes: vec!["lib/shadow-shim-helper-rs/shim_helper.h".into()],
-            include_guard: Some("main_opaque_bindings_h".into()),
-            after_includes: {
-                let mut v = base_config.after_includes.clone().unwrap();
-                // Manual forward declarations of C structs that we need,
-                // since we can't include the corresponding header files without
-                // circular definitions.
-                v.push_str("typedef struct _SysCallCondition SysCallCondition;");
-                Some(v)
-            },
-            export: cbindgen::ExportConfig {
-                include: vec!["QDiscMode".into()],
-                // Export everything except function definitions, since those are already
-                // exported in the other header file, and need the C header files.
-                item_types: base_config
-                    .export
-                    .item_types
-                    .iter()
-                    .cloned()
-                    .filter(|t| *t != cbindgen::ItemType::Functions)
-                    .collect(),
-                ..base_config.export.clone()
-            },
-            ..base_config
-        })
-        .generate()
-        .expect("Unable to generate bindings")
-        .write_to_file("../../build/src/main/bindings/c/bindings-opaque.h");
+    {
+        let mut config = base_config.clone();
+        // We want to avoid including any C headers from this crate here,
+        // which lets us avoid circular dependencies. Ok to depend on headers
+        // generated by crates that this one depends on.
+        config.includes = vec!["lib/shadow-shim-helper-rs/shim_helper.h".into()];
+        config.include_guard = Some("main_opaque_bindings_h".into());
+        config.after_includes = {
+            let mut v = base_config.after_includes.clone().unwrap();
+            // Manual forward declarations of C structs that we need,
+            // since we can't include the corresponding header files without
+            // circular definitions.
+            v.push_str("typedef struct _SysCallCondition SysCallCondition;");
+            Some(v)
+        };
+        config.export = cbindgen::ExportConfig {
+            include: vec!["QDiscMode".into()],
+            // Export everything except function definitions, since those are already
+            // exported in the other header file, and need the C header files.
+            item_types: base_config
+                .export
+                .item_types
+                .iter()
+                .cloned()
+                .filter(|t| *t != cbindgen::ItemType::Functions)
+                .collect(),
+            ..base_config.export.clone()
+        };
+        cbindgen::Builder::new()
+            .with_crate(crate_dir)
+            .with_config(config)
+            .generate()
+            .expect("Unable to generate bindings")
+            .write_to_file("../../build/src/main/bindings/c/bindings-opaque.h");
+    }
 }
 
 fn run_bindgen(build_common: &ShadowBuildCommon) {

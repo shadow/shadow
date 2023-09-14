@@ -8,15 +8,13 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = build_common.cbindgen_base_config();
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let config = cbindgen::Config {
-        include_guard: Some("log_c2rust_rustlogger_h".into()),
-        includes: vec!["lib/logger/logger.h".into()],
-        export: cbindgen::ExportConfig {
-            // Don't re-export LogLevel; we get the definition from logger.h
-            exclude: vec!["LogLevel".into()],
-            ..base_config.export.clone()
-        },
-        ..base_config
+    let mut config = base_config.clone();
+    config.include_guard = Some("log_c2rust_rustlogger_h".into());
+    config.includes = vec!["lib/logger/logger.h".into()];
+    config.export = cbindgen::ExportConfig {
+        // Don't re-export LogLevel; we get the definition from logger.h
+        exclude: vec!["LogLevel".into()],
+        ..base_config.export.clone()
     };
 
     cbindgen::Builder::new()
