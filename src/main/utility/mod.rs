@@ -399,6 +399,76 @@ pub fn verify_plugin_path(path: impl AsRef<std::path::Path>) -> Result<(), Verif
     Ok(())
 }
 
+/// Inject `injected_preloads` into the environment `envv`.
+///
+/// * Ordering of `envv` is preserved.
+/// * Ordering of preloads already in `envv` is preserved.
+/// * Addition of duplicate entries from `injected_preloads` is suppressed (to avoid
+///   unbounded growth of env through chain of execve's)
+pub fn inject_preloads(mut envv: Vec<CString>, injected_preloads: &[PathBuf]) -> Vec<CString> {
+    let ld_preload_key = CString::new("LD_PRELOAD=").unwrap();
+
+    let ld_preload_kv;
+    if let Some(kv) = envv
+        .iter_mut()
+        .find(|v| v.to_bytes().starts_with(ld_preload_key.as_bytes()))
+    {
+        // We found an existing LD_PRELOAD definition, so we'll mutate it.  In
+        // the (unusual) case that LD_PRELOAD is defined multiple times, the
+        // first is the one that will be effective; we mutate that one and
+        // ignore the others.
+        ld_preload_kv = kv;
+    } else {
+        // No existing LD_PRELOAD definition; add an empty one.
+        envv.push(ld_preload_key.clone());
+        ld_preload_kv = envv.last_mut().unwrap();
+    }
+
+    let previous_preloads_string = ld_preload_kv
+        .as_bytes()
+        .strip_prefix(ld_preload_key.as_bytes())
+        .unwrap();
+
+    let injected_preloads_bytes = injected_preloads
+        .iter()
+        .map(|path| path.as_os_str().as_bytes());
+
+    // `ld.so(8)`: The items of the list can be separated by spaces or colons,
+    // and there is no support for escaping either separator.
+    let previous_preloads = previous_preloads_string.split(|c| *c == b':' || *c == b' ');
+
+    // Deduplicate. e.g. in the case where one managed process exec's another
+    // and passes in its own environment to the child, we don't want to add
+    // duplicates here.
+    let filtered_previous_preloads =
+        previous_preloads.filter(|p| !injected_preloads_bytes.clone().any(|q| &q == p));
+
+    let injected_preloads_bytes = injected_preloads
+        .iter()
+        .map(|path| path.as_os_str().as_bytes());
+
+    let mut preloads = injected_preloads_bytes.chain(filtered_previous_preloads);
+
+    // Some way to use `join` here? I couldn't work out a nice way.
+    let mut output = Vec::<u8>::new();
+    output.extend(ld_preload_key.as_bytes());
+    // Insert first entry without a separator
+    if let Some(p) = preloads.next() {
+        output.extend(p);
+    }
+    // Add the rest with separators
+    for preload in preloads {
+        output.push(b':');
+        output.extend(preload);
+    }
+
+    // We could probably safely use an unchecked CString constructor here, but
+    // probably not worth the risk of a subtle bug.
+    *ld_preload_kv = CString::new(output).unwrap();
+
+    envv
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,6 +508,70 @@ mod tests {
                 [""].iter().collect::<std::path::PathBuf>()
             );
         }
+    }
+
+    #[test]
+    fn test_inject_preloads() {
+        // Base case
+        assert_eq!(
+            inject_preloads(vec![], &[]),
+            vec![CString::new("LD_PRELOAD=").unwrap()]
+        );
+
+        // Other env vars are preserved
+        assert_eq!(
+            inject_preloads(
+                vec![
+                    CString::new("foo=foo").unwrap(),
+                    CString::new("bar=bar").unwrap(),
+                ],
+                &[]
+            ),
+            vec![
+                CString::new("foo=foo").unwrap(),
+                CString::new("bar=bar").unwrap(),
+                CString::new("LD_PRELOAD=").unwrap()
+            ]
+        );
+
+        // Prefixes existing preloads
+        assert_eq!(
+            inject_preloads(
+                vec![CString::new("LD_PRELOAD=/existing.so").unwrap()],
+                &[PathBuf::from("/injected.so")]
+            ),
+            vec![CString::new("LD_PRELOAD=/injected.so:/existing.so").unwrap()]
+        );
+
+        // Doesn't duplicate
+        assert_eq!(
+            inject_preloads(
+                vec![CString::new("LD_PRELOAD=/injected.so").unwrap()],
+                &[PathBuf::from("/injected.so")]
+            ),
+            &[CString::new("LD_PRELOAD=/injected.so").unwrap()]
+        );
+
+        // Multiple existing, multiple injected, partial dedupe
+        assert_eq!(
+            inject_preloads(
+                vec![
+                    CString::new("foo=foo").unwrap(),
+                    CString::new("LD_PRELOAD=/existing1.so:/injected1.so:/existing2.so").unwrap(),
+                    CString::new("bar=bar").unwrap()
+                ],
+                &[
+                    PathBuf::from("/injected1.so"),
+                    PathBuf::from("/injected2.so"),
+                ],
+            ),
+            &[
+                CString::new("foo=foo").unwrap(),
+                CString::new("LD_PRELOAD=/injected1.so:/injected2.so:/existing1.so:/existing2.so")
+                    .unwrap(),
+                CString::new("bar=bar").unwrap(),
+            ]
+        );
     }
 }
 

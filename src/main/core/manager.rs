@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
-use crate::core::support::configuration::{self, ConfigOptions, EnvName, Flatten};
+use crate::core::support::configuration::{self, ConfigOptions, Flatten};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
@@ -638,6 +638,7 @@ impl<'a> Manager<'a> {
                     self.raw_frequency,
                     dns,
                     self.shmem(),
+                    self.make_preload_paths(),
                 )
             })
         };
@@ -656,10 +657,16 @@ impl<'a> Manager<'a> {
                 .map(|x| CString::new(x.as_bytes()).unwrap())
                 .collect();
 
-            let envv = self.generate_env_vars(proc.env.clone());
-            let envv: Vec<CString> = envv
-                .iter()
-                .map(|x| CString::new(x.as_bytes()).unwrap())
+            let envv: Vec<CString> = proc
+                .env
+                .clone()
+                .into_iter()
+                .map(|(x, y)| {
+                    let mut x: OsString = String::from(x).into();
+                    x.push("=");
+                    x.push(y);
+                    CString::new(x.as_bytes()).unwrap()
+                })
                 .collect();
 
             host.continue_execution_timer();
@@ -682,65 +689,6 @@ impl<'a> Manager<'a> {
         host.unlock_shmem();
 
         Ok(host)
-    }
-
-    // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
-    // much less painful
-    fn generate_env_vars(&self, env: BTreeMap<EnvName, String>) -> Vec<OsString> {
-        let mut env: BTreeMap<EnvName, OsString> =
-            env.into_iter().map(|(k, v)| (k, v.into())).collect();
-
-        // also insert the plugin preload entries
-        // precendence here is:
-        //   - preload path of the injector
-        //   - preload path of the libc lib
-        //   - preload path of the openssl rng lib
-        //   - preload path of the openssl crypto lib
-        //   - preload values from LD_PRELOAD entries in the environment process option
-
-        let preload = self.make_preload_paths();
-
-        for path in &preload {
-            let path = path.as_os_str().as_bytes();
-            // these two characters separate paths and aren't valid in a preload path
-            assert!(!path.contains(&b':'));
-            assert!(!path.contains(&b' '));
-        }
-
-        // combine the LD_PRELOAD paths into a string
-        let preload = {
-            let mut preload_string = OsString::new();
-            for (x, path) in preload.iter().enumerate() {
-                if x > 0 {
-                    preload_string.push(":");
-                }
-                preload_string.push(path);
-            }
-            preload_string
-        };
-
-        // merge our LD_PRELOAD entries with the config entries
-        let preload_env = env.entry(EnvName::new("LD_PRELOAD").unwrap()).or_default();
-        *preload_env = {
-            let mut s = OsString::new();
-            s.push(preload);
-            // user-provided paths are added to the list after shadow's paths
-            if !preload_env.is_empty() {
-                // we could alternatively have used " " here instead
-                s.push(":");
-                s.push(&preload_env);
-            }
-            s
-        };
-
-        env.into_iter()
-            .map(|(x, y)| {
-                let mut x: OsString = String::from(x).into();
-                x.push("=");
-                x.push(y);
-                x
-            })
-            .collect()
     }
 
     fn log_heartbeat(&mut self, now: EmulatedTime) {

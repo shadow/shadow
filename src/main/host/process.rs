@@ -971,6 +971,7 @@ impl Process {
             envv,
             strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
             &shimlog_path,
+            host.preload_paths(),
         )?;
         let native_pid = mthread.native_pid();
         let main_thread =
