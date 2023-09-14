@@ -130,6 +130,7 @@ void _shim_parent_init_preload() {
     _shim_parent_init_memory_manager();
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
+    _shim_parent_close_stdin();
 
     shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }

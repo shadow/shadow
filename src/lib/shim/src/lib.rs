@@ -678,4 +678,9 @@ pub mod export {
     pub extern "C" fn _shim_parent_init_host_shm() {
         tls_process_shmem::with(|process| unsafe { global_host_shmem::set(&process.host_shmem) });
     }
+
+    #[no_mangle]
+    pub extern "C" fn _shim_parent_close_stdin() {
+        unsafe { rustix::io::close(libc::STDIN_FILENO) };
+    }
 }
