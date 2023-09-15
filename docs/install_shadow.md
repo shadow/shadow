@@ -2,7 +2,8 @@
 
 After building and testing Shadow, the install step is optional. If you do not
 wish to install Shadow, you can run it directly from the build directory
-(`./build/src/main/shadow`).
+(`./build/src/main/shadow`). Shadow only supports building from directories
+that do not have whitespace characters.
 
 ```bash
 git clone https://github.com/shadow/shadow.git
@@ -21,6 +22,9 @@ probably already in your `PATH`. If it isn't, you can add it by running:
 ```bash
 echo 'export PATH="${PATH}:/home/${USER}/.local/bin"' >> ~/.bashrc && source ~/.bashrc
 ```
+
+The path that Shadow is installed to must not contain any space characters as
+they are not supported by the dynamic linker's `LD_PRELOAD` mechanism.
 
 Check that Shadow is installed and runs:
 
