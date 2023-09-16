@@ -17,7 +17,9 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
-use crate::host::descriptor::shared_buf::SharedBuf;
+use crate::host::descriptor::shared_buf::{
+    BufferHandle, BufferSignals, BufferState, ReaderHandle, SharedBuf,
+};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{File, FileMode, FileSignals, FileState, FileStatus, SyscallResult};
 use crate::host::memory_manager::MemoryManager;
@@ -99,7 +101,7 @@ impl NetlinkSocket {
     }
 
     pub fn mode(&self) -> FileMode {
-        unimplemented!()
+        FileMode::READ | FileMode::WRITE
     }
 
     pub fn has_open_file(&self) -> bool {
@@ -115,11 +117,16 @@ impl NetlinkSocket {
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        unimplemented!()
+        nix::sys::socket::AddressFamily::Netlink
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
-        unimplemented!()
+        self.protocol_state.close(&mut self.common, cb_queue)
+    }
+
+    fn refresh_file_state(&mut self, cb_queue: &mut CallbackQueue) {
+        self.protocol_state
+            .refresh_file_state(&mut self.common, cb_queue)
     }
 
     pub fn shutdown(
@@ -268,6 +275,9 @@ struct InitialState {
     // Indicate that if the socket is already bound or not. We don't keep the bound address so that
     // we won't need to fill it.
     is_bound: bool,
+    reader_handle: ReaderHandle,
+    // this handle is never accessed, but we store it because of its drop impl
+    _buffer_handle: BufferHandle,
 }
 struct ClosedState {}
 /// The current protocol state of the netlink socket. An `Option` is required for each variant so that
@@ -295,7 +305,49 @@ state_upcast!(ClosedState, ProtocolState::Closed);
 
 impl ProtocolState {
     fn new(common: &mut NetlinkSocketCommon, socket: &Weak<AtomicRefCell<NetlinkSocket>>) -> Self {
-        ProtocolState::Initial(Some(InitialState { is_bound: false }))
+        // this is a new socket and there are no listeners, so safe to use a temporary event queue
+        let mut cb_queue = CallbackQueue::new();
+
+        // increment the buffer's reader count
+        let reader_handle = common.buffer.borrow_mut().add_reader(&mut cb_queue);
+
+        let weak = Weak::clone(socket);
+        let buffer_handle = common.buffer.borrow_mut().add_listener(
+            BufferState::READABLE,
+            BufferSignals::BUFFER_GREW,
+            move |_, _, cb_queue| {
+                if let Some(socket) = weak.upgrade() {
+                    socket.borrow_mut().refresh_file_state(cb_queue);
+                }
+            },
+        );
+
+        ProtocolState::Initial(Some(InitialState {
+            is_bound: false,
+            reader_handle,
+            _buffer_handle: buffer_handle,
+        }))
+    }
+
+    fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
+        match self {
+            Self::Initial(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+            Self::Closed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+        }
+    }
+
+    fn close(
+        &mut self,
+        common: &mut NetlinkSocketCommon,
+        cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        let (new_state, rv) = match self {
+            Self::Initial(x) => x.take().unwrap().close(common, cb_queue),
+            Self::Closed(x) => x.take().unwrap().close(common, cb_queue),
+        };
+
+        *self = new_state;
+        rv
     }
 
     fn bind(
@@ -364,6 +416,22 @@ impl InitialState {
         }
 
         common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
+    }
+
+    fn close(
+        self,
+        common: &mut NetlinkSocketCommon,
+        cb_queue: &mut CallbackQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        // inform the buffer that there is one fewer readers
+        common
+            .buffer
+            .borrow_mut()
+            .remove_reader(self.reader_handle, cb_queue);
+
+        let new_state = ClosedState {};
+        new_state.refresh_file_state(common, cb_queue);
+        (new_state.into(), Ok(()))
     }
 
     fn bind(
@@ -642,6 +710,23 @@ impl InitialState {
 }
 
 impl ClosedState {
+    fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
+        common.copy_state(
+            /* mask= */ FileState::all(),
+            FileState::CLOSED,
+            cb_queue,
+        );
+    }
+
+    fn close(
+        self,
+        _common: &mut NetlinkSocketCommon,
+        _cb_queue: &mut CallbackQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        // why are we trying to close an already closed file? we probably want a bt here...
+        panic!("Trying to close an already closed socket");
+    }
+
     fn bind(
         &mut self,
         _common: &mut NetlinkSocketCommon,
