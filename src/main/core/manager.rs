@@ -645,8 +645,8 @@ impl<'a> Manager<'a> {
                 proc.shutdown_signal,
                 plugin_name,
                 plugin_path,
-                envv,
                 argv,
+                envv,
                 pause_for_debugging,
                 proc.expected_final_state,
             );
