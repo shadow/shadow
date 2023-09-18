@@ -433,6 +433,15 @@ pub fn inject_preloads(mut envv: Vec<CString>, injected_preloads: &[PathBuf]) ->
         .iter()
         .map(|path| path.as_os_str().as_bytes());
 
+    for p in injected_preloads_bytes.clone() {
+        // Should have been caught earlier in configuraton parsing,
+        // but verify here at point of use.
+        assert!(
+            !p.iter().any(|c| *c == b' ' || *c == b':'),
+            "Preload path contains LD_PRELOAD separator"
+        );
+    }
+
     // `ld.so(8)`: The items of the list can be separated by spaces or colons,
     // and there is no support for escaping either separator.
     let previous_preloads = previous_preloads_string.split(|c| *c == b':' || *c == b' ');

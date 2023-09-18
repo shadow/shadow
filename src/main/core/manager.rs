@@ -833,6 +833,12 @@ fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
 
     let libpath = libpath.ok_or_else(|| anyhow::anyhow!(format!("Could not library in rpath")))?;
 
+    let bytes = libpath.as_os_str().as_bytes();
+    if bytes.iter().any(|c| *c == b' ' || *c == b':') {
+        // These are unescapable separators in LD_PRELOAD.
+        anyhow::bail!("Preload path contains LD_PRELOAD-incompatible characters: {libpath:?}");
+    }
+
     log::debug!(
         "Found required preload library {} at path {}",
         libname,
