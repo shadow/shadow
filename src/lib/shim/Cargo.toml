@@ -20,7 +20,7 @@ logger = { path = "../logger" }
 log = { version = "0.4.19", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
 rustix = { version = "0.38.4", default-features = false, features = ["process", "thread", "time", "mm"] }
-linux-raw-sys = { version = "0.4.3" }
+linux-raw-sys = { version = "0.5.2" }
 shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
 static_assertions = "1.1.0"
