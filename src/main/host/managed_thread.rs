@@ -3,6 +3,7 @@ use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::fd::RawFd;
 use std::os::unix::prelude::OsStrExt;
+use std::path::PathBuf;
 use std::sync::{atomic, Arc};
 
 use linux_api::sched::CloneFlags;
@@ -26,7 +27,7 @@ use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
-use crate::utility::{syscall, verify_plugin_path, VerifyPluginPathError};
+use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginPathError};
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -92,8 +93,13 @@ impl ManagedThread {
         envv: Vec<CString>,
         strace_fd: Option<RawFd>,
         log_path: &CStr,
+        injected_preloads: &[PathBuf],
     ) -> nix::Result<Self> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
+
+        let envv = inject_preloads(envv, injected_preloads);
+
+        debug!("env after preload injection: {envv:?}");
 
         let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
 

@@ -191,6 +191,9 @@ pub struct Host {
     shim_shmem: UnsafeCell<ShMemBlock<'static, HostShmem>>,
 
     in_notify_socket_has_packets: RootedCell<bool>,
+
+    /// Paths to be added to LD_PRELOAD of managed processes.
+    preload_paths: Arc<Vec<PathBuf>>,
 }
 
 /// Host must be `Send`.
@@ -215,6 +218,7 @@ impl Host {
         raw_cpu_freq_khz: u64,
         dns: *mut cshadow::DNS,
         manager_shmem: &ShMemBlock<ManagerShmem>,
+        preload_paths: Arc<Vec<PathBuf>>,
     ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
@@ -329,6 +333,7 @@ impl Host {
             #[cfg(feature = "perf_timers")]
             execution_timer,
             in_notify_socket_has_packets,
+            preload_paths,
         };
 
         res.stop_execution_timer();
@@ -1003,6 +1008,11 @@ impl Host {
             }
         }
         None
+    }
+
+    /// Paths of libraries that should be preloaded into managed processes.
+    pub fn preload_paths(&self) -> &[PathBuf] {
+        &self.preload_paths
     }
 }
 

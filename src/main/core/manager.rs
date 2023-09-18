@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
-use crate::core::support::configuration::{self, ConfigOptions, EnvName, Flatten};
+use crate::core::support::configuration::{self, ConfigOptions, Flatten};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
@@ -46,14 +46,7 @@ pub struct Manager<'a> {
     data_path: PathBuf,
     hosts_path: PathBuf,
 
-    // path to the injector lib that we preload for managed processes (if no other lib is preloaded)
-    preload_injector_path: PathBuf,
-    // path to the libc lib that we preload for managed processes
-    preload_libc_path: Option<PathBuf>,
-    // path to the openssl rng lib that we preload for managed processes
-    preload_openssl_rng_path: Option<PathBuf>,
-    // path to the openssl crypto lib that we preload for managed processes
-    preload_openssl_crypto_path: Option<PathBuf>,
+    preload_paths: Arc<Vec<PathBuf>>,
 
     check_fd_usage: bool,
     check_mem_usage: bool,
@@ -89,50 +82,49 @@ impl<'a> Manager<'a> {
             raw_frequency
         };
 
+        let mut preload_paths = Vec::new();
+
         // we always preload the injector lib to ensure that the shim is loaded into the managed
         // processes
         const PRELOAD_INJECTOR_LIB: &str = "libshadow_injector.so";
-        let preload_injector_path =
+        preload_paths.push(
             get_required_preload_path(PRELOAD_INJECTOR_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_INJECTOR_LIB}'")
-            })?;
+            })?,
+        );
 
         // preload libc lib if option is enabled
         const PRELOAD_LIBC_LIB: &str = "libshadow_libc.so";
-        let preload_libc_path = if config.experimental.use_preload_libc.unwrap() {
+        if config.experimental.use_preload_libc.unwrap() {
             let path = get_required_preload_path(PRELOAD_LIBC_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_LIBC_LIB}'")
             })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the libc library is disabled");
-            None
         };
 
         // preload openssl rng lib if option is enabled
         const PRELOAD_OPENSSL_RNG_LIB: &str = "libshadow_openssl_rng.so";
-        let preload_openssl_rng_path = if config.experimental.use_preload_openssl_rng.unwrap() {
+        if config.experimental.use_preload_openssl_rng.unwrap() {
             let path = get_required_preload_path(PRELOAD_OPENSSL_RNG_LIB).with_context(|| {
                 format!("Failed to get path to preload library '{PRELOAD_OPENSSL_RNG_LIB}'")
             })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the openssl rng library is disabled");
-            None
         };
 
         // preload openssl crypto lib if option is enabled
         const PRELOAD_OPENSSL_CRYPTO_LIB: &str = "libshadow_openssl_crypto.so";
-        let preload_openssl_crypto_path = if config.experimental.use_preload_openssl_crypto.unwrap()
-        {
+        if config.experimental.use_preload_openssl_crypto.unwrap() {
             let path =
                 get_required_preload_path(PRELOAD_OPENSSL_CRYPTO_LIB).with_context(|| {
                     format!("Failed to get path to preload library '{PRELOAD_OPENSSL_CRYPTO_LIB}'")
                 })?;
-            Some(path)
+            preload_paths.push(path);
         } else {
             log::info!("Preloading the openssl crypto library is disabled");
-            None
         };
 
         // use the working dir to generate absolute paths
@@ -213,10 +205,7 @@ impl<'a> Manager<'a> {
             end_time,
             data_path,
             hosts_path,
-            preload_injector_path,
-            preload_libc_path,
-            preload_openssl_rng_path,
-            preload_openssl_crypto_path,
+            preload_paths: Arc::new(preload_paths),
             check_fd_usage: true,
             check_mem_usage: true,
             meminfo_file,
@@ -617,6 +606,7 @@ impl<'a> Manager<'a> {
                     self.raw_frequency,
                     dns,
                     self.shmem(),
+                    self.preload_paths.clone(),
                 )
             })
         };
@@ -635,10 +625,16 @@ impl<'a> Manager<'a> {
                 .map(|x| CString::new(x.as_bytes()).unwrap())
                 .collect();
 
-            let envv = self.generate_env_vars(proc.env.clone());
-            let envv: Vec<CString> = envv
-                .iter()
-                .map(|x| CString::new(x.as_bytes()).unwrap())
+            let envv: Vec<CString> = proc
+                .env
+                .clone()
+                .into_iter()
+                .map(|(x, y)| {
+                    let mut x: OsString = String::from(x).into();
+                    x.push("=");
+                    x.push(y);
+                    CString::new(x.as_bytes()).unwrap()
+                })
                 .collect();
 
             host.continue_execution_timer();
@@ -661,79 +657,6 @@ impl<'a> Manager<'a> {
         host.unlock_shmem();
 
         Ok(host)
-    }
-
-    // assume that the provided env variables are UTF-8, since working with str instead of OsStr is
-    // much less painful
-    fn generate_env_vars(&self, env: BTreeMap<EnvName, String>) -> Vec<OsString> {
-        let mut env: BTreeMap<EnvName, OsString> =
-            env.into_iter().map(|(k, v)| (k, v.into())).collect();
-
-        // also insert the plugin preload entries
-        // precendence here is:
-        //   - preload path of the injector
-        //   - preload path of the libc lib
-        //   - preload path of the openssl rng lib
-        //   - preload path of the openssl crypto lib
-        //   - preload values from LD_PRELOAD entries in the environment process option
-
-        let mut preload = vec![];
-
-        preload.push(self.preload_injector_path.clone());
-
-        if let Some(ref path) = self.preload_libc_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_rng_path {
-            preload.push(path.clone());
-        }
-
-        if let Some(ref path) = self.preload_openssl_crypto_path {
-            preload.push(path.clone());
-        }
-
-        for path in &preload {
-            let path = path.as_os_str().as_bytes();
-            // these two characters separate paths and aren't valid in a preload path
-            assert!(!path.contains(&b':'));
-            assert!(!path.contains(&b' '));
-        }
-
-        // combine the LD_PRELOAD paths into a string
-        let preload = {
-            let mut preload_string = OsString::new();
-            for (x, path) in preload.iter().enumerate() {
-                if x > 0 {
-                    preload_string.push(":");
-                }
-                preload_string.push(path);
-            }
-            preload_string
-        };
-
-        // merge our LD_PRELOAD entries with the config entries
-        let preload_env = env.entry(EnvName::new("LD_PRELOAD").unwrap()).or_default();
-        *preload_env = {
-            let mut s = OsString::new();
-            s.push(preload);
-            // user-provided paths are added to the list after shadow's paths
-            if !preload_env.is_empty() {
-                // we could alternatively have used " " here instead
-                s.push(":");
-                s.push(&preload_env);
-            }
-            s
-        };
-
-        env.into_iter()
-            .map(|(x, y)| {
-                let mut x: OsString = String::from(x).into();
-                x.push("=");
-                x.push(y);
-                x
-            })
-            .collect()
     }
 
     fn log_heartbeat(&mut self, now: EmulatedTime) {
@@ -909,6 +832,12 @@ fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
     unsafe { libc::free(libpath_c as *mut libc::c_void) };
 
     let libpath = libpath.ok_or_else(|| anyhow::anyhow!(format!("Could not library in rpath")))?;
+
+    let bytes = libpath.as_os_str().as_bytes();
+    if bytes.iter().any(|c| *c == b' ' || *c == b':') {
+        // These are unescapable separators in LD_PRELOAD.
+        anyhow::bail!("Preload path contains LD_PRELOAD-incompatible characters: {libpath:?}");
+    }
 
     log::debug!(
         "Found required preload library {} at path {}",
