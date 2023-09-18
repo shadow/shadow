@@ -1,0 +1,47 @@
+general:
+  # stop after 10 simulated seconds
+  stop_time: 10s
+
+network:
+  graph:
+    # use a built-in network graph containing
+    # a single vertex with a bandwidth of 1 Gbit
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: bash 
+      args:
+       - -c
+       - |
+         # Fork some subprocesses.
+         # These don't `exec` though, because `echo`
+         # is a bash built-in.
+         echo "Hello 1" &
+         echo "Hello 2" &
+         echo "Hello 3" &
+         jobs
+         echo all started
+
+         # Wait for all subprocesses to finish.
+         wait
+         echo done
+
+         # Fork a subprocess with IO redirection.
+         echo $(echo hello from pipeline?)
+
+         # `exec` a subprocess
+         # TODO: needs `exec`.
+         # seq 5
+
+         # `exec` subprocesses with IO redirection.
+         # TODO: this doesn't work yet, because the
+         # subprocesses try to check whether `stdin` is
+         # a terminal, and we don't yet support the corresponding
+         # syscalls on pipes.
+         # seq 20 | sort
+
+         echo done
+      start_time: 3s
