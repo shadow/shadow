@@ -430,8 +430,7 @@ fn write_events_to_ptr(
     let events_ptr = ForeignArrayPtr::new(events_ptr, ready.len());
     let mut mem_ref = mem.memory_ref_mut(events_ptr)?;
 
-    for (i, (ev, data)) in ready.iter().enumerate() {
-        let plugin_ev = &mut mem_ref.deref_mut()[i];
+    for ((ev, data), plugin_ev) in ready.iter().zip(mem_ref.deref_mut().iter_mut()) {
         plugin_ev.events = ev.bits();
         plugin_ev.data = *data;
     }
