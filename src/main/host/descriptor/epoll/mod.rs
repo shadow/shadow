@@ -181,7 +181,7 @@ impl Epoll {
             }
             EpollCtlOp::EPOLL_CTL_MOD => {
                 let entry = self.monitoring.get_mut(&key).ok_or(Errno::ENOENT)?;
-                entry.reset(events, data, state);
+                entry.modify(events, data, state);
             }
             EpollCtlOp::EPOLL_CTL_DEL => {
                 // Stop monitoring this entry. Dropping the entry will cause it to stop listening

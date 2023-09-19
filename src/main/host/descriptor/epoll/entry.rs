@@ -11,7 +11,7 @@ pub(super) struct Entry {
     priority: Option<u64>,
     /// The events of interest registered by the managed process.
     interest: EpollEvents,
-    /// The data registared by the managed process, to be returned upon event notification.
+    /// The data registered by the managed process, to be returned upon event notification.
     data: u64,
     /// The handle to the currently registered file status listener.
     listener_handle: Option<Handle<(FileState, FileState)>>,
@@ -42,7 +42,13 @@ impl Entry {
         self.is_legacy = true;
     }
 
-    pub fn reset(&mut self, interest: EpollEvents, data: u64, state: FileState) {
+    /// Updates the events that should be tracked in this entry, and the data that should be
+    /// returned to the managed process when those events occur.
+    ///
+    /// Note that this operation causes us to store the given current file state so that future
+    /// changes are tracked from the state at the time `modify()` was called, and internal state for
+    /// tracking which events have been collected by the managed process are updated accordingly.
+    pub fn modify(&mut self, interest: EpollEvents, data: u64, state: FileState) {
         log::trace!("Reset old state {:?}, new state {:?}", self.state, state);
         self.interest = interest;
         self.data = data;
@@ -374,7 +380,7 @@ mod tests {
         entry.notify(FileState::READABLE, FileState::READABLE);
         assert!(!entry.has_ready_events());
 
-        entry.reset(in_os, DATA, FileState::READABLE);
+        entry.modify(in_os, DATA, FileState::READABLE);
 
         assert!(entry.has_ready_events());
         assert_eq!(
