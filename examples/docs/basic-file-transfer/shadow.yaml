@@ -1,0 +1,35 @@
+general:
+  # stop after 10 simulated seconds
+  stop_time: 10s
+  # old versions of cURL use a busy loop, so to avoid spinning in this busy
+  # loop indefinitely, we add a system call latency to advance the simulated
+  # time when running non-blocking system calls
+  model_unblocked_syscall_latency: true
+
+network:
+  graph:
+    # use a built-in network graph containing
+    # a single vertex with a bandwidth of 1 Gbit
+    type: 1_gbit_switch
+
+hosts:
+  # a host with the hostname 'server'
+  server:
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/python3
+      args: -m http.server 80
+      start_time: 3s
+      # Tell shadow to expect this process to still be running at the end of the
+      # simulation.
+      expected_final_state: running
+  # three hosts with hostnames 'client1', 'client2', and 'client3' using a yaml
+  # anchor to avoid duplicating the options for each host
+  client1: &client_host
+    network_node_id: 0
+    processes:
+    - path: /usr/bin/curl
+      args: -s server
+      start_time: 5s
+  client2: *client_host
+  client3: *client_host

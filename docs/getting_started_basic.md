@@ -16,41 +16,7 @@ uses a built-in network graph for simplicity.
 `shadow.yaml`:
 
 ```yaml
-general:
-  # stop after 10 simulated seconds
-  stop_time: 10s
-  # old versions of cURL use a busy loop, so to avoid spinning in this busy
-  # loop indefinitely, we add a system call latency to advance the simulated
-  # time when running non-blocking system calls
-  model_unblocked_syscall_latency: true
-
-network:
-  graph:
-    # use a built-in network graph containing
-    # a single vertex with a bandwidth of 1 Gbit
-    type: 1_gbit_switch
-
-hosts:
-  # a host with the hostname 'server'
-  server:
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/python3
-      args: -m http.server 80
-      start_time: 3s
-      # Tell shadow to expect this process to still be running at the end of the
-      # simulation.
-      expected_final_state: running
-  # three hosts with hostnames 'client1', 'client2', and 'client3' using a yaml
-  # anchor to avoid duplicating the options for each host
-  client1: &client_host
-    network_node_id: 0
-    processes:
-    - path: /usr/bin/curl
-      args: -s server
-      start_time: 5s
-  client2: *client_host
-  client3: *client_host
+{{#include ../examples/docs/basic-file-transfer/shadow.yaml}}
 ```
 
 ## Running the Simulation
@@ -59,9 +25,7 @@ Shadow stores simulation data to the `shadow.data/` directory by default. We
 first remove this directory if it already exists, and then run Shadow.
 
 ```bash
-# delete any existing simulation data
-rm -rf shadow.data/
-shadow shadow.yaml > shadow.log
+{{#include ../examples/docs/basic-file-transfer/run.sh:body}}
 ```
 
 This small Shadow simulation should complete almost immediately.
@@ -72,30 +36,17 @@ Shadow will write simulation output to the data directory `shadow.data/`. Each
 host has its own directory under `shadow.data/hosts/`. For example:
 
 ```bash
-$ ls -l shadow.data/hosts/
-drwxrwxr-x 2 user user 4096 Jun  2 16:54 client1
-drwxrwxr-x 2 user user 4096 Jun  2 16:54 client2
-drwxrwxr-x 2 user user 4096 Jun  2 16:54 client3
-drwxrwxr-x 2 user user 4096 Jun  2 16:54 server
+$ {{#include ../examples/docs/basic-file-transfer/show.sh:body_1}}
+{{#include ../examples/docs/basic-file-transfer/show.sh:output_1}}
 ```
 
 Each host directory contains the output for each process running on that host.
 For example:
 
 ```bash
-$ ls -l shadow.data/hosts/client1/
--rw-rw-r-- 1 user user   0 Jun  2 16:54 curl.1000.shimlog
--rw-r--r-- 1 user user   0 Jun  2 16:54 curl.1000.stderr
--rw-r--r-- 1 user user 542 Jun  2 16:54 curl.1000.stdout
+$ {{#include ../examples/docs/basic-file-transfer/show.sh:body_2}}
+{{#include ../examples/docs/basic-file-transfer/show.sh:output_2}}
 
-$ cat shadow.data/hosts/client1/curl.1000.stdout
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>Directory listing for /</title>
-</head>
-<body>
-<h1>Directory listing for /</h1>
-...
+$ {{#include ../examples/docs/basic-file-transfer/show.sh:body_3}}
+{{#include ../examples/docs/basic-file-transfer/show.sh:output_3}}
 ```
