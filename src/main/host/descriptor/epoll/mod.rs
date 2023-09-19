@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry as HashMapEntry;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Weak};
 
@@ -161,13 +162,8 @@ impl Epoll {
                     return Err(Errno::EBADF.into());
                 }
 
-                // From epoll_ctl(2): "op was EPOLL_CTL_ADD, and the supplied file descriptor fd is
-                // already registered with this epoll instance."
-                if self.monitoring.contains_key(&key) {
-                    return Err(Errno::EEXIST.into());
-                }
-
                 let mut entry = Entry::new(events, data, state);
+
                 // TODO remove when legacy tcp is removed.
                 if matches!(
                     key.file(),
@@ -175,7 +171,13 @@ impl Epoll {
                 ) {
                     entry.set_legacy();
                 }
-                self.monitoring.insert(key.clone(), entry);
+
+                // From epoll_ctl(2): Returns EEXIST when "op was EPOLL_CTL_ADD, and the supplied
+                // file descriptor fd is already registered with this epoll instance."
+                match self.monitoring.entry(key.clone()) {
+                    HashMapEntry::Occupied(_) => return Err(Errno::EEXIST.into()),
+                    HashMapEntry::Vacant(x) => x.insert(entry),
+                };
             }
             EpollCtlOp::EPOLL_CTL_MOD => {
                 let entry = self.monitoring.get_mut(&key).ok_or(Errno::ENOENT)?;
