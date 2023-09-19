@@ -285,8 +285,9 @@ impl Epoll {
         cb_queue: &mut CallbackQueue,
     ) {
         // Notify entry of file state change if we're still monitoring it.
-        if let Some(entry) = self.monitoring.get_mut(&key.clone()) {
-            entry.notify(state, changed);
+        match self.monitoring.get_mut(&key.clone()) {
+            Some(entry) => entry.notify(state, changed),
+            None => return,
         };
 
         // Update our ready set, which removes the key if the file closed.
