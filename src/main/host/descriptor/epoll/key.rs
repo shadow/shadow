@@ -56,7 +56,7 @@ impl Eq for PriorityKey {}
 
 impl PartialEq for PriorityKey {
     fn eq(&self, other: &Self) -> bool {
-        self.key.eq(&other.key)
+        self.pri.eq(&other.pri)
     }
 }
 
