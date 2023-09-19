@@ -89,17 +89,20 @@ impl SyscallHandler {
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
 
         // Get the epoll descriptor, or return early if it doesn't exist.
-        let epoll = {
+        let (epoll, epoll_canon_handle) = {
             let desc = Self::get_descriptor(&desc_table, epfd)?;
 
             let CompatFile::New(epoll) = desc.file() else {
                 return Err(Errno::EINVAL.into());
             };
+
+            let epoll_canon_handle = epoll.inner_file().canonical_handle();
+
             let File::Epoll(epoll) = epoll.inner_file() else {
                 return Err(Errno::EINVAL.into());
             };
 
-            epoll
+            (epoll, epoll_canon_handle)
         };
 
         // Get the target descriptor, or return errors as appropriate.
@@ -131,7 +134,7 @@ impl SyscallHandler {
         };
 
         // An epoll instance is not allowed to monitor itself.
-        if epfd == fd {
+        if epoll_canon_handle == target.canonical_handle() {
             return Err(Errno::EINVAL.into());
         }
 

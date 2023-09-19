@@ -134,6 +134,9 @@ impl Epoll {
         Err(Errno::ENOTTY.into())
     }
 
+    /// Executes an epoll control operation on the target file.
+    ///
+    /// Panics if `target_file` is an instance of this epoll object.
     pub fn ctl(
         &mut self,
         op: EpollCtlOp,
