@@ -18,6 +18,10 @@ pub use bindings::linux___kernel_off_t;
 #[allow(non_camel_case_types)]
 pub type kernel_off_t = linux___kernel_off_t;
 
+pub use bindings::linux___kernel_size_t;
+#[allow(non_camel_case_types)]
+pub type kernel_size_t = linux___kernel_size_t;
+
 /// Type-safe wrapper around [`kernel_pid_t`]. Value is strictly positive.
 /// Interface inspired by `rustix::process::Pid`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]

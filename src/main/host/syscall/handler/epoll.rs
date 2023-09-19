@@ -192,7 +192,8 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int,
                   /* events */ *const std::ffi::c_void, /* max_events */ std::ffi::c_int,
-                  /* timeout */ std::ffi::c_int, /* sigmask */ *const std::ffi::c_void)]
+                  /* timeout */ std::ffi::c_int, /* sigmask */ *const std::ffi::c_void,
+                  /* sigsetsize */ linux_api::posix_types::kernel_size_t)]
     pub fn epoll_pwait(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,
@@ -200,6 +201,7 @@ impl SyscallHandler {
         max_events: std::ffi::c_int,
         timeout: std::ffi::c_int,
         sigmask_ptr: ForeignPtr<linux_api::signal::sigset_t>,
+        _sigsetsize: linux_api::posix_types::kernel_size_t,
     ) -> Result<std::ffi::c_int, SyscallError> {
         // epoll_wait(2): "The sigmask argument may be specified as NULL, in which case
         // epoll_pwait() is equivalent to epoll_wait()"
@@ -216,7 +218,8 @@ impl SyscallHandler {
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int,
                   /* events */ *const std::ffi::c_void, /* max_events */ std::ffi::c_int,
-                  /* timeout */ *const std::ffi::c_void, /* sigmask */ *const std::ffi::c_void)]
+                  /* timeout */ *const std::ffi::c_void, /* sigmask */ *const std::ffi::c_void,
+                  /* sigsetsize */ linux_api::posix_types::kernel_size_t)]
     pub fn epoll_pwait2(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,
@@ -224,6 +227,7 @@ impl SyscallHandler {
         max_events: std::ffi::c_int,
         timeout_ptr: ForeignPtr<linux_api::time::timespec>,
         sigmask_ptr: ForeignPtr<linux_api::signal::sigset_t>,
+        _sigsetsize: linux_api::posix_types::kernel_size_t,
     ) -> Result<std::ffi::c_int, SyscallError> {
         let (sigmask, timeout) = {
             let mem = ctx.objs.process.memory_borrow();
