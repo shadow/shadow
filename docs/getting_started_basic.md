@@ -10,8 +10,9 @@ package manager.
 Each client uses cURL to make an HTTP request to a basic Python HTTP server.
 
 Shadow requires a configuration file that specifies information about the
-network graph and the processes to run within the simulation. This example
-uses a built-in network graph for simplicity.
+network graph and the processes to run within the simulation. This example uses
+a [built-in network graph](shadow_config_spec.md#networkgraphtype) for
+simplicity.
 
 `shadow.yaml`:
 
