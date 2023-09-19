@@ -154,6 +154,8 @@ impl Epoll {
                 // that is referenced in the descriptor table should never be a closed file, but
                 // Shadow's C TCP sockets do close themselves even if there are still file handles
                 // (see `_tcp_endOfFileSignalled`), so we need to check this.
+                //
+                // TODO change this to an assertion when legacy tcp is removed.
                 if state.contains(FileState::CLOSED) {
                     log::warn!("Attempted to add a closed file {target_fd} to epoll");
                     return Err(Errno::EBADF.into());
@@ -168,7 +170,7 @@ impl Epoll {
                 let mut entry = Entry::new(events, data, state);
                 // TODO remove when legacy tcp is removed.
                 if matches!(
-                    key.get_file_ref(),
+                    key.file(),
                     File::Socket(Socket::Inet(InetSocket::LegacyTcp(_)))
                 ) {
                     entry.set_legacy();
@@ -185,7 +187,7 @@ impl Epoll {
                 let entry = self.monitoring.remove(&key).ok_or(Errno::ENOENT)?;
 
                 // If it has a priority, then we also remove it from the ready set.
-                if let Some(pri) = entry.get_priority() {
+                if let Some(pri) = entry.priority() {
                     self.ready.remove(&PriorityKey::new(pri, key.clone()));
                 }
             }
@@ -259,7 +261,7 @@ impl Epoll {
         let filter = StateListenerFilter::Always;
 
         // Set up a callback so we get informed when the file changes.
-        let file = key.get_file_ref().clone();
+        let file = key.file().clone();
         let handle =
             file.borrow_mut()
                 .add_listener(listen, filter, move |state, changed, cb_queue| {
@@ -304,14 +306,14 @@ impl Epoll {
         };
 
         if entry.has_ready_events() {
-            if entry.get_priority().is_none() {
+            if entry.priority().is_none() {
                 // It's ready but not in the ready set yet.
                 let pri = self.pri_counter;
                 self.pri_counter += 1;
                 self.ready.insert(PriorityKey::new(pri, key));
                 entry.set_priority(Some(pri));
             }
-        } else if let Some(pri) = entry.get_priority() {
+        } else if let Some(pri) = entry.priority() {
             // It's not ready anymore but it's in the ready set.
             self.ready.remove(&PriorityKey::new(pri, key));
             entry.set_priority(None);

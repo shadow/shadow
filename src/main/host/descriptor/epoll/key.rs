@@ -13,11 +13,11 @@ pub(super) struct Key {
 }
 
 impl Key {
-    pub(super) fn new(fd: i32, file: File) -> Self {
+    pub fn new(fd: i32, file: File) -> Self {
         Self { fd, file }
     }
 
-    pub(super) fn get_file_ref(&self) -> &File {
+    pub fn file(&self) -> &File {
         &self.file
     }
 }
@@ -47,7 +47,7 @@ pub(super) struct PriorityKey {
 }
 
 impl PriorityKey {
-    pub(super) fn new(pri: u64, key: Key) -> Self {
+    pub fn new(pri: u64, key: Key) -> Self {
         Self { pri, key }
     }
 }

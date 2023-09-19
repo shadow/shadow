@@ -7,25 +7,25 @@ use crate::utility::callback_queue::Handle;
 /// deciding when a file has events that epoll should report should be specified in this object's
 /// implementation.
 pub(super) struct Entry {
-    // Priority value among other ready entries.
+    /// Priority value among other ready entries.
     priority: Option<u64>,
-    // The events of interest registered by the managed process.
+    /// The events of interest registered by the managed process.
     interest: EpollEvents,
-    // The data registared by the managed process, to be returned upon event notification.
+    /// The data registared by the managed process, to be returned upon event notification.
     data: u64,
-    // The handle to the currently registered file status listener.
+    /// The handle to the currently registered file status listener.
     listener_handle: Option<Handle<(FileState, FileState)>>,
-    // The current state of the file.
+    /// The current state of the file.
     state: FileState,
-    // The file state changes we have already reported since the state last changed. When a state
-    // changes, that event becomes uncollected until `collect_ready_events` is called.
+    /// The file state changes we have already reported since the state last changed. When a state
+    /// changes, that event becomes uncollected until `collect_ready_events` is called.
     collected: FileState,
-    // TODO remove when legacy tcp is removed.
+    /// TODO remove when legacy tcp is removed.
     is_legacy: bool,
 }
 
 impl Entry {
-    pub(super) fn new(interest: EpollEvents, data: u64, state: FileState) -> Self {
+    pub fn new(interest: EpollEvents, data: u64, state: FileState) -> Self {
         Self {
             priority: None,
             interest,
@@ -38,11 +38,11 @@ impl Entry {
     }
 
     // TODO remove when legacy tcp is removed.
-    pub(super) fn set_legacy(&mut self) {
+    pub fn set_legacy(&mut self) {
         self.is_legacy = true;
     }
 
-    pub(super) fn reset(&mut self, interest: EpollEvents, data: u64, state: FileState) {
+    pub fn reset(&mut self, interest: EpollEvents, data: u64, state: FileState) {
         log::trace!("Reset old state {:?}, new state {:?}", self.state, state);
         self.interest = interest;
         self.data = data;
@@ -50,15 +50,15 @@ impl Entry {
         self.collected = FileState::empty();
     }
 
-    pub(super) fn set_priority(&mut self, priority: Option<u64>) {
+    pub fn set_priority(&mut self, priority: Option<u64>) {
         self.priority = priority;
     }
 
-    pub(super) fn get_priority(&self) -> Option<u64> {
+    pub fn priority(&self) -> Option<u64> {
         self.priority
     }
 
-    pub(super) fn notify(&mut self, new_state: FileState, changed: FileState) {
+    pub fn notify(&mut self, new_state: FileState, changed: FileState) {
         log::trace!(
             "Notify old state {:?}, new state {:?}, changed {:?}",
             self.state,
@@ -69,38 +69,36 @@ impl Entry {
         self.collected.remove(changed);
     }
 
-    pub(super) fn get_listener_state(&self) -> FileState {
-        {
-            // TODO remove when legacy tcp is removed.
-            if self.is_legacy {
-                return FileState::all();
-            }
+    pub fn get_listener_state(&self) -> FileState {
+        // TODO remove this if block when legacy tcp is removed.
+        if self.is_legacy {
+            return FileState::all();
         }
+
         // Return the file state changes that we want to be notified about.
         Self::state_from_events(self.interest).union(FileState::CLOSED)
     }
 
-    pub(super) fn set_listener_handle(&mut self, handle: Option<Handle<(FileState, FileState)>>) {
+    pub fn set_listener_handle(&mut self, handle: Option<Handle<(FileState, FileState)>>) {
         self.listener_handle = handle;
     }
 
-    pub(super) fn has_ready_events(&self) -> bool {
-        {
-            // TODO remove when legacy tcp is removed.
-            if self.is_legacy {
-                if self.state.contains(FileState::CLOSED) {
-                    return false;
-                } else if self.state.contains(FileState::ACTIVE) {
-                    return !self.get_ready_events().is_empty();
-                } else {
-                    return false;
-                }
+    pub fn has_ready_events(&self) -> bool {
+        // TODO remove this if block when legacy tcp is removed.
+        if self.is_legacy {
+            if self.state.contains(FileState::CLOSED) {
+                return false;
+            } else if self.state.contains(FileState::ACTIVE) {
+                return !self.get_ready_events().is_empty();
+            } else {
+                return false;
             }
         }
+
         !self.state.contains(FileState::CLOSED) && !self.get_ready_events().is_empty()
     }
 
-    pub(super) fn collect_ready_events(&mut self) -> Option<(EpollEvents, u64)> {
+    pub fn collect_ready_events(&mut self) -> Option<(EpollEvents, u64)> {
         let events = self.get_ready_events();
 
         if events.is_empty() {

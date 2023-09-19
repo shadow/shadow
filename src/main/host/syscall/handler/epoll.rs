@@ -45,7 +45,7 @@ impl SyscallHandler {
         flags: std::ffi::c_int,
     ) -> Result<std::ffi::c_int, SyscallError> {
         // See here for the order that the input args are checked in Linux:
-        // https://github.com/torvalds/linux/blob/master/fs/eventpoll.c#L2038
+        // https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2030
         let Some(flags) = EpollCreateFlags::from_bits(flags) else {
             log::debug!("Invalid epoll_create flags: {flags}");
             return Err(Errno::EINVAL.into());
@@ -68,7 +68,7 @@ impl SyscallHandler {
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 
-        log::trace!("Created epoll fd {}", fd);
+        log::trace!("Created epoll fd {fd}");
 
         Ok(fd.val().try_into().unwrap())
     }
@@ -83,7 +83,7 @@ impl SyscallHandler {
         event_ptr: ForeignPtr<linux_api::epoll::epoll_event>,
     ) -> Result<std::ffi::c_int, SyscallError> {
         // See here for the order that the input args are checked in Linux:
-        // https://github.com/torvalds/linux/blob/master/fs/eventpoll.c#L2119
+        // https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2111
 
         // We'll need to look up descriptors.
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -151,6 +151,7 @@ impl SyscallHandler {
             let ev = mem.read(event_ptr)?;
 
             let Some(mut events) = EpollEvents::from_bits(ev.events) else {
+                // Braces are needed around `ev.events` for alignment (see rustc --explain E0793).
                 log::debug!("Invalid epoll_ctl events: {}", { ev.events });
                 return Err(Errno::EINVAL.into());
             };
@@ -184,6 +185,7 @@ impl SyscallHandler {
         max_events: std::ffi::c_int,
         timeout: std::ffi::c_int,
     ) -> Result<std::ffi::c_int, SyscallError> {
+        // Note that timeout is given in milliseconds.
         let timeout = timeout_arg_to_maybe_simtime(timeout)?;
         Self::epoll_wait_helper(ctx, epfd, events_ptr, max_events, timeout, None)
     }
@@ -207,6 +209,7 @@ impl SyscallHandler {
             Some(ctx.objs.process.memory_borrow().read(sigmask_ptr)?)
         };
 
+        // Note that timeout is given in milliseconds.
         let timeout = timeout_arg_to_maybe_simtime(timeout)?;
         Self::epoll_wait_helper(ctx, epfd, events_ptr, max_events, timeout, sigmask)
     }
@@ -307,7 +310,9 @@ impl SyscallHandler {
                 return Err(Errno::EFAULT.into());
             }
 
-            // After this call, it is UB if we later fail to write the events_ptr ForeignPointer.
+            // After we collect the events here, failing to write them out to the events_ptr
+            // ForeignPointer below will leave our event state inconsistent with the managed
+            // process's understanding of the available events.
             let ready = epoll.borrow_mut().collect_ready_events(max_events);
             let n_ready = ready.len();
             if n_ready > max_events as usize {
@@ -379,23 +384,30 @@ impl SyscallHandler {
 }
 
 fn timeout_arg_to_maybe_simtime(
-    timeout: std::ffi::c_int,
+    timeout_ms: std::ffi::c_int,
 ) -> Result<Option<SimulationTime>, SyscallError> {
     // epoll_wait(2): "Specifying a timeout of -1 causes epoll_wait() to block indefinitely"
-    let timeout = (timeout >= 0).then_some(timeout);
+    let timeout_ms = (timeout_ms >= 0).then_some(timeout_ms);
 
-    if let Some(timeout) = timeout {
+    if let Some(timeout_ms) = timeout_ms {
         // a non-negative c_int should always convert to a u64
-        let timeout = timeout.try_into().unwrap();
-        let timeout = SimulationTime::try_from_millis(timeout).ok_or(Errno::EINVAL)?;
+        let timeout_ms = timeout_ms.try_into().unwrap();
+        let timeout = SimulationTime::try_from_millis(timeout_ms).ok_or(Errno::EINVAL)?;
         Ok(Some(timeout))
     } else {
         Ok(None)
     }
 }
 
+/// There is a maximum number of events that can be specified in Linux:
+/// https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2291
+///
+/// The maximum is defined as:
+///   `#define EP_MAX_EVENTS (INT_MAX / sizeof(struct epoll_event))`
+/// https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L95
+///
+/// This function performs the above computation as Linux does.
 fn epoll_max_events_upper_bound() -> i32 {
-    // https://github.com/torvalds/linux/blob/master/fs/eventpoll.c#L2299
     let ep_max_events = i32::MAX;
     let ep_ev_size: i32 = std::mem::size_of::<linux_api::epoll::epoll_event>()
         .try_into()
