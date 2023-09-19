@@ -138,9 +138,7 @@ impl Entry {
     fn events_from_state(state: FileState) -> EpollEvents {
         let mut events = EpollEvents::empty();
 
-        if state.intersects(
-            FileState::READABLE | FileState::SOCKET_ALLOWING_CONNECT | FileState::FUTEX_WAKEUP,
-        ) {
+        if state.intersects(FileState::READABLE) {
             events.insert(EpollEvents::EPOLLIN);
         }
         if state.intersects(FileState::WRITABLE) {
@@ -154,9 +152,7 @@ impl Entry {
         let mut state = FileState::empty();
 
         if events.intersects(EpollEvents::EPOLLIN) {
-            state.insert(
-                FileState::READABLE | FileState::SOCKET_ALLOWING_CONNECT | FileState::FUTEX_WAKEUP,
-            )
+            state.insert(FileState::READABLE)
         }
         if events.intersects(EpollEvents::EPOLLOUT) {
             state.insert(FileState::WRITABLE)
