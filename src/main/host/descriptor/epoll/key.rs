@@ -50,6 +50,10 @@ impl PriorityKey {
     pub fn new(pri: u64, key: Key) -> Self {
         Self { pri, key }
     }
+
+    pub fn priority(&self) -> u64 {
+        self.pri
+    }
 }
 
 impl Eq for PriorityKey {}

@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry as HashMapEntry;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BinaryHeap, HashMap};
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
@@ -35,11 +35,13 @@ pub struct Epoll {
     // this file.
     has_open_file: bool,
     // A counter for sorting entries, to guarantee fairness and determinism when reporting events.
+    // Because our ready set is a max heap, we initialize this counter to u64::MAX and count down as
+    // we assign values so that entries whose events were last reported longest ago are prioritized.
     pri_counter: u64,
     // Stores entries for all descriptors we are currently monitoring for events.
     monitoring: HashMap<Key, Entry>,
     // Stores keys for entries with events that are ready to be reported.
-    ready: BTreeSet<PriorityKey>,
+    ready: BinaryHeap<PriorityKey>,
     _counter: ObjectCounter,
 }
 
@@ -50,9 +52,9 @@ impl Epoll {
             status: FileStatus::empty(),
             state: FileState::ACTIVE,
             has_open_file: false,
-            pri_counter: 1,
+            pri_counter: u64::MAX,
             monitoring: HashMap::new(),
-            ready: BTreeSet::new(),
+            ready: BinaryHeap::new(),
             _counter: ObjectCounter::new("Epoll"),
         };
 
@@ -193,7 +195,7 @@ impl Epoll {
 
                 // If it has a priority, then we also remove it from the ready set.
                 if let Some(pri) = entry.priority() {
-                    self.ready.remove(&PriorityKey::new(pri, key.clone()));
+                    self.ready.retain(|e| e.priority() != pri)
                 }
             }
         };
@@ -316,13 +318,13 @@ impl Epoll {
             if entry.priority().is_none() {
                 // It's ready but not in the ready set yet.
                 let pri = self.pri_counter;
-                self.pri_counter += 1;
-                self.ready.insert(PriorityKey::new(pri, key));
+                self.pri_counter -= 1;
+                self.ready.push(PriorityKey::new(pri, key));
                 entry.set_priority(Some(pri));
             }
         } else if let Some(pri) = entry.priority() {
-            // It's not ready anymore but it's in the ready set.
-            self.ready.remove(&PriorityKey::new(pri, key));
+            // It's not ready anymore but it's in the ready set, so remove it.
+            self.ready.retain(|e| e.priority() != pri);
             entry.set_priority(None);
         }
     }
@@ -337,7 +339,7 @@ impl Epoll {
 
         while !self.ready.is_empty() && events.len() < max_events as usize {
             // Get the next ready entry.
-            let pri_key = self.ready.pop_first().unwrap();
+            let pri_key = self.ready.pop().unwrap();
             let key = Key::from(pri_key);
             let entry = self.monitoring.get_mut(&key).unwrap();
 
@@ -354,7 +356,7 @@ impl Epoll {
             if entry.has_ready_events() {
                 // It's ready again. Assign a new priority to ensure fairness with other entries.
                 let pri = self.pri_counter;
-                self.pri_counter += 1;
+                self.pri_counter -= 1;
                 let pri_key = PriorityKey::new(pri, key);
 
                 // Use temp vec so we don't report the same entry twice in the same round.
@@ -366,9 +368,7 @@ impl Epoll {
         }
 
         // Add everything that is still ready back to the ready set.
-        while let Some(pri_key) = keep.pop() {
-            self.ready.insert(pri_key);
-        }
+        self.ready.extend(keep);
 
         // The events to be returned to the managed process.
         events
