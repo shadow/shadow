@@ -289,7 +289,7 @@ impl Epoll {
             entry.notify(state, changed);
         };
 
-        // Update our ready set.
+        // Update our ready set, which removes the key if the file closed.
         self.refresh_ready(key.clone());
 
         // Also stop monitoring if the file was closed.
@@ -307,6 +307,7 @@ impl Epoll {
             return;
         };
 
+        // The entry will not be ready if the file closed.
         if entry.has_ready_events() {
             if entry.priority().is_none() {
                 // It's ready but not in the ready set yet.
