@@ -21,7 +21,9 @@ use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferSignals, BufferState, ReaderHandle, SharedBuf,
 };
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
-use crate::host::descriptor::{File, FileMode, FileSignals, FileState, FileStatus, SyscallResult};
+use crate::host::descriptor::{
+    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, SyscallResult,
+};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
@@ -114,6 +116,16 @@ impl NetlinkSocket {
 
     pub fn set_has_open_file(&mut self, val: bool) {
         self.common.has_open_file = val;
+    }
+
+    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+        log::warn!("getsockname() syscall not yet supported for netlink sockets; Returning ENOSYS");
+        Err(Errno::ENOSYS.into())
+    }
+
+    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+        log::warn!("getpeername() syscall not yet supported for netlink sockets; Returning ENOSYS");
+        Err(Errno::ENOSYS.into())
     }
 
     pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
@@ -230,6 +242,41 @@ impl NetlinkSocket {
         socket_ref
             .protocol_state
             .recvmsg(&mut socket_ref.common, socket, args, mem, cb_queue)
+    }
+
+    pub fn listen(
+        _socket: &Arc<AtomicRefCell<Self>>,
+        _backlog: i32,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        // We follow the same approach as UnixSocket
+        log::warn!("We do not yet handle listen request on netlink sockets");
+        Err(Errno::EINVAL.into())
+    }
+
+    pub fn connect(
+        _socket: &Arc<AtomicRefCell<Self>>,
+        _addr: &SockaddrStorage,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<(), SyscallError> {
+        // We follow the same approach as UnixSocket
+        log::warn!("We do not yet handle connect request on netlink sockets");
+        Err(Errno::EINVAL.into())
+    }
+
+    pub fn accept(
+        &mut self,
+        _net_ns: &NetworkNamespace,
+        _rng: impl rand::Rng,
+        _cb_queue: &mut CallbackQueue,
+    ) -> Result<OpenFile, SyscallError> {
+        // We follow the same approach as UnixSocket
+        log::warn!("We do not yet handle accept request on netlink sockets");
+        Err(Errno::EINVAL.into())
     }
 
     pub fn ioctl(

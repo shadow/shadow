@@ -107,7 +107,7 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::listen(socket, backlog, net_ns, rng, cb_queue),
             Self::Inet(socket) => InetSocket::listen(socket, backlog, net_ns, rng, cb_queue),
-            Self::Netlink(_) => todo!(),
+            Self::Netlink(socket) => NetlinkSocket::listen(socket, backlog, net_ns, rng, cb_queue),
         }
     }
 
@@ -121,7 +121,7 @@ impl Socket {
         match self {
             Self::Unix(socket) => UnixSocket::connect(socket, addr, net_ns, rng, cb_queue),
             Self::Inet(socket) => InetSocket::connect(socket, addr, net_ns, rng, cb_queue),
-            Self::Netlink(_) => todo!(),
+            Self::Netlink(socket) => NetlinkSocket::connect(socket, addr, net_ns, rng, cb_queue),
         }
     }
 
@@ -218,7 +218,7 @@ impl SocketRef<'_> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
-            Self::Netlink(socket) => todo!(),
+            Self::Netlink(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
@@ -226,7 +226,7 @@ impl SocketRef<'_> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
-            Self::Netlink(socket) => todo!(),
+            Self::Netlink(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
@@ -295,7 +295,7 @@ impl SocketRefMut<'_> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
-            Self::Netlink(socket) => todo!(),
+            Self::Netlink(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
 
@@ -303,7 +303,7 @@ impl SocketRefMut<'_> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
-            Self::Netlink(socket) => todo!(),
+            Self::Netlink(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
 
@@ -332,7 +332,7 @@ impl SocketRefMut<'_> {
         match self {
             Self::Unix(socket) => socket.accept(net_ns, rng, cb_queue),
             Self::Inet(socket) => socket.accept(net_ns, rng, cb_queue),
-            Self::Netlink(socket) => todo!(),
+            Self::Netlink(socket) => socket.accept(net_ns, rng, cb_queue),
         }
     }
 
