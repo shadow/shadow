@@ -39,6 +39,8 @@ impl From<Signal> for i32 {
     }
 }
 
+use core::iter::Iterator;
+
 impl Signal {
     pub const SIGHUP: Self = Self::std_from_u32_const(bindings::LINUX_SIGHUP);
     pub const SIGINT: Self = Self::std_from_u32_const(bindings::LINUX_SIGINT);
@@ -92,6 +94,10 @@ impl Signal {
 
     pub const fn as_i32(&self) -> i32 {
         self.0
+    }
+
+    pub fn standard_signals() -> impl Iterator<Item = Signal> {
+        (i32::from(Self::MIN)..=i32::from(Self::STANDARD_MAX)).map(|i| Self::try_from(i).unwrap())
     }
 
     // Checked conversion from bindings

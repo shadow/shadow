@@ -192,6 +192,10 @@ impl DescriptorTable {
         // return the old descriptors
         old_self.descriptors.into_values()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&DescriptorHandle, &Descriptor)> {
+        self.descriptors.iter()
+    }
 }
 
 impl Default for DescriptorTable {

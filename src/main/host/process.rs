@@ -13,7 +13,10 @@ use std::time::Duration;
 
 use linux_api::errno::Errno;
 use linux_api::sched::CloneFlags;
-use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalFromI32Error};
+use linux_api::signal::{
+    defaultaction, siginfo_t, sigset_t, LinuxDefaultAction, SigActionFlags, Signal,
+    SignalFromI32Error,
+};
 use log::{debug, trace, warn};
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
@@ -207,6 +210,11 @@ impl Common {
     fn name(&self) -> &str {
         self.name.to_str().unwrap()
     }
+
+    pub fn thread_group_leader_id(&self) -> ThreadId {
+        // tid of the thread group leader is equal to the pid.
+        ThreadId::from(self.id())
+    }
 }
 
 /// A process that is currently runnable.
@@ -278,6 +286,32 @@ pub struct RunnableProcess {
 }
 
 impl RunnableProcess {
+    /// Spawn a `ManagedThread` corresponding to the given `exec` syscall
+    /// parameters.  Intended for use by the `exec` syscall handlers. Whether it
+    /// succeeds or fails, does *not* mutate `self`, though `self`'s strace and
+    /// shim log files will be passed into the new `ManagedThread`.
+    ///
+    /// In case the native `exec` syscall fails, the corresponding error is returned.
+    pub fn spawn_mthread_for_exec(
+        &self,
+        host: &Host,
+        plugin_path: &CStr,
+        argv: Vec<CString>,
+        envv: Vec<CString>,
+    ) -> nix::Result<ManagedThread> {
+        ManagedThread::spawn(
+            plugin_path,
+            argv,
+            envv,
+            self.strace_logging
+                .as_ref()
+                .map(|s| s.file.borrow(host.root()))
+                .as_deref(),
+            &self.shimlog_file,
+            host.preload_paths(),
+        )
+    }
+
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
     fn reap_thread(&self, host: &Host, threadrc: RootedRc<RootedRefCell<Thread>>) {
         let thread = threadrc.borrow(host.root());
@@ -604,7 +638,7 @@ impl RunnableProcess {
 
         // The child will log to the same strace log file. Entries contain thread IDs,
         // though it might be tricky to map those back to processes.
-        let strace_logging = self.strace_logging.as_ref().map(|strace| strace.clone());
+        let strace_logging = self.strace_logging.as_ref().cloned();
 
         // `fork(2)`:
         //  > The child does not inherit timers from its parent
@@ -800,6 +834,13 @@ impl ProcessState {
         }
     }
 
+    fn runnable_mut(&mut self) -> Option<&mut RunnableProcess> {
+        match self {
+            ProcessState::Runnable(r) => Some(r),
+            ProcessState::Zombie(_) => None,
+        }
+    }
+
     fn zombie(&self) -> Option<&ZombieProcess> {
         match self {
             ProcessState::Runnable(_) => None,
@@ -843,6 +884,13 @@ impl Process {
     fn runnable(&self) -> Option<Ref<RunnableProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
             state.as_ref().unwrap().runnable()
+        })
+        .ok()
+    }
+
+    fn runnable_mut(&self) -> Option<RefMut<RunnableProcess>> {
+        RefMut::filter_map(self.state.borrow_mut(), |state| {
+            state.as_mut().unwrap().runnable_mut()
         })
         .ok()
     }
@@ -1102,8 +1150,7 @@ impl Process {
     }
 
     pub fn thread_group_leader_id(&self) -> ThreadId {
-        // tid of the thread group leader is equal to the pid.
-        ThreadId::from(self.id())
+        self.common().thread_group_leader_id()
     }
 
     /// Resume execution of `tid` (if it exists).
@@ -1321,7 +1368,7 @@ impl Process {
 
     /// Deprecated wrapper for `RunnableProcess::native_pid`
     pub fn native_pid(&self) -> Pid {
-        self.runnable().unwrap().native_pid
+        self.runnable().unwrap().native_pid()
     }
 
     /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow`
@@ -1418,7 +1465,7 @@ impl Process {
         use nix::sys::wait::WaitStatus;
         let exit_status = match (
             killed_by_shadow,
-            nix::sys::wait::waitpid(runnable.native_pid, None),
+            nix::sys::wait::waitpid(runnable.native_pid(), None),
         ) {
             (true, Ok(WaitStatus::Signaled(_pid, nixsignal::Signal::SIGKILL, _core_dump))) => {
                 ExitStatus::StoppedByShadow
@@ -1542,6 +1589,107 @@ impl Process {
 
     pub fn current_working_dir(&self) -> impl Deref<Target = CString> + '_ {
         Ref::map(self.common(), |common| &common.working_dir)
+    }
+
+    /// Update `self` to complete an `exec` syscall from thread `tid`, replacing
+    /// the running managed process with `mthread`.
+    pub fn update_for_exec(&mut self, host: &Host, tid: ThreadId, mthread: ManagedThread) {
+        let Some(mut runnable) = self.runnable_mut() else {
+            // This could happen if another event runs before the "execve completion" event
+            // and kills the process. e.g. another thread in the process could run and
+            // execute the `exit_group` syscall.
+            log::debug!(
+                "Process {:?} exited before it could complete execve",
+                self.id()
+            );
+            mthread.kill_and_drop();
+            return;
+        };
+        let old_native_pid = std::mem::replace(&mut runnable.native_pid, mthread.native_pid());
+
+        // Kill the previous native process
+        nixsignal::kill(old_native_pid, nixsignal::Signal::SIGKILL)
+            .expect("Unable to send kill signal to managed process {old_native_pid}");
+        match nix::sys::wait::waitpid(old_native_pid, None) {
+            Ok(nix::sys::wait::WaitStatus::Signaled(pid, sig, _c)) => {
+                assert_eq!(pid, old_native_pid);
+                assert_eq!(sig, nixsignal::Signal::SIGKILL);
+            }
+            r => panic!("Unexpected waitpid result: {r:?}"),
+        };
+
+        let execing_thread = runnable.threads.borrow_mut().remove(&tid).unwrap();
+
+        // Dispose of all threads other than the thread that's running `exec`.
+        for (_tid, thread) in runnable.threads.replace(BTreeMap::new()) {
+            // Notify the ManagedThread that the native process has exited.
+            thread.borrow(host.root()).mthread().handle_process_exit();
+
+            thread.explicit_drop_recursive(host.root(), host);
+        }
+
+        // Recreate the `MemoryManager`
+        {
+            // We can't safely replace the memory manager if there are outstanding
+            // unsafe references in C code. There shouldn't be any, though, since
+            // this is only called from the `execve` and `execveat` syscall handlers,
+            // which are in Rust.
+            let unsafe_borrow_mut = runnable.unsafe_borrow_mut.borrow();
+            let unsafe_borrows = runnable.unsafe_borrows.borrow();
+            assert!(unsafe_borrow_mut.is_none());
+            assert!(unsafe_borrows.is_empty());
+            // Replace the MM, while still holding the references to the unsafe borrows
+            // to ensure none exist.
+            runnable
+                .memory_manager
+                .replace(unsafe { MemoryManager::new(mthread.native_pid()) });
+        }
+
+        let new_tid = runnable.common.thread_group_leader_id();
+        log::trace!(
+            "updating for exec; pid:{pid}, tid:{tid:?}, new_tid:{new_tid:?}",
+            pid = runnable.common.id
+        );
+        execing_thread
+            .borrow_mut(host.root())
+            .update_for_exec(host, mthread, new_tid);
+
+        runnable
+            .threads
+            .borrow_mut()
+            .insert(new_tid, execing_thread);
+
+        // Exit signal is reset to SIGCHLD.
+        runnable.common.exit_signal = Some(Signal::SIGCHLD);
+
+        // Reset signal actions to default.
+        // `execve(2)`:
+        // POSIX.1 specifies that the dispositions of any signals that
+        // are ignored or set to the default are left unchanged.  POSIX.1
+        // specifies one exception: if SIGCHLD is being ignored, then an
+        // implementation may leave the disposition unchanged or reset it
+        // to the default; Linux does the former.
+        let host_shmem_prot = host.shim_shmem_lock_borrow_mut().unwrap();
+        let mut shmem_prot = runnable
+            .shim_shared_mem_block
+            .protected
+            .borrow_mut(&host_shmem_prot.root);
+        for signal in Signal::standard_signals() {
+            let current_action = unsafe { shmem_prot.signal_action(signal) };
+            if !(current_action.is_default()
+                || current_action.is_ignore()
+                || signal == Signal::SIGCHLD && current_action.is_ignore())
+            {
+                unsafe {
+                    *shmem_prot.signal_action_mut(signal) = linux_api::signal::sigaction::new_raw(
+                        linux_api::signal::SignalHandler::SigDfl,
+                        SigActionFlags::empty(),
+                        sigset_t::EMPTY,
+                        None,
+                    )
+                };
+            }
+        }
     }
 }
 

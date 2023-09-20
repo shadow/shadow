@@ -55,6 +55,8 @@ impl SyscallHandler {
             libc::SYS_dup3 => SyscallHandlerFn::call(Self::dup3, &mut ctx),
             libc::SYS_eventfd => SyscallHandlerFn::call(Self::eventfd, &mut ctx),
             libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
+            libc::SYS_execve => SyscallHandlerFn::call(Self::execve, &mut ctx),
+            libc::SYS_execveat => SyscallHandlerFn::call(Self::execveat, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
             libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
