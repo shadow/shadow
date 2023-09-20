@@ -23,6 +23,7 @@ crossbeam = "0.8.3"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["std"] }
+linux-raw-sys = "0.5.2"
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 log-c2rust = { path = "../lib/log-c2rust" }

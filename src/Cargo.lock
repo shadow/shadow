@@ -1452,6 +1452,7 @@ name = "shadow-pod"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "linux-raw-sys 0.5.2",
 ]
 
 [[package]]
@@ -1472,6 +1473,7 @@ dependencies = [
  "gml-parser",
  "libc",
  "linux-api",
+ "linux-raw-sys 0.5.2",
  "log",
  "log-c2rust",
  "logger",
