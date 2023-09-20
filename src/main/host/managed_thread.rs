@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::io::Write;
-use std::os::fd::RawFd;
+use std::os::fd::AsRawFd;
 use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
 use std::sync::{atomic, Arc};
@@ -9,8 +9,6 @@ use std::sync::{atomic, Arc};
 use linux_api::sched::CloneFlags;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
-use nix::fcntl::OFlag;
-use nix::sys::stat::Mode;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
@@ -91,8 +89,8 @@ impl ManagedThread {
         plugin_path: &CStr,
         argv: Vec<CString>,
         envv: Vec<CString>,
-        strace_fd: Option<RawFd>,
-        log_path: &CStr,
+        strace_file: Option<&std::fs::File>,
+        log_file: &std::fs::File,
         injected_preloads: &[PathBuf],
     ) -> nix::Result<Self> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
@@ -103,18 +101,8 @@ impl ManagedThread {
 
         let ipc_shmem = Arc::new(shadow_shmem::allocator::shmalloc(IPCData::new()));
 
-        let shimlog_fd = nix::fcntl::open(
-            log_path,
-            OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_CLOEXEC,
-            Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH | Mode::S_IWOTH,
-        )
-        .unwrap();
-
         let child_pid =
-            Self::spawn_native(plugin_path, argv, envv, strace_fd, shimlog_fd, &ipc_shmem)?;
-
-        // should be opened in the shim, so no need for it anymore
-        nix::unistd::close(shimlog_fd).unwrap();
+            Self::spawn_native(plugin_path, argv, envv, strace_file, log_file, &ipc_shmem)?;
 
         // In Linux, the PID is equal to the TID of its first thread.
         let native_pid = child_pid;
@@ -555,8 +543,8 @@ impl ManagedThread {
         plugin_path: &CStr,
         argv: Vec<CString>,
         envv: Vec<CString>,
-        strace_fd: Option<RawFd>,
-        shimlog_fd: RawFd,
+        strace_file: Option<&std::fs::File>,
+        shimlog_file: &std::fs::File,
         shmem_block: &ShMemBlock<IPCData>,
     ) -> nix::Result<nix::unistd::Pid> {
         // Preemptively check for likely reasons that execve might fail.
@@ -639,11 +627,11 @@ impl ManagedThread {
         // more awkward method anyway.
         // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
         // https://austingroupbugs.net/view.php?id=411
-        if let Some(strace_fd) = strace_fd {
+        if let Some(strace_file) = strace_file {
             Errno::result(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
-                    strace_fd,
+                    strace_file.as_raw_fd(),
                     libc::STDOUT_FILENO,
                 )
             })
@@ -652,7 +640,7 @@ impl ManagedThread {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     libc::STDOUT_FILENO,
-                    strace_fd,
+                    strace_file.as_raw_fd(),
                 )
             })
             .unwrap();
@@ -662,7 +650,7 @@ impl ManagedThread {
         Errno::result(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
-                shimlog_fd,
+                shimlog_file.as_raw_fd(),
                 libc::STDOUT_FILENO,
             )
         })
@@ -670,7 +658,7 @@ impl ManagedThread {
         Errno::result(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
-                shimlog_fd,
+                shimlog_file.as_raw_fd(),
                 libc::STDERR_FILENO,
             )
         })

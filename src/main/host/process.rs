@@ -5,8 +5,6 @@ use std::fmt::Write;
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 #[cfg(feature = "perf_timers")]
@@ -45,10 +43,10 @@ use crate::host::context::ProcessContext;
 use crate::host::descriptor::Descriptor;
 use crate::host::managed_thread::ManagedThread;
 use crate::host::syscall::formatter::FmtOptions;
-use crate::utility;
 use crate::utility::callback_queue::CallbackQueue;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
+use crate::utility::{self, debug_assert_cloexec};
 
 /// Virtual pid of a shadow process
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Ord, PartialOrd)]
@@ -236,6 +234,12 @@ pub struct RunnableProcess {
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
     strace_logging: Option<StraceLogging>,
+
+    // The shim's log file. This gets dup'd into the ManagedProcess
+    // where the shim can write to it directly. We persist it to handle the case
+    // where we need to recreatea a ManagedProcess and have it continue writing
+    // to the same file.
+    shimlog_file: std::fs::File,
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
@@ -635,6 +639,7 @@ impl RunnableProcess {
             unsafe_borrows: RefCell::new(Vec::new()),
             memory_manager: Box::new(RefCell::new(unsafe { MemoryManager::new(native_pid) })),
             child_process_event_listeners: Default::default(),
+            shimlog_file: self.shimlog_file.try_clone().unwrap(),
         };
         let child_process = Process {
             state: RefCell::new(Some(ProcessState::Runnable(runnable_process))),
@@ -898,13 +903,12 @@ impl Process {
         ));
 
         let strace_logging = strace_logging_options.map(|options| {
-            let oflag = { OFlag::O_CREAT | OFlag::O_TRUNC | OFlag::O_WRONLY | OFlag::O_CLOEXEC };
-            let mode = { Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH };
-            let filename = Self::static_output_file_name(&file_basename, "strace");
-            let fd = nix::fcntl::open(&filename, oflag, mode).unwrap();
-
+            let file =
+                std::fs::File::create(Self::static_output_file_name(&file_basename, "strace"))
+                    .unwrap();
+            debug_assert_cloexec(&file);
             StraceLogging {
-                file: RefCell::new(unsafe { std::fs::File::from_raw_fd(fd) }),
+                file: RefCell::new(file),
                 options,
             }
         });
@@ -958,19 +962,17 @@ impl Process {
             );
         }
 
-        let shimlog_path = CString::new(
-            Self::static_output_file_name(&file_basename, "shimlog")
-                .as_os_str()
-                .as_bytes(),
-        )
-        .unwrap();
+        let shimlog_file =
+            std::fs::File::create(Self::static_output_file_name(&file_basename, "shimlog"))
+                .unwrap();
+        debug_assert_cloexec(&shimlog_file);
 
         let mthread = ManagedThread::spawn(
             plugin_path,
             argv,
             envv,
-            strace_logging.as_ref().map(|s| s.file.borrow().as_raw_fd()),
-            &shimlog_path,
+            strace_logging.as_ref().map(|s| s.file.borrow()).as_deref(),
+            &shimlog_file,
             host.preload_paths(),
         )?;
         let native_pid = mthread.native_pid();
@@ -1045,6 +1047,7 @@ impl Process {
                         #[cfg(feature = "perf_timers")]
                         total_run_time: Cell::new(Duration::ZERO),
                         child_process_event_listeners: Default::default(),
+                        shimlog_file,
                     }))),
                 },
             ),

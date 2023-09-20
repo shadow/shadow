@@ -478,6 +478,29 @@ pub fn inject_preloads(mut envv: Vec<CString>, injected_preloads: &[PathBuf]) ->
     envv
 }
 
+/// If debug assertions are enabled, panics if `FD_CLOEXEC` is not set on `file`.
+///
+/// In shadow we want `FD_CLOEXEC` set on most files that we create, to avoid them leaking
+/// into subprocesses that we spawn. Rust's file APIs typically set this in practice,
+/// but don't formally guarantee it. It's unlikely that they'd ever not set it, but we'd
+/// like to know if that happens.
+///
+/// The likely result of it not being set is just file descriptors leaking into
+/// subprocesses.  This counts against kernel limits against the total number
+/// of file descriptors, and may cause the underlying file description to remain
+/// open longer than needed. Theoretically the subprocess could also operate on
+/// the leaked descriptor, causing difficult-to-diagnose issues, but this is
+/// unlikely in practice, especially since shadow's shim should prevent any
+/// native file operations from being executed from managed code in the first place.
+pub fn debug_assert_cloexec(file: &(impl std::os::fd::AsRawFd + std::fmt::Debug)) {
+    #[cfg(debug_assertions)]
+    {
+        let flags = nix::fcntl::fcntl(file.as_raw_fd(), nix::fcntl::FcntlArg::F_GETFD).unwrap();
+        let flags = nix::fcntl::FdFlag::from_bits_retain(flags);
+        debug_assert!(flags.contains(nix::fcntl::FdFlag::FD_CLOEXEC), "{file:?} is unexpectedly not FD_CLOEXEC, which may lead to resource leaks or strange behavior");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
