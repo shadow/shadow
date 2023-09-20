@@ -126,8 +126,7 @@ impl NetlinkSocket {
     }
 
     pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
-        log::warn!("getsockname() syscall not yet supported for netlink sockets; Returning ENOSYS");
-        Err(Errno::ENOSYS.into())
+        self.protocol_state.bound_address()
     }
 
     pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
@@ -326,9 +325,7 @@ impl NetlinkSocket {
 }
 
 struct InitialState {
-    // Indicate that if the socket is already bound or not. We don't keep the bound address so that
-    // we won't need to fill it.
-    is_bound: bool,
+    bound_addr: Option<NetlinkAddr>,
     reader_handle: ReaderHandle,
     // this handle is never accessed, but we store it because of its drop impl
     _buffer_handle: BufferHandle,
@@ -377,10 +374,17 @@ impl ProtocolState {
         );
 
         ProtocolState::Initial(Some(InitialState {
-            is_bound: false,
+            bound_addr: None,
             reader_handle,
             _buffer_handle: buffer_handle,
         }))
+    }
+
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+        match self {
+            Self::Initial(x) => x.as_ref().unwrap().bound_address(),
+            Self::Closed(x) => x.as_ref().unwrap().bound_address(),
+        }
     }
 
     fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
@@ -459,6 +463,10 @@ impl ProtocolState {
 }
 
 impl InitialState {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+        Ok(self.bound_addr)
+    }
+
     fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
         let mut new_state = FileState::ACTIVE;
 
@@ -496,7 +504,7 @@ impl InitialState {
         _rng: impl rand::Rng,
     ) -> SyscallResult {
         // if already bound
-        if self.is_bound {
+        if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
 
@@ -508,12 +516,11 @@ impl InitialState {
             );
             return Err(Errno::EINVAL.into());
         };
-        // remember that the socket is bound
-        self.is_bound = true;
 
-        // According to netlink(7), if the pid is zero, the kernel takes care of assigning it, but
-        // we will leave it untouched at the moment. We can implement the assignment later when we
-        // want to support it.
+        // TODO: According to netlink(7), if the pid is zero, the kernel takes care of assigning
+        // it, but we will leave it untouched at the moment. We can implement the assignment
+        // later when we want to support it.
+        self.bound_addr = Some(*addr);
 
         // According to netlink(7), if the groups is non-zero, it means that the socket wants to
         // listen to some groups. Since we don't support broadcasting to groups yet, we will emit
@@ -861,6 +868,10 @@ impl InitialState {
 }
 
 impl ClosedState {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+        Ok(None)
+    }
+
     fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
         common.copy_state(
             /* mask= */ FileState::all(),
