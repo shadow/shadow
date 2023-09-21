@@ -196,18 +196,16 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             // format the result (returns None if the syscall didn't complete)
             let syscall_rv = SyscallResultFmt::<#(#rv_type)*>::new(&rv, #context_arg_name.args.args, strace_fmt_options, &*memory);
 
-            if let Some(ref syscall_rv) = syscall_rv {
-                #context_arg_name.objs.process.with_strace_file(|file| {
-                    write_syscall(
-                        file,
-                        &Worker::current_time().unwrap(),
-                        #context_arg_name.objs.thread.id(),
-                        #syscall_name_str,
-                        &syscall_args,
-                        syscall_rv,
-                    ).unwrap();
-                });
-            }
+            #context_arg_name.objs.process.with_strace_file(|file| {
+                write_syscall(
+                    file,
+                    &Worker::current_time().unwrap(),
+                    #context_arg_name.objs.thread.id(),
+                    #syscall_name_str,
+                    &syscall_args,
+                    syscall_rv,
+                ).unwrap();
+            });
 
             // convert the `SyscallResult` back to the original `Result<T, SyscallError>`
             let rv = if let Some(rv_original_ok) = rv_original_ok {

@@ -206,19 +206,13 @@ where
         args: [SysCallReg; 6],
         options: FmtOptions,
         mem: &'a MemoryManager,
-    ) -> Option<Self> {
-        match &rv {
-            SyscallResult::Ok(_)
-            | SyscallResult::Err(SyscallError::Failed(_))
-            | SyscallResult::Err(SyscallError::Native) => Some(Self {
-                rv,
-                args,
-                options,
-                mem,
-                _phantom: PhantomData,
-            }),
-            // the syscall was not completed and will be re-run again later
-            SyscallResult::Err(SyscallError::Blocked(_)) => None,
+    ) -> Self {
+        Self {
+            rv,
+            args,
+            options,
+            mem,
+            _phantom: PhantomData,
         }
     }
 }
@@ -243,8 +237,9 @@ where
             SyscallResult::Err(SyscallError::Native) => {
                 write!(f, "<native>")
             }
-            // the constructor doesn't allow this
-            SyscallResult::Err(SyscallError::Blocked(_)) => unreachable!(),
+            SyscallResult::Err(SyscallError::Blocked(_)) => {
+                write!(f, "<blocked>")
+            }
         }
     }
 }
@@ -303,17 +298,15 @@ mod export {
         let memory = proc.memory_borrow();
         let rv = SyscallResultFmt::<libc::c_long>::new(&result, *args, logging_mode, &memory);
 
-        if let Some(ref rv) = rv {
-            proc.with_strace_file(|file| {
-                let time = Worker::current_time();
+        proc.with_strace_file(|file| {
+            let time = Worker::current_time();
 
-                if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
-                    write_syscall(file, &time, tid, name, args_str, rv).unwrap();
-                } else {
-                    log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
-                }
-            });
-        }
+            if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
+                write_syscall(file, &time, tid, name, args_str, rv).unwrap();
+            } else {
+                log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
+            }
+        });
 
         // need to return the result, otherwise the drop impl will free the condition pointer
         result.into()
