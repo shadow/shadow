@@ -32,8 +32,11 @@
 //! alternatively be implemented by providing methods that borrow some or all of
 //! their internal references simultaneously.
 
+use std::ops::Deref;
+
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 
+use super::managed_thread::ManagedThread;
 use super::process::ProcessId;
 use super::thread::ThreadId;
 use super::{host::Host, process::Process, thread::Thread};
@@ -99,6 +102,10 @@ impl<'a> ThreadContext<'a> {
     /// for calling `Thread` methods that take a `&ProcessContext`.
     pub fn split_thread(&self) -> (ProcessContext, &Thread) {
         (ProcessContext::new(self.host, self.process), self.thread)
+    }
+
+    pub fn mthread(&self) -> impl Deref<Target = ManagedThread> + '_ {
+        self.thread.mthread()
     }
 }
 
