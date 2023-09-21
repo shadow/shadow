@@ -4,9 +4,10 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::fmt::Write;
 use std::num::TryFromIntError;
 use std::ops::{Deref, DerefMut};
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
 
@@ -125,18 +126,8 @@ pub enum ExitStatus {
 
 #[derive(Debug)]
 struct StraceLogging {
-    file: RefCell<std::fs::File>,
+    file: RootedRefCell<std::fs::File>,
     options: FmtOptions,
-}
-
-impl StraceLogging {
-    pub fn try_clone(&self) -> Result<StraceLogging, std::io::Error> {
-        let file = self.file.borrow().try_clone()?;
-        Ok(StraceLogging {
-            file: RefCell::new(file),
-            options: self.options,
-        })
-    }
 }
 
 /// Parts of the process that are present in all states.
@@ -233,13 +224,16 @@ pub struct RunnableProcess {
     // Shared memory allocation for shared state with shim.
     shim_shared_mem_block: ShMemBlock<'static, ProcessShmem>,
 
-    strace_logging: Option<StraceLogging>,
+    // Shared with forked Processes
+    strace_logging: Option<Arc<StraceLogging>>,
 
     // The shim's log file. This gets dup'd into the ManagedProcess
     // where the shim can write to it directly. We persist it to handle the case
     // where we need to recreatea a ManagedProcess and have it continue writing
     // to the same file.
-    shimlog_file: std::fs::File,
+    //
+    // Shared with forked Processes
+    shimlog_file: Arc<std::fs::File>,
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
@@ -364,12 +358,16 @@ impl RunnableProcess {
 
     /// If strace logging is disabled, this function will do nothing and return `None`.
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        let Some(ref strace_logging) = self.strace_logging else {
-            return None;
-        };
+        // TODO: get Host from caller. Would need t update syscall-logger.
+        Worker::with_active_host(|host| {
+            let Some(ref strace_logging) = self.strace_logging else {
+                return None;
+            };
 
-        let mut file = strace_logging.file.borrow_mut();
-        Some(f(&mut file))
+            let mut file = strace_logging.file.borrow_mut(host.root());
+            Some(f(&mut file))
+        })
+        .unwrap()
     }
 
     pub fn native_pid(&self) -> Pid {
@@ -606,10 +604,7 @@ impl RunnableProcess {
 
         // The child will log to the same strace log file. Entries contain thread IDs,
         // though it might be tricky to map those back to processes.
-        let strace_logging = self
-            .strace_logging
-            .as_ref()
-            .map(|strace| strace.try_clone().unwrap());
+        let strace_logging = self.strace_logging.as_ref().map(|strace| strace.clone());
 
         // `fork(2)`:
         //  > The child does not inherit timers from its parent
@@ -622,7 +617,9 @@ impl RunnableProcess {
             &host.shim_shmem_lock_borrow().unwrap().root,
             host.shim_shmem().serialize(),
             host.id(),
-            strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
+            strace_logging
+                .as_ref()
+                .map(|x| x.file.borrow(host.root()).as_raw_fd()),
         );
         let shim_shared_mem_block = shadow_shmem::allocator::shmalloc(shim_shared_mem);
 
@@ -639,7 +636,7 @@ impl RunnableProcess {
             unsafe_borrows: RefCell::new(Vec::new()),
             memory_manager: Box::new(RefCell::new(unsafe { MemoryManager::new(native_pid) })),
             child_process_event_listeners: Default::default(),
-            shimlog_file: self.shimlog_file.try_clone().unwrap(),
+            shimlog_file: self.shimlog_file.clone(),
         };
         let child_process = Process {
             state: RefCell::new(Some(ProcessState::Runnable(runnable_process))),
@@ -907,17 +904,19 @@ impl Process {
                 std::fs::File::create(Self::static_output_file_name(&file_basename, "strace"))
                     .unwrap();
             debug_assert_cloexec(&file);
-            StraceLogging {
-                file: RefCell::new(file),
+            Arc::new(StraceLogging {
+                file: RootedRefCell::new(host.root(), file),
                 options,
-            }
+            })
         });
 
         let shim_shared_mem = ProcessShmem::new(
             &host.shim_shmem_lock_borrow().unwrap().root,
             host.shim_shmem().serialize(),
             host.id(),
-            strace_logging.as_ref().map(|x| x.file.borrow().as_raw_fd()),
+            strace_logging
+                .as_ref()
+                .map(|x| x.file.borrow(host.root()).as_raw_fd()),
         );
         let shim_shared_mem_block = shadow_shmem::allocator::shmalloc(shim_shared_mem);
 
@@ -962,16 +961,20 @@ impl Process {
             );
         }
 
-        let shimlog_file =
+        let shimlog_file = Arc::new(
             std::fs::File::create(Self::static_output_file_name(&file_basename, "shimlog"))
-                .unwrap();
+                .unwrap(),
+        );
         debug_assert_cloexec(&shimlog_file);
 
         let mthread = ManagedThread::spawn(
             plugin_path,
             argv,
             envv,
-            strace_logging.as_ref().map(|s| s.file.borrow()).as_deref(),
+            strace_logging
+                .as_ref()
+                .map(|s| s.file.borrow(host.root()))
+                .as_deref(),
             &shimlog_file,
             host.preload_paths(),
         )?;
@@ -1746,7 +1749,6 @@ fn make_name(host: &Host, exe_name: &str, id: ProcessId) -> CString {
 
 mod export {
     use std::ffi::c_char;
-    use std::os::fd::AsRawFd;
     use std::os::raw::c_void;
 
     use libc::size_t;
@@ -2105,15 +2107,6 @@ mod export {
     pub unsafe extern "C" fn process_straceLoggingMode(proc: *const Process) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.strace_logging_options().into()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn process_straceFd(proc: *const Process) -> RawFd {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        match &proc.runnable().unwrap().strace_logging {
-            Some(x) => x.file.borrow().as_raw_fd(),
-            None => -1,
-        }
     }
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations
