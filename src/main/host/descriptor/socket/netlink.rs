@@ -535,23 +535,23 @@ impl InitialState {
             return Err(Errno::EINVAL.into());
         }
 
-        let Some(addr) = args.addr else {
-            log::warn!("Attempted to send in netlink socket without destination address");
-            return Err(Errno::EINVAL.into());
-        };
-        let Some(addr) = addr.as_netlink() else {
-            log::warn!("Attempted to send to non-netlink address {:?}", args.addr);
-            return Err(Errno::EINVAL.into());
-        };
-        // Sending to non-kernel address is not supported
-        if addr.pid() != 0 {
-            log::warn!("Attempted to send to non-kernel netlink address {:?}", addr);
-            return Err(Errno::EINVAL.into());
-        }
-        // Sending to groups is not supported
-        if addr.groups() != 0 {
-            log::warn!("Attempted to send to netlink groups {:?}", addr);
-            return Err(Errno::EINVAL.into());
+        // It's okay to not have a destination address
+        if let Some(addr) = args.addr {
+            // Parse the address
+            let Some(addr) = addr.as_netlink() else {
+                log::warn!("Attempted to send to non-netlink address {:?}", args.addr);
+                return Err(Errno::EINVAL.into());
+            };
+            // Sending to non-kernel address is not supported
+            if addr.pid() != 0 {
+                log::warn!("Attempted to send to non-kernel netlink address {:?}", addr);
+                return Err(Errno::EINVAL.into());
+            }
+            // Sending to groups is not supported
+            if addr.groups() != 0 {
+                log::warn!("Attempted to send to netlink groups {:?}", addr);
+                return Err(Errno::EINVAL.into());
+            }
         }
 
         let rv = common.sendmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
