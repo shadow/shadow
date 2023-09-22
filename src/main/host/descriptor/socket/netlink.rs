@@ -173,15 +173,48 @@ impl NetlinkSocket {
 
     pub fn setsockopt(
         &mut self,
-        _level: libc::c_int,
-        _optname: libc::c_int,
-        _optval_ptr: ForeignPtr<()>,
-        _optlen: libc::socklen_t,
-        _memory_manager: &MemoryManager,
+        level: libc::c_int,
+        optname: libc::c_int,
+        optval_ptr: ForeignPtr<()>,
+        optlen: libc::socklen_t,
+        memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("setsockopt() syscall not yet supported for netlink sockets; Returning ENOSYS");
-        Err(Errno::ENOSYS.into())
+        match (level, optname) {
+            (libc::SOL_SOCKET, libc::SO_SNDBUF) => {
+                type OptType = libc::c_int;
+
+                if usize::try_from(optlen).unwrap() < std::mem::size_of::<OptType>() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let optval_ptr = optval_ptr.cast::<OptType>();
+                let val: u64 = memory_manager
+                    .read(optval_ptr)?
+                    .try_into()
+                    .or(Err(Errno::EINVAL))?;
+
+                // Linux kernel doubles this value upon setting
+                let val = val * 2;
+                // We want to keep sent_len lower than send_limit
+                let val = std::cmp::max(val, self.common.sent_len);
+                // Copied the following behaviour from setsockopt of LegacyTcpSocket
+                let val = std::cmp::max(val, 4096);
+                let val = std::cmp::min(val, 268435456); // 2^28 = 256 MiB
+
+                self.common.send_limit = val;
+            }
+            (libc::SOL_SOCKET, libc::SO_RCVBUF) => {
+                // We don't care about the receive buffer size because we already limit the send
+                // buffer size and when recvmsg is called we just retrieve the request packet from
+                // the send buffer, process it, and return the response immediately to the caller
+            }
+            _ => {
+                log::warn!("setsockopt called with unsupported level {level} and opt {optname}");
+                return Err(Errno::ENOPROTOOPT.into());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn bind(
