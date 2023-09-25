@@ -751,7 +751,7 @@ impl ZombieProcess {
         let parent = parent_rc.borrow(host.root());
         let siginfo = self.exit_siginfo(exit_signal);
 
-        let Some(parent_runnable) = parent.runnable() else {
+        let Some(parent_runnable) = parent.as_runnable() else {
             trace!("Not notifying parent of exit: {parent_pid:?} not running");
             debug_panic!("Non-running parent process shouldn't be possible.");
             #[allow(unreachable_code)]
@@ -827,21 +827,21 @@ impl ProcessState {
         }
     }
 
-    fn runnable(&self) -> Option<&RunnableProcess> {
+    fn as_runnable(&self) -> Option<&RunnableProcess> {
         match self {
             ProcessState::Runnable(r) => Some(r),
             ProcessState::Zombie(_) => None,
         }
     }
 
-    fn runnable_mut(&mut self) -> Option<&mut RunnableProcess> {
+    fn as_runnable_mut(&mut self) -> Option<&mut RunnableProcess> {
         match self {
             ProcessState::Runnable(r) => Some(r),
             ProcessState::Zombie(_) => None,
         }
     }
 
-    fn zombie(&self) -> Option<&ZombieProcess> {
+    fn as_zombie(&self) -> Option<&ZombieProcess> {
         match self {
             ProcessState::Runnable(_) => None,
             ProcessState::Zombie(z) => Some(z),
@@ -862,7 +862,7 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
         return;
     };
     let process = process.borrow(host.root());
-    let Some(runnable) = process.runnable() else {
+    let Some(runnable) = process.as_runnable() else {
         debug!("Process {:?} no longer running", &*process.name());
         return;
     };
@@ -881,35 +881,35 @@ impl Process {
         })
     }
 
-    fn runnable(&self) -> Option<Ref<RunnableProcess>> {
+    fn as_runnable(&self) -> Option<Ref<RunnableProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
-            state.as_ref().unwrap().runnable()
+            state.as_ref().unwrap().as_runnable()
         })
         .ok()
     }
 
-    fn runnable_mut(&self) -> Option<RefMut<RunnableProcess>> {
+    fn as_runnable_mut(&self) -> Option<RefMut<RunnableProcess>> {
         RefMut::filter_map(self.state.borrow_mut(), |state| {
-            state.as_mut().unwrap().runnable_mut()
+            state.as_mut().unwrap().as_runnable_mut()
         })
         .ok()
     }
 
     /// Borrows a reference to the internal [`RunnableProcess`] if `self` is runnable.
-    pub fn borrow_runnable(&self) -> Option<impl Deref<Target = RunnableProcess> + '_> {
-        self.runnable()
+    pub fn borrow_as_runnable(&self) -> Option<impl Deref<Target = RunnableProcess> + '_> {
+        self.as_runnable()
     }
 
-    fn zombie(&self) -> Option<Ref<ZombieProcess>> {
+    fn as_zombie(&self) -> Option<Ref<ZombieProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
-            state.as_ref().unwrap().zombie()
+            state.as_ref().unwrap().as_zombie()
         })
         .ok()
     }
 
     /// Borrows a reference to the internal [`ZombieProcess`] if `self` is a zombie.
-    pub fn borrow_zombie(&self) -> Option<impl Deref<Target = ZombieProcess> + '_> {
-        self.zombie()
+    pub fn borrow_as_zombie(&self) -> Option<impl Deref<Target = ZombieProcess> + '_> {
+        self.as_zombie()
     }
 
     /// Spawn a new process. The process will be runnable via [`Self::resume`]
@@ -1159,7 +1159,7 @@ impl Process {
         trace!("Continuing thread {} in process {}", tid, self.id());
 
         let threadrc = {
-            let Some(runnable) = self.runnable() else {
+            let Some(runnable) = self.as_runnable() else {
                 debug!("Process {} is no longer running", &*self.name());
                 return;
             };
@@ -1215,12 +1215,12 @@ impl Process {
                     &*self.name(),
                 );
                 let (threadrc, last_thread) = {
-                    let runnable = self.runnable().unwrap();
+                    let runnable = self.as_runnable().unwrap();
                     let mut threads = runnable.threads.borrow_mut();
                     let threadrc = threads.remove(&tid).unwrap();
                     (threadrc, threads.is_empty())
                 };
-                self.runnable().unwrap().reap_thread(host, threadrc);
+                self.as_runnable().unwrap().reap_thread(host, threadrc);
                 if last_thread {
                     self.handle_process_exit(host, false);
                 }
@@ -1243,7 +1243,7 @@ impl Process {
     pub fn stop(&self, host: &Host) {
         // Scope for `runnable`
         {
-            let Some(runnable) = self.runnable() else {
+            let Some(runnable) = self.as_runnable() else {
                 debug!("process {} has already stopped", &*self.name());
                 return;
             };
@@ -1343,7 +1343,7 @@ impl Process {
     /// Deprecated wrapper for `RunnableProcess::memory_borrow_mut`
     #[track_caller]
     pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
+        std_util::nested_ref::NestedRefMut::map(self.as_runnable().unwrap(), |runnable| {
             runnable.memory_manager.borrow_mut()
         })
     }
@@ -1351,30 +1351,30 @@ impl Process {
     /// Deprecated wrapper for `RunnableProcess::memory_borrow`
     #[track_caller]
     pub fn memory_borrow(&self) -> impl Deref<Target = MemoryManager> + '_ {
-        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
+        std_util::nested_ref::NestedRef::map(self.as_runnable().unwrap(), |runnable| {
             runnable.memory_manager.borrow()
         })
     }
 
     /// Deprecated wrapper for `RunnableProcess::strace_logging_options`
     pub fn strace_logging_options(&self) -> Option<FmtOptions> {
-        self.runnable().unwrap().strace_logging_options()
+        self.as_runnable().unwrap().strace_logging_options()
     }
 
     /// Deprecated wrapper for `RunnableProcess::with_strace_file`
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
-        self.runnable().unwrap().with_strace_file(f)
+        self.as_runnable().unwrap().with_strace_file(f)
     }
 
     /// Deprecated wrapper for `RunnableProcess::native_pid`
     pub fn native_pid(&self) -> Pid {
-        self.runnable().unwrap().native_pid()
+        self.as_runnable().unwrap().native_pid()
     }
 
     /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow`
     #[track_caller]
     pub fn realtime_timer_borrow(&self) -> impl Deref<Target = Timer> + '_ {
-        std_util::nested_ref::NestedRef::map(self.runnable().unwrap(), |runnable| {
+        std_util::nested_ref::NestedRef::map(self.as_runnable().unwrap(), |runnable| {
             runnable.itimer_real.borrow()
         })
     }
@@ -1382,7 +1382,7 @@ impl Process {
     /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow_mut`
     #[track_caller]
     pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
-        std_util::nested_ref::NestedRefMut::map(self.runnable().unwrap(), |runnable| {
+        std_util::nested_ref::NestedRefMut::map(self.as_runnable().unwrap(), |runnable| {
             runnable.itimer_real.borrow_mut()
         })
     }
@@ -1393,7 +1393,7 @@ impl Process {
         &self,
         root: &Root,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
+        std_util::nested_ref::NestedRef::filter_map(self.as_runnable()?, |runnable| {
             runnable.first_live_thread(root)
         })
     }
@@ -1403,19 +1403,19 @@ impl Process {
         &self,
         virtual_tid: ThreadId,
     ) -> Option<impl Deref<Target = RootedRc<RootedRefCell<Thread>>> + '_> {
-        std_util::nested_ref::NestedRef::filter_map(self.runnable()?, |runnable| {
+        std_util::nested_ref::NestedRef::filter_map(self.as_runnable()?, |runnable| {
             runnable.thread(virtual_tid)
         })
     }
 
     /// Deprecated wrapper for [`RunnableProcess::free_unsafe_borrows_flush`].
     pub fn free_unsafe_borrows_flush(&self) -> Result<(), Errno> {
-        self.runnable().unwrap().free_unsafe_borrows_flush()
+        self.as_runnable().unwrap().free_unsafe_borrows_flush()
     }
 
     /// Deprecated wrapper for [`RunnableProcess::free_unsafe_borrows_noflush`].
     pub fn free_unsafe_borrows_noflush(&self) {
-        self.runnable().unwrap().free_unsafe_borrows_noflush()
+        self.as_runnable().unwrap().free_unsafe_borrows_noflush()
     }
 
     pub fn physical_address(&self, vptr: ForeignPtr<()>) -> ManagedPhysicalMemoryAddr {
@@ -1423,7 +1423,7 @@ impl Process {
     }
 
     pub fn is_running(&self) -> bool {
-        self.runnable().is_some()
+        self.as_runnable().is_some()
     }
 
     /// Transitions `self` from a `RunnableProcess` to a `ZombieProcess`.
@@ -1438,7 +1438,7 @@ impl Process {
         // as with the other cleanup below. Right now this breaks some C code that expects
         // to be able to lookup the thread's process name.
         {
-            let runnable = self.runnable().unwrap();
+            let runnable = self.as_runnable().unwrap();
             let threads = std::mem::take(&mut *runnable.threads.borrow_mut());
             for (_tid, threadrc) in threads.into_iter() {
                 threadrc.borrow(host.root()).handle_process_exit();
@@ -1527,7 +1527,7 @@ impl Process {
 
     /// Deprecated wrapper for `RunnableProcess::add_thread`
     pub fn add_thread(&self, host: &Host, thread: RootedRc<RootedRefCell<Thread>>) {
-        self.runnable().unwrap().add_thread(host, thread)
+        self.as_runnable().unwrap().add_thread(host, thread)
     }
 
     /// FIXME: still needed? Time is now updated more granularly in the Thread code
@@ -1542,7 +1542,7 @@ impl Process {
 
     /// Deprecated wrapper for `RunnableProcess::shmem`
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
-        Ref::map(self.runnable().unwrap(), |r| &r.shim_shared_mem_block)
+        Ref::map(self.as_runnable().unwrap(), |r| &r.shim_shared_mem_block)
     }
 
     /// Resource usage, as returned e.g. by the `getrusage` syscall.
@@ -1594,7 +1594,7 @@ impl Process {
     /// Update `self` to complete an `exec` syscall from thread `tid`, replacing
     /// the running managed process with `mthread`.
     pub fn update_for_exec(&mut self, host: &Host, tid: ThreadId, mthread: ManagedThread) {
-        let Some(mut runnable) = self.runnable_mut() else {
+        let Some(mut runnable) = self.as_runnable_mut() else {
             // This could happen if another event runs before the "execve completion" event
             // and kills the process. e.g. another thread in the process could run and
             // execute the `exit_group` syscall.
@@ -1696,7 +1696,7 @@ impl Process {
 impl Drop for Process {
     fn drop(&mut self) {
         // Should only be dropped in the zombie state.
-        debug_assert!(self.zombie().is_some());
+        debug_assert!(self.as_zombie().is_some());
     }
 }
 
@@ -1719,7 +1719,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*const c_void, Errno> {
-        let runnable = process.runnable().unwrap();
+        let runnable = process.as_runnable().unwrap();
         let manager = runnable.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
@@ -1749,7 +1749,7 @@ impl UnsafeBorrow {
         process: &Process,
         ptr: ForeignArrayPtr<c_char>,
     ) -> Result<(*const c_char, libc::size_t), Errno> {
-        let runnable = process.runnable().unwrap();
+        let runnable = process.as_runnable().unwrap();
         let manager = runnable.memory_manager.borrow();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
@@ -1805,7 +1805,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let runnable = process.runnable().unwrap();
+        let runnable = process.as_runnable().unwrap();
         let manager = runnable.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
@@ -1840,7 +1840,7 @@ impl UnsafeBorrowMut {
         process: &Process,
         ptr: ForeignArrayPtr<u8>,
     ) -> Result<*mut c_void, Errno> {
-        let runnable = process.runnable().unwrap();
+        let runnable = process.as_runnable().unwrap();
         let manager = runnable.memory_manager.borrow_mut();
         // SAFETY: We ensure that the `memory` is dropped before the `manager`,
         // and `Process` ensures that this whole object is dropped before
@@ -2242,7 +2242,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getSharedMem(proc: *const Process) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.runnable().unwrap().shim_shared_mem_block.deref() as *const _
+        proc.as_runnable().unwrap().shim_shared_mem_block.deref() as *const _
     }
 
     #[no_mangle]
@@ -2262,7 +2262,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C" fn process_getDumpable(proc: *const Process) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.runnable().unwrap().dumpable.get()
+        proc.as_runnable().unwrap().dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations
@@ -2271,7 +2271,7 @@ mod export {
     pub unsafe extern "C" fn process_setDumpable(proc: *const Process, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.runnable().unwrap().dumpable.set(val)
+        proc.as_runnable().unwrap().dumpable.set(val)
     }
 
     #[no_mangle]
@@ -2389,7 +2389,7 @@ mod export {
         let process = unsafe { process.as_ref().unwrap() };
         let listener = HostTreePointer::new_for_host(host.id(), listener);
         process
-            .borrow_runnable()
+            .borrow_as_runnable()
             .unwrap()
             .child_process_event_listeners
             .borrow_mut()
@@ -2404,7 +2404,7 @@ mod export {
     ) {
         let process = unsafe { process.as_ref().unwrap() };
         process
-            .borrow_runnable()
+            .borrow_as_runnable()
             .unwrap()
             .child_process_event_listeners
             .borrow_mut()

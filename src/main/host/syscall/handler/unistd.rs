@@ -683,7 +683,7 @@ impl SyscallHandler {
         let mthread = ctx
             .objs
             .process
-            .borrow_runnable()
+            .borrow_as_runnable()
             .unwrap()
             .spawn_mthread_for_exec(ctx.objs.host, abs_path, argv, envv)
             .map_err(|e| Errno::try_from(e as i32).unwrap())?;

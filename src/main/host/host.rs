@@ -480,7 +480,7 @@ impl Host {
             let process = processrc.borrow(self.root());
             process.resume(self, tid);
             Worker::clear_active_process();
-            let zombie_state = process.borrow_zombie();
+            let zombie_state = process.borrow_as_zombie();
             if let Some(zombie) = zombie_state {
                 died = true;
                 is_orphan = zombie.reaper(self).is_none();
@@ -507,7 +507,7 @@ impl Host {
                     return None;
                 }
                 process.set_parent_id(ProcessId::INIT);
-                let Some(z) = process.borrow_zombie() else {
+                let Some(z) = process.borrow_as_zombie() else {
                     // Not a zombie
                     return None;
                 };
