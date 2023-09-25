@@ -1,3 +1,4 @@
+use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -5,18 +6,23 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, OFlag};
 use linux_api::posix_types::{kernel_off_t, kernel_pid_t};
 use log::*;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
+use crate::core::work::task::TaskRef;
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
 use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::io::IoVec;
-use crate::host::syscall::type_formatting::SyscallBufferArg;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::io::{read_cstring_vec, IoVec};
+use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
@@ -623,5 +629,189 @@ impl SyscallHandler {
         ctx.objs.process.set_group_id(pid);
 
         Ok(pid.into())
+    }
+
+    fn execve_common(
+        ctx: &mut SyscallContext,
+        base_dir: &CStr,
+        path: &CStr,
+        argv_ptr_ptr: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+        envv_ptr_ptr: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+        _flags: std::ffi::c_int,
+    ) -> Result<(), SyscallError> {
+        if path.is_empty() {
+            // execve(2): The file pathname or a script or ELF interpreter does not exist.
+            return Err(Errno::ENOENT.into());
+        }
+
+        let path_bytes_with_nul = path.to_bytes_with_nul();
+
+        let _abs_path_storage: Option<CString>;
+        let abs_path: &CStr;
+        if path_bytes_with_nul[0] != b'/' {
+            let base_dir_bytes = base_dir.to_bytes();
+
+            // Maybe TODO: this could be done in place without allocating
+            // and with less copying (but more fiddly and error-prone).
+            let mut tmp = Vec::with_capacity(
+                base_dir_bytes.len() + path_bytes_with_nul.len() + /*separator*/1,
+            );
+            tmp.extend(base_dir_bytes);
+            tmp.push(b'/');
+            tmp.extend(path_bytes_with_nul);
+
+            _abs_path_storage = Some(CString::from_vec_with_nul(tmp).unwrap());
+            abs_path = _abs_path_storage.as_ref().unwrap();
+        } else {
+            _abs_path_storage = None;
+            abs_path = path;
+        }
+
+        // TODO: canonicalize? On one hand that would improve caching behavior
+        // in `verify_plugin_path`; OTOH it does some redundant work with
+        // `verify_plugin_path`. Ideal solution is probably to split up
+        // `verify_plugin_path` a bit.
+
+        // `execve(2)`: Most UNIX implementations impose some limit on the
+        // total size of the command-line  argument  (argv)  and
+        // environment  (envp) strings that may be passed to a new program.
+        // POSIX.1 allows an implementation to advertise this limit using
+        // the ARG_MAX constant
+
+        let argv;
+        let envv;
+        {
+            let mem = ctx.objs.process.memory_borrow();
+            argv = read_cstring_vec(&mem, argv_ptr_ptr)?;
+            envv = read_cstring_vec(&mem, envv_ptr_ptr)?;
+        }
+
+        let mthread = ctx
+            .objs
+            .process
+            .borrow_as_runnable()
+            .unwrap()
+            .spawn_mthread_for_exec(ctx.objs.host, abs_path, argv, envv)
+            .map_err(|e| Errno::try_from(e as i32).unwrap())?;
+
+        // If we get this far, then we should be able to ultimately succeed.
+        // We need a mutable reference to the Process to update it, though, which we can't
+        // get from here since it's already borrowed immutably.
+        //
+        // So, we return a "blocking" result from this syscall handler, and
+        // schedule an event to update the `Process` and resume execution.
+        //
+        // It's possible that other events may affect the `Process` before this one runs.
+        // We try to handle this gracefully; e.g. if the `Process` has exited before this
+        // event runs, we kill and drop the exec'd `ManagedThread` and carry on.
+        //
+        // TODO: There may be other interactions that aren't handled correctly.
+        // e.g. if the exec'ing thread ends up handling a signal in the meantime.
+        // * We could add a new state "`Execing`" to `Process`, and force any
+        // such events to decide how to deal with it. e.g. signal delivery
+        // events could reschedule themselves to run after the exec has
+        // completed. This seems a bit heavy-weight, though.
+        // * We could add more interior mutability s.t. we don't need mutable
+        // references to the Thread and Process in order to do the necessary
+        // updates. This is a fair bit of extra interior mutability to add
+        // though, and has a side-effect of further complicating read-accesses
+        // to items that are read-mostly.
+        // * We could arrange for syscall handlers to get or be able to get
+        // mutable references to the Thread and Process, so that we can complete
+        // the updates synchronously here. This is currently blocked by the
+        // usage of `worker_getCurrentProcess` and `worker_getCurrentThread`,
+        // which will panic with incompatible borrow errors if those are
+        // borrowed mutably.  There aren't many references left to those though,
+        // maybe we can eliminate them.
+        {
+            let pid = ctx.objs.process.id();
+            let tid = ctx.objs.thread.id();
+
+            // Tasks are currently required to be `Sync` and to implement `Fn`, not just `FnOnce`.
+            // Since `mthread` isn't `Sync`, we need to wrap it in a `RootedRefCell`.
+            // Since we need to consume it, we need to also wrap it in an
+            // `Option` and fail at runtime if this actually gets executed
+            // multiple times.
+            // TODO: Split TaskRef into another type that only requires `FnOnce` and `Send`.
+            let mthread = RootedRefCell::new(ctx.objs.host.root(), Some(mthread));
+            ctx.objs.host.schedule_task_with_delay(
+                TaskRef::new(move |host| {
+                    // Take the `mthread` out of the captured wrapper.
+                    // This task shouldn't run multiple times, so this should be
+                    // infallible.
+                    let mthread = mthread.borrow_mut(host.root()).take().unwrap();
+                    // The exec'ing thread's ID is changed to match the pid, since it's
+                    // the new thread-group-leader.
+                    let new_tglid = {
+                        let Some(processrc) = host.process_borrow(pid) else {
+                            // Can happen if another event runs before this one
+                            // and causes the Process to exit (e.g. exit_group
+                            // called from anothe Thread).
+                            log::debug!("Process {pid:?} disappeared before exec could complete");
+                            mthread.kill_and_drop();
+                            return;
+                        };
+                        Worker::set_active_process(&processrc);
+                        let mut process = processrc.borrow_mut(host.root());
+                        process.update_for_exec(host, tid, mthread);
+                        Worker::clear_active_process();
+                        process.thread_group_leader_id()
+                    };
+                    host.resume(pid, new_tglid);
+                }),
+                SimulationTime::ZERO,
+            );
+        }
+
+        Err(SyscallError::new_blocked_until(EmulatedTime::MAX, false))
+    }
+
+    #[log_syscall(
+        /*rv*/i32,
+        /*pathname*/SyscallStringArg,
+        /*argv*/*const std::ffi::c_void,
+        /*envp*/*const std::ffi::c_void)]
+    pub fn execve(
+        ctx: &mut SyscallContext,
+        pathname: ForeignPtr<std::ffi::c_char>,
+        argv: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+        envp: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+    ) -> Result<i64, SyscallError> {
+        let mut path_buf = [0u8; linux_api::limits::PATH_MAX];
+        let path_buf_capacity = path_buf.len();
+        let path = ctx.objs.process.memory_borrow().copy_str_from_ptr(
+            &mut path_buf,
+            ForeignArrayPtr::new(pathname.cast::<u8>(), path_buf_capacity),
+        )?;
+
+        Self::execve_common(
+            ctx,
+            &ctx.objs.process.current_working_dir(),
+            path,
+            argv,
+            envp,
+            0,
+        )
+        .map(|_| 0)
+    }
+
+    #[log_syscall(
+        /*rv*/i32,
+        /*dirfd */std::ffi::c_int,
+        /*pathname*/SyscallStringArg,
+        /*argv*/*const std::ffi::c_void,
+        /*envp*/*const std::ffi::c_void,
+        /*flags*/std::ffi::c_int)]
+    pub fn execveat(
+        _ctx: &mut SyscallContext,
+        _dirfd: std::ffi::c_int,
+        _pathname: ForeignPtr<std::ffi::c_char>,
+        _argv: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+        _envp: ForeignPtr<ForeignPtr<std::ffi::c_char>>,
+        _flags: std::ffi::c_int,
+    ) -> Result<i64, SyscallError> {
+        // TODO: Implement resolution of the path to the executable,
+        // and then call `execve_common` with that.
+        Err(Errno::ENOSYS.into())
     }
 }

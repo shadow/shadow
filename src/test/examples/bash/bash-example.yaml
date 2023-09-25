@@ -16,6 +16,9 @@ hosts:
       args:
        - -c
        - |
+         # Bail on errors
+         set -euo pipefail
+
          # Fork some subprocesses.
          # These don't `exec` though, because `echo`
          # is a bash built-in.
@@ -27,21 +30,16 @@ hosts:
 
          # Wait for all subprocesses to finish.
          wait
-         echo done
+         echo all children exited
 
          # Fork a subprocess with IO redirection.
          echo $(echo hello from pipeline?)
 
          # `exec` a subprocess
-         # TODO: needs `exec`.
-         # seq 5
+         seq 5
 
          # `exec` subprocesses with IO redirection.
-         # TODO: this doesn't work yet, because the
-         # subprocesses try to check whether `stdin` is
-         # a terminal, and we don't yet support the corresponding
-         # syscalls on pipes.
-         # seq 20 | sort
+         seq 5 | tac
 
          echo done
       start_time: 3s

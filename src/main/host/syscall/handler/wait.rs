@@ -129,7 +129,7 @@ impl SyscallHandler {
 
         let mut matching_child_zombies = matching_children.filter(|(_pid, process)| {
             let process = process.borrow(ctx.objs.host.root());
-            let zombie = process.borrow_zombie();
+            let zombie = process.borrow_as_zombie();
             zombie.is_some()
         });
         let Some((matching_child_zombie_pid, matching_child_zombie)) =
@@ -149,7 +149,7 @@ impl SyscallHandler {
         };
 
         let zombie_process = matching_child_zombie.borrow(ctx.objs.host.root());
-        let zombie = zombie_process.borrow_zombie().unwrap();
+        let zombie = zombie_process.borrow_as_zombie().unwrap();
         let mut memory = ctx.objs.process.memory_borrow_mut();
 
         if !status_ptr.is_null() {

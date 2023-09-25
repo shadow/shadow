@@ -2,6 +2,8 @@ use std::cell::{Cell, RefCell};
 use std::ops::{Deref, DerefMut};
 
 use linux_api::errno::Errno;
+use linux_api::fcntl::DescriptorFlags;
+use linux_api::signal::stack_t;
 use nix::unistd::Pid;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
@@ -13,12 +15,13 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{shmalloc, ShMemBlock};
 
 use super::context::ProcessContext;
-use super::descriptor::descriptor_table::DescriptorTable;
+use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{syscall, IsSend, ObjectCounter};
 
 /// The thread's state after having been allowed to execute some code.
@@ -65,6 +68,100 @@ impl Thread {
     /// Minimal wrapper around the native managed thread.
     pub fn mthread(&self) -> impl Deref<Target = ManagedThread> + '_ {
         self.mthread.borrow()
+    }
+
+    /// Update this thread to be the new thread group leader as part of an
+    /// `execve` or `execveat` syscall.  Replaces the managed thread with
+    /// `mthread` and updates the thread ID.
+    pub fn update_for_exec(&mut self, host: &Host, mthread: ManagedThread, new_tid: ThreadId) {
+        self.mthread.replace(mthread).handle_process_exit();
+        self.tid_address.set(ForeignPtr::null());
+
+        // Update shmem
+        {
+            // We potentially need to update the thread-id. It doesn't currently
+            // have interior mutability, and since mutating it is rare, it seems
+            // nicer to get a mutable copy of the current  shared memory, update
+            // it, and alloc a new block, vs. adding another layer of interior
+            // mutability at all the other points we access it.
+
+            let host_shmem_prot = host.shim_shmem_lock_borrow().unwrap();
+
+            let mut thread_shmem =
+                ThreadShmem::clone(&self.shim_shared_memory, &host_shmem_prot.root);
+
+            // thread id is updated to make this the new thread group leader.
+            thread_shmem.tid = new_tid.into();
+
+            // sigaltstack is reset to disabled.
+            unsafe {
+                *thread_shmem
+                    .protected
+                    .borrow_mut(&host_shmem_prot.root)
+                    .sigaltstack_mut() = stack_t::new(
+                    std::ptr::null_mut(),
+                    linux_api::signal::SigAltStackFlags::SS_DISABLE,
+                    0,
+                )
+            };
+
+            self.shim_shared_memory = shmalloc(thread_shmem);
+        }
+
+        unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
+        self.syscallhandler = unsafe {
+            SendPointer::new(c::syscallhandler_new(
+                host.id(),
+                self.process_id.into(),
+                new_tid.into(),
+            ))
+        };
+
+        // Update descriptor table
+        {
+            // Descriptor table is unshared
+            let desc_table_rc = self.desc_table.take().unwrap();
+            let mut desc_table = DescriptorTable::clone(&desc_table_rc.borrow(host.root()));
+            desc_table_rc.explicit_drop(host.root());
+
+            // Any descriptors with CLOEXEC are closed.
+            let to_close: Vec<DescriptorHandle> = desc_table
+                .iter()
+                .filter_map(|(handle, descriptor)| {
+                    if descriptor.flags().contains(DescriptorFlags::FD_CLOEXEC) {
+                        Some(*handle)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            CallbackQueue::queue_and_run(|q| {
+                for handle in to_close {
+                    log::trace!("Unregistering FD_CLOEXEC descriptor {handle:?}");
+                    if let Some(Err(e)) = desc_table
+                        .deregister_descriptor(handle)
+                        .unwrap()
+                        .close(host, q)
+                    {
+                        log::debug!("Error closing {handle:?}: {e:?}");
+                    };
+                }
+            });
+
+            self.desc_table = Some(RootedRc::new(
+                host.root(),
+                RootedRefCell::new(host.root(), desc_table),
+            ));
+        }
+
+        if let Some(c) = unsafe { self.cond.get_mut().ptr().as_mut() } {
+            unsafe { c::syscallcondition_cancel(c) };
+            unsafe { c::syscallcondition_unref(c) };
+        }
+        self.cond = Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) });
+
+        self.id = new_tid;
     }
 
     /// Have the plugin thread natively execute the given syscall.

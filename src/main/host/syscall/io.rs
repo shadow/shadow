@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 
@@ -415,4 +416,35 @@ fn msghdr_to_rust(msg: &libc::msghdr, mem: &MemoryManager) -> Result<MsgHdr, Err
         control_len: msg.msg_controllen,
         flags: msg.msg_flags,
     })
+}
+
+/// Read an array of strings, each of which with max length
+/// `linux_api::limits::ARG_MAX`.  e.g. suitable for `execve`'s argument and
+/// environment string lists.
+pub fn read_cstring_vec(
+    mem: &MemoryManager,
+    mut ptr_ptr: ForeignPtr<ForeignPtr<i8>>,
+) -> Result<Vec<CString>, Errno> {
+    let mut res = Vec::new();
+
+    // `execve(2)`: Most UNIX implementations impose some limit on the
+    // total size of the command-line  argument  (argv)  and
+    // environment  (envp) strings that may be passed to a new program.
+    // POSIX.1 allows an implementation to advertise this limit using
+    // the ARG_MAX constant
+    let mut arg_buf = [0; linux_api::limits::ARG_MAX];
+
+    loop {
+        let ptr = mem.read(ptr_ptr)?;
+        ptr_ptr = ptr_ptr.add(1);
+        if ptr.is_null() {
+            break;
+        }
+        let cstr = mem.copy_str_from_ptr(
+            &mut arg_buf,
+            ForeignArrayPtr::new(ptr.cast::<u8>(), linux_api::limits::ARG_MAX),
+        )?;
+        res.push(cstr.to_owned());
+    }
+    Ok(res)
 }

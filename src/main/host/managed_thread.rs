@@ -740,6 +740,25 @@ impl ManagedThread {
 
         child_pid_res
     }
+
+    /// `ManagedThread` panics if dropped while the underlying process is still running,
+    /// since otherwise that process could continue writing to shared memory regions
+    /// that shadow reallocates.
+    ///
+    /// This method kills the process that `self` belongs to (not just the
+    /// thread!) and then drops `self`.
+    pub fn kill_and_drop(self) {
+        if let Err(err) =
+            nix::sys::signal::kill(self.native_pid(), nix::sys::signal::Signal::SIGKILL)
+        {
+            log::warn!(
+                "Couldn't kill managed process {}. kill: {:?}",
+                self.native_pid(),
+                err
+            );
+        }
+        self.handle_process_exit();
+    }
 }
 
 impl Drop for ManagedThread {

@@ -201,7 +201,7 @@ impl SyscallHandler {
             let process = ctx
                 .objs
                 .process
-                .borrow_runnable()
+                .borrow_as_runnable()
                 .unwrap()
                 .new_forked_process(ctx.objs.host, flags, exit_signal, childrc);
             child_process_rc = Some(process.clone(ctx.objs.host.root()));

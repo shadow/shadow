@@ -499,6 +499,11 @@ pub fn debug_assert_cloexec(file: &(impl std::os::fd::AsRawFd + std::fmt::Debug)
         let flags = nix::fcntl::FdFlag::from_bits_retain(flags);
         debug_assert!(flags.contains(nix::fcntl::FdFlag::FD_CLOEXEC), "{file:?} is unexpectedly not FD_CLOEXEC, which may lead to resource leaks or strange behavior");
     }
+    #[cfg(not(debug_assertions))]
+    {
+        // Silence unused variable warning
+        let _ = file;
+    }
 }
 
 #[cfg(test)]

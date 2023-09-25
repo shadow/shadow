@@ -139,7 +139,9 @@ unsafe fn emulated_syscall_event(
                     // SAFETY: file descriptor should be valid and open.
                     let strace_fd = unsafe { BorrowedFd::borrow_raw(strace_fd) };
                     let mut strace_file_writer = BorrowedFdWriter::new(strace_fd);
-                    strace_file_writer.write_str(buffer.as_str()).unwrap();
+                    if let Err(e) = strace_file_writer.write_str(buffer.as_str()) {
+                        log::warn!("Couldn't write to strace_fd:{strace_fd:?}: {e:?}");
+                    }
                 }
 
                 return rv;

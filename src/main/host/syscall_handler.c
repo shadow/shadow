@@ -117,8 +117,7 @@ void syscallhandler_free(SysCallHandler* sys) {
     if (_countSyscalls && sys->syscall_counter) {
         // Log the plugin thread specific counts
         char* str = counter_alloc_string(sys->syscall_counter);
-        debug("Thread %d (%s) syscall counts: %s", sys->threadId,
-              _syscallhandler_getProcessName(sys), str);
+        debug("Thread %d syscall counts: %s", sys->threadId, str);
         counter_free_string(sys->syscall_counter, str);
 
         // Add up the counts at the worker level
@@ -322,7 +321,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(epoll_wait);
             HANDLE_RUST(eventfd);
             HANDLE_RUST(eventfd2);
-            UNSUPPORTED(execve);
+            HANDLE_RUST(execve);
+            HANDLE_RUST(execveat);
             HANDLE_C(exit_group);
             HANDLE_C(faccessat);
             HANDLE_C(fadvise64);

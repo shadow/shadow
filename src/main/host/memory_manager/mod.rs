@@ -485,8 +485,8 @@ impl MemoryManager {
         unsafe { self.memory_copier.copy_prefix_from_ptr(buf, ptr) }
     }
 
-    /// Copies a NULL-terminated string starting from the beginning of `dst` and
-    /// contained completely within `dst`. Still works if some of `dst` isn't
+    /// Copies a NULL-terminated string starting from the beginning of `src` and
+    /// contained completely within `src`. Still works if some of `src` isn't
     /// readable, as long as a NULL-terminated-string is contained in the
     /// readable prefix.
     ///

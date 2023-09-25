@@ -248,6 +248,11 @@ impl ProcessShmemProtected {
         &mut self.signal_actions[signal_idx(signal)]
     }
 
+    /// This drops all pending signals. Intended primarily for use with exec.
+    pub fn clear_pending_signals(&mut self) {
+        self.pending_signals = sigset_t::EMPTY;
+    }
+
     pub fn take_pending_unblocked_signal(
         &mut self,
         thread: &ThreadShmemProtected,
@@ -296,9 +301,19 @@ impl ThreadShmem {
             ),
         }
     }
+
+    /// Create a copy of `Self`. We can't implement the `Clone` trait since we
+    /// need the `root`.
+    pub fn clone(&self, root: &Root) -> Self {
+        Self {
+            host_id: self.host_id,
+            tid: self.tid,
+            protected: RootedRefCell::new(root, *self.protected.borrow(root)),
+        }
+    }
 }
 
-#[derive(VirtualAddressSpaceIndependent)]
+#[derive(VirtualAddressSpaceIndependent, Copy, Clone)]
 #[repr(C)]
 pub struct ThreadShmemProtected {
     pub host_id: HostId,
@@ -365,6 +380,7 @@ impl ThreadShmemProtected {
     }
 }
 
+#[derive(Copy, Clone)]
 #[repr(transparent)]
 struct StackWrapper(stack_t);
 
