@@ -454,12 +454,13 @@ jobs:
         run: |
           cd shadow
           # dependencies for examples
-          ./examples/curl/install_deps.sh
-          ./examples/etcd/install_deps.sh
-          ./examples/http-server/install_deps.sh
-          ./examples/iperf-2/install_deps.sh
-          ./examples/nginx/install_deps.sh
-          ./examples/wget2/install_deps.sh
+          ./examples/apps/curl/install_deps.sh
+          ./examples/apps/etcd/install_deps.sh
+          ./examples/apps/http-server/install_deps.sh
+          ./examples/apps/iperf-2/install_deps.sh
+          ./examples/apps/nginx/install_deps.sh
+          ./examples/apps/wget2/install_deps.sh
+          ./examples/docs/basic-file-transfer/install_deps.sh
 
       - name: Install setup script dependencies
         run: apt-get install -y cmake

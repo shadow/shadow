@@ -1,0 +1,6 @@
+add_subdirectory(curl)
+add_subdirectory(etcd)
+add_subdirectory(http-server)
+add_subdirectory(iperf-2)
+add_subdirectory(nginx)
+add_subdirectory(wget2)

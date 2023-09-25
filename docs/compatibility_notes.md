@@ -50,11 +50,11 @@ See also:
 ### Example
 
 ```yaml
-{{#include ../examples/curl/shadow.yaml}}
+{{#include ../examples/apps/curl/shadow.yaml}}
 ```
 
 ```bash
-{{#include ../examples/curl/run.sh:body}}
+{{#include ../examples/apps/curl/run.sh:body}}
 ```
 
 ### Notes
@@ -70,11 +70,11 @@ version provided in Ubuntu 20.04, don't have this issue. See issue
 ### Example
 
 ```yaml
-{{#include ../examples/wget2/shadow.yaml}}
+{{#include ../examples/apps/wget2/shadow.yaml}}
 ```
 
 ```bash
-{{#include ../examples/wget2/run.sh:body}}
+{{#include ../examples/apps/wget2/run.sh:body}}
 ```
 
 ### Notes
@@ -88,17 +88,17 @@ version provided in Ubuntu 20.04, don't have this issue. See issue
 #### `shadow.yaml`
 
 ```yaml
-{{#include ../examples/nginx/shadow.yaml}}
+{{#include ../examples/apps/nginx/shadow.yaml}}
 ```
 
 #### `nginx.conf`
 
 ```nginx
-{{#include ../examples/nginx/nginx.conf}}
+{{#include ../examples/apps/nginx/nginx.conf}}
 ```
 
 ```bash
-{{#include ../examples/nginx/run.sh:body}}
+{{#include ../examples/apps/nginx/run.sh:body}}
 ```
 
 ### Notes
@@ -114,11 +114,11 @@ off`.
 ### Example
 
 ```yaml
-{{#include ../examples/iperf-2/shadow.yaml}}
+{{#include ../examples/apps/iperf-2/shadow.yaml}}
 ```
 
 ```bash
-{{#include ../examples/iperf-2/run.sh:body}}
+{{#include ../examples/apps/iperf-2/run.sh:body}}
 ```
 
 ### Notes
@@ -185,11 +185,11 @@ with Shadow and will cause Shadow to deadlock. A workaround is to use the
 Example for etcd version 3.3.x.
 
 ```yaml
-{{#include ../examples/etcd/shadow.yaml}}
+{{#include ../examples/apps/etcd/shadow.yaml}}
 ```
 
 ```bash
-{{#include ../examples/etcd/run.sh:body}}
+{{#include ../examples/apps/etcd/run.sh:body}}
 ```
 
 ### Notes
@@ -275,11 +275,11 @@ privileges if it detects that the effective user is root.
 ### Example
 
 ```yaml
-{{#include ../examples/http-server/shadow.yaml}}
+{{#include ../examples/apps/http-server/shadow.yaml}}
 ```
 
 ```bash
-{{#include ../examples/http-server/run.sh:body}}
+{{#include ../examples/apps/http-server/run.sh:body}}
 ```
 
 ### Notes
