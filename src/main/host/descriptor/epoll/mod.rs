@@ -138,7 +138,8 @@ impl Epoll {
 
     /// Executes an epoll control operation on the target file.
     ///
-    /// Panics if `target_file` is an instance of this epoll object.
+    /// We think this panics if `target_file` is an instance of this epoll object due to recursive
+    /// mutable borrows (but it does not panic due to a check+panic).
     pub fn ctl(
         &mut self,
         op: EpollCtlOp,
