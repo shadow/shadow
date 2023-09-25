@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="recvsize" attr.type="string" for="node" id="d5" />
+  <key attr.name="sendsize" attr.type="string" for="node" id="d4" />
+  <key attr.name="count" attr.type="string" for="node" id="d3" />
+  <key attr.name="time" attr.type="string" for="node" id="d2" />
+  <key attr.name="peers" attr.type="string" for="node" id="d1" />
+  <key attr.name="loglevel" attr.type="string" for="node" id="d0" />
+  <graph edgedefault="directed">
+    <node id="start">
+      <data key="d0">info</data>
+      <data key="d1">server:8888</data>
+    </node>
+    <node id="pause">
+      <data key="d2">1,2,3</data>
+    </node>
+    <node id="end">
+      <data key="d3">10</data>
+    </node>
+    <node id="stream">
+      <data key="d4">1 MiB</data>
+      <data key="d5">1 MiB</data>
+    </node>
+    <edge source="start" target="stream" />
+    <edge source="pause" target="start" />
+    <edge source="end" target="pause" />
+    <edge source="stream" target="end" />
+  </graph>
+</graphml>
