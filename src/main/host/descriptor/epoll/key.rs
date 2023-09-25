@@ -47,6 +47,11 @@ pub(super) struct PriorityKey {
 }
 
 impl PriorityKey {
+    /// Creates a new `PriorityKey` with the given priority.
+    ///
+    /// The new key will be tested for equality and order based exclusively on the `pri` value while
+    /// ignoring the `key` value. Thus, callers should ensure that every instance of this object
+    /// that should be considered unique is created with a unique priority value.
     pub fn new(pri: u64, key: Key) -> Self {
         Self { pri, key }
     }
@@ -60,12 +65,14 @@ impl Eq for PriorityKey {}
 
 impl PartialEq for PriorityKey {
     fn eq(&self, other: &Self) -> bool {
+        // Equality is based only on the priority value as explained in `PriorityKey::new()`.
         self.pri.eq(&other.pri)
     }
 }
 
 impl Ord for PriorityKey {
     fn cmp(&self, other: &Self) -> Ordering {
+        // Order is based only on the priority value as explained in `PriorityKey::new()`.
         self.pri.cmp(&other.pri)
     }
 }
