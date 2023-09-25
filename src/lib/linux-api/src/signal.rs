@@ -1184,7 +1184,7 @@ impl Default for sigaction {
 }
 
 // Corresponds to default actions documented in signal(7).
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 #[repr(C)]
 pub enum LinuxDefaultAction {
     TERM,

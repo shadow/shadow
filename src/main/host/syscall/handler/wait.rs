@@ -153,12 +153,13 @@ impl SyscallHandler {
         let mut memory = ctx.objs.process.memory_borrow_mut();
 
         if !status_ptr.is_null() {
-            // From glib's waitstatus.h. Doesn't seem to be exposed in linux kernel headers.
-            const COREFLAG: i32 = 0x80;
             let status = match zombie.exit_status() {
                 ExitStatus::Normal(i) => i << 8,
-                ExitStatus::Signaled(s, false) => i32::from(s),
-                ExitStatus::Signaled(s, true) => i32::from(s) | COREFLAG,
+                ExitStatus::Signaled(s) => {
+                    // This should be `| 0x80` if the process dumped core, but since
+                    // this depends on the system config we never set this flag.
+                    i32::from(s)
+                }
                 ExitStatus::StoppedByShadow => unreachable!(),
             };
             memory.write(status_ptr, &status)?;
