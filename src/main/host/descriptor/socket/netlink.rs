@@ -934,7 +934,7 @@ impl NetlinkSocketCommon {
         _mem: &mut MemoryManager,
         cb_queue: &mut CallbackQueue,
     ) -> Result<(usize, usize), SyscallError> {
-        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_TRUNC;
+        let supported_flags = MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_PEEK | MsgFlags::MSG_TRUNC;
 
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
@@ -956,9 +956,13 @@ impl NetlinkSocketCommon {
                 return Err(Errno::EWOULDBLOCK);
             }
 
-            let (num_copied, num_removed_from_buf) = buffer
-                .read(dst, cb_queue)
-                .map_err(|e| Errno::try_from(e).unwrap())?;
+            let (num_copied, num_removed_from_buf) = if flags.contains(MsgFlags::MSG_PEEK) {
+                buffer.peek(dst).map_err(|e| Errno::try_from(e).unwrap())?
+            } else {
+                buffer
+                    .read(dst, cb_queue)
+                    .map_err(|e| Errno::try_from(e).unwrap())?
+            };
 
             if flags.contains(MsgFlags::MSG_TRUNC) {
                 // return the total size of the message, not the number of bytes we read
