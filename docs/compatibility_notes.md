@@ -103,8 +103,8 @@ version provided in Ubuntu 20.04, don't have this issue. See issue
 
 ### Notes
 
-1. Shadow doesn't support `fork()` (See [limitations](limitations.md#unimplemented-system-calls-and-options)) so you must disable additional processes
-using `master_process off` and `worker_processes 0`.
+1. Shadow currently doesn't support some syscalls that nginx uses to set up and control worker child processes, so you must disable additional processes
+using `master_process off` and `worker_processes 0`. See https://github.com/shadow/shadow/issues/3174.
 
 2. Shadow doesn't support `sendfile()` so you must disable it using `sendfile
 off`.
