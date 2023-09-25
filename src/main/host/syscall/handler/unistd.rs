@@ -672,6 +672,12 @@ impl SyscallHandler {
         // `verify_plugin_path`. Ideal solution is probably to split up
         // `verify_plugin_path` a bit.
 
+        // `execve(2)`: Most UNIX implementations impose some limit on the
+        // total size of the command-line  argument  (argv)  and
+        // environment  (envp) strings that may be passed to a new program.
+        // POSIX.1 allows an implementation to advertise this limit using
+        // the ARG_MAX constant
+
         let argv;
         let envv;
         {
