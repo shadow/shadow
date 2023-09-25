@@ -19,6 +19,7 @@ currently be disabled via the (unstable) option `log-errors-to-tty`.
   * The `fork` syscall and `fork`-like invocations of the `clone` and `clone3` syscalls.
   * Process parent pid's, process group IDs, process session IDs, and related syscalls.
   * Child exit signals (e.g. SIGCHLD)
+  * The `execve` syscall.
 
 * Added Debian 12 (Bookworm) to our supported platforms.
 
