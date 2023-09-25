@@ -35,55 +35,7 @@ the configuration options for those applications.
 `shadow.yaml`:
 
 ```yaml
-general:
-  stop_time: 10m
-  # Needed to avoid deadlock in some configurations of tgen.
-  # See below.
-  model_unblocked_syscall_latency: true
-
-network:
-  graph:
-    # a custom single-node graph
-    type: gml
-    inline: |
-      graph [
-        node [
-          id 0
-          host_bandwidth_down "140 Mbit"
-          host_bandwidth_up "18 Mbit"
-        ]
-        edge [
-          source 0
-          target 0
-          latency "50 ms"
-          packet_loss 0.01
-        ]
-      ]
-hosts:
-  server:
-    network_node_id: 0
-    processes:
-    # Assumes `tgen` is on your shell's `PATH`.
-    # Otherwise use an absolute path here.
-    - path: tgen
-      # The ../../../ prefix assumes that tgen.server.graph.xml in the same
-      # directory as the data directory (specified with the -d CLI argument).
-      # See notes below explaining Shadow's directory structure.
-      args: ../../../tgen.server.graphml.xml
-      start_time: 1s
-      # Tell shadow to expect this process to still be running at the end of the
-      # simulation.
-      expected_final_state: running
-  client1: &client_host
-    network_node_id: 0
-    processes:
-    - path: tgen
-      args: ../../../tgen.client.graphml.xml
-      start_time: 2s
-  client2: *client_host
-  client3: *client_host
-  client4: *client_host
-  client5: *client_host
+{{#include ../examples/docs/traffic-generation/shadow.yaml}}
 ```
 
 We can see that Shadow will be running 6 processes in total, and that those
@@ -116,16 +68,7 @@ The main configuration here is the port number on which the server will listen.
 `tgen.server.graphml.xml`:
 
 ```xml
-<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key attr.name="serverport" attr.type="string" for="node" id="d1" />
-  <key attr.name="loglevel" attr.type="string" for="node" id="d0" />
-  <graph edgedefault="directed">
-    <node id="start">
-      <data key="d0">info</data>
-      <data key="d1">8888</data>
-    </node>
-  </graph>
-</graphml>
+{{#include ../examples/docs/traffic-generation/tgen.server.graphml.xml}}
 ```
 
 #### Our TGen Clients
@@ -137,34 +80,7 @@ port `server:8888`, and that we download and upload `1 MiB` 10 times, pausing 1,
 `tgen.client.graphml.xml`:
 
 ```xml
-<?xml version="1.0" encoding="utf-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key attr.name="recvsize" attr.type="string" for="node" id="d5" />
-  <key attr.name="sendsize" attr.type="string" for="node" id="d4" />
-  <key attr.name="count" attr.type="string" for="node" id="d3" />
-  <key attr.name="time" attr.type="string" for="node" id="d2" />
-  <key attr.name="peers" attr.type="string" for="node" id="d1" />
-  <key attr.name="loglevel" attr.type="string" for="node" id="d0" />
-  <graph edgedefault="directed">
-    <node id="start">
-      <data key="d0">info</data>
-      <data key="d1">server:8888</data>
-    </node>
-    <node id="pause">
-      <data key="d2">1,2,3</data>
-    </node>
-    <node id="end">
-      <data key="d3">10</data>
-    </node>
-    <node id="stream">
-      <data key="d4">1 MiB</data>
-      <data key="d5">1 MiB</data>
-    </node>
-    <edge source="start" target="stream" />
-    <edge source="pause" target="start" />
-    <edge source="end" target="pause" />
-    <edge source="stream" target="end" />
-  </graph>
-</graphml>
+{{#include ../examples/docs/traffic-generation/tgen.client.graphml.xml}}
 ```
 
 ### Running the Simulation
@@ -175,9 +91,7 @@ default. We first remove this directory if it already exists, and then run
 Shadow. This example may take a few minutes.
 
 ```bash
-# delete any existing simulation data
-rm -rf shadow.data/
-shadow shadow.yaml > shadow.log
+{{#include ../examples/docs/traffic-generation/run.sh:body}}
 ```
 
 ### Simulation Output
@@ -189,14 +103,16 @@ In the TGen process output, lines containing `stream-success` represent
 completed downloads and contain useful timing statistics. From these lines we
 should see that clients have completed a total of **50** streams:
 
-```bash
-for d in shadow.data/hosts/client*; do grep "stream-success" ${d}/*.stdout ; done | wc -l
+```text
+$ {{#include ../examples/docs/traffic-generation/show.sh:body_1}}
+{{#include ../examples/docs/traffic-generation/show.sh:output_1}}
 ```
 
 We can also look at the transfers from the servers' perspective:
 
-```bash
-for d in shadow.data/hosts/server*; do grep "stream-success" ${d}/*.stdout ; done | wc -l
+```text
+$ {{#include ../examples/docs/traffic-generation/show.sh:body_2}}
+{{#include ../examples/docs/traffic-generation/show.sh:output_2}}
 ```
 
 You can also parse the TGen output logged to the stdout files using the

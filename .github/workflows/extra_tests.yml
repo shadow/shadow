@@ -452,6 +452,8 @@ jobs:
 
       - name: Install example dependencies
         run: |
+          # if we need to build C code, we want to do so with the default compiler
+          unset CC
           cd shadow
           # dependencies for examples
           ./examples/apps/curl/install_deps.sh
@@ -461,6 +463,7 @@ jobs:
           ./examples/apps/nginx/install_deps.sh
           ./examples/apps/wget2/install_deps.sh
           ./examples/docs/basic-file-transfer/install_deps.sh
+          ./examples/docs/traffic-generation/install_deps.sh
 
       - name: Install setup script dependencies
         run: apt-get install -y cmake
@@ -468,6 +471,7 @@ jobs:
       - name: Test
         run: |
           cd shadow
+          PATH="$PATH:$HOME/.local/bin"
           ./setup test -- --build-config extra --label-regex example
 
       - name: Last 200 log lines
