@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 use std::error::Error;
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, OsString};
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use libc::{c_int, c_void, siginfo_t, CLD_EXITED};
@@ -947,26 +948,18 @@ fn test_waitid_sets_signal_death_info(fatal_signal: Signal) -> anyhow::Result<()
 }
 
 /// Core, minimal functionality for fork+exec
-fn test_fork_exec_and_reap(python_path: &Path, exit_code: i32) -> anyhow::Result<()> {
+fn test_fork_exec_and_reap(
+    spawn_fn: impl FnOnce(&Path, &[&str]) -> Pid,
+    python_path: &Path,
+    exit_code: i32,
+) -> anyhow::Result<()> {
     run_test_in_subprocess(|| {
-        let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
-        let child_pid = match clone_res {
-            CloneResult::CallerIsChild => {
-                let path = CString::new(python_path.as_os_str().as_bytes()).unwrap();
-                let script = CString::new(format!(
-                    r#"
+        let script = format!(
+            r#"
 import os
-os._exit({exit_code})
-                "#
-                ))
-                .unwrap();
-                let args = vec![path.clone(), CString::new("-c").unwrap(), script];
-                unsafe { libc::execv(path.as_ptr(), execv_argvec(&args).as_ptr()) };
-                unreachable!()
-            }
-            CloneResult::CallerIsParent(child_pid) => child_pid,
-        };
-
+os._exit({exit_code}) "#
+        );
+        let child_pid = spawn_fn(python_path, &["-c", &script]);
         let child_pid = nix::unistd::Pid::from_raw(child_pid.as_raw_nonzero().get());
         assert_eq!(
             nix::sys::wait::waitpid(Some(child_pid), None).unwrap(),
@@ -1655,13 +1648,124 @@ fn main() -> Result<(), Box<dyn Error>> {
         ));
     }
 
-    for exit_code in [0, 1].into_iter() {
-        let python_path = python_path.to_path_buf();
-        tests.push(ShadowTest::new(
-            &format!("test_fork_exec_and_reap-{exit_code}"),
-            move || test_fork_exec_and_reap(&python_path, exit_code),
-            all_envs.clone(),
-        ));
+    #[allow(clippy::type_complexity)]
+    let spawn_fns: [(&str, Arc<dyn Fn(&Path, &[&str]) -> Pid>); 4] = [
+        (
+            "fork_exec",
+            Arc::new(|path: &Path, args: &[&str]| {
+                let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
+                match clone_res {
+                    CloneResult::CallerIsChild => {
+                        let path = CString::new(path.as_os_str().as_bytes()).unwrap();
+                        let args: Vec<CString> = [path.clone()]
+                            .into_iter()
+                            .chain(args.iter().map(|s| CString::new(*s).unwrap()))
+                            .collect();
+                        unsafe { libc::execv(path.as_ptr(), execv_argvec(&args).as_ptr()) };
+                        unreachable!()
+                    }
+                    CloneResult::CallerIsParent(child_pid) => child_pid,
+                }
+            }),
+        ),
+        (
+            "vfork_exec",
+            Arc::new(|path: &Path, args: &[&str]| {
+                let path = CString::new(path.as_os_str().as_bytes()).unwrap();
+                let args: Vec<CString> = [path.clone()]
+                    .into_iter()
+                    .chain(args.iter().map(|s| CString::new(*s).unwrap()))
+                    .collect();
+                let env: Vec<CString> = Vec::new();
+                let raw_pid: i64;
+                // A function that returns twice in the same address space, such as vfork,
+                // is unsound in Rust. We work around this by doing the vfork+exec in a single
+                // asm block, effectivey hiding the double-return.
+                unsafe {
+                    core::arch::asm!(
+                        // vfork
+                        "syscall",
+                        // If in the parent, exit the asm block (by jumping forward
+                        // to the label `2`).
+                        // https://doc.rust-lang.org/rust-by-example/unsafe/asm.html#labels
+                        "cmp rax, 0",
+                        "jne 2f",
+
+                        // We're in the child; execve syscall.
+                        "mov rax, r12",
+                        "syscall",
+                        "ud2",
+
+                        "2:",
+                        inlateout("rax") libc::SYS_vfork => raw_pid,
+                        // r12 shouldn't be clobbered by the vfork syscall
+                        in("r12") libc::SYS_execve,
+                        in("rdi") path.as_ptr(),
+                        in("rsi") execv_argvec(&args).as_ptr(),
+                        in("rdx") execv_argvec(&env).as_ptr(),
+                        clobber_abi("C"),
+                    )
+                };
+                Pid::from_raw(raw_pid.try_into().unwrap()).unwrap()
+            }),
+        ),
+        (
+            "posix_spawn",
+            Arc::new(|path: &Path, args: &[&str]| {
+                let mut raw_pid = 0;
+                let path = CString::new(path.as_os_str().as_bytes()).unwrap();
+                let args: Vec<CString> = [path.clone()]
+                    .into_iter()
+                    .chain(args.iter().map(|s| CString::new(*s).unwrap()))
+                    .collect();
+                let env: Vec<CString> = Vec::new();
+                let rv = unsafe {
+                    libc::posix_spawn(
+                        &mut raw_pid,
+                        path.as_ptr(),
+                        std::ptr::null(),
+                        std::ptr::null(),
+                        execv_argvec(&args).as_ptr().cast(),
+                        execv_argvec(&env).as_ptr().cast(),
+                    )
+                };
+                assert_eq!(rv, 0);
+                Pid::from_raw(raw_pid).unwrap()
+            }),
+        ),
+        (
+            "rust_command",
+            Arc::new(|path: &Path, args: &[&str]| {
+                let args: Vec<OsString> = args
+                    .iter()
+                    .map(|s| OsString::from_str(s).unwrap())
+                    .collect();
+                let child = std::process::Command::new(path)
+                    .args(&args)
+                    .spawn()
+                    .unwrap();
+                let pid = Pid::from_raw(child.id().try_into().unwrap()).unwrap();
+
+                // Safe to drop; documented as specifically *not* having a Drop impl.
+                // i.e. this won't kill or wait for the child process.
+                static_assertions::assert_not_impl_any!(std::process::Child: Drop);
+                drop(child);
+
+                pid
+            }),
+        ),
+    ];
+
+    for (spawn_fn_name, spawn_fn) in &spawn_fns {
+        for exit_code in [0, 1].into_iter() {
+            let python_path = python_path.to_path_buf();
+            let spawn_fn = spawn_fn.clone();
+            tests.push(ShadowTest::new(
+                &format!("test_spawn-{spawn_fn_name}-{exit_code}"),
+                move || test_fork_exec_and_reap(&*spawn_fn, &python_path, exit_code),
+                all_envs.clone(),
+            ));
+        }
     }
 
     tests.push(ShadowTest::new(
