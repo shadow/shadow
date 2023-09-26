@@ -16,6 +16,8 @@ add_shadow_tests(BASENAME tor-minimal
                    --use-cpu-pinning true
                    --parallelism 2
                    --strace-logging-mode off
+                   # Disable to support fork
+                   --use-memory-manager false
                    --template-directory "shadow.data.template"
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
