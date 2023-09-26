@@ -10,7 +10,9 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
-use crate::host::descriptor::{FileMode, FileState, FileStatus, OpenFile, SyscallResult};
+use crate::host::descriptor::{
+    FileMode, FileState, FileStatus, Handle, OpenFile, StateListenerFilter, SyscallResult,
+};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
@@ -288,6 +290,14 @@ impl InetSocketRefMut<'_> {
     );
     enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
+    );
+    enum_passthrough!(self, (monitoring, filter, notify_fn), LegacyTcp, Tcp, Udp;
+        pub fn add_listener(
+            &mut self,
+            monitoring: FileState,
+            filter: StateListenerFilter,
+            notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        ) -> Handle<(FileState, FileState)>
     );
     enum_passthrough!(self, (ptr), LegacyTcp, Tcp, Udp;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

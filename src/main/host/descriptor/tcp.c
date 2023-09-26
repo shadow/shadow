@@ -1030,7 +1030,8 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     // Cleanup
     g_queue_free(keys_sorted);
 
-    if(_tcp_getBufferSpaceOut(tcp) > 0) {
+    if (_tcp_getBufferSpaceOut(tcp) > 0 &&
+        (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }
@@ -1053,7 +1054,8 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
         }
     }
 
-    if(_tcp_getBufferSpaceOut(tcp) > 0) {
+    if (_tcp_getBufferSpaceOut(tcp) > 0 &&
+        (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }
@@ -1192,7 +1194,8 @@ static void _tcp_retransmitPacket(TCP* tcp, const Host* host, gint sequence) {
     tcp->retransmit.queueLength -= packet_getPayloadSize(packet);
     packet_addDeliveryStatus(packet, PDS_SND_TCP_DEQUEUE_RETRANSMIT);
 
-    if(_tcp_getBufferSpaceOut(tcp) > 0) {
+    if (_tcp_getBufferSpaceOut(tcp) > 0 &&
+        (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 
@@ -1438,7 +1441,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
     } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
-    } else {
+    } else if (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE) {
         legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
     }
 }

@@ -10,6 +10,7 @@ use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
 mod clone;
+mod epoll;
 mod eventfd;
 mod fcntl;
 mod file;
@@ -53,6 +54,12 @@ impl SyscallHandler {
             libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),
             libc::SYS_dup2 => SyscallHandlerFn::call(Self::dup2, &mut ctx),
             libc::SYS_dup3 => SyscallHandlerFn::call(Self::dup3, &mut ctx),
+            libc::SYS_epoll_create => SyscallHandlerFn::call(Self::epoll_create, &mut ctx),
+            libc::SYS_epoll_create1 => SyscallHandlerFn::call(Self::epoll_create1, &mut ctx),
+            libc::SYS_epoll_ctl => SyscallHandlerFn::call(Self::epoll_ctl, &mut ctx),
+            libc::SYS_epoll_pwait => SyscallHandlerFn::call(Self::epoll_pwait, &mut ctx),
+            libc::SYS_epoll_pwait2 => SyscallHandlerFn::call(Self::epoll_pwait2, &mut ctx),
+            libc::SYS_epoll_wait => SyscallHandlerFn::call(Self::epoll_wait, &mut ctx),
             libc::SYS_eventfd => SyscallHandlerFn::call(Self::eventfd, &mut ctx),
             libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
             libc::SYS_execve => SyscallHandlerFn::call(Self::execve, &mut ctx),

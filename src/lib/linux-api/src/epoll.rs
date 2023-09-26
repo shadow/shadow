@@ -25,37 +25,37 @@ bitflags::bitflags! {
     /// types and other flags specify various input wakeup options.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct EpollEvents: u32 {
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLIN = bindings::LINUX_EPOLLIN;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLPRI = bindings::LINUX_EPOLLPRI;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLOUT = bindings::LINUX_EPOLLOUT;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLERR = bindings::LINUX_EPOLLERR;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLHUP = bindings::LINUX_EPOLLHUP;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLNVAL = bindings::LINUX_EPOLLNVAL;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLRDNORM = bindings::LINUX_EPOLLRDNORM;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLRDBAND = bindings::LINUX_EPOLLRDBAND;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLWRNORM = bindings::LINUX_EPOLLWRNORM;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLWRBAND = bindings::LINUX_EPOLLWRBAND;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLMSG = bindings::LINUX_EPOLLMSG;
-        // An epoll event type.
+        /// An epoll event type.
         const EPOLLRDHUP = bindings::LINUX_EPOLLRDHUP;
-        // An epoll wakeup option.
+        /// An epoll wakeup option.
         const EPOLLEXCLUSIVE = bindings::LINUX_EPOLLEXCLUSIVE;
-        // An epoll wakeup option.
+        /// An epoll wakeup option.
         const EPOLLWAKEUP = bindings::LINUX_EPOLLWAKEUP;
-        // An epoll wakeup option.
+        /// An epoll wakeup option.
         const EPOLLONESHOT = bindings::LINUX_EPOLLONESHOT;
-        // An epoll wakeup option.
+        /// An epoll wakeup option.
         const EPOLLET = bindings::LINUX_EPOLLET;
     }
 }
