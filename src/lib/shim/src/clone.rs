@@ -5,6 +5,8 @@ use linux_api::ucontext::{sigcontext, ucontext};
 use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
 use shadow_shmem::allocator::ShMemBlockSerialized;
 
+use crate::tls_allow_native_syscalls;
+
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
 /// https://github.com/rust-lang/rust/issues/106655
@@ -130,7 +132,7 @@ unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
-unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
+unsafe fn do_clone_process(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
     let flags = CloneFlags::from_bits(event.flags).unwrap();
     assert!(!flags.contains(CloneFlags::CLONE_THREAD));
     let ptid: *mut i32 = event.ptid.cast::<i32>().into_raw_mut();
@@ -138,11 +140,6 @@ unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
     let child_stack: *mut u8 = event.child_stack.cast::<u8>().into_raw_mut();
     let newtls = event.newtls;
 
-    if !child_stack.is_null() {
-        // Don't know of a real-world need for this, but shouldn't be
-        // difficult to implement if needed.
-        unimplemented!("fork with new stack");
-    }
     if flags.contains(CloneFlags::CLONE_VM) {
         // Don't know of a real-world need for this.
         unimplemented!("fork with shared memory");
@@ -170,7 +167,12 @@ unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
         linux_api::sched::clone(
             flags,
             Some(Signal::SIGCHLD),
-            child_stack.cast(),
+            // If a child stack is provided, we do the stack switch below
+            // as part of initialization instead of having the syscall do it for us.
+            // It's a bit simpler this way, and we can safely do it this way
+            // since we're not using CLONE_VM (not sharing memory with the
+            // parent).
+            core::ptr::null_mut(),
             ptid,
             ctid,
             newtls as *mut linux_user_desc,
@@ -187,6 +189,14 @@ unsafe fn do_clone_process(event: &ShimEventAddThreadReq) -> i64 {
             // SAFETY: Shadow should give us the correct type and lifetime.
             unsafe { crate::tls_ipc::set(&event.ipc_block) };
             unsafe { crate::bindings::_shim_child_process_init_preload() };
+            if !child_stack.is_null() {
+                // Do the requested stack switch by long jumping out of the
+                // signal handler to an updated context.
+                tls_allow_native_syscalls::swap(false);
+                let mut mctx = ctx.uc_mcontext;
+                mctx.rsp = child_stack as u64;
+                unsafe { set_context(&mctx) };
+            }
             0
         }
         CloneResult::CallerIsParent(child) => child.as_raw_nonzero().get().into(),
@@ -336,6 +346,6 @@ pub unsafe fn do_clone(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 {
     if flags.contains(CloneFlags::CLONE_THREAD) {
         unsafe { do_clone_thread(ctx, event) }
     } else {
-        unsafe { do_clone_process(event) }
+        unsafe { do_clone_process(ctx, event) }
     }
 }
