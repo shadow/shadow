@@ -16,12 +16,6 @@ it will generally return `ENOSYS` and log at `warn` level or higher. In many
 such cases the application is able to recover, and this has little or no effect
 on the ultimate results of the simulation.
 
-Notably Shadow does not yet implement `fork`, `exec`, or other variations on
-these syscalls (but *does* implement enough of `clone` to support threads).
-Typically this can be worked around by spawning all processes
-directly from shadow's config file.  We plan to implement these calls:
-https://github.com/shadow/shadow/issues/1987.
-
 ## IPv6
 
 Shadow does not yet implement IPv6. Most applications can be configured to use IPv4
