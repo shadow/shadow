@@ -145,8 +145,9 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
           Update the minimum runahead dynamically throughout the simulation. [default: false]
 
       --use-memory-manager <bool>
-          Use the MemoryManager. It can be useful to disable for debugging, but will hurt
-          performance in most cases [default: true]
+          Use the MemoryManager in memory-mapping mode. This can improve performance, but disables
+          support for dynamically spawning processes inside the simulation (e.g. the `fork`
+          syscall). [default: false]
 
       --use-new-tcp <bool>
           Use the rust TCP implementation [default: false]

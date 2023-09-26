@@ -334,8 +334,9 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("use_preload_openssl_crypto").unwrap().as_str())]
     pub use_preload_openssl_crypto: Option<bool>,
 
-    /// Use the MemoryManager. It can be useful to disable for debugging, but will hurt performance in
-    /// most cases
+    /// Use the MemoryManager in memory-mapping mode. This can improve
+    /// performance, but disables support for dynamically spawning processes
+    /// inside the simulation (e.g. the `fork` syscall).
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_memory_manager").unwrap().as_str())]
@@ -493,7 +494,7 @@ impl Default for ExperimentalOptions {
             // Actual latencies vary from ~40 to ~400 CPU cycles. https://stackoverflow.com/a/13096917
             // Default to the lower end to minimize effect in simualations without busy loops.
             unblocked_vdso_latency: Some(units::Time::new(10, units::TimePrefix::Nano)),
-            use_memory_manager: Some(true),
+            use_memory_manager: Some(false),
             use_cpu_pinning: Some(true),
             use_worker_spinning: Some(true),
             runahead: Some(NullableOption::Value(units::Time::new(
