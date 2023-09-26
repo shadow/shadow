@@ -1,5 +1,5 @@
 use std::collections::LinkedList;
-use std::io::Read;
+use std::io::{Read, Write};
 
 use bytes::{Buf, Bytes, BytesMut};
 
@@ -303,6 +303,33 @@ impl RecvQueue {
         self.start_seq += advance_by;
 
         Some((seq, segment))
+    }
+
+    pub fn read(&mut self, mut writer: impl Write, len: usize) -> Result<usize, std::io::Error> {
+        let mut bytes_copied = 0;
+
+        if self.is_empty() {
+            return Ok(0);
+        }
+
+        while bytes_copied < len {
+            let remaining = len - bytes_copied;
+            let remaining_u32 = remaining.try_into().unwrap_or(u32::MAX);
+
+            let Some((_seq, data)) = self.pop(remaining_u32) else {
+                // no more data available
+                break;
+            };
+
+            assert!(data.len() <= remaining);
+
+            // TODO: the stream will lose partial data if there's an error; is this fine?
+            writer.write_all(&data)?;
+
+            bytes_copied += data.len();
+        }
+
+        Ok(bytes_copied)
     }
 }
 

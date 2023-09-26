@@ -82,34 +82,14 @@ impl<I: Instant> Connection<I> {
         Ok(len)
     }
 
-    pub fn recv(&mut self, mut writer: impl Write, len: usize) -> Result<usize, RecvError> {
-        let mut bytes_copied = 0;
+    pub fn recv(&mut self, writer: impl Write, len: usize) -> Result<usize, RecvError> {
         let recv = self.recv.as_mut().unwrap();
 
         if recv.buffer.is_empty() {
             return Err(RecvError::Empty);
         }
 
-        while bytes_copied < len {
-            let remaining = len - bytes_copied;
-            let remaining_u32 = remaining.try_into().unwrap_or(u32::MAX);
-
-            let Some((_seq, data)) = recv.buffer.pop(remaining_u32) else {
-                // no more data available
-                break;
-            };
-
-            assert!(data.len() <= remaining);
-
-            if let Err(e) = writer.write_all(&data) {
-                // TODO: the stream will lose partial data; is this fine?
-                return Err(RecvError::Io(e));
-            }
-
-            bytes_copied += data.len();
-        }
-
-        Ok(bytes_copied)
+        recv.buffer.read(writer, len).map_err(RecvError::Io)
     }
 
     pub fn push_packet(
