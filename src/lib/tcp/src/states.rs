@@ -2,15 +2,15 @@ use std::collections::{HashMap, LinkedList};
 use std::io::{Read, Write};
 use std::net::SocketAddrV4;
 
+use crate::buffer::RecvQueue;
 use crate::connection::Connection;
 use crate::seq::Seq;
 use crate::util::remove_from_list;
 use crate::util::time::Duration;
 use crate::{
-    AcceptError, AcceptedTcpState, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError,
-    Payload, PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError,
-    TcpConfig, TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait,
-    TimerRegisteredBy,
+    AcceptError, AcceptedTcpState, CloseError, ConnectError, Dependencies, ListenError, Payload,
+    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
+    TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait, TimerRegisteredBy,
 };
 
 // state structs
@@ -113,6 +113,7 @@ pub struct RstState<X: Dependencies> {
 #[derive(Debug)]
 pub struct ClosedState<X: Dependencies> {
     pub(crate) common: Common<X>,
+    pub(crate) recv_buffer: RecvQueue,
 }
 
 // other helper types
@@ -187,6 +188,17 @@ impl<X: Dependencies> Common<X> {
     pub fn current_time(&self) -> X::Instant {
         self.deps.current_time()
     }
+
+    /// Returns true if the error was set, or false if the error was previously set and was not
+    /// modified.
+    pub fn set_error_if_unset(&mut self, new_error: TcpError) -> bool {
+        if self.error.is_none() {
+            self.error = Some(new_error);
+            return true;
+        }
+
+        false
+    }
 }
 
 /// A pair of remote and local addresses, typically used to represent a connection (the 4-tuple).
@@ -232,13 +244,13 @@ impl<X: Dependencies> InitState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
     fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        let new_state = ClosedState::new(self.common);
+        let new_state = ClosedState::new(self.common, None);
         (new_state.into(), Ok(()))
     }
 
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         // no need to send a RST; closing immediately
-        let new_state = ClosedState::new(self.common);
+        let new_state = ClosedState::new(self.common, None);
         (new_state.into(), Ok(()))
     }
 
@@ -334,6 +346,9 @@ impl<X: Dependencies> ListenState<X> {
                 child_key: Some(key),
                 error: None,
             };
+
+            assert!(header.flags.contains(TcpFlags::SYN));
+            assert!(!header.flags.contains(TcpFlags::RST));
 
             let mut connection =
                 Connection::new(header.dst(), header.src(), Seq::new(0), self.config);
@@ -492,7 +507,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
 
         let new_state = if rst_packets.is_empty() {
             // no RST packets to send, so go directly to the "closed" state
-            ClosedState::new(self.common).into()
+            ClosedState::new(self.common, None).into()
         } else {
             RstState::new(self.common, rst_packets).into()
         };
@@ -707,13 +722,20 @@ impl<X: Dependencies> SynSentState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
     fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        let new_state = ClosedState::new(self.common);
+        // we haven't received a SYN yet, so we can't have received data and don't
+        // need to send an RST
+        debug_assert!(!self.connection.recv_buf_has_data());
+
+        let new_state = ClosedState::new(self.common, None);
         (new_state.into(), Ok(()))
     }
 
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
-        // no need to send a RST; closing immediately
-        let new_state = ClosedState::new(self.common);
+        // we haven't received a SYN yet, so we can't have received data and don't
+        // need to send an RST
+        debug_assert!(!self.connection.recv_buf_has_data());
+
+        let new_state = ClosedState::new(self.common, None);
         (new_state.into(), Ok(()))
     }
 
@@ -744,14 +766,18 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received SYN and ACK (active open), move to the "established" state
@@ -828,33 +854,24 @@ impl<X: Dependencies> SynReceivedState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // send a FIN packet
-        self.connection.send_fin();
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // send a FIN packet
+            self.connection.send_fin();
 
-        let new_state = FinWaitOneState::new(self.common, self.connection);
-        (new_state.into(), Ok(()))
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            FinWaitOneState::new(self.common, self.connection).into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
-        let rst_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *self.connection.local_addr.ip(),
-                dst: *self.connection.remote_addr.ip(),
-            },
-            flags: TcpFlags::RST,
-            src_port: self.connection.local_addr.port(),
-            dst_port: self.connection.remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-
-        let new_state = RstState::new(self.common, LinkedList::from_iter([rst_packet]));
-
+        let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
     }
 
@@ -887,14 +904,18 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received ACK, move to the "established" state
@@ -947,33 +968,24 @@ impl<X: Dependencies> EstablishedState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // send a FIN packet
-        self.connection.send_fin();
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // send a FIN packet
+            self.connection.send_fin();
 
-        let new_state = FinWaitOneState::new(self.common, self.connection);
-        (new_state.into(), Ok(()))
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            FinWaitOneState::new(self.common, self.connection).into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
-        let rst_packet = TcpHeader {
-            ip: Ipv4Header {
-                src: *self.connection.local_addr.ip(),
-                dst: *self.connection.remote_addr.ip(),
-            },
-            flags: TcpFlags::RST,
-            src_port: self.connection.local_addr.port(),
-            dst_port: self.connection.remote_addr.port(),
-            seq: 0,
-            ack: 0,
-            window_size: 0,
-            selective_acks: None,
-            window_scale: None,
-            timestamp: None,
-            timestamp_echo: None,
-        };
-
-        let new_state = RstState::new(self.common, LinkedList::from_iter([rst_packet]));
-
+        let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
     }
 
@@ -1014,14 +1026,18 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received FIN, move to the "close-wait" state
@@ -1081,9 +1097,19 @@ impl<X: Dependencies> FinWaitOneState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // we're already in the process of closing (active close)
-        (self.into(), Ok(()))
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            // we're already in the process of closing (active close)
+            self.into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn connect<T, E>(
@@ -1118,14 +1144,18 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received FIN and ACK, move to the "time-wait" state
@@ -1197,9 +1227,19 @@ impl<X: Dependencies> FinWaitTwoState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // we're already in the process of closing (active close)
-        (self.into(), Ok(()))
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            // we're already in the process of closing (active close)
+            self.into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn connect<T, E>(
@@ -1234,14 +1274,18 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received FIN, move to the "time-wait" state
@@ -1301,9 +1345,19 @@ impl<X: Dependencies> ClosingState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // we're already in the process of closing (active close)
-        (self.into(), Ok(()))
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            // we're already in the process of closing (active close)
+            self.into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn connect<T, E>(
@@ -1345,14 +1399,18 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         // if received ACK, move to the "time-wait" state
@@ -1420,7 +1478,8 @@ impl<X: Dependencies> TimeWaitState<X> {
         let timeout = state.common.current_time() + timeout;
         state.common.register_timer(timeout, |state| {
             if let TcpStateEnum::TimeWait(state) = state {
-                let new_state = ClosedState::new(state.common);
+                let recv_buffer = state.connection.into_recv_buffer();
+                let new_state = ClosedState::new(state.common, recv_buffer);
                 new_state.into()
             } else {
                 state
@@ -1432,7 +1491,14 @@ impl<X: Dependencies> TimeWaitState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+        // Linux does not seem to send a RST packet if a "time-wait" socket is closed while having
+        // data in the receive buffer, probably because the peer should be in the "closed" state by
+        // this point
+
+        // if the connection receives any more data, it should send an RST
+        self.connection.send_rst_if_recv_payload();
+
         // we're already in the process of closing (active close)
         (self.into(), Ok(()))
     }
@@ -1476,15 +1542,19 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         // TODO: send RST for all packets?
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         (self.into(), Ok(()))
@@ -1541,10 +1611,24 @@ impl<X: Dependencies> CloseWaitState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // send a FIN packet
-        self.connection.send_fin();
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // send a FIN packet
+            self.connection.send_fin();
 
-        let new_state = LastAckState::new(self.common, self.connection);
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            LastAckState::new(self.common, self.connection).into()
+        };
+
+        (new_state, Ok(()))
+    }
+
+    fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
+        let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
     }
 
@@ -1592,14 +1676,18 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
+        }
+
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
         }
 
         (self.into(), Ok(()))
@@ -1655,9 +1743,19 @@ impl<X: Dependencies> LastAckState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        // we're already in the process of closing (passive close)
-        (self.into(), Ok(()))
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+        let new_state = if self.connection.recv_buf_has_data() {
+            // send a RST if there is still data in the receive buffer
+            reset_connection(self.common, self.connection).into()
+        } else {
+            // if the connection receives any more data, it should send an RST
+            self.connection.send_rst_if_recv_payload();
+
+            // we're already in the process of closing (passive close)
+            self.into()
+        };
+
+        (new_state, Ok(()))
     }
 
     fn connect<T, E>(
@@ -1699,19 +1797,24 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
             return (self.into(), Ok(()));
         }
 
-        if header.flags.contains(TcpFlags::RST) {
-            // move to the "closed" state
-            let new_state = ClosedState::new(self.common);
-            return (new_state.into(), Ok(()));
-        }
-
         if let Err(e) = self.connection.push_packet(header, payload) {
             return (self.into(), Err(e));
         }
 
+        // if the connection was reset
+        if self.connection.is_reset() {
+            if header.flags.contains(TcpFlags::RST) {
+                self.common.set_error_if_unset(TcpError::ResetReceived);
+            }
+
+            let new_state = connection_was_reset(self.common, self.connection);
+            return (new_state, Ok(()));
+        }
+
         // if received ACK, move to the "closed" state
         if self.connection.fin_was_acked() {
-            let new_state = ClosedState::new(self.common);
+            let recv_buffer = self.connection.into_recv_buffer();
+            let new_state = ClosedState::new(self.common, recv_buffer);
             return (new_state.into(), Ok(()));
         }
 
@@ -1824,7 +1927,7 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
 
         // if we have no more packets to send
         if self.send_buffer.is_empty() {
-            let new_state = ClosedState::new(self.common);
+            let new_state = ClosedState::new(self.common, None);
             return (new_state.into(), Ok(packet));
         }
 
@@ -1858,8 +1961,13 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
 }
 
 impl<X: Dependencies> ClosedState<X> {
-    fn new(common: Common<X>) -> Self {
-        Self { common }
+    fn new(common: Common<X>, recv_buffer: Option<RecvQueue>) -> Self {
+        let recv_buffer = recv_buffer.unwrap_or_else(|| RecvQueue::new(Seq::new(0)));
+
+        Self {
+            common,
+            recv_buffer,
+        }
     }
 }
 
@@ -1883,10 +1991,18 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosedState<X> {
         (self.into(), Err(SendError::StreamClosed))
     }
 
-    fn recv(self, _writer: impl Write, _len: usize) -> (TcpStateEnum<X>, Result<usize, RecvError>) {
-        // TODO: we should also have a copy of the receive buffer and allow the application to
-        // continue reading data
-        (self.into(), Err(RecvError::InvalidState))
+    fn recv(
+        mut self,
+        writer: impl Write,
+        len: usize,
+    ) -> (TcpStateEnum<X>, Result<usize, RecvError>) {
+        if self.recv_buffer.is_empty() {
+            return (self.into(), Err(RecvError::StreamClosed));
+        }
+
+        let rv = self.recv_buffer.read(writer, len).map_err(RecvError::Io);
+
+        (self.into(), rv)
     }
 
     fn clear_error(&mut self) -> Option<TcpError> {
@@ -1910,5 +2026,48 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosedState<X> {
 
     fn local_remote_addrs(&self) -> Option<(SocketAddrV4, SocketAddrV4)> {
         None
+    }
+}
+
+/// Reset the connection, get the resulting RST packet, and return a new `RstState` that will send
+/// this RST packet.
+fn reset_connection<X: Dependencies>(
+    common: Common<X>,
+    mut connection: Connection<X::Instant>,
+) -> RstState<X> {
+    connection.send_rst();
+
+    let new_state = connection_was_reset(common, connection);
+
+    let TcpStateEnum::Rst(new_state) = new_state else {
+        panic!("We called `send_rst()` above but aren't now in the \"rst\" state: {new_state:?}");
+    };
+
+    new_state
+}
+
+/// For a connection that was reset (either by us or by the peer), check if it has a remaining RST
+/// packet to send, and return a new `RstState` that will send this RST packet or a new
+/// `ClosedState` if not.
+fn connection_was_reset<X: Dependencies>(
+    mut common: Common<X>,
+    mut connection: Connection<X::Instant>,
+) -> TcpStateEnum<X> {
+    assert!(connection.is_reset());
+
+    let now = common.current_time();
+
+    // check if there's an RST packet to send
+    if let Ok((header, payload)) = connection.pop_packet(now) {
+        assert!(payload.is_empty());
+        debug_assert!(connection.pop_packet(now).is_err());
+
+        common.set_error_if_unset(TcpError::ResetSent);
+
+        let rst_packets = [header].into_iter().collect();
+        RstState::new(common, rst_packets).into()
+    } else {
+        // the receive buffer is cleared when a connection is reset, which is why we pass `None`
+        ClosedState::new(common, None).into()
     }
 }
