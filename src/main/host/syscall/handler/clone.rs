@@ -79,10 +79,6 @@ impl SyscallHandler {
                 warn!("Fork with memory mapper unimplemented");
                 return Err(Errno::ENOTSUP.into());
             }
-            if flags.contains(CloneFlags::CLONE_VM) {
-                warn!("Fork with memory shared with parent unimplemented");
-                return Err(Errno::ENOTSUP.into());
-            }
             // Make shadow the parent process
             native_flags.insert(CloneFlags::CLONE_PARENT);
         }
@@ -126,8 +122,35 @@ impl SyscallHandler {
             handled_flags.insert(CloneFlags::CLONE_SETTLS);
         }
 
+        if flags.contains(CloneFlags::CLONE_VFORK) {
+            // *Typically* `CLONE_VFORK|CLONE_VM` is used as a "faster fork", and
+            // ignoring it will still work as intended.
+            //
+            // In principle this might not be true if the managed program
+            // actually uses the shared memory with the parent process as a
+            // "feature" and e.g. writes to non-scratch memory, expecting the
+            // parent process to see those writes when it resumes.
+            warn_once_then_debug!(
+                "(LOG_ONCE) Ignoring CLONE_VFORK (and CLONE_VM if set). In *typical* usage this won't result in incorrect behavior."
+            );
+            handled_flags.insert(CloneFlags::CLONE_VFORK);
+        }
+
         if flags.contains(CloneFlags::CLONE_VM) {
-            native_flags.insert(CloneFlags::CLONE_VM);
+            if flags.contains(CloneFlags::CLONE_THREAD) {
+                native_flags.insert(CloneFlags::CLONE_VM);
+            } else if flags.contains(CloneFlags::CLONE_VFORK) {
+                // We already handled (warned) about this above.
+            } else {
+                // Haven't seen this in practice.
+                //
+                // Unclear that it'd be safe to ignore. Lack of CLONE_VFORK
+                // (which normally pauses the parent until the child exec's or
+                // exits) implies that this that the child may exist for more
+                // than a brief window before exec'ing.
+                warn!("CLONE_VM without CLONE_THREAD and without CLONE_VFORK unsupported");
+                return Err(Errno::ENOTSUP.into());
+            }
             handled_flags.insert(CloneFlags::CLONE_VM);
         }
 
