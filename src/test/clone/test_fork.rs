@@ -9,11 +9,11 @@ use libc::{c_int, c_void, siginfo_t, CLD_EXITED};
 use linux_api::errno::Errno;
 use linux_api::posix_types::Pid;
 use linux_api::sched::{CloneFlags, CloneResult};
-use linux_api::signal::Signal;
+use linux_api::signal::{LinuxDefaultAction, Signal};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigmaskHow};
 use nix::sys::signalfd::SigSet;
 use rustix::fd::{AsFd, AsRawFd};
-use test_utils::{ensure_ord, TestEnvironment as TestEnv};
+use test_utils::{ensure_ord, running_in_shadow, TestEnvironment as TestEnv};
 use test_utils::{set, ShadowTest};
 
 fn execv_argvec(args: &[impl AsRef<CStr>]) -> Vec<*const i8> {
@@ -810,15 +810,23 @@ fn test_waitfn_sets_normal_exit_wstatus(waitfn: impl FnOnce() -> i32) -> anyhow:
 }
 
 /// Validate that `waitfn` creates a correct status integer (`wstatus` in
-/// `waitid(2)`) for a child that has has been killed by a signal that doesn't result
-/// in a core dump.
-fn test_waitfn_sets_signal_death_wstatus(waitfn: impl FnOnce() -> i32) -> anyhow::Result<()> {
+/// `waitid(2)`).
+fn test_waitfn_sets_signal_death_wstatus(
+    fatal_signal: Signal,
+    waitfn: impl FnOnce() -> i32,
+) -> anyhow::Result<()> {
+    match linux_api::signal::defaultaction(fatal_signal) {
+        linux_api::signal::LinuxDefaultAction::TERM
+        | linux_api::signal::LinuxDefaultAction::CORE => (),
+        a => {
+            panic!("Test unexpectedly invoked with a signal with default action {a:?}")
+        }
+    }
     run_test_in_subprocess(|| {
-        const FATAL_SIGNAL: Signal = Signal::SIGKILL;
         let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
         match clone_res {
             CloneResult::CallerIsChild => {
-                unsafe { libc::raise(FATAL_SIGNAL.as_i32()) };
+                unsafe { libc::raise(fatal_signal.as_i32()) };
                 unreachable!()
             }
             CloneResult::CallerIsParent(_child_pid) => (),
@@ -827,34 +835,19 @@ fn test_waitfn_sets_signal_death_wstatus(waitfn: impl FnOnce() -> i32) -> anyhow
         let wstatus = waitfn();
 
         assert!(libc::WIFSIGNALED(wstatus));
-        assert!(!libc::WCOREDUMP(wstatus));
-        assert_eq!(libc::WTERMSIG(wstatus), FATAL_SIGNAL.as_i32());
-        assert!(!libc::WIFEXITED(wstatus));
-        assert!(!libc::WIFSTOPPED(wstatus));
-        assert!(!libc::WIFCONTINUED(wstatus));
-    })
-}
-
-/// Validate that `waitfn` creates a correct status integer (`wstatus` in
-/// `waitid(2)`) for a child that has has been killed by a signal that does result
-/// in a core dump.
-fn test_waitfn_sets_signal_dump_wstatus(waitfn: impl Fn() -> i32) -> anyhow::Result<()> {
-    run_test_in_subprocess(|| {
-        const FATAL_SIGNAL: Signal = Signal::SIGABRT;
-        let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
-        match clone_res {
-            CloneResult::CallerIsChild => {
-                unsafe { libc::raise(FATAL_SIGNAL.as_i32()) };
-                unreachable!()
-            }
-            CloneResult::CallerIsParent(_child_pid) => (),
-        };
-
-        let wstatus = waitfn();
-
-        assert!(libc::WIFSIGNALED(wstatus));
-        assert!(libc::WCOREDUMP(wstatus));
-        assert_eq!(libc::WTERMSIG(wstatus), FATAL_SIGNAL.as_i32());
+        if running_in_shadow()
+            || linux_api::signal::defaultaction(fatal_signal) == LinuxDefaultAction::TERM
+        {
+            // In shadow, this is always false for sake of determinism.
+            //
+            // If the signal action is TERM rather than CORE, we
+            // know no core will have been generated.
+            assert!(!libc::WCOREDUMP(wstatus));
+        } else {
+            // Whether WCOREDUMP is set depends on various system conditions
+            // documented in `core(5)`; don't try to validate.
+        }
+        assert_eq!(libc::WTERMSIG(wstatus), fatal_signal.as_i32());
         assert!(!libc::WIFEXITED(wstatus));
         assert!(!libc::WIFSTOPPED(wstatus));
         assert!(!libc::WIFCONTINUED(wstatus));
@@ -896,8 +889,15 @@ fn test_waitid_sets_normal_exit_info() -> anyhow::Result<()> {
 }
 
 /// Validate that `waitid` correctly sets the `infop` parameter for a child
-/// that has been killed by a signal that doesn't result in a core dump.
-fn test_waitid_sets_signal_death_info() -> anyhow::Result<()> {
+/// that has been killed by a signal.
+fn test_waitid_sets_signal_death_info(fatal_signal: Signal) -> anyhow::Result<()> {
+    match linux_api::signal::defaultaction(fatal_signal) {
+        linux_api::signal::LinuxDefaultAction::TERM
+        | linux_api::signal::LinuxDefaultAction::CORE => (),
+        a => {
+            panic!("Test unexpectedly invoked with a signal with default action {a:?}")
+        }
+    }
     run_test_in_subprocess(|| {
         const FATAL_SIGNAL: Signal = Signal::SIGKILL;
         let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
@@ -920,45 +920,26 @@ fn test_waitid_sets_signal_death_info() -> anyhow::Result<()> {
         });
         assert_eq!(rv, Ok(0));
 
-        assert_eq!(
-            info.si_code,
-            i32::from(linux_api::signal::SigInfoCodeCld::CLD_KILLED)
-        );
-        assert_eq!(info.si_signo, Signal::SIGCHLD.as_i32());
-        assert_eq!(unsafe { info.si_pid() }, child_pid.as_raw_nonzero().get());
-        assert_eq!(unsafe { info.si_status() }, FATAL_SIGNAL.as_i32());
-    })
-}
-
-/// Validate that `waitid` correctly sets the `infop` parameter for a child
-/// that has been killed by a signal that does result in a core dump.
-fn test_waitid_sets_signal_dumped_info() -> anyhow::Result<()> {
-    run_test_in_subprocess(|| {
-        const FATAL_SIGNAL: Signal = Signal::SIGABRT;
-        let clone_res = unsafe { linux_api::sched::fork() }.unwrap();
-        let child_pid = match clone_res {
-            CloneResult::CallerIsChild => {
-                unsafe { libc::raise(FATAL_SIGNAL.as_i32()) };
-                unreachable!()
-            }
-            CloneResult::CallerIsParent(child_pid) => child_pid,
-        };
-
-        let mut info: siginfo_t = unsafe { std::mem::zeroed() };
-        let rv = nix::errno::Errno::result(unsafe {
-            libc::waitid(
-                libc::P_PID,
-                child_pid.as_raw_nonzero().get().try_into().unwrap(),
-                &mut info,
-                libc::WEXITED,
-            )
-        });
-        assert_eq!(rv, Ok(0));
-
-        assert_eq!(
-            info.si_code,
-            i32::from(linux_api::signal::SigInfoCodeCld::CLD_DUMPED)
-        );
+        if running_in_shadow()
+            || linux_api::signal::defaultaction(fatal_signal) == LinuxDefaultAction::TERM
+        {
+            // Always CLD_KILLED under shadow, for sake of determinism.
+            //
+            // If the signal action is TERM rather than CORE, we know this will be CLD_KILLED.
+            assert_eq!(
+                info.si_code,
+                i32::from(linux_api::signal::SigInfoCodeCld::CLD_KILLED)
+            );
+        } else {
+            // Will be one of CLD_KILLED or CLD_DUMPED; we can't reliably
+            // predict which. See `core(5)`.
+            assert!([
+                linux_api::signal::SigInfoCodeCld::CLD_KILLED,
+                linux_api::signal::SigInfoCodeCld::CLD_DUMPED
+            ]
+            .map(i32::from)
+            .contains(&info.si_code));
+        }
         assert_eq!(info.si_signo, Signal::SIGCHLD.as_i32());
         assert_eq!(unsafe { info.si_pid() }, child_pid.as_raw_nonzero().get());
         assert_eq!(unsafe { info.si_status() }, FATAL_SIGNAL.as_i32());
@@ -1635,67 +1616,44 @@ fn main() -> Result<(), Box<dyn Error>> {
         all_envs.clone(),
     ));
 
-    tests.push(ShadowTest::new(
-        "test_waitfn_sets_signal_death_wstatus:waitpid",
-        || {
-            test_waitfn_sets_signal_death_wstatus(|| {
-                let mut wstatus = 0;
-                nix::errno::Errno::result(unsafe { libc::waitpid(-1, &mut wstatus, 0) }).unwrap();
-                wstatus
-            })
-        },
-        all_envs.clone(),
-    ));
-    tests.push(ShadowTest::new(
-        "test_waitfn_sets_signal_death_wstatus:wait",
-        || {
-            test_waitfn_sets_signal_death_wstatus(|| {
-                let mut wstatus = 0;
-                nix::errno::Errno::result(unsafe { libc::wait(&mut wstatus) }).unwrap();
-                wstatus
-            })
-        },
-        all_envs.clone(),
-    ));
-
-    tests.push(ShadowTest::new(
-        "test_waitfn_sets_signal_dump_wstatus:waitpid",
-        || {
-            test_waitfn_sets_signal_dump_wstatus(|| {
-                let mut wstatus = 0;
-                nix::errno::Errno::result(unsafe { libc::waitpid(-1, &mut wstatus, 0) }).unwrap();
-                wstatus
-            })
-        },
-        all_envs.clone(),
-    ));
-    tests.push(ShadowTest::new(
-        "test_waitfn_sets_signal_dump_wstatus:wait",
-        || {
-            test_waitfn_sets_signal_dump_wstatus(|| {
-                let mut wstatus = 0;
-                nix::errno::Errno::result(unsafe { libc::wait(&mut wstatus) }).unwrap();
-                wstatus
-            })
-        },
-        all_envs.clone(),
-    ));
+    for fatal_signal in [Signal::SIGKILL, Signal::SIGABRT] {
+        tests.push(ShadowTest::new(
+            "test_waitfn_sets_signal_death_wstatus:waitpid:{fatal_signal:?}",
+            move || {
+                test_waitfn_sets_signal_death_wstatus(fatal_signal, || {
+                    let mut wstatus = 0;
+                    nix::errno::Errno::result(unsafe { libc::waitpid(-1, &mut wstatus, 0) })
+                        .unwrap();
+                    wstatus
+                })
+            },
+            all_envs.clone(),
+        ));
+        tests.push(ShadowTest::new(
+            "test_waitfn_sets_signal_death_wstatus:wait:{fatal_signal:?}",
+            move || {
+                test_waitfn_sets_signal_death_wstatus(fatal_signal, || {
+                    let mut wstatus = 0;
+                    nix::errno::Errno::result(unsafe { libc::wait(&mut wstatus) }).unwrap();
+                    wstatus
+                })
+            },
+            all_envs.clone(),
+        ));
+    }
 
     tests.push(ShadowTest::new(
         "test_waitid_sets_normal_exit_info",
         test_waitid_sets_normal_exit_info,
         all_envs.clone(),
     ));
-    tests.push(ShadowTest::new(
-        "test_waitid_sets_signal_death_info",
-        test_waitid_sets_signal_death_info,
-        all_envs.clone(),
-    ));
-    tests.push(ShadowTest::new(
-        "test_waitid_sets_signal_dumped_info",
-        test_waitid_sets_signal_dumped_info,
-        all_envs.clone(),
-    ));
+    for fatal_signal in [Signal::SIGKILL, Signal::SIGABRT] {
+        tests.push(ShadowTest::new(
+            "test_waitid_sets_signal_death_info:{fatal_signal:?}",
+            move || test_waitid_sets_signal_death_info(fatal_signal),
+            all_envs.clone(),
+        ));
+    }
 
     for exit_code in [0, 1].into_iter() {
         let python_path = python_path.to_path_buf();
@@ -1754,7 +1712,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // * signal mask should be preserved
     // * unclear whether currently-pending signals should still be pending
     //   post-exec or whether they're lost.
-
     // Explicitly reference these to avoid clippy warning about unnecessary
     // clone at point of last usage above.
     drop(all_envs);
