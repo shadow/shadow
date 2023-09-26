@@ -46,6 +46,9 @@ INTERPOSE(bind);
 INTERPOSE(bpf);
 #endif
 // Skipping SYS_brk
+#ifdef SYS_cachestat // kernel entry: num=451 func=sys_cachestat
+INTERPOSE(cachestat);
+#endif
 #ifdef SYS_capget // kernel entry: num=125 func=sys_capget
 INTERPOSE(capget);
 #endif
@@ -149,6 +152,9 @@ INTERPOSE(fchdir);
 #endif
 // Skipping SYS_fchmod
 // Skipping SYS_fchmodat
+#ifdef SYS_fchmodat2 // kernel entry: num=452 func=sys_fchmodat2
+INTERPOSE(fchmodat2);
+#endif
 #ifdef SYS_fchown // kernel entry: num=93 func=sys_fchown
 INTERPOSE(fchown);
 #endif
@@ -381,6 +387,9 @@ INTERPOSE(lstat);
 #endif
 #ifdef SYS_madvise // kernel entry: num=28 func=sys_madvise
 INTERPOSE(madvise);
+#endif
+#ifdef SYS_map_shadow_stack // kernel entry: num=453 func=sys_map_shadow_stack
+INTERPOSE(map_shadow_stack);
 #endif
 #ifdef SYS_mbind // kernel entry: num=237 func=sys_mbind
 INTERPOSE(mbind);
@@ -868,9 +877,7 @@ INTERPOSE(utimensat);
 #ifdef SYS_utimes // kernel entry: num=235 func=sys_utimes
 INTERPOSE(utimes);
 #endif
-#ifdef SYS_vfork // kernel entry: num=58 func=sys_vfork
-INTERPOSE(vfork);
-#endif
+// Skipping SYS_vfork
 #ifdef SYS_vhangup // kernel entry: num=153 func=sys_vhangup
 INTERPOSE(vhangup);
 #endif
