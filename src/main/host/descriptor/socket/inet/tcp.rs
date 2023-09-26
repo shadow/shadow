@@ -266,11 +266,31 @@ impl TcpSocket {
     }
 
     pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
-        Ok(self.association.as_ref().map(|x| x.local_addr().into()))
+        // The socket state won't always have the local address. For example if the socket was bound
+        // but connect() hasn't yet been called, the socket state will not have a local or remote
+        // address. Instead we should get the local address from the association.
+        Ok(Some(
+            self.association
+                .as_ref()
+                .map(|x| x.local_addr().into())
+                .unwrap_or(SockaddrIn::new(0, 0, 0, 0, 0)),
+        ))
     }
 
     pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
-        Ok(self.association.as_ref().map(|x| x.remote_addr().into()))
+        // The association won't always have the peer address. For example if the socket was bound
+        // before connect() was called, the association will have a peer of 0.0.0.0. Instead we
+        // should get the peer address from the socket state.
+        Ok(Some(
+            self.tcp_state
+                .local_remote_addrs()
+                .map(|x| x.1.into())
+                .ok_or(Errno::ENOTCONN)?,
+        ))
+
+        // TODO: This will not have the remote address once the tcp state has closed (for example by
+        // `shutdown(RDWR)`), in which case `local_remote_addrs()` will return `None` so this will
+        // incorrectly return ENOTCONN. Should fix this somehow and add a test.
     }
 
     pub fn address_family(&self) -> AddressFamily {
