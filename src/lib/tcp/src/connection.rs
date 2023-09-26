@@ -451,11 +451,12 @@ impl<I: Instant> Connection<I> {
                     seq_len += segment.len();
                 }
                 Segment::Data(mut chunk) => {
-                    let allowed_len =
-                        MAX_BYTES_PER_PACKET.saturating_sub(payload_bytes_len) as usize;
-                    let allowed_len = std::cmp::min(allowed_len, send_window.len() as usize);
+                    let allowed_payload_len =
+                        MAX_BYTES_PER_PACKET.saturating_sub(payload_bytes_len);
+                    let allowed_seq_len = send_window.end - seq;
+                    let allowed_len = std::cmp::min(allowed_payload_len, allowed_seq_len);
 
-                    chunk.truncate(std::cmp::min(chunk.len(), allowed_len));
+                    chunk.truncate(std::cmp::min(chunk.len(), allowed_len.try_into().unwrap()));
 
                     let chunk_len: u32 = chunk.len().try_into().unwrap();
                     payload_bytes_len += chunk_len;
