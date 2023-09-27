@@ -2,7 +2,7 @@ use bytes::{Buf, Bytes};
 use std::io::{Read, Write};
 use std::net::SocketAddrV4;
 
-use crate::buffer::Segment;
+use crate::buffer::{RecvQueue, Segment};
 use crate::seq::{Seq, SeqRange};
 use crate::util::time::Instant;
 use crate::window_scaling::WindowScaling;
@@ -22,6 +22,9 @@ pub(crate) struct Connection<I: Instant> {
     pub(crate) need_to_ack: bool,
     pub(crate) last_advertised_window: Option<u32>,
     pub(crate) window_scaling: WindowScaling,
+    pub(crate) send_rst_if_recv_payload: bool,
+    pub(crate) is_reset: bool,
+    pub(crate) need_to_send_rst: bool,
 }
 
 impl<I: Instant> Connection<I> {
@@ -45,6 +48,9 @@ impl<I: Instant> Connection<I> {
             need_to_ack: true,
             last_advertised_window: None,
             window_scaling: WindowScaling::new(),
+            send_rst_if_recv_payload: false,
+            is_reset: false,
+            need_to_send_rst: false,
         };
 
         // disable window scaling if it's disabled in the config
@@ -55,6 +61,14 @@ impl<I: Instant> Connection<I> {
         rv
     }
 
+    pub fn into_recv_buffer(self) -> Option<RecvQueue> {
+        if let Some(recv) = self.recv {
+            return Some(recv.buffer);
+        }
+
+        None
+    }
+
     /// Returns `true` if the packet header src/dst addresses match this connection.
     pub fn packet_addrs_match(&self, header: &TcpHeader) -> bool {
         header.src() == self.remote_addr && header.dst() == self.local_addr
@@ -63,6 +77,16 @@ impl<I: Instant> Connection<I> {
     pub fn send_fin(&mut self) {
         self.send.buffer.add_fin();
         self.send.is_closed = true;
+    }
+
+    pub fn send_rst(&mut self) {
+        self.need_to_send_rst = true;
+        self.is_reset = true;
+    }
+
+    /// If any new payload bytes are received, the connection will be reset.
+    pub fn send_rst_if_recv_payload(&mut self) {
+        self.send_rst_if_recv_payload = true;
     }
 
     pub fn send(&mut self, reader: impl Read, len: usize) -> Result<usize, SendError> {
@@ -82,34 +106,14 @@ impl<I: Instant> Connection<I> {
         Ok(len)
     }
 
-    pub fn recv(&mut self, mut writer: impl Write, len: usize) -> Result<usize, RecvError> {
-        let mut bytes_copied = 0;
+    pub fn recv(&mut self, writer: impl Write, len: usize) -> Result<usize, RecvError> {
         let recv = self.recv.as_mut().unwrap();
 
         if recv.buffer.is_empty() {
             return Err(RecvError::Empty);
         }
 
-        while bytes_copied < len {
-            let remaining = len - bytes_copied;
-            let remaining_u32 = remaining.try_into().unwrap_or(u32::MAX);
-
-            let Some((_seq, data)) = recv.buffer.pop(remaining_u32) else {
-                // no more data available
-                break;
-            };
-
-            assert!(data.len() <= remaining);
-
-            if let Err(e) = writer.write_all(&data) {
-                // TODO: the stream will lose partial data; is this fine?
-                return Err(RecvError::Io(e));
-            }
-
-            bytes_copied += data.len();
-        }
-
-        Ok(bytes_copied)
+        recv.buffer.read(writer, len).map_err(RecvError::Io)
     }
 
     pub fn push_packet(
@@ -117,6 +121,68 @@ impl<I: Instant> Connection<I> {
         header: &TcpHeader,
         payload: Payload,
     ) -> Result<(), PushPacketError> {
+        if self.is_reset {
+            panic!(
+                "The connection has already been reset, so why are we being given more packets?"
+            );
+        }
+
+        // process RST packets
+        if header.flags.contains(TcpFlags::RST) {
+            let seq = Seq::new(header.seq);
+            let recv_window = self.recv_window();
+
+            // TODO: figure out how to properly handle weird RST packets (for example RST packets
+            // with payload data)
+
+            let Some(recv_window) = recv_window else {
+                // we haven't received a SYN yet, so we'll trust the RST
+                self.is_reset = true;
+                return Ok(());
+            };
+
+            // RFC 9293 3.10.7.4.:
+            // > If the RCV.WND is zero, no segments will be acceptable, but special allowance
+            // > should be made to accept valid ACKs, URGs, and RSTs.
+            if seq == recv_window.start {
+                // RFC 9293 3.10.7.4.:
+                // > If the RST bit is set and the sequence number exactly matches the next expected
+                // > sequence number (RCV.NXT), then TCP endpoints MUST reset the connection in the
+                // > manner prescribed below according to the connection state.
+
+                self.is_reset = true;
+                return Ok(());
+            }
+
+            if recv_window.contains(seq) {
+                // RFC 9293 3.10.7.4.:
+                // > If the RST bit is set and the sequence number does not exactly match the next
+                // > expected sequence value, yet is within the current receive window, TCP
+                // > endpoints MUST send an acknowledgment (challenge ACK):
+                // >
+                // > <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+                // >
+                // > After sending the challenge ACK, TCP endpoints MUST drop the unacceptable
+                // > segment and stop processing the incoming packet further.
+
+                // TODO: Setting `need_to_ack` to true isn't enough to send an acknowledgement
+                // exactly as described above, since the next `pop_packet` may next try to
+                // retransmit something which would have a different sequence number. But not sure
+                // if this really matters in practice since the peer would receive the packet and
+                // send another RST packet based on the ACK value we send.
+
+                self.need_to_ack = true;
+                return Ok(());
+            }
+
+            // RFC 9293 3.10.7.4.:
+            // > If the RST bit is set and the sequence number is outside the current receive
+            // > window, silently drop the segment.
+
+            return Ok(());
+        }
+
+        // process the first SYN packet
         if self.recv.is_none() && header.flags.contains(TcpFlags::SYN) {
             // we needed to know the sender's initial sequence number before we could initialize the
             // receiving part of the connection
@@ -138,26 +204,37 @@ impl<I: Instant> Connection<I> {
         // TODO: be careful about this if we support a reassembly queue in the future
         let original_packet_had_syn = header.flags.contains(TcpFlags::SYN);
 
+        // trim the segment so that it only contains data/flags that fit within the receive window
         let recv_window = self.recv_window().unwrap();
         let Some((header, payload)) = trim_segment(header, payload, &recv_window) else {
             // the sequence range of the segment does not overlap with the receive window, so we
             // must drop the packet and send an ACK
-            self.need_to_ack = true;
 
+            self.need_to_ack = true;
             return Ok(());
         };
 
         let Some(recv) = self.recv.as_mut() else {
             // we received a non-SYN packet before the first SYN packet
-
-            if !header.flags.contains(TcpFlags::RST) {
-                // TODO: send a RST packet
-            }
-
-            // TODO: move to closed state
-
+            self.send_rst();
             return Ok(());
         };
+
+        // if we've been told to send a RST when we receive new payload data, and we did receive new
+        // payload data
+        if self.send_rst_if_recv_payload && !payload.is_empty() {
+            self.send_rst();
+            return Ok(());
+        }
+
+        // if we've previously received a FIN packet, and now we've received a payload/SYN/FIN
+        // packet that is within the receive window
+        if recv.is_closed
+            && (!payload.is_empty() || header.flags.intersects(TcpFlags::SYN | TcpFlags::FIN))
+        {
+            self.send_rst();
+            return Ok(());
+        }
 
         // the receive buffer's initial next sequence number; useful so we can check if we need to
         // acknowledge or not
@@ -171,6 +248,7 @@ impl<I: Instant> Connection<I> {
                     // TODO: We can follow RFC 793 or RFC 5961 here. 793 is probably easiest, and we
                     // should send an RST and move to the "closed" state.
 
+                    self.send_rst();
                     return Ok(());
                 }
 
@@ -329,13 +407,18 @@ impl<I: Instant> Connection<I> {
         // inform the buffer that we transmitted this segment
         self.send.buffer.mark_as_transmitted(seq_range.end, now);
 
+        if header.flags.contains(TcpFlags::RST) {
+            assert!(self.need_to_send_rst);
+            self.need_to_send_rst = false;
+        }
+
         Ok((header, payload))
     }
 
     /// Returns a segment that is ready to send. This may be a data segment (a segment containing a
-    /// SYN/FIN flag and/or payload data) or an empty segment. Even if this returns an empty
-    /// segment, it must be sent with the correct acknowledgement number, window size, etc as it may
-    /// represent an acknowledgement or window update.
+    /// SYN/FIN flag and/or payload data), a RST segment, or an empty segment. Even if this returns
+    /// an empty segment, it must be sent with the correct acknowledgement number, window size, etc
+    /// as it may represent an acknowledgement or window update.
     fn next_segment(&self) -> Option<(SeqRange, TcpFlags, Payload)> {
         // should be inlined
         self._next_segment()
@@ -357,6 +440,24 @@ impl<I: Instant> Connection<I> {
     /// call it from two functions, `next_segment()` and `wants_to_send()`.
     #[inline(always)]
     fn _next_segment(&self) -> Option<(SeqRange, TcpFlags, Payload)> {
+        if self.need_to_send_rst {
+            let seq = self
+                .send
+                .buffer
+                .next_not_transmitted(0)
+                .map(|x| x.0)
+                .unwrap_or(self.send.buffer.next_seq());
+
+            let seq_range = SeqRange::new(seq, seq);
+            return Some((seq_range, TcpFlags::RST, Payload::default()));
+        }
+
+        // if the connection has been reset and we don't need to send a RST packet, never send any
+        // future packets
+        if self.is_reset {
+            return None;
+        }
+
         let (seq_range, syn_fin_flags, payload) = 'packet: {
             // if we have syn/fin/payload data to send
             if let Some((seq_range, syn_fin_flags, payload)) = self.next_data_segment() {
@@ -451,11 +552,12 @@ impl<I: Instant> Connection<I> {
                     seq_len += segment.len();
                 }
                 Segment::Data(mut chunk) => {
-                    let allowed_len =
-                        MAX_BYTES_PER_PACKET.saturating_sub(payload_bytes_len) as usize;
-                    let allowed_len = std::cmp::min(allowed_len, send_window.len() as usize);
+                    let allowed_payload_len =
+                        MAX_BYTES_PER_PACKET.saturating_sub(payload_bytes_len);
+                    let allowed_seq_len = send_window.end - seq;
+                    let allowed_len = std::cmp::min(allowed_payload_len, allowed_seq_len);
 
-                    chunk.truncate(std::cmp::min(chunk.len(), allowed_len));
+                    chunk.truncate(std::cmp::min(chunk.len(), allowed_len.try_into().unwrap()));
 
                     let chunk_len: u32 = chunk.len().try_into().unwrap();
                     payload_bytes_len += chunk_len;
@@ -476,6 +578,11 @@ impl<I: Instant> Connection<I> {
         }
 
         None
+    }
+
+    /// Returns true if we received a RST packet, or if we want to send a RST packet.
+    pub fn is_reset(&self) -> bool {
+        self.is_reset
     }
 
     /// Returns true if we received a SYN packet from the peer.

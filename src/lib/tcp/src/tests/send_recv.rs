@@ -230,3 +230,103 @@ fn test_coalesce_recv() {
     TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 10).unwrap();
     assert_eq!(recv_buf, b"helloworld");
 }
+
+#[test]
+fn test_close_with_non_empty_recv_buffer() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    // send a payload packet to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 1,
+        ack: 1,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+
+    // check that our payload packet was acknowledged
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::ACK));
+
+    // close the socket, which should send a RST response since there is data in the receive buffer
+    tcp.borrow_mut().close().unwrap();
+    assert!(s(&tcp).as_closed().is_some());
+
+    // check that a RST packet was sent by the socket
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::RST));
+}
+
+#[test]
+fn test_incoming_payload_after_close() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    // close the socket
+    tcp.borrow_mut().close().unwrap();
+    assert!(s(&tcp).as_fin_wait_one().is_some());
+
+    // check that a FIN was sent
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::FIN));
+
+    // send a payload packet to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 1,
+        ack: 1,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+
+    assert!(s(&tcp).as_closed().is_some());
+
+    // check that a RST packet was sent by the socket in response to the payload packet
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::RST));
+
+    // try to recv on the socket, but there should be no data and we should receive an EOF
+    // (typically on linux we'd receive an ECONNRESET for the first read, but we don't use the error
+    // state in our test socket wrapper)
+    let mut recv_buf = vec![0; 5];
+    assert_eq!(TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 5), Ok(0));
+}
