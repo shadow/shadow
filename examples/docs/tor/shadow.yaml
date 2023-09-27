@@ -29,20 +29,6 @@ hosts:
       args: ../../../conf/tgen.server.graphml.xml
       start_time: 1
       expected_final_state: running
-  hiddenserver:
-    network_node_id: 0
-    processes:
-    - path: tgen
-      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: { OPENBLAS_NUM_THREADS: "1" }
-      args: ../../../conf/tgen.hiddenserver.graphml.xml
-      start_time: 1
-      expected_final_state: running
-    - path: tor
-      args: --Address hiddenserver --Nickname hiddenserver
-            --defaults-torrc torrc-defaults -f torrc
-      start_time: 900
-      expected_final_state: running
   4uthority:
     network_node_id: 0
     ip_addr: 100.0.0.1
@@ -139,17 +125,4 @@ hosts:
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torclient.graphml.xml
-      start_time: 1500
-  torhiddenclient:
-    network_node_id: 0
-    processes:
-    - path: tor
-      args: --Address torhiddenclient --Nickname torhiddenclient
-            --defaults-torrc torrc-defaults -f torrc
-      start_time: 900
-      expected_final_state: running
-    - path: tgen
-      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: { OPENBLAS_NUM_THREADS: "1" }
-      args: ../../../conf/tgen.torhiddenclient.graphml.xml
       start_time: 1500

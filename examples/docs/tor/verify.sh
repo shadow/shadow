@@ -6,7 +6,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-EXPECTED_BOOTSTRAP_COUNT=11
+EXPECTED_BOOTSTRAP_COUNT=9
 bootstrapped_count="$(grep -r --include="tor.*.stdout" "Bootstrapped 100" | wc -l)"
 echo "Bootstrapped count: ${bootstrapped_count}/$EXPECTED_BOOTSTRAP_COUNT"
 if [ "${bootstrapped_count}" != "$EXPECTED_BOOTSTRAP_COUNT" ]; then
@@ -34,10 +34,5 @@ check_host client 10 10
 check_host torclient 10 10
 check_host torbridgeclient 10 10
 check_host fileserver 30 30
-
-# Only require half of the streams to succeed, to mitigate
-# https://github.com/shadow/shadow/issues/2544
-check_host torhiddenclient 5 10
-check_host hiddenserver 5 10
 
 printf "Verification %bsucceeded%b: Yay :)\n" "$GREEN" "$NC"
