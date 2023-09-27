@@ -334,7 +334,11 @@ impl Epoll {
         !self.ready.is_empty()
     }
 
-    pub fn collect_ready_events(&mut self, max_events: u32) -> Vec<(EpollEvents, u64)> {
+    pub fn collect_ready_events(
+        &mut self,
+        cb_queue: &mut CallbackQueue,
+        max_events: u32,
+    ) -> Vec<(EpollEvents, u64)> {
         let mut events = vec![];
         let mut keep = vec![];
 
@@ -370,6 +374,9 @@ impl Epoll {
 
         // Add everything that is still ready back to the ready set.
         self.ready.extend(keep);
+
+        // We've mutated the ready list; we may need to trigger callbacks.
+        self.refresh_state(cb_queue);
 
         // The events to be returned to the managed process.
         events

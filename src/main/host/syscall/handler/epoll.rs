@@ -320,7 +320,11 @@ impl SyscallHandler {
             // After we collect the events here, failing to write them out to the events_ptr
             // ForeignPointer below will leave our event state inconsistent with the managed
             // process's understanding of the available events.
-            let ready = epoll.borrow_mut().collect_ready_events(max_events);
+            let ready = CallbackQueue::queue_and_run(|cb_queue| {
+                epoll
+                    .borrow_mut()
+                    .collect_ready_events(cb_queue, max_events)
+            });
             let n_ready = ready.len();
             if n_ready > max_events as usize {
                 panic!("Epoll should not return more than {max_events} events");
