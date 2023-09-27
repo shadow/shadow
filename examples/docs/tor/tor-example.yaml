@@ -100,19 +100,6 @@ hosts:
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
       expected_final_state: running
-  ptbridge:
-    network_node_id: 0
-    ip_addr: 100.0.0.100
-    processes:
-    - path: tor
-      args: --Address ptbridge --Nickname ptbridge
-            --BridgeRelay 1
-            --ServerTransportPlugin "obfs4 exec /usr/bin/obfs4proxy --enableLogging --logLevel=DEBUG --unsafeLogging"
-            --ExtOrPort auto
-            --ServerTransportListenAddr "obfs4 100.0.0.100:9908"
-            --defaults-torrc torrc-defaults -f torrc
-      start_time: 60
-      expected_final_state: running
   client:
     network_node_id: 0
     processes:
@@ -148,17 +135,6 @@ hosts:
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
-  torptbridgeclient:
-    network_node_id: 0
-    processes:
-    - path: tor
-      args: --Address torptbridgeclient --Nickname torptbridgeclient
-            --UseBridges 1
-            --ClientTransportPlugin "obfs4 exec /usr/bin/obfs4proxy --enableLogging --logLevel=DEBUG --unsafeLogging"
-            --Bridge "obfs4 100.0.0.100:9908 2350D51B1F2550DED67603DE1F402007C2B63A0A cert=cNfcYQ7dU8YvQWVfKiHJuO/c5ccuPLzPsmoclDUCYGz5t3Rh7gclqPmDxP12kOh13FG8CA iat-mode=0"
-            --defaults-torrc torrc-defaults -f torrc
-      start_time: 900
-      expected_final_state: running
     - path: tgen
       # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
       environment: { OPENBLAS_NUM_THREADS: "1" }

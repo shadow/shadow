@@ -1,3 +1,0 @@
-%include ../../../conf/tor.common.torrc
-%include ../../../conf/tor.relay.torrc
-%include ../../../conf/tor.non-exit.torrc
