@@ -1,0 +1,29 @@
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="socksproxy" attr.type="string" for="node" id="d7" />
+  <key attr.name="peers" attr.type="string" for="node" id="d5" />
+  <key attr.name="sendsize" attr.type="string" for="node" id="d3" />
+  <key attr.name="recvsize" attr.type="string" for="node" id="d2" />
+  <key attr.name="count" attr.type="string" for="node" id="d1" />
+  <key attr.name="time" attr.type="string" for="node" id="d0" />
+  <graph edgedefault="directed">
+    <node id="start">
+      <data key="d5">r4aj4kaqf46mala2yykldkvwrrwjagab2qppuqtvgdxwh6spsulwu2qd.onion:80</data>
+      <data key="d7">localhost:9000</data>
+    </node>
+    <node id="stream">
+      <data key="d2">1 MiB</data>
+      <data key="d3">1 KiB</data>
+    </node>
+    <node id="pause">
+      <data key="d0">1,2,3,4,5,6,7,8,9,10</data>
+    </node>
+    <node id="end">
+      <data key="d1">10</data>
+      <data key="d0">3600</data>
+    </node>
+    <edge source="start" target="stream" />
+    <edge source="stream" target="end" />
+    <edge source="end" target="pause" />
+    <edge source="pause" target="start" />
+  </graph>
+</graphml>

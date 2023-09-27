@@ -1,0 +1,2 @@
+%include ../../../conf/tor.common.torrc
+%include ../../../conf/tor.client.torrc
