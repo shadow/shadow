@@ -466,11 +466,12 @@ Update the minimum runahead dynamically throughout the simulation.
 
 #### `experimental.use_memory_manager`
 
-Default: true  
+Default: false  
 Type: Bool
 
-Use the MemoryManager. It can be useful to disable for debugging, but will hurt
-performance in most cases.
+Use the MemoryManager in memory-mapping mode. This can improve
+performance, but disables support for dynamically spawning processes
+inside the simulation (e.g. the `fork` syscall).
 
 #### `experimental.use_new_tcp`
 
