@@ -107,22 +107,3 @@ hosts:
       environment: { OPENBLAS_NUM_THREADS: "1" }
       args: ../../../conf/tgen.torclient.graphml.xml
       start_time: 1500
-  torbridgeclient:
-    network_node_id: 0
-    processes:
-    - path: tor
-      args: --Address torbridgeclient --Nickname torbridgeclient
-            --UseBridges 1 --Bridge 100.0.0.1:9111
-            --defaults-torrc torrc-defaults -f torrc
-      start_time: 900
-      expected_final_state: running
-    - path: tgen
-      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: { OPENBLAS_NUM_THREADS: "1" }
-      args: ../../../conf/tgen.torclient.graphml.xml
-      start_time: 1500
-    - path: tgen
-      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
-      environment: { OPENBLAS_NUM_THREADS: "1" }
-      args: ../../../conf/tgen.torclient.graphml.xml
-      start_time: 1500
