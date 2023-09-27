@@ -45,8 +45,7 @@ std::thread_local! {
 // shared global state
 // Must not mutably borrow when the simulation is running. Worker threads should access it through
 // `Worker::shared`.
-pub static WORKER_SHARED: Lazy<AtomicRefCell<Option<WorkerShared>>> =
-    Lazy::new(|| AtomicRefCell::new(None));
+pub static WORKER_SHARED: AtomicRefCell<Option<WorkerShared>> = AtomicRefCell::new(None);
 
 #[derive(Copy, Clone, Debug)]
 pub struct WorkerThreadID(pub u32);
