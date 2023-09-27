@@ -1585,6 +1585,7 @@ dependencies = [
  "rand",
  "rustix 0.38.4",
  "signal-hook",
+ "static_assertions",
  "vasi-sync",
 ]
 
