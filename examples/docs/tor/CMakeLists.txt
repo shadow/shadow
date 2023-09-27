@@ -1,6 +1,6 @@
 file(COPY
        ${CMAKE_CURRENT_SOURCE_DIR}/run.sh
-       ${CMAKE_CURRENT_SOURCE_DIR}/verify.sh
+       ${CMAKE_CURRENT_SOURCE_DIR}/show.sh
        ${CMAKE_CURRENT_SOURCE_DIR}/shadow.yaml
        ${CMAKE_CURRENT_SOURCE_DIR}/conf
        ${CMAKE_CURRENT_SOURCE_DIR}/shadow.data.template
@@ -9,7 +9,7 @@ file(COPY
 
 add_test(
   NAME tor-example
-  COMMAND bash -c "./run.sh ${CMAKE_BINARY_DIR}/src/main && cd shadow.data && ../verify.sh"
+  COMMAND bash -c "./run.sh ${CMAKE_BINARY_DIR}/src/main && ./show.sh"
   CONFIGURATIONS extra
 )
 
