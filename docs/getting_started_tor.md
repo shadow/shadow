@@ -9,28 +9,60 @@ This example requires that you have installed:
 * [`tor`](https://github.com/torproject/tor/blob/main/README); can typically be installed
 via your system package manager.
 * [`tgen`](https://github.com/shadow/tgen); will most likely need to be built from source.
-* [`obfs4proxy`](https://gitlab.com/yawning/obfs4); can typically be installed via your system package manager. The simulation will still functon without it, but the simulated
-hosts `ptbridge` and `torptbridgeclient` will have errors.
 
-Once Shadow, Tor, and TGen are installed, you can quickly get started running a
-very simple Tor network:
+## Configuring Shadow
 
-```bash
-cd shadow/src/test/tor/minimal
-./run.sh
-cd shadow.data
-../verify.sh
+This simulation again uses `tgen` as both client and server. In addition to a
+`tor`-oblivious client and server, we add a `tor` network and a client that uses
+`tor` to connect to the server.
+
+`shadow.yaml`:
+
+```yaml
+{{#include ../examples/docs/tor/shadow.yaml}}
 ```
 
-The [`run.sh` script](../src/test/tor/minimal/run.sh) launches Shadow with a
-config that runs a minimal Tor network. The [`verify.sh`
-script](../src/test/tor/minimal/verify.sh) checks that all Tor processes
-bootstrapped correctly and that all TGen file transfer attempts succeeded. Note
-that these steps can also be launched as a test case using `./setup test --
---build-config extra --label tor`.
+## Running the Simulation
 
-After the experiment, have a look in the `shadow.data/host/*` directories to
-inspect the individual log files from the Tor relays and TGen clients.
+We run this example similarly as before. Here we use an additional command-line
+flag `--template-directory` to copy a template directory layout containing each
+host's `tor` configuraton files into its host directory before the simulation
+begins.
+
+For brevity we omit the contents of our template directory, and configuration files that are referenced from it, but you can find them at [`examples/docs/tor/shadow.data.template/`](https://github.com/shadow/shadow/blob/main/examples/docs/tor/shadow.data.template) and [`examples/docs/tor/conf/`](https://github.com/shadow/shadow/blob/main/examples/docs/tor/conf).
+
+```bash
+{{#include ../examples/docs/tor/run.sh:body}}
+```
+
+## Simulation Output
+
+As before, Shadow will write simulation output to the data directory
+`shadow.data/`. Each host has its own directory under `shadow.data/hosts/`.
+
+In the TGen process output, lines containing `stream-success` represent
+completed downloads and contain useful timing statistics. From these lines we
+should see that clients have completed a total of **20** streams:
+
+```text
+$ {{#include ../examples/docs/tor/show.sh:body_1}}
+{{#include ../examples/docs/tor/show.sh:output_1}}
+```
+
+We can also look at the transfers from the servers' perspective:
+
+```text
+$ {{#include ../examples/docs/tor/show.sh:body_2}}
+{{#include ../examples/docs/tor/show.sh:output_2}}
+```
+
+You can also parse the TGen output logged to the stdout files using the
+`tgentools` program from the TGen repo, and plot the data in graphical format to
+visualize the performance characteristics of the transfers. [This
+page](https://github.com/shadow/tgen/blob/main/doc/Tools-Setup.md) describes how
+to get started.
+
+## More Realistic Simulations
 
 You can use the [tornettools
 toolkit](https://github.com/shadow/tornettools) to run larger, more
