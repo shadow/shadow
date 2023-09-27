@@ -23,6 +23,19 @@ currently be disabled via the (unstable) option `log-errors-to-tty`.
 
 * Added Debian 12 (Bookworm) to our supported platforms.
 
+* Added support for `sendmsg`, `recvmsg`, and `shutdown` for UDP sockets.
+
+* Added support for `MSG_TRUNC` and `MSG_PEEK` as `recv` syscall argument flags
+  for UDP sockets.
+
+* Added support for `MSG_TRUNC` as a `recv` syscall return flag for UDP and
+  Unix sockets.
+
+* Added support for the `SO_DOMAIN`, `SO_PROTOCOL`, and `SO_ACCEPTCONN` socket
+  options for TCP and UDP sockets.
+
+* Added support for the `SIOCGSTAMP` ioctl for TCP and UDP sockets.
+
 PATCH changes (bugfixes):
 
 * Updated documentation and tests to reflect that shadow no longer requires
@@ -36,6 +49,17 @@ made the syscall without going through libc.
 
 * Fixed [#2681](https://github.com/shadow/shadow/issues/2681): shadow can now escape spin loops
 that use an inlined syscall instruction to make `sched_yield` syscalls.
+
+* Fixed a deadlock when the managed process calls `recv` (or similar
+  syscalls) on a TCP or UDP socket with an invalid memory address.
+
+* Fixed a bug that would allow UDP sockets to accept packets from addresses
+  that aren't the peer address.
+
+* Fixed an incorrect return value from the `FIONREAD` ioctl for UDP sockets.
+
+* Fixed the behaviour of the `read` and `recv` syscalls when called with
+  0-length buffers.
 
 Full changelog since v3.0.0:
 
