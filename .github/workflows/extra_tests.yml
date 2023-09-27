@@ -301,6 +301,9 @@ jobs:
             libssl-dev \
             zlib1g
 
+      - name: Install obfs4proxy
+        run: apt-get install -y obfs4proxy
+
       - name: Put tor in path
         run: echo "$GITHUB_WORKSPACE/opt/tor/bin" >> $GITHUB_PATH
 

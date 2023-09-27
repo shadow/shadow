@@ -5,11 +5,12 @@ transfer](getting_started_basic.md) and [traffic
 generation](getting_started_tgen.md) examples to orient yourself with Shadow
 before running this slightly more complex Tor simulation._
 
-This example requires that you have installed (or linked) a Tor executable in
-`~/.local/bin/tor` (see [the Tor install
-README](https://github.com/torproject/tor/blob/main/README)). You also need to
-install (or link) a TGen executable in `~/.local/bin/tgen` (see [the TGen
-installation guide](https://github.com/shadow/tgen)).
+This example requires that you have installed:
+* [`tor`](https://github.com/torproject/tor/blob/main/README); can typically be installed
+via your system package manager.
+* [`tgen`](https://github.com/shadow/tgen); will most likely need to be built from source.
+* [`obfs4proxy`](https://gitlab.com/yawning/obfs4); can typically be installed via your system package manager. The simulation will still functon without it, but the simulated
+hosts `ptbridge` and `torptbridgeclient` will have errors.
 
 Once Shadow, Tor, and TGen are installed, you can quickly get started running a
 very simple Tor network:
@@ -17,7 +18,8 @@ very simple Tor network:
 ```bash
 cd shadow/src/test/tor/minimal
 ./run.sh
-./verify.sh
+cd shadow.data
+../verify.sh
 ```
 
 The [`run.sh` script](../src/test/tor/minimal/run.sh) launches Shadow with a

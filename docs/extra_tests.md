@@ -1,7 +1,8 @@
 # Extra Tests
 
 Shadow includes tests that require additional dependencies, such as Tor, TGen,
-networkx, and golang. These aren't run by default, but are run as part of the CI tests.
+networkx, obfs4proxy, and golang. These aren't run by default, but are run as
+part of the CI tests.
 
 To run them locally, first make sure that both tor and tgen are located on your
 shell's `PATH` You should also install all of Shadow's optional dependencies.
