@@ -16,6 +16,25 @@ it will generally return `ENOSYS` and log at `warn` level or higher. In many
 such cases the application is able to recover, and this has little or no effect
 on the ultimate results of the simulation.
 
+There are some syscalls that shadow doesn't quite emulate faithfully, but has a
+"best effort" implementation. As with unimplemented sysalls, shadow logs at
+`warn` level when encountering such a syscall.
+
+### vfork
+
+A notable example of a not-quite faithfully implemented syscall is
+[`vfork`](https://www.man7.org/linux/man-pages/man2/vfork.2.html), which shadow
+effectively implements as a synonym for `fork`. Usage of `vfork` that is
+compliant with the POSIX.1 specification that "behavior is undefined if the
+process created by vfork() either modifies any data other than a variable of
+type pid_t used to store the return value...". However, usage that relies on
+specific Linux implementation details of `vfork` (e.g. that a write to a global
+variable from the child will be observed by the parent) won't work correctly.
+
+As in other such cases, shadow logs a warning when it encounters `vfork`, so
+that users can identify it as the potential source of problems if a simulation
+doesn't work as expected.
+
 ## IPv6
 
 Shadow does not yet implement IPv6. Most applications can be configured to use IPv4
