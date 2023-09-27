@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Run the Tor minimal test and store output in shadow.log
-shadow --template-directory shadow.data.template --use-memory-manager=false tor-minimal.yaml > shadow.log
+# first argument is the path to shadow
+if [ "$#" -ge 1 ]; then
+    echo "Prepending $1 to PATH"
+    export PATH="$1:${PATH}"
+fi
+
+# ANCHOR: body
+# delete any existing simulation data
+rm -rf shadow.data/
+shadow --template-directory shadow.data.template shadow.yaml > shadow.log
+# ANCHOR_END: body
