@@ -99,9 +99,9 @@ pub struct ShadowLogger {
     log_errors_to_stderr: OnceCell<bool>,
 }
 
-thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = RefCell::new(None));
-thread_local!(static THREAD_NAME: Lazy<String> = Lazy::new(|| { get_thread_name() }));
-thread_local!(static THREAD_ID: Lazy<nix::unistd::Pid> = Lazy::new(|| { nix::unistd::gettid() }));
+thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = const{ RefCell::new(None)});
+thread_local!(static THREAD_NAME: String = get_thread_name());
+thread_local!(static THREAD_ID: nix::unistd::Pid = nix::unistd::gettid());
 
 fn get_thread_name() -> String {
     let mut thread_name = Vec::<i8>::with_capacity(16);
@@ -326,7 +326,7 @@ impl Log for ShadowLogger {
                 .try_with(|name| (*name).clone())
                 .unwrap_or_else(|_| get_thread_name()),
             thread_id: THREAD_ID
-                .try_with(|id| **id)
+                .try_with(|id| *id)
                 .unwrap_or_else(|_| nix::unistd::gettid()),
             host_info,
         };

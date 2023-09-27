@@ -12,7 +12,7 @@ use crate::utility::callback_queue::CallbackQueue;
 pub type RootedRefCell_StateEventSource = RootedRefCell<StateEventSource>;
 
 thread_local! {
-    static C_CALLBACK_QUEUE: RefCell<Option<CallbackQueue>> = RefCell::new(None);
+    static C_CALLBACK_QUEUE: RefCell<Option<CallbackQueue>> = const { RefCell::new(None) };
 }
 
 /// Helper function to initialize and run a global thread-local callback queue. This is a hack so

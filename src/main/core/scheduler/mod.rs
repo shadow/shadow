@@ -18,7 +18,7 @@ use crate::host::host::Host;
 
 std::thread_local! {
     /// The core affinity of the current thread, as set by the active scheduler.
-    static CORE_AFFINITY: RefCell<Option<u32>> = RefCell::new(None);
+    static CORE_AFFINITY: RefCell<Option<u32>> = const { RefCell::new(None) };
 }
 
 /// Get the core affinity of the current thread, as set by the active scheduler.
