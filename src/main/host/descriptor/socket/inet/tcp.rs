@@ -859,6 +859,17 @@ impl TcpSocket {
         cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
         match (level, optname) {
+            (libc::SOL_SOCKET, libc::SO_ERROR) => {
+                // may update the socket's state (for example, reading `SO_ERROR` will make `poll()`
+                // stop returning `POLLERR` for the socket)
+                let error = self.with_tcp_state(cb_queue, |state| state.clear_error());
+                let error = error.map(tcp_error_to_errno).map(Into::into).unwrap_or(0);
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &error, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, libc::SO_DOMAIN) => {
                 let domain = libc::AF_INET;
 
