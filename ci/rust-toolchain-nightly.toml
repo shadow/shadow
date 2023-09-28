@@ -6,14 +6,9 @@
 #
 # See
 # https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file
-#
-# After updating this version, it's a good idea to re-build the base images for
-# our incremental CI tests (.github/workflows/run_tests_incremental.yml), so
-# that the newly specified version is baked in and doesn't have to be installed
-# (and rust deps rebuilt) during every incremental build.
 [toolchain]
 # Must be a version built with miri; check
 # https://rust-lang.github.io/rustup-components-history/
-channel = "nightly-2023-08-27"
+channel = "nightly-2023-09-27"
 # We don't add individual components here. CI individually
 # adds the ones they need (e.g. clippy, miri).
