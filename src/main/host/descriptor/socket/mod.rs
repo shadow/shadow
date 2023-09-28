@@ -212,12 +212,6 @@ impl SocketRef<'_> {
     enum_passthrough!(self, (), Unix, Inet;
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
-
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
-                          optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
-        -> Result<libc::socklen_t, SyscallError>
-    );
 }
 
 // file functions
@@ -293,9 +287,9 @@ impl SocketRefMut<'_> {
         pub fn address_family(&self) -> nix::sys::socket::AddressFamily
     );
 
-    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager), Unix, Inet;
-        pub fn getsockopt(&self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
-                          optlen: libc::socklen_t, memory_manager: &mut MemoryManager)
+    enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager, cb_queue), Unix, Inet;
+        pub fn getsockopt(&mut self, level: libc::c_int, optname: libc::c_int, optval_ptr: ForeignPtr<()>,
+                          optlen: libc::socklen_t, memory_manager: &mut MemoryManager, cb_queue: &mut CallbackQueue)
         -> Result<libc::socklen_t, SyscallError>
     );
 

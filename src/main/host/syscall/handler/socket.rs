@@ -970,9 +970,13 @@ impl SyscallHandler {
         // get the provided optlen
         let optlen = mem.read(optlen_ptr)?;
 
-        let mut optlen_new = socket
-            .borrow()
-            .getsockopt(level, optname, optval_ptr, optlen, &mut mem)?;
+        let mut optlen_new = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket
+                    .borrow_mut()
+                    .getsockopt(level, optname, optval_ptr, optlen, &mut mem, cb_queue)
+            })
+        })?;
 
         if optlen_new > optlen {
             // this is probably a bug in the socket's getsockopt implementation

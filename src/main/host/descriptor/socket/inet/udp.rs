@@ -785,12 +785,13 @@ impl UdpSocket {
     }
 
     pub fn getsockopt(
-        &self,
+        &mut self,
         level: libc::c_int,
         optname: libc::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         mem: &mut MemoryManager,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
         match (level, optname) {
             (libc::SOL_SOCKET, libc::SO_SNDBUF) => {

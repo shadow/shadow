@@ -258,12 +258,13 @@ impl UnixSocket {
     }
 
     pub fn getsockopt(
-        &self,
+        &mut self,
         _level: libc::c_int,
         _optname: libc::c_int,
         _optval_ptr: ForeignPtr<()>,
         _optlen: libc::socklen_t,
         _memory_manager: &mut MemoryManager,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
         log::warn!("getsockopt() syscall not yet supported for unix sockets; Returning ENOSYS");
         Err(Errno::ENOSYS.into())
