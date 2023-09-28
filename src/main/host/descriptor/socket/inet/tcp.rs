@@ -680,6 +680,7 @@ impl TcpSocket {
             Ok(x) => x,
             Err(tcp::ConnectError::InProgress) => return Err(Errno::EALREADY.into()),
             Err(tcp::ConnectError::AlreadyConnected) => return Err(Errno::EISCONN.into()),
+            Err(tcp::ConnectError::IsListening) => return Err(Errno::EISCONN.into()),
             Err(tcp::ConnectError::InvalidState) => return Err(Errno::EINVAL.into()),
             Err(tcp::ConnectError::FailedAssociation(e)) => return Err(e),
         };

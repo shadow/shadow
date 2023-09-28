@@ -1304,6 +1304,16 @@ impl Protocol for ConnOrientedListening {
         (self.into(), Ok(()))
     }
 
+    fn connect(
+        self,
+        _common: &mut UnixSocketCommon,
+        _socket: &Arc<AtomicRefCell<UnixSocket>>,
+        _addr: &SockaddrStorage,
+        _cb_queue: &mut CallbackQueue,
+    ) -> (ProtocolState, Result<(), SyscallError>) {
+        (self.into(), Err(Errno::EINVAL.into()))
+    }
+
     fn accept(
         &mut self,
         common: &mut UnixSocketCommon,
