@@ -438,6 +438,15 @@ impl TcpSocket {
     ) -> Result<RecvmsgReturn, SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
 
+        // if there was an asynchronous error, return it
+        if let Some(error) = socket_ref.with_tcp_state(cb_queue, |state| state.clear_error()) {
+            // by returning this error, we're probably (but not necessarily) returning a previous
+            // connect() result
+            socket_ref.connect_result_is_pending = false;
+
+            return Err(tcp_error_to_errno(error).into());
+        }
+
         let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
             log::debug!("Unrecognized recv flags: {:#b}", args.flags);
             return Err(Errno::EINVAL.into());
@@ -569,13 +578,7 @@ impl TcpSocket {
             // connect() result
             socket_ref.connect_result_is_pending = false;
 
-            return Err(match error {
-                // TODO: not sure what to return here
-                tcp::TcpError::ResetSent => Errno::EINVAL,
-                tcp::TcpError::ResetReceived => Errno::ECONNREFUSED,
-                tcp::TcpError::TimedOut => Errno::ETIMEDOUT,
-            }
-            .into());
+            return Err(tcp_error_to_errno(error).into());
         }
 
         // if connect() had previously been called (either blocking or non-blocking), we need to
@@ -878,6 +881,15 @@ impl TcpSocket {
 
         self.event_source
             .notify_listeners(self.file_state, states_changed, cb_queue);
+    }
+}
+
+fn tcp_error_to_errno(error: tcp::TcpError) -> Errno {
+    match error {
+        tcp::TcpError::ResetSent => Errno::ECONNRESET,
+        // TODO: when should this be ECONNREFUSED vs ECONNRESET? maybe we need more context?
+        tcp::TcpError::ResetReceived => Errno::ECONNREFUSED,
+        tcp::TcpError::TimedOut => Errno::ETIMEDOUT,
     }
 }
 
