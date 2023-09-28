@@ -6,7 +6,7 @@ use std::rc::Rc;
 use bytes::Bytes;
 
 use crate::tests::{establish_helper, Host, Scheduler, TcpSocket, TestEnvState};
-use crate::{Ipv4Header, TcpFlags, TcpHeader, TcpState};
+use crate::{Ipv4Header, Payload, Shutdown, TcpFlags, TcpHeader, TcpState};
 
 #[test]
 fn test_send_recv() {
@@ -278,6 +278,98 @@ fn test_close_with_non_empty_recv_buffer() {
 }
 
 #[test]
+fn test_recv_after_shutdown_both() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    tcp.borrow_mut().collect_packets(false);
+
+    // send a payload packet to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 1,
+        ack: 1,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+
+    tcp.borrow_mut().shutdown(Shutdown::Both).unwrap();
+    assert!(s(&tcp).as_fin_wait_one().is_some());
+
+    // group the payload acknowledgement and FIN into one packet
+    tcp.borrow_mut().collect_packets(true);
+
+    // check that a FIN packet was sent by the socket
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::FIN));
+
+    // should still be able to recv old data on the socket
+    let mut recv_buf = vec![0; 2];
+    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 2).unwrap();
+    assert_eq!(recv_buf, b"he");
+
+    // send a FIN packet to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::FIN | TcpFlags::ACK,
+        src_port: 20,
+        dst_port: 10,
+        seq: 6,
+        ack: 2,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut().push_in_packet(&header, Payload::default());
+
+    assert!(s(&tcp).as_time_wait().is_some());
+
+    // should still be able to recv old data on the socket
+    let mut recv_buf = vec![0; 2];
+    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 2).unwrap();
+    assert_eq!(recv_buf, b"ll");
+
+    // check that our FIN was acknowledged
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::ACK));
+
+    assert!(s(&tcp).as_time_wait().is_some());
+
+    // advance past the time-wait period
+    scheduler.advance(std::time::Duration::from_secs(120));
+    assert!(s(&tcp).as_closed().is_some());
+
+    // should still be able to recv old data on the socket
+    let mut recv_buf = vec![0; 2];
+    TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 2).unwrap();
+    assert_eq!(recv_buf, b"o\0");
+}
+
+#[test]
 fn test_incoming_payload_after_close() {
     let scheduler = Scheduler::new();
     let mut host = Host::new();
@@ -297,6 +389,60 @@ fn test_incoming_payload_after_close() {
     // check that a FIN was sent
     let (header, _) = scheduler.pop_packet().unwrap();
     assert!(header.flags.contains(TcpFlags::FIN));
+
+    // send a payload packet to the socket
+    let header = TcpHeader {
+        ip: Ipv4Header {
+            src: "5.6.7.8".parse().unwrap(),
+            dst: host.ip_addr,
+        },
+        flags: TcpFlags::empty(),
+        src_port: 20,
+        dst_port: 10,
+        seq: 1,
+        ack: 1,
+        window_size: 10000,
+        selective_acks: None,
+        window_scale: None,
+        timestamp: None,
+        timestamp_echo: None,
+    };
+    tcp.borrow_mut()
+        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+
+    assert!(s(&tcp).as_closed().is_some());
+
+    // check that a RST packet was sent by the socket in response to the payload packet
+    let (header, _) = scheduler.pop_packet().unwrap();
+    assert!(header.flags.contains(TcpFlags::RST));
+
+    // try to recv on the socket, but there should be no data and we should receive an EOF
+    // (typically on linux we'd receive an ECONNRESET for the first read, but we don't use the error
+    // state in our test socket wrapper)
+    let mut recv_buf = vec![0; 5];
+    assert_eq!(TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 5), Ok(0));
+}
+
+#[test]
+fn test_incoming_payload_after_shutdown_read() {
+    let scheduler = Scheduler::new();
+    let mut host = Host::new();
+
+    /// Helper to get the state from a socket.
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+        Ref::map(tcp.borrow(), |x| x.tcp_state())
+    }
+
+    // get an established tcp socket
+    let tcp = establish_helper(&scheduler, &mut host);
+
+    // on Linux you would need to `shutdown(Both)` for a RST to be sent when payload data is
+    // received, but in this TCP library only `shutdown(Read)` is required
+    tcp.borrow_mut().shutdown(Shutdown::Read).unwrap();
+    assert!(s(&tcp).as_established().is_some());
+
+    // check that no packets were sent by the socket
+    assert!(scheduler.pop_packet().is_none());
 
     // send a payload packet to the socket
     let header = TcpHeader {
