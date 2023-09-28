@@ -6,10 +6,5 @@
 #
 # See
 # https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file
-#
-# After updating this version, it's a good idea to re-build the base images for
-# our incremental CI tests (.github/workflows/run_tests_incremental.yml), so
-# that the newly specified version is baked in and doesn't have to be installed
-# (and rust deps rebuilt) during every incremental build.
 [toolchain]
-channel = "1.72.0"
+channel = "1.72.1"
