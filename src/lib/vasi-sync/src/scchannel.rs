@@ -34,6 +34,7 @@ impl From<u8> for ChannelContentsState {
 const WRITER_CLOSED: u32 = 0x1 << 9;
 const HAS_SLEEPER: u32 = 0x1 << 10;
 
+#[repr(C)]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, VirtualAddressSpaceIndependent)]
 struct ChannelState {
     writer_closed: bool,
