@@ -1664,6 +1664,11 @@ static gint _tcp_connectToPeer(LegacySocket* socket, const Host* host, in_addr_t
         return errorCode;
     }
 
+    /* listening sockets can't connect */
+    if (tcp_isValidListener(tcp)) {
+        return -EISCONN;
+    }
+
     /* send 1st part of 3-way handshake, state->syn_sent */
     _tcp_sendControlPacket(tcp, host, PTCP_SYN);
 

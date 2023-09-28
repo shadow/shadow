@@ -539,6 +539,8 @@ pub enum ConnectError<E> {
     /// out, closing, half-closed, closed, etc. This does not include connection attempts that are
     /// in progress ("syn-sent" or "syn-received" states).
     AlreadyConnected,
+    /// Is already listening for new connections.
+    IsListening,
     FailedAssociation(E),
 }
 

@@ -559,6 +559,14 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
         (self.into(), Ok(rv))
     }
 
+    fn connect<T, E>(
+        self,
+        _remote_addr: SocketAddrV4,
+        _associate_fn: impl FnOnce() -> Result<(SocketAddrV4, T), E>,
+    ) -> (TcpStateEnum<X>, Result<T, ConnectError<E>>) {
+        (self.into(), Err(ConnectError::IsListening))
+    }
+
     fn accept(mut self) -> (TcpStateEnum<X>, Result<AcceptedTcpState<X>, AcceptError>) {
         let Some(child_key) = self.accept_queue.pop_front() else {
             return (self.into(), Err(AcceptError::NothingToAccept));

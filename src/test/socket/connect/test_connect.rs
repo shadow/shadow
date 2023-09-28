@@ -229,11 +229,18 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 let append_args =
                     |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
 
-                tests.extend(vec![test_utils::ShadowTest::new(
-                    &append_args("test_connect_when_server_queue_full"),
-                    move || test_connect_when_server_queue_full(domain, sock_type, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                )]);
+                tests.extend(vec![
+                    test_utils::ShadowTest::new(
+                        &append_args("test_listening"),
+                        move || test_listening(domain, sock_type, flag),
+                        set![TestEnv::Libc, TestEnv::Shadow],
+                    ),
+                    test_utils::ShadowTest::new(
+                        &append_args("test_connect_when_server_queue_full"),
+                        move || test_connect_when_server_queue_full(domain, sock_type, flag),
+                        set![TestEnv::Libc, TestEnv::Shadow],
+                    ),
+                ]);
             }
 
             tests.extend(vec![test_utils::ShadowTest::new(
@@ -876,6 +883,50 @@ fn test_non_existent_path(sock_type: libc::c_int, flag: libc::c_int) -> Result<(
     };
 
     test_utils::run_and_close_fds(&[fd], || check_connect_call(&args, Some(libc::ENOENT)))
+}
+
+/// Test connect() on a listening socket.
+fn test_listening(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    // unix sockets must be bound before you can call `listen()`
+    if domain == libc::AF_UNIX {
+        let (_addr, _addr_len) = socket_utils::autobind_helper(fd, domain);
+    }
+
+    {
+        let rv = unsafe { libc::listen(fd, 10) };
+        eprintln!("errno: {}", test_utils::get_errno());
+        assert_eq!(rv, 0);
+    }
+
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
+    let args = ConnectArguments {
+        fd,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+
+    let expected_errno = match domain {
+        libc::AF_INET => libc::EISCONN,
+        libc::AF_UNIX => libc::EINVAL,
+        _ => unimplemented!(),
+    };
+
+    check_connect_call(&args, Some(expected_errno))
 }
 
 /// Test connect() when the server queue is full, and for blocking sockets that an accept() unblocks
