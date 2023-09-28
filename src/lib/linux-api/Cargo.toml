@@ -11,7 +11,7 @@ std = []
 rustix = ["dep:rustix"]
 
 [dependencies]
-bitflags = "2.3.1"
+bitflags = "2.4.0"
 log = { version = "0.4.18", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
