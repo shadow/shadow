@@ -37,6 +37,7 @@ pub struct TcpSocket {
     file_state: FileState,
     association: Option<AssociationHandle>,
     connect_result_is_pending: bool,
+    shutdown_status: Option<Shutdown>,
     // should only be used by `OpenFile` to make sure there is only ever one `OpenFile` instance for
     // this file
     has_open_file: bool,
@@ -63,6 +64,7 @@ impl TcpSocket {
                 file_state: FileState::ACTIVE,
                 association: None,
                 connect_result_is_pending: false,
+                shutdown_status: None,
                 has_open_file: false,
                 _counter: ObjectCounter::new("TcpSocket"),
             })
@@ -139,6 +141,10 @@ impl TcpSocket {
             });
         }
 
+        // the following mappings from `PollState` to `FileState` may be relied on by other parts of
+        // the code, such as the `connect()` and `accept()` blocking behaviour, so be careful when
+        // making changes
+
         let mut read_write_flags = FileState::empty();
         let poll_state = self.tcp_state.poll();
 
@@ -155,8 +161,8 @@ impl TcpSocket {
             read_write_flags.insert(FileState::READABLE | FileState::WRITABLE);
         }
 
-        // if the socket is closed, undo all of the flags set above (closed sockets aren't readable
-        // or writable)
+        // if the socket/file is closed, undo all of the flags set above (closed sockets aren't
+        // readable or writable)
         if self.file_state.contains(FileState::CLOSED) {
             read_write_flags = FileState::empty();
         }
@@ -291,6 +297,9 @@ impl TcpSocket {
         // TODO: This will not have the remote address once the tcp state has closed (for example by
         // `shutdown(RDWR)`), in which case `local_remote_addrs()` will return `None` so this will
         // incorrectly return ENOTCONN. Should fix this somehow and add a test.
+
+        // TODO: I don't think `getpeername()` should not return a valid peer name before the
+        // connection is successfully established.
     }
 
     pub fn address_family(&self) -> AddressFamily {
@@ -438,6 +447,15 @@ impl TcpSocket {
     ) -> Result<RecvmsgReturn, SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
 
+        // if there was an asynchronous error, return it
+        if let Some(error) = socket_ref.with_tcp_state(cb_queue, |state| state.clear_error()) {
+            // by returning this error, we're probably (but not necessarily) returning a previous
+            // connect() result
+            socket_ref.connect_result_is_pending = false;
+
+            return Err(tcp_error_to_errno(error).into());
+        }
+
         let Some(mut flags) = MsgFlags::from_bits(args.flags) else {
             log::debug!("Unrecognized recv flags: {:#b}", args.flags);
             return Err(Errno::EINVAL.into());
@@ -457,7 +475,16 @@ impl TcpSocket {
 
             let num_recv = match rv {
                 Ok(x) => x,
-                Err(tcp::RecvError::Empty) => return Err(Errno::EWOULDBLOCK),
+                Err(tcp::RecvError::Empty) => {
+                    if [Shutdown::Read, Shutdown::Both]
+                        .map(Some)
+                        .contains(&socket_ref.shutdown_status)
+                    {
+                        0
+                    } else {
+                        return Err(Errno::EWOULDBLOCK);
+                    }
+                }
                 Err(tcp::RecvError::NotConnected) => return Err(Errno::ENOTCONN),
                 Err(tcp::RecvError::StreamClosed) => 0,
                 Err(tcp::RecvError::Io(e)) => return Err(Errno::try_from(e).unwrap()),
@@ -569,13 +596,7 @@ impl TcpSocket {
             // connect() result
             socket_ref.connect_result_is_pending = false;
 
-            return Err(match error {
-                // TODO: not sure what to return here
-                tcp::TcpError::ResetSent => Errno::EINVAL,
-                tcp::TcpError::ResetReceived => Errno::ECONNREFUSED,
-                tcp::TcpError::TimedOut => Errno::ETIMEDOUT,
-            }
-            .into());
+            return Err(tcp_error_to_errno(error).into());
         }
 
         // if connect() had previously been called (either blocking or non-blocking), we need to
@@ -583,16 +604,16 @@ impl TcpSocket {
         if socket_ref.connect_result_is_pending {
             // ignore all connect arguments and just check if we've connected
 
-            // if the ESTABLISHED flag isn't set, then it's still connecting
-            if !socket_ref
+            // check if it's still connecting (in the "syn-sent" or "syn-received" state)
+            if socket_ref
                 .tcp_state
                 .poll()
-                .contains(tcp::PollState::ESTABLISHED)
+                .contains(tcp::PollState::CONNECTING)
             {
                 return Err(Errno::EALREADY.into());
             }
 
-            // the ESTABLISHED flag is set and there were no socket errors (checked above)
+            // if not connecting and there were no socket errors (checked above)
             socket_ref.connect_result_is_pending = false;
             return Ok(());
         }
@@ -678,7 +699,23 @@ impl TcpSocket {
         } else {
             let err = SyscallError::new_blocked_on_file(
                 File::Socket(Socket::Inet(InetSocket::Tcp(Arc::clone(socket)))),
-                FileState::WRITABLE | FileState::CLOSED,
+                // I think we want this to resume when it leaves the "syn-sent" and "syn-received"
+                // states (for example moves to the "rst", "closed", "fin-wait-1", etc states).
+                //
+                // - READABLE: the state may timeout in the "syn-received" state and move to the
+                //   "closed" state, which is `tcp::PollState::RECV_CLOSED` and maps to
+                //   `FileState::READABLE`
+                // - WRITABLE: the state may reach the "established" state which is
+                //   `tcp::PollState::WRITABLE` which maps to `FileState::WRITABLE`
+                // - CLOSED: we use this just to be safe; typically the `connect()` syscall handler
+                //   would hold an `OpenFile` for this socket while the syscall is blocked which
+                //   would prevent the socket from being closed until the syscall completed
+                //
+                // We assume here that the "syn-sent" and "syn-received" states never have the
+                // `RECV_CLOSED`, `READABLE`, or `WRITABLE` `PollState` states, otherwise this
+                // syscall condition would trigger while the socket was still connecting. This all
+                // relies on the `PollState` to `FileState` mappings in `with_tcp_state()` above.
+                FileState::READABLE | FileState::WRITABLE | FileState::CLOSED,
                 socket_ref.supports_sa_restart(),
             );
 
@@ -724,6 +761,7 @@ impl TcpSocket {
                 file_state: FileState::ACTIVE,
                 association: None,
                 connect_result_is_pending: false,
+                shutdown_status: None,
                 has_open_file: false,
                 _counter: ObjectCounter::new("TcpSocket"),
             })
@@ -756,10 +794,58 @@ impl TcpSocket {
 
     pub fn shutdown(
         &mut self,
-        _how: Shutdown,
-        _cb_queue: &mut CallbackQueue,
+        how: Shutdown,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        todo!();
+        // Update `how` based on any previous shutdown() calls. For example if shutdown(RD) was
+        // previously called and now shutdown(WR) has been called, we should call shutdown(RDWR) on
+        // the tcp state.
+        let how = match (how, self.shutdown_status) {
+            // if it was previously `Both`
+            (_, Some(Shutdown::Both)) => Shutdown::Both,
+            // if it's now `Both`
+            (Shutdown::Both, _) => Shutdown::Both,
+            (Shutdown::Read, None | Some(Shutdown::Read)) => Shutdown::Read,
+            (Shutdown::Read, Some(Shutdown::Write)) => Shutdown::Both,
+            (Shutdown::Write, None | Some(Shutdown::Write)) => Shutdown::Write,
+            (Shutdown::Write, Some(Shutdown::Read)) => Shutdown::Both,
+        };
+
+        // Linux and the tcp library interpret shutdown flags differently. In the tcp library,
+        // `tcp::Shutdown` has a very specific meaning for `Read` and `Write`, whereas Linux is
+        // undocumented and not straightforward. Here we try to map from the Linux behaviour to the
+        // tcp library behaviour.
+        let tcp_how = match how {
+            Shutdown::Read => None,
+            Shutdown::Write => Some(tcp::Shutdown::Write),
+            Shutdown::Both => Some(tcp::Shutdown::Both),
+        };
+
+        if let Some(tcp_how) = tcp_how {
+            if let Err(e) = self.with_tcp_state(cb_queue, |state| state.shutdown(tcp_how)) {
+                match e {
+                    tcp::ShutdownError::NotConnected => return Err(Errno::ENOTCONN.into()),
+                    tcp::ShutdownError::InvalidState => return Err(Errno::EINVAL.into()),
+                }
+            }
+        } else {
+            // we don't need to call shutdown() on the tcp state since we don't actually want to do
+            // anything, but we still need to return ENOTCONN sometimes
+
+            let not_connected = !self
+                .tcp_state
+                .poll()
+                .intersects(tcp::PollState::CONNECTING | tcp::PollState::CONNECTED);
+
+            if not_connected {
+                return Err(Errno::ENOTCONN.into());
+            }
+        }
+
+        // the shutdown was successful, so update our shutdown status
+        self.shutdown_status = Some(how);
+
+        Ok(())
     }
 
     pub fn getsockopt(
@@ -878,6 +964,16 @@ impl TcpSocket {
 
         self.event_source
             .notify_listeners(self.file_state, states_changed, cb_queue);
+    }
+}
+
+fn tcp_error_to_errno(error: tcp::TcpError) -> Errno {
+    match error {
+        tcp::TcpError::ResetSent => Errno::ECONNRESET,
+        // TODO: when should this be ECONNREFUSED vs ECONNRESET? maybe we need more context?
+        tcp::TcpError::ResetReceived => Errno::ECONNREFUSED,
+        tcp::TcpError::ClosedWhileConnecting => Errno::ECONNRESET,
+        tcp::TcpError::TimedOut => Errno::ETIMEDOUT,
     }
 }
 

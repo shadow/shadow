@@ -169,6 +169,10 @@ where
         (self.into(), Err(RstCloseError::InvalidState))
     }
 
+    fn shutdown(self, _how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        (self.into(), Err(ShutdownError::InvalidState))
+    }
+
     fn listen<T, E>(
         self,
         _backlog: u32,
@@ -252,6 +256,11 @@ impl<X: Dependencies> TcpState<X> {
     #[inline]
     pub fn close(&mut self) -> Result<(), CloseError> {
         self.with_state(|state| state.close())
+    }
+
+    #[inline]
+    pub fn shutdown(&mut self, how: Shutdown) -> Result<(), ShutdownError> {
+        self.with_state(|state| state.shutdown(how))
     }
 
     #[inline]
@@ -486,10 +495,19 @@ impl<X: Dependencies> From<AcceptedTcpStateInner<X>> for TcpStateEnum<X> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Shutdown {
+    Read,
+    Write,
+    Both,
+}
+
 #[derive(Debug)]
 pub enum TcpError {
     ResetSent,
     ResetReceived,
+    /// The connection was closed while it was connecting, and no RST was sent or received.
+    ClosedWhileConnecting,
     TimedOut,
 }
 
@@ -516,7 +534,10 @@ pub enum ConnectError<E> {
     InvalidState,
     /// A previous connection attempt is in progress.
     InProgress,
-    /// A connection has previously been attempted and was either successful or unsuccessful.
+    /// A connection has previously been attempted and was either successful or unsuccessful (it may
+    /// or may not have reached the "established" state). The connection may be established, timed
+    /// out, closing, half-closed, closed, etc. This does not include connection attempts that are
+    /// in progress ("syn-sent" or "syn-received" states).
     AlreadyConnected,
     FailedAssociation(E),
 }
@@ -525,6 +546,12 @@ pub enum ConnectError<E> {
 pub enum AcceptError {
     InvalidState,
     NothingToAccept,
+}
+
+#[derive(Debug)]
+pub enum ShutdownError {
+    NotConnected,
+    InvalidState,
 }
 
 #[derive(Debug)]
@@ -568,13 +595,16 @@ bitflags::bitflags! {
         const WRITABLE = 1 << 1;
         /// There is a pending error that can be read using [`TcpState::clear_error`].
         const ERROR = 1 << 2;
-        /// The connection has been closed for receiving. Some possible causes are:
+        /// The connection has been closed for receiving. This is not mutually exclusive with
+        /// `READABLE` (even if it's closed for receiving, there may still be buffered data to
+        /// read). Some possible causes are:
         /// - Received a FIN packet.
         /// - Sent or received a RST packet.
-        /// - TCP was `shutdown()` for reading.
         /// - TCP was closed.
         const RECV_CLOSED = 1 << 3;
-        /// The connection has been closed for sending. Some possible causes are:
+        /// The connection has been closed for sending. This should be mutually exclusive with
+        /// `WRITABLE` (there would be no point in writing data if it's closed for sending). Some
+        /// possible causes are:
         /// - Sent a FIN packet.
         /// - Sent or received a RST packet.
         /// - TCP was `shutdown()` for writing.
@@ -582,14 +612,19 @@ bitflags::bitflags! {
         const SEND_CLOSED = 1 << 4;
         /// A listening socket has a new incoming connection that can be accepted.
         const READY_TO_ACCEPT = 1 << 5;
-        /// The connection has been established. More specifically, TCP is or has been in the
-        /// "established" state. This may be set even if closed.
-        const ESTABLISHED = 1 << 6;
+        /// Connection is in the process of opening. More specifically this means that it is in
+        /// either the "syn-sent" or "syn-received" states.
+        const CONNECTING = 1 << 6;
+        /// A connection has previously been attempted and was either successful or unsuccessful (it
+        /// may or may not have reached the "established" state). The connection may be established,
+        /// timed out, closing, half-closed, closed, etc. This does not include connection attempts
+        /// that are in progress ("syn-sent" or "syn-received" states).
+        const CONNECTED = 1 << 7;
         /// TCP is fully closed (in the "closed" state). This may not be set immediately after a
         /// `close()` call, for example if `close()` was called while in the "established" state,
         /// and now is in the "fin-wait-1" state. This does not include the initial state (we don't
         /// consider a new TCP to be "closed").
-        const CLOSED = 1 << 7;
+        const CLOSED = 1 << 8;
     }
 }
 

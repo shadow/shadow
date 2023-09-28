@@ -23,8 +23,8 @@ use crate::tests::util::time::{Duration, Instant};
 #[allow(unused_imports)]
 use crate::{
     AcceptError, CloseError, ConnectError, Dependencies, Ipv4Header, ListenError, Payload,
-    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
-    TcpFlags, TcpHeader, TcpState, TimerRegisteredBy,
+    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, Shutdown,
+    TcpConfig, TcpFlags, TcpHeader, TcpState, TimerRegisteredBy,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -457,6 +457,17 @@ impl TcpSocket {
 
         // add the closed flag
         self.emit_file_state(self.file_state | FileState::CLOSED);
+
+        Ok(())
+    }
+
+    /// This shutdown method isn't intended to exactly replicate Linux. Instead it behaves as
+    /// documented on [`Shutdown`]. Tests should not be written in a way that assumes this behaves
+    /// exactly as Linux does. In a real application (such as Shadow), the Linux compatability would
+    /// be implemented here in the socket file's shutdown method.
+    pub fn shutdown(&mut self, how: Shutdown) -> Result<(), Errno> {
+        // we don't expect shutdown() to ever have an error
+        self.with_tcp_state(|state| state.shutdown(how)).unwrap();
 
         Ok(())
     }

@@ -75,6 +75,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
                     let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
                         test_utils::ShadowTest::new(
+                            &append_args("test_not_connected"),
+                            move || test_not_connected(domain, sock_type, flag, how),
+                            set![TestEnv::Libc, TestEnv::Shadow],
+                        ),
+                        test_utils::ShadowTest::new(
                             &append_args("test_arguments"),
                             move || test_arguments(domain, sock_type, flag, how),
                             set![TestEnv::Libc, TestEnv::Shadow],
@@ -91,31 +96,13 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         ),
                         test_utils::ShadowTest::new(
                             &append_args("test_read_after_client_shutdown"),
-                            move || {
-                                test_read_after_client_shutdown(
-                                    domain, sock_type, flag, how,
-                                    /* expect_no_bytes_after_shutrd= */ false,
-                                )
-                            },
+                            move || test_read_after_client_shutdown(domain, sock_type, flag, how),
+                            // TODO: this passes for rust tcp sockets but not C tcp sockets, so
+                            // enable this later
                             if domain != libc::AF_INET || sock_type != libc::SOCK_STREAM {
                                 set![TestEnv::Libc, TestEnv::Shadow]
                             } else {
                                 set![TestEnv::Libc]
-                            },
-                        ),
-                        // shadow's tcp shutdown works slightly different from linux
-                        test_utils::ShadowTest::new(
-                            &append_args("test_read_after_client_shutdown <shadow-tcp>"),
-                            move || {
-                                test_read_after_client_shutdown(
-                                    domain, sock_type, flag, how,
-                                    /* expect_no_bytes_after_shutrd= */ true,
-                                )
-                            },
-                            if domain == libc::AF_INET && sock_type == libc::SOCK_STREAM {
-                                set![TestEnv::Shadow]
-                            } else {
-                                set![]
                             },
                         ),
                         test_utils::ShadowTest::new(
@@ -150,22 +137,6 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
                     tests.extend(more_tests);
                 }
-            }
-        }
-    }
-
-    for &domain in domains.iter() {
-        for &sock_type in sock_types.iter() {
-            for &flag in flags.iter() {
-                // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
-
-                tests.extend(vec![test_utils::ShadowTest::new(
-                    &append_args("test_not_connected"),
-                    move || test_not_connected(domain, sock_type, flag),
-                    set![TestEnv::Libc, TestEnv::Shadow],
-                )]);
             }
         }
     }
@@ -231,14 +202,12 @@ fn test_not_connected(
     domain: libc::c_int,
     sock_type: libc::c_int,
     flag: libc::c_int,
+    how: libc::c_int,
 ) -> Result<(), String> {
     let fd = unsafe { libc::socket(domain, sock_type | flag, 0) };
     assert!(fd >= 0);
 
-    let args = ShutdownArguments {
-        fd,
-        how: libc::SHUT_RDWR,
-    };
+    let args = ShutdownArguments { fd, how };
 
     test_utils::run_and_close_fds(&[fd], || check_shutdown_call(&args, &[libc::ENOTCONN]))
 }
@@ -477,6 +446,14 @@ fn read_all(fd: libc::c_int) -> Vec<u8> {
         if num == 0 {
             break;
         }
+
+        // might get EAGAIN if the peer is sending more data than fits in the receive window
+        if num == -1 && test_utils::get_errno() == libc::EAGAIN {
+            // need to wait for more data
+            assert_eq!(unsafe { libc::usleep(10000) }, 0);
+            continue;
+        }
+
         assert!(num > 0);
         buf.extend_from_slice(&tmp_buf[..(num as usize)]);
     }
@@ -490,7 +467,6 @@ fn test_read_after_client_shutdown(
     sock_type: libc::c_int,
     flag: libc::c_int,
     how: libc::c_int,
-    expect_no_bytes_after_shutrd: bool,
 ) -> Result<(), String> {
     let (fd_client, fd_server) = if sock_type == libc::SOCK_STREAM {
         setup_stream_sockets(domain, flag)
@@ -587,15 +563,9 @@ fn test_read_after_client_shutdown(
                     &[],
                 )?;
 
-                let expected_rv = if expect_no_bytes_after_shutrd {
-                    0
-                } else {
-                    MESSAGE_SIZE as libc::c_int
-                };
-
                 test_utils::result_assert_eq(
                     rv,
-                    expected_rv,
+                    MESSAGE_SIZE as libc::c_int,
                     &format!("Unexpected return value when read()ing message {}", x + 1),
                 )?;
             }
