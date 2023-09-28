@@ -272,18 +272,15 @@ jobs:
             libevent-dev \
             libssl-dev \
             make \
-            zlib1g-dev
+            zlib1g-dev \
+            git
 
       - name: Checkout tor
         if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          path: tor
-          # this is not the official tor repo, but it's managed by the Tor Project
-          # and allows us to simplify our CI script
-          repository: torproject/tor
-          ref: ${{ matrix.tor }}
-          persist-credentials: false
+        run: |
+          git clone https://gitlab.torproject.org/tpo/core/tor.git
+          cd tor
+          git checkout ${{ matrix.tor }}
 
       - name: Configure, build, and install tor
         if: steps.restore-tor-build-cache.outputs.cache-hit != 'true'
