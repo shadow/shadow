@@ -9,8 +9,9 @@ use crate::util::remove_from_list;
 use crate::util::time::Duration;
 use crate::{
     AcceptError, AcceptedTcpState, CloseError, ConnectError, Dependencies, ListenError, Payload,
-    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, TcpConfig,
-    TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait, TimerRegisteredBy,
+    PollState, PopPacketError, PushPacketError, RecvError, RstCloseError, SendError, Shutdown,
+    ShutdownError, TcpConfig, TcpError, TcpFlags, TcpHeader, TcpState, TcpStateEnum, TcpStateTrait,
+    TimerRegisteredBy,
 };
 
 // state structs
@@ -108,12 +109,22 @@ pub struct LastAckState<X: Dependencies> {
 pub struct RstState<X: Dependencies> {
     pub(crate) common: Common<X>,
     pub(crate) send_buffer: LinkedList<TcpHeader>,
+    /// Was the socket previously connected? Should be `true` for any states that have previously
+    /// been in the "syn-sent" or "syn-received" states. The connection does not need to have been
+    /// successful (for example it may have timed out in the "syn-sent" state or may have been
+    /// reset).
+    pub(crate) was_connected: bool,
 }
 
 #[derive(Debug)]
 pub struct ClosedState<X: Dependencies> {
     pub(crate) common: Common<X>,
     pub(crate) recv_buffer: RecvQueue,
+    /// Was the socket previously connected? Should be `true` for any states that have previously
+    /// been in the "syn-sent" or "syn-received" states. The connection does not need to have been
+    /// successful (for example it may have timed out in the "syn-sent" state or may have been
+    /// reset).
+    pub(crate) was_connected: bool,
 }
 
 // other helper types
@@ -244,14 +255,18 @@ impl<X: Dependencies> InitState<X> {
 
 impl<X: Dependencies> TcpStateTrait<X> for InitState<X> {
     fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
-        let new_state = ClosedState::new(self.common, None);
+        let new_state = ClosedState::new(self.common, None, /* was_connected= */ false);
         (new_state.into(), Ok(()))
     }
 
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         // no need to send a RST; closing immediately
-        let new_state = ClosedState::new(self.common, None);
+        let new_state = ClosedState::new(self.common, None, /* was_connected= */ false);
         (new_state.into(), Ok(()))
+    }
+
+    fn shutdown(self, _how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        (self.into(), Err(ShutdownError::NotConnected))
     }
 
     fn listen<T, E>(
@@ -507,12 +522,21 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
 
         let new_state = if rst_packets.is_empty() {
             // no RST packets to send, so go directly to the "closed" state
-            ClosedState::new(self.common, None).into()
+            ClosedState::new(self.common, None, /* was_connected= */ false).into()
         } else {
-            RstState::new(self.common, rst_packets).into()
+            RstState::new(self.common, rst_packets, /* was_connected= */ false).into()
         };
 
         (new_state, Ok(()))
+    }
+
+    fn shutdown(self, _how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        // TODO: Linux will reset back to the initial state (allowing future connect(), listen(),
+        // etc for the same socket) for SHUT_RD or SHUT_RDWR. But this should probably be handled in
+        // a higher layer (for example having the socket replace this tcp state with a new tcp state
+        // object).
+
+        (self.into(), Err(ShutdownError::NotConnected))
     }
 
     fn listen<T, E>(
@@ -721,22 +745,48 @@ impl<X: Dependencies> SynSentState<X> {
 }
 
 impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
-    fn close(self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
+    fn close(mut self) -> (TcpStateEnum<X>, Result<(), CloseError>) {
         // we haven't received a SYN yet, so we can't have received data and don't
         // need to send an RST
         debug_assert!(!self.connection.recv_buf_has_data());
 
-        let new_state = ClosedState::new(self.common, None);
+        self.common
+            .set_error_if_unset(TcpError::ClosedWhileConnecting);
+
+        let new_state = ClosedState::new(self.common, None, /* was_connected= */ true);
         (new_state.into(), Ok(()))
     }
 
-    fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
+    fn rst_close(mut self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         // we haven't received a SYN yet, so we can't have received data and don't
         // need to send an RST
         debug_assert!(!self.connection.recv_buf_has_data());
 
-        let new_state = ClosedState::new(self.common, None);
+        self.common
+            .set_error_if_unset(TcpError::ClosedWhileConnecting);
+
+        let new_state = ClosedState::new(self.common, None, /* was_connected= */ true);
         (new_state.into(), Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we haven't received a SYN yet, so we can't have received data and don't
+            // need to send an RST
+            debug_assert!(!self.connection.recv_buf_has_data());
+
+            self.common
+                .set_error_if_unset(TcpError::ClosedWhileConnecting);
+
+            let new_state = ClosedState::new(self.common, None, /* was_connected= */ true);
+            return (new_state.into(), Ok(()));
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -812,7 +862,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::empty();
+        let mut poll_state = PollState::CONNECTING;
 
         if self.common.error.is_some() {
             poll_state.insert(PollState::ERROR);
@@ -861,6 +911,9 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
             // send a FIN packet
             self.connection.send_fin();
 
+            self.common
+                .set_error_if_unset(TcpError::ClosedWhileConnecting);
+
             // if the connection receives any more data, it should send an RST
             self.connection.send_rst_if_recv_payload();
 
@@ -873,6 +926,25 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // send a FIN packet
+            self.connection.send_fin();
+
+            self.common
+                .set_error_if_unset(TcpError::ClosedWhileConnecting);
+
+            let new_state = FinWaitOneState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -942,7 +1014,7 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::empty();
+        let mut poll_state = PollState::CONNECTING;
 
         if self.common.error.is_some() {
             poll_state.insert(PollState::ERROR);
@@ -987,6 +1059,22 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // send a FIN packet
+            self.connection.send_fin();
+
+            let new_state = FinWaitOneState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1064,7 +1152,7 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         if self.connection.send_buf_has_space() {
             poll_state.insert(PollState::WRITABLE);
@@ -1110,6 +1198,18 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
         };
 
         (new_state, Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing (active close)
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1194,7 +1294,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         if self.connection.recv_buf_has_data() {
             poll_state.insert(PollState::READABLE);
@@ -1240,6 +1340,18 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
         };
 
         (new_state, Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing (active close)
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1312,7 +1424,7 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         if self.connection.recv_buf_has_data() {
             poll_state.insert(PollState::READABLE);
@@ -1358,6 +1470,18 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
         };
 
         (new_state, Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing (active close)
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1439,7 +1563,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         // we've received a FIN
         poll_state.insert(PollState::RECV_CLOSED);
@@ -1479,7 +1603,8 @@ impl<X: Dependencies> TimeWaitState<X> {
         state.common.register_timer(timeout, |state| {
             if let TcpStateEnum::TimeWait(state) = state {
                 let recv_buffer = state.connection.into_recv_buffer();
-                let new_state = ClosedState::new(state.common, recv_buffer);
+                let new_state =
+                    ClosedState::new(state.common, recv_buffer, /* was_connected= */ true);
                 new_state.into()
             } else {
                 state
@@ -1500,6 +1625,18 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
         self.connection.send_rst_if_recv_payload();
 
         // we're already in the process of closing (active close)
+        (self.into(), Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing (active close)
+        }
+
         (self.into(), Ok(()))
     }
 
@@ -1575,7 +1712,7 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         // we've received a FIN
         poll_state.insert(PollState::RECV_CLOSED);
@@ -1630,6 +1767,22 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     fn rst_close(self) -> (TcpStateEnum<X>, Result<(), RstCloseError>) {
         let new_state = reset_connection(self.common, self.connection);
         (new_state.into(), Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // send a FIN packet
+            self.connection.send_fin();
+
+            let new_state = LastAckState::new(self.common, self.connection);
+            return (new_state.into(), Ok(()));
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1708,7 +1861,7 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         if self.connection.send_buf_has_space() {
             poll_state.insert(PollState::WRITABLE);
@@ -1756,6 +1909,18 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
         };
 
         (new_state, Ok(()))
+    }
+
+    fn shutdown(mut self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if how == Shutdown::Read || how == Shutdown::Both {
+            self.connection.send_rst_if_recv_payload()
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing (passive close)
+        }
+
+        (self.into(), Ok(()))
     }
 
     fn connect<T, E>(
@@ -1814,7 +1979,8 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
         // if received ACK, move to the "closed" state
         if self.connection.fin_was_acked() {
             let recv_buffer = self.connection.into_recv_buffer();
-            let new_state = ClosedState::new(self.common, recv_buffer);
+            let new_state =
+                ClosedState::new(self.common, recv_buffer, /* was_connected= */ true);
             return (new_state.into(), Ok(()));
         }
 
@@ -1836,7 +2002,7 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::ESTABLISHED;
+        let mut poll_state = PollState::CONNECTED;
 
         // we've received a FIN
         poll_state.insert(PollState::RECV_CLOSED);
@@ -1866,13 +2032,14 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
 
 impl<X: Dependencies> RstState<X> {
     /// All packets must contain `TcpFlags::RST`.
-    fn new(common: Common<X>, rst_packets: LinkedList<TcpHeader>) -> Self {
+    fn new(common: Common<X>, rst_packets: LinkedList<TcpHeader>, was_connected: bool) -> Self {
         debug_assert!(rst_packets.iter().all(|x| x.flags.contains(TcpFlags::RST)));
         assert!(!rst_packets.is_empty());
 
         Self {
             common,
             send_buffer: rst_packets,
+            was_connected,
         }
     }
 }
@@ -1883,24 +2050,50 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
         (self.into(), Ok(()))
     }
 
+    fn shutdown(self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if !self.was_connected {
+            return (self.into(), Err(ShutdownError::NotConnected));
+        }
+
+        if how == Shutdown::Read || how == Shutdown::Both {
+            // we've been reset, so nothing to do
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing; do nothing
+        }
+
+        // TODO: should we return an error or do nothing?
+
+        (self.into(), Ok(()))
+    }
+
     fn connect<T, E>(
         self,
         _remote_addr: SocketAddrV4,
         _associate_fn: impl FnOnce() -> Result<(SocketAddrV4, T), E>,
     ) -> (TcpStateEnum<X>, Result<T, ConnectError<E>>) {
-        // TODO: what should we return here if we weren't actually connected? (for example went from
-        // state "listen" to here?
-        (self.into(), Err(ConnectError::AlreadyConnected))
+        if self.was_connected {
+            (self.into(), Err(ConnectError::AlreadyConnected))
+        } else {
+            (self.into(), Err(ConnectError::InvalidState))
+        }
     }
 
     fn send(self, _reader: impl Read, _len: usize) -> (TcpStateEnum<X>, Result<usize, SendError>) {
-        (self.into(), Err(SendError::StreamClosed))
+        if self.was_connected {
+            (self.into(), Err(SendError::StreamClosed))
+        } else {
+            (self.into(), Err(SendError::NotConnected))
+        }
     }
 
     fn recv(self, _writer: impl Write, _len: usize) -> (TcpStateEnum<X>, Result<usize, RecvError>) {
-        // TODO: we should also have a copy of the receive buffer and allow the application to
-        // continue reading data
-        (self.into(), Err(RecvError::InvalidState))
+        if self.was_connected {
+            (self.into(), Err(RecvError::StreamClosed))
+        } else {
+            (self.into(), Err(RecvError::NotConnected))
+        }
     }
 
     fn push_packet(
@@ -1927,7 +2120,11 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
 
         // if we have no more packets to send
         if self.send_buffer.is_empty() {
-            let new_state = ClosedState::new(self.common, None);
+            let new_state = ClosedState::new(
+                self.common,
+                None,
+                /* was_connected= */ self.was_connected,
+            );
             return (new_state.into(), Ok(packet));
         }
 
@@ -1939,11 +2136,14 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
     }
 
     fn poll(&self) -> PollState {
-        // TODO: add ESTABLISHED if was previously in the "established" state
         let mut poll_state = PollState::RECV_CLOSED | PollState::SEND_CLOSED;
 
         if self.common.error.is_some() {
             poll_state.insert(PollState::ERROR);
+        }
+
+        if self.was_connected {
+            poll_state.insert(PollState::CONNECTED);
         }
 
         poll_state
@@ -1961,12 +2161,17 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
 }
 
 impl<X: Dependencies> ClosedState<X> {
-    fn new(common: Common<X>, recv_buffer: Option<RecvQueue>) -> Self {
+    fn new(common: Common<X>, recv_buffer: Option<RecvQueue>, was_connected: bool) -> Self {
         let recv_buffer = recv_buffer.unwrap_or_else(|| RecvQueue::new(Seq::new(0)));
+
+        if !was_connected {
+            assert!(recv_buffer.is_empty());
+        }
 
         Self {
             common,
             recv_buffer,
+            was_connected,
         }
     }
 }
@@ -1977,17 +2182,41 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosedState<X> {
         (self.into(), Ok(()))
     }
 
+    fn shutdown(self, how: Shutdown) -> (TcpStateEnum<X>, Result<(), ShutdownError>) {
+        if !self.was_connected {
+            return (self.into(), Err(ShutdownError::NotConnected));
+        }
+
+        if how == Shutdown::Read || how == Shutdown::Both {
+            // we've been reset, so nothing to do
+        }
+
+        if how == Shutdown::Write || how == Shutdown::Both {
+            // we're already in the process of closing; do nothing
+        }
+
+        // TODO: should we return an error or do nothing?
+
+        (self.into(), Ok(()))
+    }
+
     fn connect<T, E>(
         self,
         _remote_addr: SocketAddrV4,
         _associate_fn: impl FnOnce() -> Result<(SocketAddrV4, T), E>,
     ) -> (TcpStateEnum<X>, Result<T, ConnectError<E>>) {
-        // TODO: what should we return here if we weren't actually connected? (for example went from
-        // state "listen" to here?
-        (self.into(), Err(ConnectError::AlreadyConnected))
+        if self.was_connected {
+            (self.into(), Err(ConnectError::AlreadyConnected))
+        } else {
+            (self.into(), Err(ConnectError::InvalidState))
+        }
     }
 
     fn send(self, _reader: impl Read, _len: usize) -> (TcpStateEnum<X>, Result<usize, SendError>) {
+        if !self.was_connected {
+            return (self.into(), Err(SendError::NotConnected));
+        }
+
         (self.into(), Err(SendError::StreamClosed))
     }
 
@@ -1996,6 +2225,10 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosedState<X> {
         writer: impl Write,
         len: usize,
     ) -> (TcpStateEnum<X>, Result<usize, RecvError>) {
+        if !self.was_connected {
+            return (self.into(), Err(RecvError::NotConnected));
+        }
+
         if self.recv_buffer.is_empty() {
             return (self.into(), Err(RecvError::StreamClosed));
         }
@@ -2010,8 +2243,19 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosedState<X> {
     }
 
     fn poll(&self) -> PollState {
-        // TODO: add ESTABLISHED if was previously in the "established" state
-        let mut poll_state = PollState::RECV_CLOSED | PollState::SEND_CLOSED | PollState::CLOSED;
+        let mut poll_state = PollState::CLOSED;
+
+        poll_state.insert(PollState::RECV_CLOSED);
+        if !self.recv_buffer.is_empty() {
+            poll_state.insert(PollState::READABLE);
+        }
+
+        poll_state.insert(PollState::SEND_CLOSED);
+        assert!(!poll_state.contains(PollState::WRITABLE));
+
+        if self.was_connected {
+            poll_state.insert(PollState::CONNECTED);
+        }
 
         if self.common.error.is_some() {
             poll_state.insert(PollState::ERROR);
@@ -2065,9 +2309,9 @@ fn connection_was_reset<X: Dependencies>(
         common.set_error_if_unset(TcpError::ResetSent);
 
         let rst_packets = [header].into_iter().collect();
-        RstState::new(common, rst_packets).into()
+        RstState::new(common, rst_packets, /* was_connected= */ true).into()
     } else {
         // the receive buffer is cleared when a connection is reset, which is why we pass `None`
-        ClosedState::new(common, None).into()
+        ClosedState::new(common, None, /* was_connected= */ true).into()
     }
 }
