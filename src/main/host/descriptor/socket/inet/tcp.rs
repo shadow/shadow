@@ -894,6 +894,15 @@ impl TcpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_ACCEPTCONN) => {
+                let is_listener = self.tcp_state.poll().contains(tcp::PollState::LISTENING);
+                let is_listener = is_listener as libc::c_int;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &is_listener, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             _ => {
                 log::warn!("getsockopt called with unsupported level {level} and opt {optname}");
                 Err(Errno::ENOPROTOOPT.into())
