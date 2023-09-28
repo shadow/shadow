@@ -455,6 +455,12 @@ jobs:
           # if we need to build C code, we want to do so with the default compiler
           unset CC
           cd shadow
+
+          # We install some dependencies in ~/.local/bin.
+          # Put it on the path to faciliate checking if a dependency is already
+          # installed.
+          PATH="$PATH:$HOME/.local/bin"
+
           # dependencies for examples
           ./examples/apps/curl/install_deps.sh
           ./examples/apps/etcd/install_deps.sh
@@ -464,6 +470,7 @@ jobs:
           ./examples/apps/wget2/install_deps.sh
           ./examples/docs/basic-file-transfer/install_deps.sh
           ./examples/docs/traffic-generation/install_deps.sh
+          ./examples/docs/tor/install_deps.sh
 
       - name: Install setup script dependencies
         run: apt-get install -y cmake

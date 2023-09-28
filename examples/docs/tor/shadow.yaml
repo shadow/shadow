@@ -1,0 +1,109 @@
+general:
+  stop_time: 30 min
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          host_bandwidth_down "1 Gbit"
+          host_bandwidth_up "1 Gbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "50 ms"
+          jitter "0 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  fileserver:
+    network_node_id: 0
+    processes:
+    - path: tgen
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
+      environment: { OPENBLAS_NUM_THREADS: "1" }
+      args: ../../../conf/tgen.server.graphml.xml
+      start_time: 1
+      expected_final_state: running
+  4uthority:
+    network_node_id: 0
+    ip_addr: 100.0.0.1
+    processes:
+    - path: tor
+      args: --Address 4uthority --Nickname 4uthority
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 1
+      expected_final_state: running
+  exit1:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address exit1 --Nickname exit1
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  exit2:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address exit2 --Nickname exit2
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  relay1:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay1 --Nickname relay1
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  relay2:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay2 --Nickname relay2
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  relay3:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay3 --Nickname relay3
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  relay4:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address relay4 --Nickname relay4
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 60
+      expected_final_state: running
+  client:
+    network_node_id: 0
+    processes:
+    - path: tgen
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
+      environment: { OPENBLAS_NUM_THREADS: "1" }
+      args: ../../../conf/tgen.client.graphml.xml
+      start_time: 600
+  torclient:
+    network_node_id: 0
+    processes:
+    - path: tor
+      args: --Address torclient --Nickname torclient
+            --defaults-torrc torrc-defaults -f torrc
+      start_time: 900
+      expected_final_state: running
+    - path: tgen
+      # See https://shadow.github.io/docs/guide/compatibility_notes.html#libopenblas
+      environment: { OPENBLAS_NUM_THREADS: "1" }
+      args: ../../../conf/tgen.torclient.graphml.xml
+      start_time: 1500

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-apt-get install -y cmake libglib2.0-dev libigraph-dev git
+apt-get install -y cmake libglib2.0-dev libigraph-dev git tor
 
 if type tgen; then
     echo tgen already installed
