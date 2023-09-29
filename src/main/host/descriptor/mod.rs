@@ -377,7 +377,7 @@ impl std::fmt::Debug for File {
                 f,
                 "(state: {:?}, status: {:?})",
                 file.state(),
-                file.get_status()
+                file.status()
             )
         } else {
             write!(f, "(already borrowed)")
@@ -409,7 +409,7 @@ impl FileRef<'_> {
         pub fn mode(&self) -> FileMode
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
-        pub fn get_status(&self) -> FileStatus
+        pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool
@@ -427,7 +427,7 @@ impl FileRefMut<'_> {
         pub fn mode(&self) -> FileMode
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
-        pub fn get_status(&self) -> FileStatus
+        pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool
@@ -485,7 +485,7 @@ impl std::fmt::Debug for FileRef<'_> {
             f,
             "(state: {:?}, status: {:?})",
             self.state(),
-            self.get_status()
+            self.status()
         )
     }
 }
@@ -504,7 +504,7 @@ impl std::fmt::Debug for FileRefMut<'_> {
             f,
             "(state: {:?}, status: {:?})",
             self.state(),
-            self.get_status()
+            self.status()
         )
     }
 }

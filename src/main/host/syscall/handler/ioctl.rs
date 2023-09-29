@@ -76,7 +76,7 @@ impl SyscallHandler {
             let arg_ptr = arg_ptr.cast::<std::ffi::c_int>();
             let arg = ctx.objs.process.memory_borrow_mut().read(arg_ptr)?;
 
-            let mut status = file.get_status();
+            let mut status = file.status();
             status.set(FileStatus::NONBLOCK, arg != 0);
             file.set_status(status);
 

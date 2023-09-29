@@ -63,7 +63,7 @@ impl Epoll {
         Arc::new(AtomicRefCell::new(epoll))
     }
 
-    pub fn get_status(&self) -> FileStatus {
+    pub fn status(&self) -> FileStatus {
         self.status
     }
 

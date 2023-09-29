@@ -51,7 +51,7 @@ impl Pipe {
         }
     }
 
-    pub fn get_status(&self) -> FileStatus {
+    pub fn status(&self) -> FileStatus {
         self.status
     }
 

@@ -66,7 +66,7 @@ impl SyscallHandler {
 
                 let file = file.inner_file().borrow();
                 // combine the file status and access mode flags
-                let flags = file.get_status().as_o_flags() | file.mode().as_o_flags();
+                let flags = file.status().as_o_flags() | file.mode().as_o_flags();
                 SysCallReg::from(flags.bits())
             }
             FcntlCommand::F_SETFL => {
@@ -96,7 +96,7 @@ impl SyscallHandler {
                 );
 
                 let mut file = file.inner_file().borrow_mut();
-                let old_flags = file.get_status().as_o_flags();
+                let old_flags = file.status().as_o_flags();
 
                 // fcntl(2): "On Linux, this command can change only the O_APPEND, O_ASYNC, O_DIRECT,
                 // O_NOATIME, and O_NONBLOCK flags"

@@ -248,7 +248,7 @@ impl SyscallHandler {
             return Ok(return_val);
         }
 
-        let file_status = file.borrow().get_status();
+        let file_status = file.borrow().status();
 
         let result =
             // call the file's read(), and run any resulting events
@@ -507,7 +507,7 @@ impl SyscallHandler {
             return Ok(bytes_written);
         }
 
-        let file_status = file.borrow().get_status();
+        let file_status = file.borrow().status();
 
         let result =
             // call the file's write(), and run any resulting events
