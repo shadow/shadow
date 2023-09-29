@@ -921,21 +921,29 @@ impl UdpSocket {
                     .set_soft_limit_bytes(val.try_into().unwrap());
             }
             (libc::SOL_SOCKET, libc::SO_REUSEADDR) => {
-                // TODO: implement this, tor and tgen use it
-                log::warn!("setsockopt SO_REUSEADDR not yet implemented");
+                // TODO: implement this
+                warn_once_then_debug!(
+                    "(LOG_ONCE) setsockopt SO_REUSEADDR not yet implemented for udp"
+                );
+                return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_REUSEPORT) => {
-                // TODO: implement this, tgen uses it
-                log::warn!("setsockopt SO_REUSEPORT not yet implemented");
+                // TODO: implement this
+                warn_once_then_debug!(
+                    "(LOG_ONCE) setsockopt SO_REUSEPORT not yet implemented for udp"
+                );
+                return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_KEEPALIVE) => {
-                // TODO: implement this, libevent uses it in
-                // evconnlistener_new_bind()
-                log::warn!("setsockopt SO_KEEPALIVE not yet implemented");
+                // TODO: implement this
+                warn_once_then_debug!(
+                    "(LOG_ONCE) setsockopt SO_KEEPALIVE not yet implemented for udp"
+                );
+                return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_BROADCAST) => {
                 // TODO: implement this, pkg.go.dev/net uses it
-                log::warn!("setsockopt SO_BROADCAST not yet implemented");
+                warn_once_then_debug!("(LOG_ONCE) setsockopt SO_BROADCAST not yet implemented for udp; ignoring and returning 0");
             }
             _ => {
                 log::debug!("setsockopt called with unsupported level {level} and opt {optname}");
