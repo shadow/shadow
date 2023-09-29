@@ -708,7 +708,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
     }
 
     fn poll(&self) -> PollState {
-        let mut poll_state = PollState::empty();
+        let mut poll_state = PollState::LISTENING;
 
         if !self.accept_queue.is_empty() {
             poll_state.insert(PollState::READY_TO_ACCEPT);

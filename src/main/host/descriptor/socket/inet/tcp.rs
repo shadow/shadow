@@ -850,14 +850,26 @@ impl TcpSocket {
     }
 
     pub fn getsockopt(
-        &self,
+        &mut self,
         level: libc::c_int,
         optname: libc::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         mem: &mut MemoryManager,
+        cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
         match (level, optname) {
+            (libc::SOL_SOCKET, libc::SO_ERROR) => {
+                // may update the socket's state (for example, reading `SO_ERROR` will make `poll()`
+                // stop returning `POLLERR` for the socket)
+                let error = self.with_tcp_state(cb_queue, |state| state.clear_error());
+                let error = error.map(tcp_error_to_errno).map(Into::into).unwrap_or(0);
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &error, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, libc::SO_DOMAIN) => {
                 let domain = libc::AF_INET;
 
@@ -879,6 +891,15 @@ impl TcpSocket {
 
                 let optval_ptr = optval_ptr.cast::<libc::c_int>();
                 let bytes_written = write_partial(mem, &protocol, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
+            (libc::SOL_SOCKET, libc::SO_ACCEPTCONN) => {
+                let is_listener = self.tcp_state.poll().contains(tcp::PollState::LISTENING);
+                let is_listener = is_listener as libc::c_int;
+
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &is_listener, optval_ptr, optlen as usize)?;
 
                 Ok(bytes_written as libc::socklen_t)
             }

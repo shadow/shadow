@@ -970,6 +970,7 @@ impl LegacyTcpSocket {
         optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
         memory_manager: &mut MemoryManager,
+        _cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
         match (level, optname) {
             (libc::SOL_TCP, libc::TCP_INFO) => {

@@ -612,21 +612,23 @@ bitflags::bitflags! {
         /// - TCP was `shutdown()` for writing.
         /// - TCP was closed.
         const SEND_CLOSED = 1 << 4;
+        /// Is listening for new connections.
+        const LISTENING = 1 << 5;
         /// A listening socket has a new incoming connection that can be accepted.
-        const READY_TO_ACCEPT = 1 << 5;
+        const READY_TO_ACCEPT = 1 << 6;
         /// Connection is in the process of opening. More specifically this means that it is in
         /// either the "syn-sent" or "syn-received" states.
-        const CONNECTING = 1 << 6;
+        const CONNECTING = 1 << 7;
         /// A connection has previously been attempted and was either successful or unsuccessful (it
         /// may or may not have reached the "established" state). The connection may be established,
         /// timed out, closing, half-closed, closed, etc. This does not include connection attempts
         /// that are in progress ("syn-sent" or "syn-received" states).
-        const CONNECTED = 1 << 7;
+        const CONNECTED = 1 << 8;
         /// TCP is fully closed (in the "closed" state). This may not be set immediately after a
         /// `close()` call, for example if `close()` was called while in the "established" state,
         /// and now is in the "fin-wait-1" state. This does not include the initial state (we don't
         /// consider a new TCP to be "closed").
-        const CLOSED = 1 << 8;
+        const CLOSED = 1 << 9;
     }
 }
 
