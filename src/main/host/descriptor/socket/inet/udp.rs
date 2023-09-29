@@ -78,7 +78,7 @@ impl UdpSocket {
         Arc::new(AtomicRefCell::new(socket))
     }
 
-    pub fn get_status(&self) -> FileStatus {
+    pub fn status(&self) -> FileStatus {
         self.status
     }
 
@@ -354,7 +354,7 @@ impl UdpSocket {
             },
         };
 
-        if socket_ref.get_status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -484,7 +484,7 @@ impl UdpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.get_status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 

@@ -697,7 +697,7 @@ impl SyscallHandler {
             })
         });
 
-        let file_status = socket.borrow().get_status();
+        let file_status = socket.borrow().status();
 
         // if the syscall would block and it's a blocking descriptor
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())

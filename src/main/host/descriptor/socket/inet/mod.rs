@@ -184,7 +184,7 @@ impl std::fmt::Debug for InetSocket {
                 f,
                 "(state: {:?}, status: {:?})",
                 file.state(),
-                file.get_status()
+                file.status()
             )
         } else {
             write!(f, "(already borrowed)")
@@ -213,7 +213,7 @@ impl InetSocketRef<'_> {
         pub fn mode(&self) -> FileMode
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
-        pub fn get_status(&self) -> FileStatus
+        pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
@@ -265,7 +265,7 @@ impl InetSocketRefMut<'_> {
         pub fn mode(&self) -> FileMode
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
-        pub fn get_status(&self) -> FileStatus
+        pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
@@ -389,7 +389,7 @@ impl std::fmt::Debug for InetSocketRef<'_> {
             f,
             "(state: {:?}, status: {:?})",
             self.state(),
-            self.get_status()
+            self.status()
         )
     }
 }
@@ -406,7 +406,7 @@ impl std::fmt::Debug for InetSocketRefMut<'_> {
             f,
             "(state: {:?}, status: {:?})",
             self.state(),
-            self.get_status()
+            self.status()
         )
     }
 }
