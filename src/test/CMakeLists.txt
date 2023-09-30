@@ -153,6 +153,7 @@ endmacro()
 ## === end test helper macros ===
 
 add_subdirectory(bindc)
+add_subdirectory(capabilities)
 add_subdirectory(cli)
 add_subdirectory(clone)
 add_subdirectory(compressed-graph)
