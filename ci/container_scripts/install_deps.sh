@@ -8,7 +8,9 @@ APT_PACKAGES=(
   cmake
   findutils
   golang-go
+  iproute2
   libc-dbg
+  libcap-dev
   libglib2.0-0
   libglib2.0-dev
   make
@@ -48,6 +50,8 @@ RPM_PACKAGES=(
   glib2
   glib2-devel
   golang
+  iproute
+  libcap-devel
   make
   pkg-config
   python3
