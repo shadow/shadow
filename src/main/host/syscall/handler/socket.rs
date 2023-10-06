@@ -374,7 +374,6 @@ impl SyscallHandler {
         } = result?;
 
         if !addr_ptr.is_null() {
-            let addr_ptr = addr_ptr;
             io::write_sockaddr_and_len(&mut mem, from_addr.as_ref(), addr_ptr, addr_len_ptr)?;
         }
 

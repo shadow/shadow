@@ -228,7 +228,6 @@ impl ByteQueue {
                 break;
             }
 
-            let copied = copied;
             self.length -= copied;
             total_copied += copied;
 
