@@ -22,7 +22,7 @@ bytemuck = "1.14.0"
 linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
-linux-raw-sys = "0.5.2"
+linux-raw-sys = "0.6.0"
 rustix = { optional=true, version = "0.38.14", default-features=false, features = ["process"] }
 
 [dev-dependencies]
