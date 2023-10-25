@@ -30,4 +30,4 @@ rustix = { version = "0.38.14", default-features=false, features = ["thread", "p
 
 [build-dependencies]
 shadow-build-common = { path = "../shadow-build-common" }
-cbindgen = { version = "0.26.0" }
+cbindgen = { version = "0.26.0", default_features = false }
