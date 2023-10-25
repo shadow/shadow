@@ -45,7 +45,7 @@ unsafe fn align_down(ptr: *mut u8, align: usize) -> *mut u8 {
 /// stack and instruction pointers must be valid, and other register values must
 /// correspond to "sound" values of whatever state they correspond to at that
 /// instruction pointer.
-unsafe extern "C" fn set_context(ctx: &sigcontext) -> ! {
+unsafe extern "C-unwind" fn set_context(ctx: &sigcontext) -> ! {
     // These offsets are hard-coded into the asm format string below.
     // TODO: turn these into const parameters to the asm block when const
     // asm parameters are stabilized.
@@ -104,14 +104,14 @@ unsafe extern "C" fn set_context(ctx: &sigcontext) -> ! {
     };
 }
 
-/// `extern "C"` wrapper for `crate::tls_ipc::set`, which we can call from
+/// `extern "C-unwind"` wrapper for `crate::tls_ipc::set`, which we can call from
 /// assembly.
 ///
 /// # Safety
 ///
 /// `blk` must contained a serialized block of
 /// type `IPCData`, which outlives the current thread.
-unsafe extern "C" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
+unsafe extern "C-unwind" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
     let blk = unsafe { blk.as_ref().unwrap() };
     let prev = crate::tls_allow_native_syscalls::swap(true);
 

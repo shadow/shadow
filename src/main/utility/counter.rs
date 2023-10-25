@@ -209,12 +209,12 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn counter_new() -> *mut Counter {
+    pub extern "C-unwind" fn counter_new() -> *mut Counter {
         Box::into_raw(Box::new(Counter::new()))
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_free(counter_ptr: *mut Counter) {
+    pub extern "C-unwind" fn counter_free(counter_ptr: *mut Counter) {
         if counter_ptr.is_null() {
             return;
         }
@@ -222,7 +222,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_add_value(
+    pub extern "C-unwind" fn counter_add_value(
         counter: *mut Counter,
         id: *const c_char,
         value: i64,
@@ -237,7 +237,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_sub_value(
+    pub extern "C-unwind" fn counter_sub_value(
         counter: *mut Counter,
         id: *const c_char,
         value: i64,
@@ -252,7 +252,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_add_counter(counter: *mut Counter, other: *const Counter) {
+    pub extern "C-unwind" fn counter_add_counter(counter: *mut Counter, other: *const Counter) {
         assert!(!counter.is_null());
         assert!(!other.is_null());
 
@@ -263,7 +263,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_sub_counter(counter: *mut Counter, other: *const Counter) {
+    pub extern "C-unwind" fn counter_sub_counter(counter: *mut Counter, other: *const Counter) {
         assert!(!counter.is_null());
         assert!(!other.is_null());
 
@@ -274,7 +274,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn counter_equals_counter(
+    pub extern "C-unwind" fn counter_equals_counter(
         counter: *const Counter,
         other: *const Counter,
     ) -> bool {
@@ -290,7 +290,7 @@ mod export {
     /// Creates a new string representation of the counter, e.g., for logging.
     /// The returned string must be free'd by passing it to counter_free_string.
     #[no_mangle]
-    pub extern "C" fn counter_alloc_string(counter: *mut Counter) -> *mut c_char {
+    pub extern "C-unwind" fn counter_alloc_string(counter: *mut Counter) -> *mut c_char {
         assert!(!counter.is_null());
 
         let counter = unsafe { &mut *counter };
@@ -302,7 +302,7 @@ mod export {
 
     /// Frees a string previously returned from counter_alloc_string.
     #[no_mangle]
-    pub extern "C" fn counter_free_string(counter: *mut Counter, ptr: *mut c_char) {
+    pub extern "C-unwind" fn counter_free_string(counter: *mut Counter, ptr: *mut c_char) {
         assert!(!counter.is_null());
         assert!(!ptr.is_null());
         // Free the previously alloc'd string

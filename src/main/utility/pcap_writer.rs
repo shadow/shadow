@@ -158,7 +158,7 @@ mod export {
     /// A new packet capture writer. Each packet (header and payload) captured will be truncated to
     /// a length `capture_len`.
     #[no_mangle]
-    pub extern "C" fn pcapwriter_new(
+    pub extern "C-unwind" fn pcapwriter_new(
         path: *const libc::c_char,
         capture_len: u32,
     ) -> *mut PcapWriter<BufWriter<File>> {
@@ -177,7 +177,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn pcapwriter_free(pcap: *mut PcapWriter<BufWriter<File>>) {
+    pub extern "C-unwind" fn pcapwriter_free(pcap: *mut PcapWriter<BufWriter<File>>) {
         if pcap.is_null() {
             return;
         }
@@ -187,7 +187,7 @@ mod export {
     /// If there's an error, returns 1. Otherwise returns 0. If there's an error, the pcap file is
     /// likely to be corrupt.
     #[no_mangle]
-    pub extern "C" fn pcapwriter_writePacket(
+    pub extern "C-unwind" fn pcapwriter_writePacket(
         pcap: *mut PcapWriter<BufWriter<File>>,
         ts_sec: u32,
         ts_usec: u32,

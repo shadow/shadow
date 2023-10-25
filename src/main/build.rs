@@ -311,6 +311,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         //# don't generate rust bindings for c bindings of rust code)
         .blocklist_file(".*/bindings-opaque.h")
         .blocklist_file(".*/bindings.h")
+        // shadow's C functions may call rust functions that do unwind, so I think we need this
+        .override_abi(bindgen::Abi::CUnwind, ".*")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

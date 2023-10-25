@@ -19,7 +19,7 @@ use log::log_enabled;
 
 /// Flush Rust's log::logger().
 #[no_mangle]
-pub extern "C" fn rustlogger_flush() {
+pub extern "C-unwind" fn rustlogger_flush() {
     log::logger().flush();
 }
 
@@ -53,7 +53,7 @@ pub fn c_to_rust_log_level(level: logger::LogLevel) -> Option<log::Level> {
 
 /// Whether logging is currently enabled for `level`.
 #[no_mangle]
-pub extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
+pub extern "C-unwind" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
     let level = c_to_rust_log_level(level).unwrap();
     log_enabled!(level).into()
 }
@@ -65,7 +65,7 @@ pub extern "C" fn rustlogger_isEnabled(level: logger::LogLevel) -> c_int {
 /// Pointer args must be safely dereferenceable. `format` and `args` must
 /// follow the rules of `sprintf(3)`.
 #[no_mangle]
-pub unsafe extern "C" fn rustlogger_log(
+pub unsafe extern "C-unwind" fn rustlogger_log(
     level: logger::LogLevel,
     file_name: *const c_char,
     fn_name: *const c_char,

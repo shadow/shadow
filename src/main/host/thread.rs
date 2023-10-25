@@ -614,7 +614,7 @@ mod export {
     // with arguments `Thread* thread, long n, ...`. We manually generate that declartion
     // in our bindings.
     #[no_mangle]
-    unsafe extern "C" fn thread_nativeSyscall(
+    unsafe extern "C-unwind" fn thread_nativeSyscall(
         thread: *const Thread,
         n: libc::c_long,
         arg1: SysCallReg,
@@ -639,7 +639,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getID(thread: *const Thread) -> libc::pid_t {
+    pub unsafe extern "C-unwind" fn thread_getID(thread: *const Thread) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.id().into()
     }
@@ -647,14 +647,19 @@ mod export {
     /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
     /// will perform a futex-wake operation on the given address on termination.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_setTidAddress(thread: *const Thread, addr: UntypedForeignPtr) {
+    pub unsafe extern "C-unwind" fn thread_setTidAddress(
+        thread: *const Thread,
+        addr: UntypedForeignPtr,
+    ) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.set_tid_address(addr.cast::<libc::pid_t>());
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getTidAddress(thread: *const Thread) -> UntypedForeignPtr {
+    pub unsafe extern "C-unwind" fn thread_getTidAddress(
+        thread: *const Thread,
+    ) -> UntypedForeignPtr {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.get_tid_address().cast::<()>()
     }
@@ -662,13 +667,15 @@ mod export {
     /// Returns a typed pointer to memory shared with the shim (which is backed by
     /// the block returned by thread_getShMBlock).
     #[no_mangle]
-    pub unsafe extern "C" fn thread_sharedMem(thread: *const Thread) -> *const ShimShmemThread {
+    pub unsafe extern "C-unwind" fn thread_sharedMem(
+        thread: *const Thread,
+    ) -> *const ShimShmemThread {
         let thread = unsafe { thread.as_ref().unwrap() };
         &*thread.shim_shared_memory
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getProcess(thread: *const Thread) -> *const Process {
+    pub unsafe extern "C-unwind" fn thread_getProcess(thread: *const Thread) -> *const Process {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let process = host.process_borrow(thread.process_id).unwrap();
@@ -679,7 +686,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getHost(thread: *const Thread) -> *const Host {
+    pub unsafe extern "C-unwind" fn thread_getHost(thread: *const Thread) -> *const Host {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             assert_eq!(host.id(), thread.host_id());
@@ -690,7 +697,7 @@ mod export {
 
     /// Get the syscallhandler for this thread.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getSysCallHandler(
+    pub unsafe extern "C-unwind" fn thread_getSysCallHandler(
         thread: *const Thread,
     ) -> *mut c::SysCallHandler {
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -698,7 +705,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getSysCallCondition(
+    pub unsafe extern "C-unwind" fn thread_getSysCallCondition(
         thread: *const Thread,
     ) -> *mut c::SysCallCondition {
         let thread = unsafe { thread.as_ref().unwrap() };
@@ -706,7 +713,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn thread_clearSysCallCondition(thread: *const Thread) {
+    pub unsafe extern "C-unwind" fn thread_clearSysCallCondition(thread: *const Thread) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.cleanup_syscall_condition();
     }
@@ -714,7 +721,7 @@ mod export {
     /// Returns true iff there is an unblocked, unignored signal pending for this
     /// thread (or its process).
     #[no_mangle]
-    pub unsafe extern "C" fn thread_unblockedSignalPending(
+    pub unsafe extern "C-unwind" fn thread_unblockedSignalPending(
         thread: *const Thread,
         host_lock: *const ShimShmemHostLock,
     ) -> bool {
@@ -732,7 +739,7 @@ mod export {
     /// Register a `Descriptor`. This takes ownership of the descriptor and you must not access it
     /// after.
     #[no_mangle]
-    pub extern "C" fn thread_registerDescriptor(
+    pub extern "C-unwind" fn thread_registerDescriptor(
         thread: *const Thread,
         desc: *mut Descriptor,
     ) -> libc::c_int {
@@ -751,7 +758,7 @@ mod export {
 
     /// Get a temporary reference to a descriptor.
     #[no_mangle]
-    pub extern "C" fn thread_getRegisteredDescriptor(
+    pub extern "C-unwind" fn thread_getRegisteredDescriptor(
         thread: *const Thread,
         handle: libc::c_int,
     ) -> *const Descriptor {
@@ -776,7 +783,7 @@ mod export {
 
     /// Get a temporary mutable reference to a descriptor.
     #[no_mangle]
-    pub extern "C" fn thread_getRegisteredDescriptorMut(
+    pub extern "C-unwind" fn thread_getRegisteredDescriptorMut(
         thread: *const Thread,
         handle: libc::c_int,
     ) -> *mut Descriptor {
@@ -801,7 +808,7 @@ mod export {
 
     /// Get a temporary reference to a legacy file.
     #[no_mangle]
-    pub unsafe extern "C" fn thread_getRegisteredLegacyFile(
+    pub unsafe extern "C-unwind" fn thread_getRegisteredLegacyFile(
         thread: *const Thread,
         handle: libc::c_int,
     ) -> *mut c::LegacyFile {

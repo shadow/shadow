@@ -790,7 +790,7 @@ mod export {
     /// # Safety
     /// * `thread` must point to a valid object.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_new(pid: libc::pid_t) -> *mut MemoryManager {
+    pub unsafe extern "C-unwind" fn memorymanager_new(pid: libc::pid_t) -> *mut MemoryManager {
         Box::into_raw(Box::new(unsafe {
             MemoryManager::new(nix::unistd::Pid::from_raw(pid))
         }))
@@ -799,12 +799,12 @@ mod export {
     /// # Safety
     /// * `mm` must point to a valid object.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_free(mm: *mut MemoryManager) {
+    pub unsafe extern "C-unwind" fn memorymanager_free(mm: *mut MemoryManager) {
         unsafe { mm.as_mut().map(|mm| Box::from_raw(notnull_mut_debug(mm))) };
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_new(
+    pub unsafe extern "C-unwind" fn allocdmem_new(
         thread: *const Thread,
         len: usize,
     ) -> *mut AllocdMem<u8> {
@@ -817,7 +817,10 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_free(thread: *const Thread, allocd_mem: *mut AllocdMem<u8>) {
+    pub unsafe extern "C-unwind" fn allocdmem_free(
+        thread: *const Thread,
+        allocd_mem: *mut AllocdMem<u8>,
+    ) {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let allocd_mem = unsafe { Box::from_raw(notnull_mut_debug(allocd_mem)) };
@@ -830,40 +833,42 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn allocdmem_foreignPtr(
+    pub unsafe extern "C-unwind" fn allocdmem_foreignPtr(
         allocd_mem: *const AllocdMem<u8>,
     ) -> UntypedForeignPtr {
         unsafe { allocd_mem.as_ref().unwrap().ptr().ptr().cast::<()>() }
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeRef(memory_ref: *mut ProcessMemoryRef<'_, u8>) {
+    pub unsafe extern "C-unwind" fn memorymanager_freeRef(
+        memory_ref: *mut ProcessMemoryRef<'_, u8>,
+    ) {
         drop(unsafe { Box::from_raw(notnull_mut_debug(memory_ref)) });
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagerref_ptr(
+    pub unsafe extern "C-unwind" fn memorymanagerref_ptr(
         memory_ref: *const ProcessMemoryRef<'_, u8>,
     ) -> *const c_void {
         unsafe { memory_ref.as_ref() }.unwrap().as_ptr() as *const c_void
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagerref_sizeof(
+    pub unsafe extern "C-unwind" fn memorymanagerref_sizeof(
         memory_ref: *const ProcessMemoryRef<'_, u8>,
     ) -> libc::size_t {
         unsafe { memory_ref.as_ref() }.unwrap().len()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagermut_ptr(
+    pub unsafe extern "C-unwind" fn memorymanagermut_ptr(
         memory_ref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> *mut c_void {
         unsafe { memory_ref.as_ref() }.unwrap().as_ptr() as *mut c_void
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanagermut_sizeof(
+    pub unsafe extern "C-unwind" fn memorymanagermut_sizeof(
         memory_ref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> libc::size_t {
         unsafe { memory_ref.as_ref() }.unwrap().len()
@@ -872,7 +877,7 @@ mod export {
     /// Write-back any previously returned writable memory, and free the writer.
     /// Returns 0 on success or a negative errno on failure.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeMutRefWithFlush(
+    pub unsafe extern "C-unwind" fn memorymanager_freeMutRefWithFlush(
         mref: *mut ProcessMemoryRefMut<'_, u8>,
     ) -> i32 {
         let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
@@ -888,7 +893,7 @@ mod export {
 
     /// Write-back any previously returned writable memory, and free the writer.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_freeMutRefWithoutFlush(
+    pub unsafe extern "C-unwind" fn memorymanager_freeMutRefWithoutFlush(
         mref: *mut ProcessMemoryRefMut<'_, u8>,
     ) {
         let mref = unsafe { Box::from_raw(notnull_mut_debug(mref)) };
@@ -899,7 +904,7 @@ mod export {
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
-    pub extern "C" fn memorymanager_readPtr(
+    pub extern "C-unwind" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
         src: UntypedForeignPtr,
@@ -921,7 +926,7 @@ mod export {
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
-    pub unsafe extern "C" fn memorymanager_writePtr(
+    pub unsafe extern "C-unwind" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
         dst: UntypedForeignPtr,
         src: *const c_void,

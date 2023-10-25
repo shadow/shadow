@@ -1602,14 +1602,14 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn config_getUseSyscallCounters(config: *const ConfigOptions) -> bool {
+    pub extern "C-unwind" fn config_getUseSyscallCounters(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_syscall_counters.unwrap()
     }
 
     #[no_mangle]
-    pub extern "C" fn config_getUseMemoryManager(config: *const ConfigOptions) -> bool {
+    pub extern "C-unwind" fn config_getUseMemoryManager(config: *const ConfigOptions) -> bool {
         assert!(!config.is_null());
         let config = unsafe { &*config };
         config.experimental.use_memory_manager.unwrap()

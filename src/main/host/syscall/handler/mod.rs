@@ -27,7 +27,7 @@ mod unistd;
 mod wait;
 
 type LegacySyscallFn =
-    unsafe extern "C" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
+    unsafe extern "C-unwind" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
 
 pub struct SyscallHandler {
     // Will eventually contain syscall handler state once migrated from the c handler
@@ -306,12 +306,12 @@ mod export {
     use crate::core::worker::Worker;
 
     #[no_mangle]
-    pub extern "C" fn rustsyscallhandler_new() -> *mut SyscallHandler {
+    pub extern "C-unwind" fn rustsyscallhandler_new() -> *mut SyscallHandler {
         Box::into_raw(Box::new(SyscallHandler::new()))
     }
 
     #[no_mangle]
-    pub extern "C" fn rustsyscallhandler_free(handler_ptr: *mut SyscallHandler) {
+    pub extern "C-unwind" fn rustsyscallhandler_free(handler_ptr: *mut SyscallHandler) {
         if handler_ptr.is_null() {
             return;
         }
@@ -319,7 +319,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn rustsyscallhandler_syscall(
+    pub extern "C-unwind" fn rustsyscallhandler_syscall(
         sys: *mut SyscallHandler,
         csys: *mut c::SysCallHandler,
         args: *const SysCallArgs,

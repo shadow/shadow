@@ -30,6 +30,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use shadow_shim_helper_rs::shim_shmem::export::*;")
         .blocklist_type("TlsOneThreadStorageAllocation")
         .raw_line("use crate::tls::TlsOneThreadStorageAllocation;")
+        // the shim's C functions may call rust functions that do unwind, so I think we need this
+        .override_abi(bindgen::Abi::CUnwind, ".*")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

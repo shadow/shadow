@@ -291,7 +291,7 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDone(retval: SysCallReg) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDone(retval: SysCallReg) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval,
             restartable: false,
@@ -299,7 +299,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDoneI64(retval: i64) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDoneI64(retval: i64) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,
@@ -307,7 +307,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDoneU64(retval: u64) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDoneU64(retval: u64) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,
@@ -315,7 +315,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDonePtr(retval: UntypedForeignPtr) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDonePtr(
+        retval: UntypedForeignPtr,
+    ) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
             restartable: false,
@@ -323,7 +325,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeDoneErrno(err: i32) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDoneErrno(err: i32) -> SyscallReturn {
         debug_assert!(err > 0);
         // Should use `syscallreturn_makeInterrupted` instead
         debug_assert!(err != libc::EINTR);
@@ -334,7 +336,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeInterrupted(restartable: bool) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeInterrupted(
+        restartable: bool,
+    ) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: (-libc::EINTR).into(),
             restartable,
@@ -342,7 +346,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeBlocked(
+    pub unsafe extern "C-unwind" fn syscallreturn_makeBlocked(
         cond: *mut c::SysCallCondition,
         restartable: bool,
     ) -> SyscallReturn {
@@ -350,12 +354,12 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_makeNative() -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeNative() -> SyscallReturn {
         SyscallReturn::Native
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_blocked(
+    pub unsafe extern "C-unwind" fn syscallreturn_blocked(
         scr: *mut SyscallReturn,
     ) -> *mut SyscallReturnBlocked {
         let scr = unsafe { scr.as_mut().unwrap() };
@@ -366,7 +370,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn syscallreturn_done(scr: *mut SyscallReturn) -> *mut SyscallReturnDone {
+    pub unsafe extern "C-unwind" fn syscallreturn_done(
+        scr: *mut SyscallReturn,
+    ) -> *mut SyscallReturnDone {
         let scr = unsafe { scr.as_mut().unwrap() };
         let SyscallReturn::Done(d) = scr else {
             panic!("Unexpected scr {:?}", scr);
