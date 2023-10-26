@@ -42,7 +42,7 @@ macro_rules! assert_shmem_safe {
         // `assert_shmem_safe`, and enforce it in e.g. APIs that set up and
         // initialize shared memory.
         #[deny(improper_ctypes_definitions)]
-        unsafe extern "C" fn $testfnname(_: $t) {}
+        unsafe extern "C-unwind" fn $testfnname(_: $t) {}
     };
 }
 
@@ -431,7 +431,7 @@ pub mod export {
     ///
     /// `host` must be valid. The returned pointer must not be accessed from other threads.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmemhost_lock(
+    pub unsafe extern "C-unwind" fn shimshmemhost_lock(
         host: *const ShimShmemHost,
     ) -> *mut ShimShmemHostLock {
         let host = unsafe { host.as_ref().unwrap() };
@@ -445,7 +445,7 @@ pub mod export {
     ///
     /// `host` and `lock` must be valid.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmemhost_unlock(
+    pub unsafe extern "C-unwind" fn shimshmemhost_unlock(
         host: *const ShimShmemHost,
         lock: *mut *mut ShimShmemHostLock,
     ) {
@@ -461,7 +461,9 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getShadowPid(host_mem: *const ShimShmemHost) -> libc::pid_t {
+    pub unsafe extern "C-unwind" fn shimshmem_getShadowPid(
+        host_mem: *const ShimShmemHost,
+    ) -> libc::pid_t {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
         host_mem.shadow_pid
     }
@@ -470,7 +472,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getTscHz(host_mem: *const ShimShmemHost) -> u64 {
+    pub unsafe extern "C-unwind" fn shimshmem_getTscHz(host_mem: *const ShimShmemHost) -> u64 {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
         host_mem.tsc_hz
     }
@@ -479,7 +481,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getLogLevel(
+    pub unsafe extern "C-unwind" fn shimshmem_getLogLevel(
         host_mem: *const ShimShmemHost,
     ) -> ::logger::LogLevel {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
@@ -490,7 +492,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getEmulatedTime(
+    pub unsafe extern "C-unwind" fn shimshmem_getEmulatedTime(
         host_mem: *const ShimShmemHost,
     ) -> CEmulatedTime {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
@@ -501,7 +503,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setEmulatedTime(
+    pub unsafe extern "C-unwind" fn shimshmem_setEmulatedTime(
         host_mem: *const ShimShmemHost,
         t: CEmulatedTime,
     ) {
@@ -515,7 +517,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getMaxRunaheadTime(
+    pub unsafe extern "C-unwind" fn shimshmem_getMaxRunaheadTime(
         host_mem: *const ShimShmemHostLock,
     ) -> CEmulatedTime {
         let host_mem = unsafe { host_mem.as_ref().unwrap() };
@@ -526,7 +528,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setMaxRunaheadTime(
+    pub unsafe extern "C-unwind" fn shimshmem_setMaxRunaheadTime(
         host_mem: *mut ShimShmemHostLock,
         t: CEmulatedTime,
     ) {
@@ -538,7 +540,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getProcessStraceFd(
+    pub unsafe extern "C-unwind" fn shimshmem_getProcessStraceFd(
         process: *const ShimShmemProcess,
     ) -> libc::c_int {
         let process_mem = unsafe { process.as_ref().unwrap() };
@@ -549,7 +551,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getSignalAction(
+    pub unsafe extern "C-unwind" fn shimshmem_getSignalAction(
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
         sig: i32,
@@ -564,7 +566,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setSignalAction(
+    pub unsafe extern "C-unwind" fn shimshmem_setSignalAction(
         lock: *const ShimShmemHostLock,
         process: *const ShimShmemProcess,
         sig: i32,
@@ -578,7 +580,7 @@ pub mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn shimshmemthread_size() -> usize {
+    pub extern "C-unwind" fn shimshmemthread_size() -> usize {
         std::mem::size_of::<ThreadShmem>()
     }
 
@@ -586,7 +588,9 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getThreadId(thread: *const ShimShmemThread) -> libc::pid_t {
+    pub unsafe extern "C-unwind" fn shimshmem_getThreadId(
+        thread: *const ShimShmemThread,
+    ) -> libc::pid_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         thread_mem.tid
     }
@@ -595,7 +599,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getThreadPendingSignals(
+    pub unsafe extern "C-unwind" fn shimshmem_getThreadPendingSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
     ) -> linux_sigset_t {
@@ -611,7 +615,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setThreadPendingSignals(
+    pub unsafe extern "C-unwind" fn shimshmem_setThreadPendingSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
         s: linux_sigset_t,
@@ -628,7 +632,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setThreadSiginfo(
+    pub unsafe extern "C-unwind" fn shimshmem_setThreadSiginfo(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
         sig: i32,
@@ -645,7 +649,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getBlockedSignals(
+    pub unsafe extern "C-unwind" fn shimshmem_getBlockedSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
     ) -> linux_sigset_t {
@@ -661,7 +665,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setBlockedSignals(
+    pub unsafe extern "C-unwind" fn shimshmem_setBlockedSignals(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
         s: linux_sigset_t,
@@ -678,7 +682,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getSigAltStack(
+    pub unsafe extern "C-unwind" fn shimshmem_getSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
     ) -> linux_stack_t {
@@ -694,7 +698,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_setSigAltStack(
+    pub unsafe extern "C-unwind" fn shimshmem_setSigAltStack(
         lock: *const ShimShmemHostLock,
         thread: *const ShimShmemThread,
         stack: linux_stack_t,
@@ -709,7 +713,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_incrementUnappliedCpuLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_incrementUnappliedCpuLatency(
         lock: *mut ShimShmemHostLock,
         dt: CSimulationTime,
     ) {
@@ -721,7 +725,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getUnappliedCpuLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_getUnappliedCpuLatency(
         lock: *const ShimShmemHostLock,
     ) -> CSimulationTime {
         let lock = unsafe { lock.as_ref().unwrap() };
@@ -732,7 +736,9 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_resetUnappliedCpuLatency(lock: *mut ShimShmemHostLock) {
+    pub unsafe extern "C-unwind" fn shimshmem_resetUnappliedCpuLatency(
+        lock: *mut ShimShmemHostLock,
+    ) {
         let lock = unsafe { lock.as_mut().unwrap() };
         lock.unapplied_cpu_latency = SimulationTime::ZERO;
     }
@@ -743,7 +749,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getModelUnblockedSyscallLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_getModelUnblockedSyscallLatency(
         host: *const ShimShmemHost,
     ) -> bool {
         let host = unsafe { host.as_ref().unwrap() };
@@ -757,7 +763,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_maxUnappliedCpuLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_maxUnappliedCpuLatency(
         host: *const ShimShmemHost,
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
@@ -770,7 +776,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_unblockedSyscallLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_unblockedSyscallLatency(
         host: *const ShimShmemHost,
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
@@ -783,7 +789,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_unblockedVdsoLatency(
+    pub unsafe extern "C-unwind" fn shimshmem_unblockedVdsoLatency(
         host: *const ShimShmemHost,
     ) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
@@ -796,7 +802,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shimshmem_getLoggingStartTime(
+    pub unsafe extern "C-unwind" fn shimshmem_getLoggingStartTime(
         manager: *const ShimShmemManager,
     ) -> i64 {
         let manager = unsafe { manager.as_ref().unwrap() };

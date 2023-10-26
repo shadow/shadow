@@ -269,7 +269,7 @@ mod export {
     use crate::host::syscall_types::SyscallReturn;
 
     #[no_mangle]
-    pub extern "C" fn log_syscall(
+    pub extern "C-unwind" fn log_syscall(
         proc: *const Process,
         logging_mode: StraceFmtMode,
         tid: libc::pid_t,

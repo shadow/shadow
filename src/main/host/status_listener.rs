@@ -61,7 +61,7 @@ impl StatusListener {
 
     /// Create a [`StatusListener`] with the given notification function.
     pub fn new(host: &Host, notify: impl Fn(&Host) + Send + Sync + 'static) -> Self {
-        extern "C" fn notify_fn(
+        extern "C-unwind" fn notify_fn(
             callback_object: *mut std::ffi::c_void,
             _callback_arg: *mut std::ffi::c_void,
         ) {
@@ -69,7 +69,7 @@ impl StatusListener {
             let task = unsafe { &*task };
             Worker::with_active_host(|host| task.execute(host)).unwrap()
         }
-        extern "C" fn object_free_fn(callback_object: *mut std::ffi::c_void) {
+        extern "C-unwind" fn object_free_fn(callback_object: *mut std::ffi::c_void) {
             let task: *mut TaskRef = callback_object.cast();
             drop(unsafe { Box::from_raw(task) })
         }

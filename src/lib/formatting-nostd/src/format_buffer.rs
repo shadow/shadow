@@ -328,7 +328,7 @@ mod sprintf_test {
 
     // Wrapper code we expose to our C test harness.
     #[no_mangle]
-    unsafe extern "C" fn test_format_buffer_valist(
+    unsafe extern "C-unwind" fn test_format_buffer_valist(
         format_buffer: *mut FormatBuffer<10>,
         fmt: *const core::ffi::c_char,
         args: va_list::VaList,
@@ -338,7 +338,7 @@ mod sprintf_test {
         unsafe { format_buffer.sprintf(fmt, args) };
     }
 
-    extern "C" {
+    extern "C-unwind" {
         // Wrapper code that our C test harness exposes to us.
         // It calls `test_format_buffer_valist` and returns the result.
         //

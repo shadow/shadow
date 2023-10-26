@@ -10,6 +10,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .bindgen_builder()
         .header("logger.h")
         .allowlist_function("logger_.*")
+        // the logger's C functions may call rust functions that do unwind, so I think we need this
+        .override_abi(bindgen::Abi::CUnwind, ".*")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

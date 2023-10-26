@@ -68,7 +68,7 @@ mod export {
     /// Notify listeners using the global callback queue. If the queue hasn't been set using
     /// [`with_global_cb_queue`], the listeners will be notified here before returning.
     #[no_mangle]
-    pub unsafe extern "C" fn notify_listeners_with_global_cb_queue(
+    pub unsafe extern "C-unwind" fn notify_listeners_with_global_cb_queue(
         event_source: *const RootedRefCell_StateEventSource,
         status: c::Status,
         changed: c::Status,
@@ -94,7 +94,7 @@ mod export {
     /// queue hasn't been set using [`with_global_cb_queue`], the host will be notified here before
     /// returning.
     #[no_mangle]
-    pub unsafe extern "C" fn socket_wants_to_send_with_global_cb_queue(
+    pub unsafe extern "C-unwind" fn socket_wants_to_send_with_global_cb_queue(
         host: *const Host,
         socket: c::CompatSocket,
         ip: libc::in_addr_t,

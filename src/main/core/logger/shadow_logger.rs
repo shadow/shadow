@@ -454,7 +454,7 @@ mod export {
     /// soon as it's created.  The calling thread still isn't blocked on the
     /// record actually being written, though.
     #[no_mangle]
-    pub unsafe extern "C" fn shadow_logger_setEnableBuffering(buffering_enabled: i32) {
+    pub unsafe extern "C-unwind" fn shadow_logger_setEnableBuffering(buffering_enabled: i32) {
         set_buffering_enabled(buffering_enabled != 0)
     }
 }

@@ -22,6 +22,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .bindgen_builder()
         .header("tsc_internal.h")
         .allowlist_function("TscC_.*")
+        // the tsc C functions may call rust functions that do unwind, so I think we need this
+        .override_abi(bindgen::Abi::CUnwind, ".*")
         .generate()
         .expect("Unable to generate bindings");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());

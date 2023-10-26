@@ -384,7 +384,7 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn main_runShadow(
+    pub extern "C-unwind" fn main_runShadow(
         build_info: *const ShadowBuildInfo,
         argc: libc::c_int,
         argv: *const *const libc::c_char,

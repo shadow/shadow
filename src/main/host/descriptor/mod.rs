@@ -833,7 +833,7 @@ mod export {
     /// If creating a descriptor for a `TCP` object, you should use `descriptor_fromLegacyTcp`
     /// instead. If `legacy_file` is a TCP socket, this function will panic.
     #[no_mangle]
-    pub unsafe extern "C" fn descriptor_fromLegacyFile(
+    pub unsafe extern "C-unwind" fn descriptor_fromLegacyFile(
         legacy_file: *mut c::LegacyFile,
         descriptor_flags: libc::c_int,
     ) -> *mut Descriptor {
@@ -847,7 +847,7 @@ mod export {
     /// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
     /// `O_CLOEXEC`.
     #[no_mangle]
-    pub unsafe extern "C" fn descriptor_fromLegacyTcp(
+    pub unsafe extern "C-unwind" fn descriptor_fromLegacyTcp(
         legacy_tcp: *mut c::TCP,
         descriptor_flags: libc::c_int,
     ) -> *mut Descriptor {
@@ -870,7 +870,9 @@ mod export {
     /// returns NULL. The legacy file's ref count is not modified, so the pointer must not outlive
     /// the lifetime of the descriptor.
     #[no_mangle]
-    pub extern "C" fn descriptor_asLegacyFile(descriptor: *const Descriptor) -> *mut c::LegacyFile {
+    pub extern "C-unwind" fn descriptor_asLegacyFile(
+        descriptor: *const Descriptor,
+    ) -> *mut c::LegacyFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -886,7 +888,9 @@ mod export {
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
     /// modified, so the returned pointer must not outlive the lifetime of the descriptor.
     #[no_mangle]
-    pub extern "C" fn descriptor_borrowOpenFile(descriptor: *const Descriptor) -> *const OpenFile {
+    pub extern "C-unwind" fn descriptor_borrowOpenFile(
+        descriptor: *const Descriptor,
+    ) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -902,7 +906,9 @@ mod export {
     /// so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
     /// memory will leak.
     #[no_mangle]
-    pub extern "C" fn descriptor_newRefOpenFile(descriptor: *const Descriptor) -> *const OpenFile {
+    pub extern "C-unwind" fn descriptor_newRefOpenFile(
+        descriptor: *const Descriptor,
+    ) -> *const OpenFile {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -915,7 +921,7 @@ mod export {
 
     /// The descriptor flags must be either 0 or `O_CLOEXEC`.
     #[no_mangle]
-    pub extern "C" fn descriptor_setFlags(descriptor: *mut Descriptor, flags: libc::c_int) {
+    pub extern "C-unwind" fn descriptor_setFlags(descriptor: *mut Descriptor, flags: libc::c_int) {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &mut *descriptor };
@@ -929,7 +935,7 @@ mod export {
     /// Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
     /// this function.
     #[no_mangle]
-    pub extern "C" fn openfile_drop(file: *const OpenFile) {
+    pub extern "C-unwind" fn openfile_drop(file: *const OpenFile) {
         assert!(!file.is_null());
 
         drop(unsafe { Box::from_raw(file as *mut OpenFile) });
@@ -937,7 +943,7 @@ mod export {
 
     /// Get the state of the `OpenFile` object.
     #[no_mangle]
-    pub extern "C" fn openfile_getStatus(file: *const OpenFile) -> c::Status {
+    pub extern "C-unwind" fn openfile_getStatus(file: *const OpenFile) -> c::Status {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -949,7 +955,7 @@ mod export {
     /// ref count, and will decrement the ref count when this status listener is removed or when the
     /// `OpenFile` is freed/dropped.
     #[no_mangle]
-    pub unsafe extern "C" fn openfile_addListener(
+    pub unsafe extern "C-unwind" fn openfile_addListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
     ) {
@@ -965,7 +971,7 @@ mod export {
 
     /// Remove a listener from the `OpenFile` object.
     #[no_mangle]
-    pub extern "C" fn openfile_removeListener(
+    pub extern "C-unwind" fn openfile_removeListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
     ) {
@@ -982,7 +988,7 @@ mod export {
     /// Get the canonical handle for an `OpenFile` object. Two `OpenFile` objects refer to the same
     /// underlying data if their handles are equal.
     #[no_mangle]
-    pub extern "C" fn openfile_getCanonicalHandle(file: *const OpenFile) -> libc::uintptr_t {
+    pub extern "C-unwind" fn openfile_getCanonicalHandle(file: *const OpenFile) -> libc::uintptr_t {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -994,7 +1000,7 @@ mod export {
     /// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
     /// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
     #[no_mangle]
-    pub extern "C" fn descriptor_newRefFile(descriptor: *const Descriptor) -> *const File {
+    pub extern "C-unwind" fn descriptor_newRefFile(descriptor: *const Descriptor) -> *const File {
         assert!(!descriptor.is_null());
 
         let descriptor = unsafe { &*descriptor };
@@ -1008,7 +1014,7 @@ mod export {
     /// Decrement the ref count of the `File` object. The pointer must not be used after calling
     /// this function.
     #[no_mangle]
-    pub extern "C" fn file_drop(file: *const File) {
+    pub extern "C-unwind" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
         drop(unsafe { Box::from_raw(file as *mut File) });
@@ -1018,14 +1024,14 @@ mod export {
     /// the given pointer (they are distinct references), and they both must be dropped with
     /// `file_drop` separately later.
     #[no_mangle]
-    pub extern "C" fn file_cloneRef(file: *const File) -> *const File {
+    pub extern "C-unwind" fn file_cloneRef(file: *const File) -> *const File {
         let file = unsafe { file.as_ref() }.unwrap();
         Box::into_raw(Box::new(file.clone()))
     }
 
     /// Get the state of the `File` object.
     #[no_mangle]
-    pub extern "C" fn file_getStatus(file: *const File) -> c::Status {
+    pub extern "C-unwind" fn file_getStatus(file: *const File) -> c::Status {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -1037,7 +1043,10 @@ mod export {
     /// count, and will decrement the ref count when this status listener is removed or when the
     /// `File` is freed/dropped.
     #[no_mangle]
-    pub unsafe extern "C" fn file_addListener(file: *const File, listener: *mut c::StatusListener) {
+    pub unsafe extern "C-unwind" fn file_addListener(
+        file: *const File,
+        listener: *mut c::StatusListener,
+    ) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
@@ -1049,7 +1058,10 @@ mod export {
 
     /// Remove a listener from the `File` object.
     #[no_mangle]
-    pub extern "C" fn file_removeListener(file: *const File, listener: *mut c::StatusListener) {
+    pub extern "C-unwind" fn file_removeListener(
+        file: *const File,
+        listener: *mut c::StatusListener,
+    ) {
         assert!(!file.is_null());
         assert!(!listener.is_null());
 
@@ -1061,7 +1073,7 @@ mod export {
     /// Get the canonical handle for a `File` object. Two `File` objects refer to the same
     /// underlying data if their handles are equal.
     #[no_mangle]
-    pub extern "C" fn file_getCanonicalHandle(file: *const File) -> libc::uintptr_t {
+    pub extern "C-unwind" fn file_getCanonicalHandle(file: *const File) -> libc::uintptr_t {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -1070,7 +1082,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn eventsource_new() -> *mut RootedRefCell_StateEventSource {
+    pub extern "C-unwind" fn eventsource_new() -> *mut RootedRefCell_StateEventSource {
         let event_source = worker::Worker::with_active_host(|host| {
             Box::new(RootedRefCell::new(host.root(), StateEventSource::new()))
         })
@@ -1079,13 +1091,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
+    pub extern "C-unwind" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
         assert!(!event_source.is_null());
         drop(unsafe { Box::from_raw(event_source) });
     }
 
     #[no_mangle]
-    pub extern "C" fn eventsource_addLegacyListener(
+    pub extern "C-unwind" fn eventsource_addLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,
     ) {
@@ -1099,7 +1111,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn eventsource_removeLegacyListener(
+    pub extern "C-unwind" fn eventsource_removeLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,
     ) {

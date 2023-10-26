@@ -522,14 +522,14 @@ mod export {
     /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
     /// calling this function.
     #[no_mangle]
-    pub extern "C" fn inetsocket_drop(socket: *const InetSocket) {
+    pub extern "C-unwind" fn inetsocket_drop(socket: *const InetSocket) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket.cast_mut()) });
     }
 
     /// Helper for GLib functions that take a `TaskObjectFreeFunc`. See [`inetsocket_drop`].
     #[no_mangle]
-    pub extern "C" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
+    pub extern "C-unwind" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
         inetsocket_drop(socket.cast_const().cast())
     }
 
@@ -537,7 +537,7 @@ mod export {
     /// same as the given pointer (they are distinct references), and they both must be dropped
     /// with `inetsocket_drop` separately later.
     #[no_mangle]
-    pub extern "C" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
+    pub extern "C-unwind" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
         let socket = unsafe { socket.as_ref() }.unwrap();
         Box::into_raw(Box::new(socket.clone()))
     }
@@ -546,13 +546,13 @@ mod export {
     /// to a single socket object (an `InetSocket` is just an enum that contains an `Arc` of the
     /// socket object), so the address of an `InetSocket` *does not* uniquely identify a socket.
     #[no_mangle]
-    pub extern "C" fn inetsocket_getCanonicalHandle(socket: *const InetSocket) -> usize {
+    pub extern "C-unwind" fn inetsocket_getCanonicalHandle(socket: *const InetSocket) -> usize {
         let socket = unsafe { socket.as_ref() }.unwrap();
         socket.canonical_handle()
     }
 
     #[no_mangle]
-    pub extern "C" fn inetsocket_pushInPacket(
+    pub extern "C-unwind" fn inetsocket_pushInPacket(
         socket: *const InetSocket,
         packet: *mut c::Packet,
         recv_time: CEmulatedTime,
@@ -574,7 +574,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn inetsocket_pullOutPacket(socket: *const InetSocket) -> *mut c::Packet {
+    pub extern "C-unwind" fn inetsocket_pullOutPacket(socket: *const InetSocket) -> *mut c::Packet {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
@@ -590,7 +590,7 @@ mod export {
 
     /// Will return non-zero if socket doesn't have data to send (there is no priority).
     #[no_mangle]
-    pub extern "C" fn inetsocket_peekNextPacketPriority(
+    pub extern "C-unwind" fn inetsocket_peekNextPacketPriority(
         socket: *const InetSocket,
         priority_out: *mut u64,
     ) -> libc::c_int {
@@ -604,7 +604,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn inetsocket_hasDataToSend(socket: *const InetSocket) -> bool {
+    pub extern "C-unwind" fn inetsocket_hasDataToSend(socket: *const InetSocket) -> bool {
         let socket = unsafe { socket.as_ref() }.unwrap();
         socket.borrow().has_data_to_send()
     }
@@ -612,7 +612,7 @@ mod export {
     /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
     /// legacy TCP socket or if `socket` is already mutably borrowed. Will never return `NULL`.
     #[no_mangle]
-    pub extern "C" fn inetsocket_asLegacyTcp(socket: *const InetSocket) -> *mut c::TCP {
+    pub extern "C-unwind" fn inetsocket_asLegacyTcp(socket: *const InetSocket) -> *mut c::TCP {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
         #[allow(irrefutable_let_patterns)]
@@ -631,7 +631,7 @@ mod export {
     /// Decrement the ref count of the `InetSocketWeak` object. The pointer must not be used after
     /// calling this function.
     #[no_mangle]
-    pub extern "C" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
+    pub extern "C-unwind" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket) });
     }
@@ -639,7 +639,9 @@ mod export {
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
     /// references and has been dropped.
     #[no_mangle]
-    pub extern "C" fn inetsocketweak_upgrade(socket: *const InetSocketWeak) -> *mut InetSocket {
+    pub extern "C-unwind" fn inetsocketweak_upgrade(
+        socket: *const InetSocketWeak,
+    ) -> *mut InetSocket {
         let socket = unsafe { socket.as_ref() }.unwrap();
         socket
             .upgrade()

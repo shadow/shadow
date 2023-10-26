@@ -66,9 +66,10 @@ pub mod export {
     use super::*;
     use crate::{host::host::Host, utility::HostTreePointer};
 
-    pub type TaskCallbackFunc = extern "C" fn(*const Host, *mut libc::c_void, *mut libc::c_void);
-    pub type TaskObjectFreeFunc = Option<extern "C" fn(*mut libc::c_void)>;
-    pub type TaskArgumentFreeFunc = Option<extern "C" fn(*mut libc::c_void)>;
+    pub type TaskCallbackFunc =
+        extern "C-unwind" fn(*const Host, *mut libc::c_void, *mut libc::c_void);
+    pub type TaskObjectFreeFunc = Option<extern "C-unwind" fn(*mut libc::c_void)>;
+    pub type TaskArgumentFreeFunc = Option<extern "C-unwind" fn(*mut libc::c_void)>;
 
     /// Compatibility struct for creating a `TaskRef` from function pointers.
     struct CTaskHostTreePtrs {
@@ -195,7 +196,7 @@ pub mod export {
     /// the pointers while the callback transforms the pointer into another Rust
     /// reference).
     #[no_mangle]
-    pub unsafe extern "C" fn taskref_new_bound(
+    pub unsafe extern "C-unwind" fn taskref_new_bound(
         host_id: HostId,
         callback: TaskCallbackFunc,
         object: *mut libc::c_void,
@@ -235,7 +236,7 @@ pub mod export {
     /// the pointers while the callback transforms the pointer into another Rust
     /// reference).
     #[no_mangle]
-    pub unsafe extern "C" fn taskref_new_unbound(
+    pub unsafe extern "C-unwind" fn taskref_new_unbound(
         callback: TaskCallbackFunc,
         object: *mut libc::c_void,
         argument: *mut libc::c_void,
@@ -267,7 +268,7 @@ pub mod export {
     ///
     /// `task` must be legally dereferencable.
     #[no_mangle]
-    pub unsafe extern "C" fn taskref_drop(task: *mut TaskRef) {
+    pub unsafe extern "C-unwind" fn taskref_drop(task: *mut TaskRef) {
         drop(unsafe { Box::from_raw(notnull_mut(task)) });
     }
 }

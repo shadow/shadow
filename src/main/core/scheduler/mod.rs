@@ -156,7 +156,7 @@ mod export {
     /// Get the core affinity of the current thread, as set by the active scheduler. Returns `-1` if
     /// the affinity is not set.
     #[no_mangle]
-    pub extern "C" fn scheduler_getAffinity() -> i32 {
+    pub extern "C-unwind" fn scheduler_getAffinity() -> i32 {
         core_affinity()
             .map(|x| i32::try_from(x).unwrap())
             .unwrap_or(-1)

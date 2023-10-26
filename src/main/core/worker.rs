@@ -654,13 +654,13 @@ mod export {
     use crate::host::process::Process;
 
     #[no_mangle]
-    pub extern "C" fn worker_getDNS() -> *mut cshadow::DNS {
+    pub extern "C-unwind" fn worker_getDNS() -> *mut cshadow::DNS {
         Worker::with_dns(|dns| dns as *const cshadow::DNS).cast_mut()
     }
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
-    pub extern "C" fn worker_getLatency(
+    pub extern "C-unwind" fn worker_getLatency(
         src: libc::in_addr_t,
         dst: libc::in_addr_t,
     ) -> CSimulationTime {
@@ -673,21 +673,21 @@ mod export {
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
-    pub extern "C" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
+    pub extern "C-unwind" fn worker_getBandwidthDownBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         Worker::with(|w| w.shared.bandwidth(ip).unwrap().down_bytes).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
-    pub extern "C" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
+    pub extern "C-unwind" fn worker_getBandwidthUpBytes(ip: libc::in_addr_t) -> u64 {
         let ip = std::net::IpAddr::V4(u32::from_be(ip).into());
         Worker::with(|w| w.shared.bandwidth(ip).unwrap().up_bytes).unwrap()
     }
 
     /// Addresses must be provided in network byte order.
     #[no_mangle]
-    pub extern "C" fn worker_isRoutable(src: libc::in_addr_t, dst: libc::in_addr_t) -> bool {
+    pub extern "C-unwind" fn worker_isRoutable(src: libc::in_addr_t, dst: libc::in_addr_t) -> bool {
         let src = std::net::IpAddr::V4(u32::from_be(src).into());
         let dst = std::net::IpAddr::V4(u32::from_be(dst).into());
 
@@ -696,14 +696,16 @@ mod export {
 
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
     #[no_mangle]
-    pub unsafe extern "C" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
+    pub unsafe extern "C-unwind" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
         Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
     }
 
     /// Implementation for counting allocated objects. Do not use this function directly.
     /// Use worker_count_allocation instead from the call site.
     #[no_mangle]
-    pub extern "C" fn worker_increment_object_alloc_counter(object_name: *const libc::c_char) {
+    pub extern "C-unwind" fn worker_increment_object_alloc_counter(
+        object_name: *const libc::c_char,
+    ) {
         assert!(!object_name.is_null());
 
         let s = unsafe { std::ffi::CStr::from_ptr(object_name) };
@@ -714,7 +716,9 @@ mod export {
     /// Implementation for counting deallocated objects. Do not use this function directly.
     /// Use worker_count_deallocation instead from the call site.
     #[no_mangle]
-    pub extern "C" fn worker_increment_object_dealloc_counter(object_name: *const libc::c_char) {
+    pub extern "C-unwind" fn worker_increment_object_dealloc_counter(
+        object_name: *const libc::c_char,
+    ) {
         assert!(!object_name.is_null());
 
         let s = unsafe { std::ffi::CStr::from_ptr(object_name) };
@@ -724,7 +728,7 @@ mod export {
 
     /// Aggregate the given syscall counts in a worker syscall counter.
     #[no_mangle]
-    pub extern "C" fn worker_add_syscall_counts(syscall_counts: *const Counter) {
+    pub extern "C-unwind" fn worker_add_syscall_counts(syscall_counts: *const Counter) {
         assert!(!syscall_counts.is_null());
         let syscall_counts = unsafe { syscall_counts.as_ref() }.unwrap();
 
@@ -732,22 +736,24 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_setCurrentEmulatedTime(t: CEmulatedTime) {
+    pub extern "C-unwind" fn worker_setCurrentEmulatedTime(t: CEmulatedTime) {
         Worker::set_current_time(EmulatedTime::from_c_emutime(t).unwrap());
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentSimulationTime() -> CSimulationTime {
+    pub extern "C-unwind" fn worker_getCurrentSimulationTime() -> CSimulationTime {
         SimulationTime::to_c_simtime(Worker::current_time().map(|t| t.to_abs_simtime()))
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
+    pub extern "C-unwind" fn worker_getCurrentEmulatedTime() -> CEmulatedTime {
         EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_resolveIPToAddress(ip: libc::in_addr_t) -> *const cshadow::Address {
+    pub extern "C-unwind" fn worker_resolveIPToAddress(
+        ip: libc::in_addr_t,
+    ) -> *const cshadow::Address {
         Worker::with(|w| {
             let dns = w.shared.dns.ptr();
             unsafe { cshadow::dns_resolveIPToAddress(dns, ip) }
@@ -756,7 +762,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn worker_resolveNameToAddress(
+    pub extern "C-unwind" fn worker_resolveNameToAddress(
         name: *const libc::c_char,
     ) -> *const cshadow::Address {
         Worker::with(|w| {
@@ -769,14 +775,14 @@ mod export {
     /// Returns a pointer to the current running host. The returned pointer is
     /// invalidated the next time the worker switches hosts.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentHost() -> *const Host {
+    pub extern "C-unwind" fn worker_getCurrentHost() -> *const Host {
         Worker::with_active_host(|h| h as *const _).unwrap()
     }
 
     /// Returns a pointer to the current running process. The returned pointer is
     /// invalidated the next time the worker switches processes.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentProcess() -> *const Process {
+    pub extern "C-unwind" fn worker_getCurrentProcess() -> *const Process {
         // We can't use `with_active_process` here since that returns the &Process instead
         // of the enclosing &Process.
         Worker::with_active_process(|process| process as *const _).unwrap()
@@ -785,14 +791,14 @@ mod export {
     /// Returns a pointer to the current running thread. The returned pointer is
     /// invalidated the next time the worker switches threads.
     #[no_mangle]
-    pub extern "C" fn worker_getCurrentThread() -> *const Thread {
+    pub extern "C-unwind" fn worker_getCurrentThread() -> *const Thread {
         Worker::with_active_thread(|thread| thread as *const _).unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the
     /// host lock.
     #[no_mangle]
-    pub extern "C" fn worker_maxEventRunaheadTime(host: *const Host) -> CEmulatedTime {
+    pub extern "C-unwind" fn worker_maxEventRunaheadTime(host: *const Host) -> CEmulatedTime {
         let host = unsafe { host.as_ref() }.unwrap();
         EmulatedTime::to_c_emutime(Some(Worker::max_event_runahead_time(host)))
     }

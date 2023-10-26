@@ -218,7 +218,7 @@ pub mod export {
     /// the enclosing `Timer`; if it needs to do so it should schedule a new
     /// task to do so.
     #[no_mangle]
-    pub unsafe extern "C" fn timer_new(task: *const TaskRef) -> *mut Timer {
+    pub unsafe extern "C-unwind" fn timer_new(task: *const TaskRef) -> *mut Timer {
         let task = unsafe { task.as_ref() }.unwrap().clone();
         let timer = Timer::new(move |host| task.execute(host));
         Box::into_raw(Box::new(timer))
@@ -228,7 +228,7 @@ pub mod export {
     ///
     /// `timer` must be safely dereferenceable. Consumes `timer`.
     #[no_mangle]
-    pub unsafe extern "C" fn timer_drop(timer: *mut Timer) {
+    pub unsafe extern "C-unwind" fn timer_drop(timer: *mut Timer) {
         drop(unsafe { Box::from_raw(timer) });
     }
 
@@ -237,7 +237,7 @@ pub mod export {
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub unsafe extern "C" fn timer_arm(
+    pub unsafe extern "C-unwind" fn timer_arm(
         timer: *mut Timer,
         host: *const Host,
         nextExpireTime: CEmulatedTime,
@@ -258,7 +258,7 @@ pub mod export {
     ///
     /// Pointer args must be safely dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn timer_disarm(timer: *mut Timer) {
+    pub unsafe extern "C-unwind" fn timer_disarm(timer: *mut Timer) {
         let timer = unsafe { timer.as_mut() }.unwrap();
         timer.disarm()
     }

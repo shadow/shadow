@@ -1909,7 +1909,7 @@ mod export {
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. Always succeeds with n==0.
     #[no_mangle]
-    pub extern "C" fn process_readPtr(
+    pub extern "C-unwind" fn process_readPtr(
         proc: *const Process,
         dst: *mut c_void,
         src: UntypedForeignPtr,
@@ -1931,7 +1931,7 @@ mod export {
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of
     /// the specified range couldn't be accessed. The write is flushed immediately.
     #[no_mangle]
-    pub unsafe extern "C" fn process_writePtr(
+    pub unsafe extern "C-unwind" fn process_writePtr(
         proc: *const Process,
         dst: UntypedForeignPtr,
         src: *const c_void,
@@ -1954,7 +1954,7 @@ mod export {
     /// The returned pointer is invalidated when one of the process memory flush
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getReadablePtr(
+    pub unsafe extern "C-unwind" fn process_getReadablePtr(
         proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
@@ -1974,7 +1974,7 @@ mod export {
     /// isn't explicitly freed via `process_freePtrsWithoutFlushing`, those
     /// unspecified contents may be written back into process memory.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getWriteablePtr(
+    pub unsafe extern "C-unwind" fn process_getWriteablePtr(
         proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
@@ -1990,7 +1990,7 @@ mod export {
     /// The returned pointer is invalidated when one of the process memory flush
     /// methods is called; typically after a syscall has completed.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getMutablePtr(
+    pub unsafe extern "C-unwind" fn process_getMutablePtr(
         proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
@@ -2007,7 +2007,7 @@ mod export {
     /// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
-    pub unsafe extern "C" fn process_readString(
+    pub unsafe extern "C-unwind" fn process_readString(
         proc: *const Process,
         strbuf: *mut libc::c_char,
         ptr: UntypedForeignPtr,
@@ -2033,7 +2033,7 @@ mod export {
     /// -ENAMETOOLONG if there was no NULL byte in the first `n` characters.
     /// -EFAULT if the string extends beyond the accessible address space.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getReadableString(
+    pub unsafe extern "C-unwind" fn process_getReadableString(
         proc: *const Process,
         plugin_src: UntypedForeignPtr,
         n: usize,
@@ -2057,7 +2057,7 @@ mod export {
 
     /// Fully handles the `mmap` syscall
     #[no_mangle]
-    pub unsafe extern "C" fn process_handleMmap(
+    pub unsafe extern "C-unwind" fn process_handleMmap(
         proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
@@ -2088,7 +2088,7 @@ mod export {
 
     /// Fully handles the `munmap` syscall
     #[no_mangle]
-    pub unsafe extern "C" fn process_handleMunmap(
+    pub unsafe extern "C-unwind" fn process_handleMunmap(
         proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
@@ -2110,7 +2110,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_handleMremap(
+    pub unsafe extern "C-unwind" fn process_handleMremap(
         proc: *const Process,
         thread: *const Thread,
         old_addr: UntypedForeignPtr,
@@ -2139,7 +2139,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_handleMprotect(
+    pub unsafe extern "C-unwind" fn process_handleMprotect(
         proc: *const Process,
         thread: *const Thread,
         addr: UntypedForeignPtr,
@@ -2165,7 +2165,7 @@ mod export {
 
     /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
     #[no_mangle]
-    pub unsafe extern "C" fn process_handleBrk(
+    pub unsafe extern "C-unwind" fn process_handleBrk(
         proc: *const Process,
         thread: *const Thread,
         plugin_src: UntypedForeignPtr,
@@ -2188,7 +2188,7 @@ mod export {
     /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
     /// be running and ready to make native syscalls.
     #[no_mangle]
-    pub unsafe extern "C" fn process_initMapperIfNeeded(
+    pub unsafe extern "C-unwind" fn process_initMapperIfNeeded(
         proc: *const Process,
         thread: *const Thread,
     ) {
@@ -2205,25 +2205,25 @@ mod export {
 
     /// Returns the processID that was assigned to us in process_new
     #[no_mangle]
-    pub unsafe extern "C" fn process_getProcessID(proc: *const Process) -> libc::pid_t {
+    pub unsafe extern "C-unwind" fn process_getProcessID(proc: *const Process) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.id().into()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getHostId(proc: *const Process) -> HostId {
+    pub unsafe extern "C-unwind" fn process_getHostId(proc: *const Process) -> HostId {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.host_id()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getName(proc: *const Process) -> *const c_char {
+    pub unsafe extern "C-unwind" fn process_getName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.common().name.as_ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getPluginName(proc: *const Process) -> *const c_char {
+    pub unsafe extern "C-unwind" fn process_getPluginName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.common().plugin_name.as_ptr()
     }
@@ -2233,19 +2233,23 @@ mod export {
     /// The returned pointer is invalidated when the host shmem lock is released, e.g. via
     /// Host::unlock_shmem.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getSharedMem(proc: *const Process) -> *const ShimShmemProcess {
+    pub unsafe extern "C-unwind" fn process_getSharedMem(
+        proc: *const Process,
+    ) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.as_runnable().unwrap().shim_shared_mem_block.deref() as *const _
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getWorkingDir(proc: *const Process) -> *const c_char {
+    pub unsafe extern "C-unwind" fn process_getWorkingDir(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.common().working_dir.as_ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_straceLoggingMode(proc: *const Process) -> StraceFmtMode {
+    pub unsafe extern "C-unwind" fn process_straceLoggingMode(
+        proc: *const Process,
+    ) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.strace_logging_options().into()
     }
@@ -2253,7 +2257,7 @@ mod export {
     /// Get process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_getDumpable(proc: *const Process) -> u32 {
+    pub unsafe extern "C-unwind" fn process_getDumpable(proc: *const Process) -> u32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.as_runnable().unwrap().dumpable.get()
     }
@@ -2261,14 +2265,14 @@ mod export {
     /// Set process's "dumpable" state, as manipulated by the prctl operations
     /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
     #[no_mangle]
-    pub unsafe extern "C" fn process_setDumpable(proc: *const Process, val: u32) {
+    pub unsafe extern "C-unwind" fn process_setDumpable(proc: *const Process, val: u32) {
         assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.as_runnable().unwrap().dumpable.set(val)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getNativePid(proc: *const Process) -> libc::pid_t {
+    pub unsafe extern "C-unwind" fn process_getNativePid(proc: *const Process) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.native_pid().as_raw()
     }
@@ -2280,7 +2284,7 @@ mod export {
     ///
     /// Returns 0 on success or a negative errno on failure.
     #[no_mangle]
-    pub unsafe extern "C" fn process_flushPtrs(proc: *const Process) -> i32 {
+    pub unsafe extern "C-unwind" fn process_flushPtrs(proc: *const Process) -> i32 {
         let proc = unsafe { proc.as_ref().unwrap() };
         match proc.free_unsafe_borrows_flush() {
             Ok(_) => 0,
@@ -2294,13 +2298,13 @@ mod export {
     /// and we end up not wanting to write anything after all (in particular, don't
     /// write back whatever garbage data was in the uninialized bueffer).
     #[no_mangle]
-    pub unsafe extern "C" fn process_freePtrsWithoutFlushing(proc: *const Process) {
+    pub unsafe extern "C-unwind" fn process_freePtrsWithoutFlushing(proc: *const Process) {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.free_unsafe_borrows_noflush();
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getThread(
+    pub unsafe extern "C-unwind" fn process_getThread(
         proc: *const Process,
         tid: libc::pid_t,
     ) -> *const Thread {
@@ -2318,7 +2322,7 @@ mod export {
 
     /// Returns a pointer to an arbitrary live thread in the process.
     #[no_mangle]
-    pub unsafe extern "C" fn process_firstLiveThread(proc: *const Process) -> *const Thread {
+    pub unsafe extern "C-unwind" fn process_firstLiveThread(proc: *const Process) -> *const Thread {
         let proc = unsafe { proc.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             let Some(thread) = proc.first_live_thread_borrow(host.root()) else {
@@ -2331,7 +2335,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_isRunning(proc: *const Process) -> bool {
+    pub unsafe extern "C-unwind" fn process_isRunning(proc: *const Process) -> bool {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.is_running()
     }
@@ -2339,12 +2343,12 @@ mod export {
     // FIXME: still needed? Time is now updated more granularly in the Thread code
     // when xferring control to/from shim.
     #[no_mangle]
-    pub unsafe extern "C" fn process_setSharedTime() {
+    pub unsafe extern "C-unwind" fn process_setSharedTime() {
         Worker::with_active_host(Process::set_shared_time).unwrap();
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_getPhysicalAddress(
+    pub unsafe extern "C-unwind" fn process_getPhysicalAddress(
         proc: *const Process,
         vptr: UntypedForeignPtr,
     ) -> ManagedPhysicalMemoryAddr {
@@ -2360,7 +2364,7 @@ mod export {
     ///
     /// Mandatory fields of `siginfo` must be initd.
     #[no_mangle]
-    pub unsafe extern "C" fn process_signal(
+    pub unsafe extern "C-unwind" fn process_signal(
         target_proc: *const Process,
         current_running_thread: *const Thread,
         siginfo_t: *const linux_siginfo_t,
@@ -2373,7 +2377,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_addChildEventListener(
+    pub unsafe extern "C-unwind" fn process_addChildEventListener(
         host: *const Host,
         process: *const Process,
         listener: *mut cshadow::StatusListener,
@@ -2390,7 +2394,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn process_removeChildEventListener(
+    pub unsafe extern "C-unwind" fn process_removeChildEventListener(
         _host: *const Host,
         process: *const Process,
         listener: *mut cshadow::StatusListener,

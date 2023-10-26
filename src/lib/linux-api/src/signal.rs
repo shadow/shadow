@@ -1538,12 +1538,12 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn linux_signal_is_valid(signo: i32) -> bool {
+    pub extern "C-unwind" fn linux_signal_is_valid(signo: i32) -> bool {
         Signal::try_from(signo).is_ok()
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_signal_is_realtime(signo: i32) -> bool {
+    pub extern "C-unwind" fn linux_signal_is_realtime(signo: i32) -> bool {
         let Ok(signal) = Signal::try_from(signo) else {
             return false;
         };
@@ -1551,43 +1551,46 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_sigemptyset() -> linux_sigset_t {
+    pub extern "C-unwind" fn linux_sigemptyset() -> linux_sigset_t {
         sigset_t::EMPTY.0
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_sigfullset() -> linux_sigset_t {
+    pub extern "C-unwind" fn linux_sigfullset() -> linux_sigset_t {
         sigset_t::FULL.0
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
+    pub unsafe extern "C-unwind" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
+    pub unsafe extern "C-unwind" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigismember(set: *const linux_sigset_t, signo: i32) -> bool {
+    pub unsafe extern "C-unwind" fn linux_sigismember(
+        set: *const linux_sigset_t,
+        signo: i32,
+    ) -> bool {
         let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         set.has(signo.try_into().unwrap())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
+    pub unsafe extern "C-unwind" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
         let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         set.is_empty()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigorset(
+    pub unsafe extern "C-unwind" fn linux_sigorset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
     ) -> linux_sigset_t {
@@ -1597,7 +1600,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigandset(
+    pub unsafe extern "C-unwind" fn linux_sigandset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
     ) -> linux_sigset_t {
@@ -1607,13 +1610,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
+    pub unsafe extern "C-unwind" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
         sigset_t(!*set).0
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
+    pub unsafe extern "C-unwind" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
         let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         match set.lowest() {
             Some(s) => s.into(),
@@ -1622,13 +1625,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
+    pub extern "C-unwind" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
         let sig = Signal::try_from(signo).unwrap();
         defaultaction(sig)
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_siginfo_new_for_kill(
+    pub extern "C-unwind" fn linux_siginfo_new_for_kill(
         lsi_signo: i32,
         sender_pid: i32,
         sender_uid: u32,
@@ -1638,7 +1641,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_kill(pid: i32, sig: i32) -> i32 {
+    pub unsafe extern "C-unwind" fn linux_kill(pid: i32, sig: i32) -> i32 {
         match kill_raw(pid, sig) {
             Ok(()) => 0,
             Err(e) => e.to_negated_i32(),
@@ -1646,7 +1649,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn linux_siginfo_new_for_tkill(
+    pub extern "C-unwind" fn linux_siginfo_new_for_tkill(
         lsi_signo: i32,
         sender_pid: i32,
         sender_uid: u32,
@@ -1657,7 +1660,7 @@ mod export {
 
     /// Returns the handler if there is one, or else NULL.
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigaction_handler(
+    pub unsafe extern "C-unwind" fn linux_sigaction_handler(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32)> {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
@@ -1669,7 +1672,7 @@ mod export {
 
     /// Returns the action if there is one, else NULL.
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigaction_action(
+    pub unsafe extern "C-unwind" fn linux_sigaction_action(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)> {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
@@ -1691,13 +1694,13 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigaction_is_ign(sa: *const linux_sigaction) -> bool {
+    pub unsafe extern "C-unwind" fn linux_sigaction_is_ign(sa: *const linux_sigaction) -> bool {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigIgn)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_sigaction_is_dfl(sa: *const linux_sigaction) -> bool {
+    pub unsafe extern "C-unwind" fn linux_sigaction_is_dfl(sa: *const linux_sigaction) -> bool {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigDfl)
     }

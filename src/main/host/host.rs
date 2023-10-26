@@ -1053,32 +1053,32 @@ mod export {
     };
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {
+    pub unsafe extern "C-unwind" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         let until = EmulatedTime::from_c_emutime(until).unwrap();
         hostrc.execute(until)
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_nextEventTime(hostrc: *const Host) -> CEmulatedTime {
+    pub unsafe extern "C-unwind" fn host_nextEventTime(hostrc: *const Host) -> CEmulatedTime {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         EmulatedTime::to_c_emutime(hostrc.next_event_time())
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getNewPacketID(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_getNewPacketID(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.get_new_packet_id()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_freeAllApplications(hostrc: *const Host) {
+    pub unsafe extern "C-unwind" fn host_freeAllApplications(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.free_all_applications()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getID(hostrc: *const Host) -> HostId {
+    pub unsafe extern "C-unwind" fn host_getID(hostrc: *const Host) -> HostId {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.id()
     }
@@ -1086,13 +1086,13 @@ mod export {
     /// SAFETY: The returned pointer belongs to Host, and is invalidated when
     /// `host` is moved or freed.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getTsc(host: *const Host) -> *const Tsc {
+    pub unsafe extern "C-unwind" fn host_getTsc(host: *const Host) -> *const Tsc {
         let hostrc = unsafe { host.as_ref().unwrap() };
         hostrc.tsc()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getName(hostrc: *const Host) -> *const c_char {
+    pub unsafe extern "C-unwind" fn host_getName(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.hostname.as_ptr()
     }
@@ -1100,62 +1100,66 @@ mod export {
     /// SAFETY: Returned pointer belongs to Host, and is only safe to access
     /// while no other threads are accessing Host.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getDefaultAddress(hostrc: *const Host) -> *mut cshadow::Address {
+    pub unsafe extern "C-unwind" fn host_getDefaultAddress(
+        hostrc: *const Host,
+    ) -> *mut cshadow::Address {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.net_ns.default_address.ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getDefaultIP(hostrc: *const Host) -> in_addr_t {
+    pub unsafe extern "C-unwind" fn host_getDefaultIP(hostrc: *const Host) -> in_addr_t {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         let ip = hostrc.default_ip();
         u32::from(ip).to_be()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getNextPacketPriority(hostrc: *const Host) -> FifoPacketPriority {
+    pub unsafe extern "C-unwind" fn host_getNextPacketPriority(
+        hostrc: *const Host,
+    ) -> FifoPacketPriority {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.get_next_packet_priority()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_autotuneReceiveBuffer(hostrc: *const Host) -> bool {
+    pub unsafe extern "C-unwind" fn host_autotuneReceiveBuffer(hostrc: *const Host) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.autotune_recv_buf
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_autotuneSendBuffer(hostrc: *const Host) -> bool {
+    pub unsafe extern "C-unwind" fn host_autotuneSendBuffer(hostrc: *const Host) -> bool {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.autotune_send_buf
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getConfiguredRecvBufSize(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_getConfiguredRecvBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.init_sock_recv_buf_size
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.init_sock_send_buf_size
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
+    pub unsafe extern "C-unwind" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         &mut *hostrc.upstream_router_borrow_mut()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_get_bw_down_kiBps(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_get_bw_down_kiBps(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.bw_down_kiBps()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_get_bw_up_kiBps(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_get_bw_up_kiBps(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.bw_up_kiBps()
     }
@@ -1167,7 +1171,7 @@ mod export {
     /// and is invalidated when the Host is no longer accessible to the current
     /// thread, or something else accesses its Tracker.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
+    pub unsafe extern "C-unwind" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         if let Some(mut tracker) = hostrc.tracker_borrow_mut() {
             &mut *tracker
@@ -1179,13 +1183,13 @@ mod export {
     /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when
     /// the Host is destroyed, and possibly when it is otherwise moved or mutated.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
+    pub unsafe extern "C-unwind" fn host_getDataPath(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.data_dir_path_cstring.as_ptr()
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_disassociateInterface(
+    pub unsafe extern "C-unwind" fn host_disassociateInterface(
         hostrc: *const Host,
         protocol: cshadow::ProtocolType,
         bind_ip: in_addr_t,
@@ -1210,7 +1214,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_getRandomFreePort(
+    pub unsafe extern "C-unwind" fn host_getRandomFreePort(
         hostrc: *const Host,
         protocol_type: cshadow::ProtocolType,
         interface_ip: in_addr_t,
@@ -1243,14 +1247,16 @@ mod export {
     /// and is invalidated when the Host is no longer accessible to the current
     /// thread, or something else accesses its FutexTable.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getFutexTable(hostrc: *const Host) -> *mut cshadow::FutexTable {
+    pub unsafe extern "C-unwind" fn host_getFutexTable(
+        hostrc: *const Host,
+    ) -> *mut cshadow::FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         &mut *hostrc.futextable_borrow_mut()
     }
 
     /// Returns the specified process, or NULL if it doesn't exist.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getProcess(
+    pub unsafe extern "C-unwind" fn host_getProcess(
         host: *const Host,
         virtual_pid: libc::pid_t,
     ) -> *const Process {
@@ -1270,7 +1276,7 @@ mod export {
     /// The pointer should not be accessed from threads other than the calling thread,
     /// or after `host` is no longer active on the current thread.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getThread(
+    pub unsafe extern "C-unwind" fn host_getThread(
         host: *const Host,
         virtual_tid: libc::pid_t,
     ) -> *const Thread {
@@ -1298,7 +1304,7 @@ mod export {
 
     /// Returns host-specific state that's kept in memory shared with the shim(s).
     #[no_mangle]
-    pub unsafe extern "C" fn host_getSharedMem(
+    pub unsafe extern "C-unwind" fn host_getSharedMem(
         hostrc: *const Host,
     ) -> *const shim_shmem::export::ShimShmemHost {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
@@ -1320,7 +1326,7 @@ mod export {
     /// SAFETY: The returned pointer is invalidated when the memory is unlocked, e.g.
     /// via `host_unlockShimShmemLock`.
     #[no_mangle]
-    pub unsafe extern "C" fn host_getShimShmemLock(
+    pub unsafe extern "C-unwind" fn host_getShimShmemLock(
         hostrc: *const Host,
     ) -> *mut shim_shmem::export::ShimShmemHostLock {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
@@ -1333,14 +1339,14 @@ mod export {
 
     /// Take the host's shared memory lock. See `host_getShimShmemLock`.
     #[no_mangle]
-    pub unsafe extern "C" fn host_lockShimShmemLock(hostrc: *const Host) {
+    pub unsafe extern "C-unwind" fn host_lockShimShmemLock(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.lock_shmem()
     }
 
     /// Release the host's shared memory lock. See `host_getShimShmemLock`.
     #[no_mangle]
-    pub unsafe extern "C" fn host_unlockShimShmemLock(hostrc: *const Host) {
+    pub unsafe extern "C-unwind" fn host_unlockShimShmemLock(hostrc: *const Host) {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.unlock_shmem()
     }
@@ -1350,14 +1356,16 @@ mod export {
     /// established a deterministic ordering, which can be useful when iterating
     /// items that are otherwise inconsistently ordered (e.g. hash table iterators).
     #[no_mangle]
-    pub unsafe extern "C" fn host_getNextDeterministicSequenceValue(hostrc: *const Host) -> u64 {
+    pub unsafe extern "C-unwind" fn host_getNextDeterministicSequenceValue(
+        hostrc: *const Host,
+    ) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.get_next_deterministic_sequence_value()
     }
 
     /// Schedule a task for this host at time 'time'.
     #[no_mangle]
-    pub unsafe extern "C" fn host_scheduleTaskAtEmulatedTime(
+    pub unsafe extern "C-unwind" fn host_scheduleTaskAtEmulatedTime(
         hostrc: *const Host,
         task: *mut TaskRef,
         time: CEmulatedTime,
@@ -1370,7 +1378,7 @@ mod export {
 
     /// Schedule a task for this host at a time 'nanoDelay' from now,.
     #[no_mangle]
-    pub unsafe extern "C" fn host_scheduleTaskWithDelay(
+    pub unsafe extern "C-unwind" fn host_scheduleTaskWithDelay(
         hostrc: *const Host,
         task: *mut TaskRef,
         delay: CSimulationTime,
@@ -1382,52 +1390,54 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_rngDouble(host: *const Host) -> f64 {
+    pub unsafe extern "C-unwind" fn host_rngDouble(host: *const Host) -> f64 {
         let host = unsafe { host.as_ref().unwrap() };
         host.random_mut().gen()
     }
 
     /// Fills the buffer with pseudo-random bytes.
     #[no_mangle]
-    pub extern "C" fn host_rngNextNBytes(host: *const Host, buf: *mut u8, len: usize) {
+    pub extern "C-unwind" fn host_rngNextNBytes(host: *const Host, buf: *mut u8, len: usize) {
         let host = unsafe { host.as_ref().unwrap() };
         let buf = unsafe { std::slice::from_raw_parts_mut(buf, len) };
         host.random_mut().fill_bytes(buf);
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsCpuFrequencyHz(host: *const Host) -> u64 {
+    pub extern "C-unwind" fn host_paramsCpuFrequencyHz(host: *const Host) -> u64 {
         let host = unsafe { host.as_ref().unwrap() };
         host.params.cpu_frequency
     }
 
     #[no_mangle]
-    pub extern "C" fn host_addDelayNanos(host: *const Host, delay_nanos: u64) {
+    pub extern "C-unwind" fn host_addDelayNanos(host: *const Host, delay_nanos: u64) {
         let host = unsafe { host.as_ref().unwrap() };
         let delay = Duration::from_nanos(delay_nanos);
         host.cpu.borrow_mut().add_delay(delay);
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsHeartbeatInterval(host: *const Host) -> CSimulationTime {
+    pub extern "C-unwind" fn host_paramsHeartbeatInterval(host: *const Host) -> CSimulationTime {
         let host = unsafe { host.as_ref().unwrap() };
         SimulationTime::to_c_simtime(host.params.heartbeat_interval)
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsHeartbeatLogLevel(host: *const Host) -> LogLevel {
+    pub extern "C-unwind" fn host_paramsHeartbeatLogLevel(host: *const Host) -> LogLevel {
         let host = unsafe { host.as_ref().unwrap() };
         host.params.heartbeat_log_level
     }
 
     #[no_mangle]
-    pub extern "C" fn host_paramsHeartbeatLogInfo(host: *const Host) -> cshadow::LogInfoFlags {
+    pub extern "C-unwind" fn host_paramsHeartbeatLogInfo(
+        host: *const Host,
+    ) -> cshadow::LogInfoFlags {
         let host = unsafe { host.as_ref().unwrap() };
         host.params.heartbeat_log_info
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_socketWantsToSend(
+    pub unsafe extern "C-unwind" fn host_socketWantsToSend(
         hostrc: *const Host,
         socket: *const cshadow::CompatSocket,
         addr: in_addr_t,
@@ -1438,7 +1448,11 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn host_continue(host: *const Host, pid: libc::pid_t, tid: libc::pid_t) {
+    pub unsafe extern "C-unwind" fn host_continue(
+        host: *const Host,
+        pid: libc::pid_t,
+        tid: libc::pid_t,
+    ) {
         let host = unsafe { host.as_ref().unwrap() };
         host.resume(pid.try_into().unwrap(), tid.try_into().unwrap())
     }

@@ -98,7 +98,10 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C" fn linux_clock_gettime(clockid: i32, res: *mut linux_timespec) -> i64 {
+    pub unsafe extern "C-unwind" fn linux_clock_gettime(
+        clockid: i32,
+        res: *mut linux_timespec,
+    ) -> i64 {
         let t = match clock_gettime_raw(clockid) {
             Ok(t) => t,
             Err(e) => return e.to_negated_i64(),

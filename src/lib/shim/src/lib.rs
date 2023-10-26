@@ -458,7 +458,7 @@ fn wait_for_start_event(get_initial_working_dir: bool) {
     }
 }
 
-// Rust's linking of a `cdylib` only considers Rust `pub extern "C"` entry
+// Rust's linking of a `cdylib` only considers Rust `pub extern "C-unwind"` entry
 // points, and the symbols those recursively used, to be used. i.e. any function
 // called from outside of the shim needs to be exported from the Rust code. We
 // wrap some C implementations here.
@@ -471,7 +471,7 @@ pub mod export {
     ///
     /// The syscall itself must be safe to make.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_api_syscall(
+    pub unsafe extern "C-unwind" fn shim_api_syscall(
         n: core::ffi::c_long,
         arg1: u64,
         arg2: u64,
@@ -487,7 +487,7 @@ pub mod export {
     ///
     /// Pointers must be dereferenceable.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_api_getaddrinfo(
+    pub unsafe extern "C-unwind" fn shim_api_getaddrinfo(
         node: *const core::ffi::c_char,
         service: *const core::ffi::c_char,
         hints: *const libc::addrinfo,
@@ -501,7 +501,7 @@ pub mod export {
     /// * Pointers must be dereferenceable.
     /// * `res` is invalidated afterwards.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_api_freeaddrinfo(res: *mut libc::addrinfo) {
+    pub unsafe extern "C-unwind" fn shim_api_freeaddrinfo(res: *mut libc::addrinfo) {
         unsafe { bindings::shimc_api_freeaddrinfo(res) }
     }
 
@@ -509,7 +509,7 @@ pub mod export {
     ///
     /// Pointers must be dereferenceable
     #[no_mangle]
-    pub unsafe extern "C" fn shim_api_getifaddrs(ifap: *mut *mut libc::ifaddrs) -> i32 {
+    pub unsafe extern "C-unwind" fn shim_api_getifaddrs(ifap: *mut *mut libc::ifaddrs) -> i32 {
         unsafe { bindings::shimc_api_getifaddrs(ifap) }
     }
 
@@ -518,7 +518,7 @@ pub mod export {
     /// * Pointers must be dereferenceable.
     /// * `ifa` is invalidated afterwards.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_api_freeifaddrs(ifa: *mut libc::ifaddrs) {
+    pub unsafe extern "C-unwind" fn shim_api_freeifaddrs(ifa: *mut libc::ifaddrs) {
         unsafe { bindings::shimc_api_freeifaddrs(ifa) }
     }
 
@@ -526,13 +526,13 @@ pub mod export {
     /// returns the old value. Typical usage is to set this to the desired value at
     /// the beginning of an operation, and restore the old value afterwards.
     #[no_mangle]
-    pub extern "C" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
+    pub extern "C-unwind" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
         tls_allow_native_syscalls::swap(new)
     }
 
     /// Whether syscall interposition is currently enabled.
     #[no_mangle]
-    pub extern "C" fn shim_interpositionEnabled() -> bool {
+    pub extern "C-unwind" fn shim_interpositionEnabled() -> bool {
         !tls_allow_native_syscalls::get()
     }
 
@@ -543,7 +543,7 @@ pub mod export {
     /// This should be called once per thread before any signal handlers run.
     /// Panics if already called on the current thread.
     #[no_mangle]
-    pub extern "C" fn _shim_init_signal_stack() {
+    pub extern "C-unwind" fn _shim_init_signal_stack() {
         tls_thread_signal_stack::init();
     }
 
@@ -558,7 +558,7 @@ pub mod export {
     /// this, since we know Shadow won't permit another thread to run
     /// preemptively before the curent thread has a chance to finish exiting.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_freeSignalStack() {
+    pub unsafe extern "C-unwind" fn shim_freeSignalStack() {
         unsafe { tls_thread_signal_stack::free() };
     }
 
@@ -567,7 +567,7 @@ pub mod export {
     /// stdin must contained a serialized block of
     /// type `IPCData`, which outlives the current thread.
     #[no_mangle]
-    pub unsafe extern "C" fn _shim_parent_init_ipc() {
+    pub unsafe extern "C-unwind" fn _shim_parent_init_ipc() {
         let mut bytes = [0; core::mem::size_of::<ShMemBlockSerialized>()];
         let bytes_read = rustix::io::read(
             unsafe { rustix::fd::BorrowedFd::borrow_raw(libc::STDIN_FILENO) },
@@ -587,7 +587,7 @@ pub mod export {
     ///
     /// The returned pointer must not outlive the current thread.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_thisThreadEventIPC() -> *const IPCData {
+    pub unsafe extern "C-unwind" fn shim_thisThreadEventIPC() -> *const IPCData {
         tls_ipc::with(|ipc| ipc as *const _)
     }
 
@@ -597,13 +597,13 @@ pub mod export {
     ///
     /// The returned pointer must not outlive the current thread.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_threadSharedMem(
+    pub unsafe extern "C-unwind" fn shim_threadSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
         tls_thread_shmem::with(|thread| thread as *const _)
     }
 
     #[no_mangle]
-    pub extern "C" fn _shim_load() {
+    pub extern "C-unwind" fn _shim_load() {
         init_process();
     }
 
@@ -615,12 +615,12 @@ pub mod export {
     /// access thread local storage again from the current thread, e.g.
     /// using `std::panic::catch_unwind` or a custom panic hook.
     #[no_mangle]
-    pub unsafe extern "C" fn shim_release_and_exit_current_thread(status: i32) {
+    pub unsafe extern "C-unwind" fn shim_release_and_exit_current_thread(status: i32) {
         unsafe { release_and_exit_current_thread(status) }
     }
 
     #[no_mangle]
-    pub extern "C" fn shim_managerSharedMem(
+    pub extern "C-unwind" fn shim_managerSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager {
         let rv = global_manager_shmem::try_get();
         rv.map(|x| {
@@ -634,7 +634,7 @@ pub mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn shim_hostSharedMem(
+    pub extern "C-unwind" fn shim_hostSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost {
         let rv = global_host_shmem::try_get();
         rv.map(|x| {
@@ -648,7 +648,7 @@ pub mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn shim_processSharedMem(
+    pub extern "C-unwind" fn shim_processSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
         tls_process_shmem::with(|process| {
             // We know this pointer will be live for the lifetime of the
@@ -660,27 +660,27 @@ pub mod export {
 
     /// Wait for start event from shadow, from a newly spawned thread.
     #[no_mangle]
-    pub extern "C" fn _shim_preload_only_child_ipc_wait_for_start_event() {
+    pub extern "C-unwind" fn _shim_preload_only_child_ipc_wait_for_start_event() {
         wait_for_start_event(false);
     }
 
     #[no_mangle]
-    pub extern "C" fn _shim_ipc_wait_for_start_event() {
+    pub extern "C-unwind" fn _shim_ipc_wait_for_start_event() {
         wait_for_start_event(true);
     }
 
     #[no_mangle]
-    pub extern "C" fn _shim_parent_init_manager_shm() {
+    pub extern "C-unwind" fn _shim_parent_init_manager_shm() {
         unsafe { global_manager_shmem::set(&global_host_shmem::get().manager_shmem) }
     }
 
     #[no_mangle]
-    pub extern "C" fn _shim_parent_init_host_shm() {
+    pub extern "C-unwind" fn _shim_parent_init_host_shm() {
         tls_process_shmem::with(|process| unsafe { global_host_shmem::set(&process.host_shmem) });
     }
 
     #[no_mangle]
-    pub extern "C" fn _shim_parent_close_stdin() {
+    pub extern "C-unwind" fn _shim_parent_close_stdin() {
         unsafe { rustix::io::close(libc::STDIN_FILENO) };
     }
 }

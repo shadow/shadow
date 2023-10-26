@@ -186,7 +186,7 @@ pub mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C" fn emutime_add_simtime(
+    pub extern "C-unwind" fn emutime_add_simtime(
         lhs: CEmulatedTime,
         rhs: CSimulationTime,
     ) -> CEmulatedTime {
@@ -205,7 +205,7 @@ pub mod export {
     }
 
     #[no_mangle]
-    pub extern "C" fn emutime_sub_emutime(
+    pub extern "C-unwind" fn emutime_sub_emutime(
         lhs: CEmulatedTime,
         rhs: CEmulatedTime,
     ) -> CSimulationTime {
