@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 libc = { version = "0.2.148", default-features = false }
-rustix = { version = "0.38.14", default-features = false }
+rustix = { version = "0.38.19", default-features = false }
 va_list = { version = "0.1.4", default-features = false }
 
 [dev-dependencies]
-rustix = { version = "0.38.14", default-features = false, features=["pipe"] }
+rustix = { version = "0.38.19", default-features = false, features=["pipe"] }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }

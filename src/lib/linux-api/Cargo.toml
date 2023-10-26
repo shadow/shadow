@@ -23,10 +23,10 @@ linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
 linux-raw-sys = "0.6.0"
-rustix = { optional=true, version = "0.38.14", default-features=false, features = ["process"] }
+rustix = { optional=true, version = "0.38.19", default-features=false, features = ["process"] }
 
 [dev-dependencies]
-rustix = { version = "0.38.14", default-features=false, features = ["thread", "process", "time"] }
+rustix = { version = "0.38.19", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
 shadow-build-common = { path = "../shadow-build-common" }
