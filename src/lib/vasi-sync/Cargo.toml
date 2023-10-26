@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 num_enum = { version = "0.7.0", default-features=false }
-rustix = { version = "0.38.14", default-features = false, features=["fs", "thread", "process"] }
+rustix = { version = "0.38.19", default-features = false, features=["fs", "thread", "process"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 rustc-hash = { version = "1.1.0", default-features=false }
@@ -15,7 +15,7 @@ rustc-hash = { version = "1.1.0", default-features=false }
 [dev-dependencies]
 criterion = "0.5.1"
 rand = "0.8.5"
-rustix = { version = "0.38.14", default-features = false, features=["process"] }
+rustix = { version = "0.38.19", default-features = false, features=["process"] }
 libc = "0.2"
 nix =  "0.27.1"
 
