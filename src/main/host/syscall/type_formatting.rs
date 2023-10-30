@@ -189,6 +189,8 @@ simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 
+simple_display_impl!(linux_api::prctl::PrctlOp);
+
 bitflags_impl!(linux_api::fcntl::OFlag);
 bitflags_impl!(linux_api::mman::ProtFlags);
 bitflags_impl!(linux_api::mman::MapFlags);

@@ -493,3 +493,9 @@ impl TryFrom<SysCallReg> for linux_api::time::ITimerId {
         Self::try_from(i32::from(reg)).map_err(|_| ())
     }
 }
+
+impl From<SysCallReg> for linux_api::prctl::PrctlOp {
+    fn from(reg: SysCallReg) -> Self {
+        Self::new(reg.into())
+    }
+}

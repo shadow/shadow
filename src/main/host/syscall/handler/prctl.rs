@@ -8,18 +8,18 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall_types::SyscallError;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* option */ std::ffi::c_int,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* option */ PrctlOp,
                   /* arg2 */ std::ffi::c_ulong, /* arg3 */ std::ffi::c_ulong,
                   /* arg4 */ std::ffi::c_ulong, /* arg5 */ std::ffi::c_ulong)]
     pub fn prctl(
         ctx: &mut SyscallContext,
-        option: std::ffi::c_int,
+        option: PrctlOp,
         arg2: std::ffi::c_ulong,
         _arg3: std::ffi::c_ulong,
         _arg4: std::ffi::c_ulong,
         _arg5: std::ffi::c_ulong,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        match PrctlOp::new(option) {
+        match option {
             PrctlOp::PR_CAP_AMBIENT
             | PrctlOp::PR_CAPBSET_READ
             | PrctlOp::PR_CAPBSET_DROP
