@@ -207,7 +207,8 @@ impl SyscallHandler {
             Some(file as *mut c::RegularFile)
         };
 
-        // this fd exists in the plugin and not shadow
+        // this fd exists in the plugin and not shadow; make sure to close this before returning (no
+        // RAII)
         let plugin_fd = file.map(|file| Self::open_plugin_file(ctx.objs, fd, file));
 
         // the file is None for an anonymous mapping, or a non-null Some otherwise
@@ -239,16 +240,26 @@ impl SyscallHandler {
         );
 
         if matches!(mmap_result, Err(SyscallError::Native)) {
-            let (ctx, thread) = ctx.objs.split_thread();
-            return Ok(thread.native_mmap(
-                &ctx,
+            // TODO: We already made the native syscall above when calling the memory manager's
+            // do_mmap(). Can this really return `SyscallError::Native`, and does trying the native
+            // syscall again really do anything for us?
+            let (process_ctx, thread) = ctx.objs.split_thread();
+            let mmap_result = thread.native_mmap(
+                &process_ctx,
                 addr,
                 len,
                 prot,
                 flags,
                 plugin_fd.unwrap_or(-1),
                 offset,
-            )?);
+            );
+
+            // close the file we asked them to open
+            if let Some(plugin_fd) = plugin_fd {
+                Self::close_plugin_file(ctx.objs, plugin_fd);
+            }
+
+            return Ok(mmap_result?);
         }
 
         log::trace!(
