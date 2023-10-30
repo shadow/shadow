@@ -29,7 +29,7 @@ use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
+use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::Thread;
 
 mod memory_copier;
@@ -633,7 +633,7 @@ impl MemoryManager {
         flags: i32,
         fd: i32,
         offset: i64,
-    ) -> SyscallResult {
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         let addr = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
@@ -641,7 +641,7 @@ impl MemoryManager {
         if let Some(mm) = &mut self.memory_mapper {
             mm.handle_mmap_result(ctx, ForeignArrayPtr::new(addr, length), prot, flags, fd);
         }
-        Ok(addr.into())
+        Ok(addr)
     }
 
     pub fn handle_munmap(
@@ -649,12 +649,12 @@ impl MemoryManager {
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
         length: usize,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         if self.memory_mapper.is_some() {
             // Do it ourselves so that we can update our mappings based on
             // whether it succeeded.
             self.do_munmap(ctx, addr, length)?;
-            Ok(0.into())
+            Ok(())
         } else {
             // We don't need to know the result, and it's more efficient to let
             // the original syscall complete than to do it ourselves.
@@ -727,20 +727,19 @@ where
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
-        let ptr = ForeignPtr::<()>::from(
-            ctx.process
-                .memory_borrow_mut()
-                .do_mmap(
-                    ctx,
-                    ForeignPtr::null(),
-                    len * std::mem::size_of::<T>(),
-                    prot,
-                    libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
-                    -1,
-                    0,
-                )
-                .unwrap(),
-        );
+        let ptr = ctx
+            .process
+            .memory_borrow_mut()
+            .do_mmap(
+                ctx,
+                ForeignPtr::null(),
+                len * std::mem::size_of::<T>(),
+                prot,
+                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
+                -1,
+                0,
+            )
+            .unwrap();
 
         Self {
             ptr: ForeignArrayPtr::new(ptr.cast::<T>(), len),

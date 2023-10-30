@@ -11,14 +11,17 @@ use crate::cshadow as c;
 use crate::host::descriptor::CompatFile;
 use crate::host::memory_manager::AllocdMem;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall_types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void)]
-    pub fn brk(ctx: &mut SyscallContext, addr: ForeignPtr<u8>) -> SyscallResult {
+    pub fn brk(
+        ctx: &mut SyscallContext,
+        addr: ForeignPtr<u8>,
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         // delegate to the memory manager
         let mut memory_manager = ctx.objs.process.memory_borrow_mut();
-        memory_manager.handle_brk(ctx.objs, addr).map(Into::into)
+        memory_manager.handle_brk(ctx.objs, addr)
     }
 
     // <https://github.com/torvalds/linux/tree/v6.3/mm/mremap.c#L895>
@@ -37,7 +40,7 @@ impl SyscallHandler {
         new_size: std::ffi::c_ulong,
         flags: std::ffi::c_ulong,
         new_addr: std::ffi::c_ulong,
-    ) -> SyscallResult {
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         let old_addr: usize = old_addr.try_into().unwrap();
         let old_size: usize = old_size.try_into().unwrap();
         let new_size: usize = new_size.try_into().unwrap();
@@ -56,9 +59,7 @@ impl SyscallHandler {
 
         // delegate to the memory manager
         let mut memory_manager = ctx.objs.process.memory_borrow_mut();
-        memory_manager
-            .handle_mremap(ctx.objs, old_addr, old_size, new_size, flags, new_addr)
-            .map(Into::into)
+        memory_manager.handle_mremap(ctx.objs, old_addr, old_size, new_size, flags, new_addr)
     }
 
     // <https://github.com/torvalds/linux/tree/v6.3/mm/mmap.c#L2786>
@@ -66,7 +67,11 @@ impl SyscallHandler {
     // SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
     // ```
     #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void, /* length */ usize)]
-    pub fn munmap(ctx: &mut SyscallContext, addr: std::ffi::c_ulong, len: usize) -> SyscallResult {
+    pub fn munmap(
+        ctx: &mut SyscallContext,
+        addr: std::ffi::c_ulong,
+        len: usize,
+    ) -> Result<(), SyscallError> {
         let addr: usize = addr.try_into().unwrap();
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 
@@ -86,7 +91,7 @@ impl SyscallHandler {
         addr: std::ffi::c_ulong,
         len: usize,
         prot: std::ffi::c_ulong,
-    ) -> SyscallResult {
+    ) -> Result<std::ffi::c_int, SyscallError> {
         let addr: usize = addr.try_into().unwrap();
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 
@@ -100,9 +105,7 @@ impl SyscallHandler {
 
         // delegate to the memory manager
         let mut memory_manager = ctx.objs.process.memory_borrow_mut();
-        memory_manager
-            .handle_mprotect(ctx.objs, addr, len, prot)
-            .map(Into::into)
+        memory_manager.handle_mprotect(ctx.objs, addr, len, prot)
     }
 
     // <https://github.com/torvalds/linux/tree/v6.3/arch/x86/kernel/sys_x86_64.c#L86>
@@ -123,7 +126,7 @@ impl SyscallHandler {
         flags: std::ffi::c_ulong,
         fd: std::ffi::c_ulong,
         offset: std::ffi::c_ulong,
-    ) -> SyscallResult {
+    ) -> Result<ForeignPtr<u8>, SyscallError> {
         log::trace!("mmap called on fd {fd} for {len} bytes");
 
         let addr: usize = addr.try_into().unwrap();
@@ -237,17 +240,15 @@ impl SyscallHandler {
 
         if matches!(mmap_result, Err(SyscallError::Native)) {
             let (ctx, thread) = ctx.objs.split_thread();
-            return Ok(thread
-                .native_mmap(
-                    &ctx,
-                    addr,
-                    len,
-                    prot,
-                    flags,
-                    plugin_fd.unwrap_or(-1),
-                    offset,
-                )?
-                .into());
+            return Ok(thread.native_mmap(
+                &ctx,
+                addr,
+                len,
+                prot,
+                flags,
+                plugin_fd.unwrap_or(-1),
+                offset,
+            )?);
         }
 
         log::trace!(
