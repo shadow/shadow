@@ -13,28 +13,6 @@ impl SyscallHandler {
         memory_manager.handle_brk(ctx.objs, addr).map(Into::into)
     }
 
-    // <https://github.com/torvalds/linux/tree/v6.3/arch/x86/kernel/sys_x86_64.c#L86>
-    // ```
-    // SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
-    //                 unsigned long, prot, unsigned long, flags,
-    //                 unsigned long, fd, unsigned long, off)
-    // ```
-    #[log_syscall(/* rv */ *const std::ffi::c_void, /* addr */ *const std::ffi::c_void,
-                  /* length */ usize, /* prot */ linux_api::mman::ProtFlags,
-                  /* flags */ linux_api::mman::MapFlags, /* fd */ std::ffi::c_ulong,
-                  /* offset */ std::ffi::c_ulong)]
-    pub fn mmap(
-        ctx: &mut SyscallContext,
-        _addr: std::ffi::c_ulong,
-        _len: std::ffi::c_ulong,
-        _prot: std::ffi::c_ulong,
-        _flags: std::ffi::c_ulong,
-        _fd: std::ffi::c_ulong,
-        _offset: std::ffi::c_ulong,
-    ) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_mmap, ctx)
-    }
-
     // <https://github.com/torvalds/linux/tree/v6.3/mm/mremap.c#L895>
     // ```
     // SYSCALL_DEFINE5(mremap, unsigned long, addr, unsigned long, old_len,
@@ -117,5 +95,27 @@ impl SyscallHandler {
         memory_manager
             .handle_mprotect(ctx.objs, addr, len, prot)
             .map(Into::into)
+    }
+
+    // <https://github.com/torvalds/linux/tree/v6.3/arch/x86/kernel/sys_x86_64.c#L86>
+    // ```
+    // SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
+    //                 unsigned long, prot, unsigned long, flags,
+    //                 unsigned long, fd, unsigned long, off)
+    // ```
+    #[log_syscall(/* rv */ *const std::ffi::c_void, /* addr */ *const std::ffi::c_void,
+                  /* length */ usize, /* prot */ linux_api::mman::ProtFlags,
+                  /* flags */ linux_api::mman::MapFlags, /* fd */ std::ffi::c_ulong,
+                  /* offset */ std::ffi::c_ulong)]
+    pub fn mmap(
+        ctx: &mut SyscallContext,
+        _addr: std::ffi::c_ulong,
+        _len: std::ffi::c_ulong,
+        _prot: std::ffi::c_ulong,
+        _flags: std::ffi::c_ulong,
+        _fd: std::ffi::c_ulong,
+        _offset: std::ffi::c_ulong,
+    ) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_mmap, ctx)
     }
 }
