@@ -1130,6 +1130,19 @@ impl Process {
         self.common().host_id
     }
 
+    /// Get process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
+    /// `PR_GET_DUMPABLE`.
+    pub fn dumpable(&self) -> u32 {
+        self.as_runnable().unwrap().dumpable.get()
+    }
+
+    /// Set process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
+    /// `PR_GET_DUMPABLE`.
+    pub fn set_dumpable(&self, val: u32) {
+        assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
+        self.as_runnable().unwrap().dumpable.set(val)
+    }
+
     /// Deprecated wrapper for `RunnableProcess::start_cpu_delay_timer`
     #[cfg(feature = "perf_timers")]
     pub fn start_cpu_delay_timer(&self) {
@@ -2252,23 +2265,6 @@ mod export {
     ) -> StraceFmtMode {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.strace_logging_options().into()
-    }
-
-    /// Get process's "dumpable" state, as manipulated by the prctl operations
-    /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_getDumpable(proc: *const Process) -> u32 {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        proc.as_runnable().unwrap().dumpable.get()
-    }
-
-    /// Set process's "dumpable" state, as manipulated by the prctl operations
-    /// PR_SET_DUMPABLE and PR_GET_DUMPABLE.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_setDumpable(proc: *const Process, val: u32) {
-        assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
-        let proc = unsafe { proc.as_ref().unwrap() };
-        proc.as_runnable().unwrap().dumpable.set(val)
     }
 
     #[no_mangle]

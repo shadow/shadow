@@ -16,6 +16,7 @@ mod fcntl;
 mod file;
 mod ioctl;
 mod mman;
+mod prctl;
 mod random;
 mod sched;
 mod socket;
@@ -87,6 +88,7 @@ impl SyscallHandler {
             libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
             libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
+            libc::SYS_prctl => SyscallHandlerFn::call(Self::prctl, &mut ctx),
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
             libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
             libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),

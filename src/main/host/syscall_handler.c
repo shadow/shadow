@@ -392,7 +392,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(pipe2);
             HANDLE_C(poll);
             HANDLE_C(ppoll);
-            HANDLE_C(prctl);
+            HANDLE_RUST(prctl);
             HANDLE_RUST(pread64);
             HANDLE_RUST(preadv);
 #ifdef SYS_preadv2
