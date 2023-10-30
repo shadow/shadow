@@ -18,6 +18,7 @@ mod ioctl;
 mod mman;
 mod prctl;
 mod random;
+mod resource;
 mod sched;
 mod socket;
 mod sysinfo;
@@ -92,6 +93,7 @@ impl SyscallHandler {
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
             libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
             libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),
+            libc::SYS_prlimit64 => SyscallHandlerFn::call(Self::prlimit64, &mut ctx),
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
             libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
             libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
