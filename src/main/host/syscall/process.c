@@ -37,16 +37,6 @@ static SyscallReturn _syscallhandler_prlimitHelper(SysCallHandler* sys, pid_t pi
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_prlimit(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-    pid_t pid = args->args[0].as_i64;
-    int resource = args->args[1].as_i64;
-    UntypedForeignPtr newlim = args->args[2].as_ptr; // const struct rlimit*
-    UntypedForeignPtr oldlim = args->args[3].as_ptr; // const struct rlimit*
-    trace("prlimit called on pid %i for resource %i", pid, resource);
-    return _syscallhandler_prlimitHelper(sys, pid, resource, newlim, oldlim);
-}
-
 SyscallReturn syscallhandler_prlimit64(SysCallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
     pid_t pid = args->args[0].as_i64;

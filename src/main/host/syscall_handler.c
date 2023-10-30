@@ -398,9 +398,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #ifdef SYS_preadv2
             HANDLE_RUST(preadv2);
 #endif
-#ifdef SYS_prlimit
-            HANDLE_C(prlimit);
-#endif
 #ifdef SYS_prlimit64
             HANDLE_C(prlimit64);
 #endif
