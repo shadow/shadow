@@ -1915,7 +1915,7 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::host::context::ThreadContext;
-    use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
+    use crate::host::syscall_types::ForeignArrayPtr;
     use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
 
@@ -2066,37 +2066,6 @@ mod export {
             }
             Err(e) => e.to_negated_i32(),
         }
-    }
-
-    /// Fully handles the `mmap` syscall
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleMmap(
-        proc: *const Process,
-        thread: *const Thread,
-        addr: UntypedForeignPtr,
-        len: usize,
-        prot: i32,
-        flags: i32,
-        fd: i32,
-        offset: i64,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .do_mmap(
-                    &ThreadContext::new(host, process, thread),
-                    addr.cast::<u8>(),
-                    len,
-                    prot,
-                    flags,
-                    fd,
-                    offset,
-                )
-                .into()
-        })
-        .unwrap()
     }
 
     /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
