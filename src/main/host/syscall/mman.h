@@ -8,10 +8,6 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(brk);
 SYSCALL_HANDLER(mmap);
-SYSCALL_HANDLER(mprotect);
-SYSCALL_HANDLER(mremap);
-SYSCALL_HANDLER(munmap);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_MMAN_H_ */

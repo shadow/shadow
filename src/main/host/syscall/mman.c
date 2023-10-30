@@ -253,14 +253,6 @@ static SyscallReturn _syscallhandler_mmap(SysCallHandler* sys, UntypedForeignPtr
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_brk(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr newBrk = args->args[0].as_ptr;
-
-    // Delegate to the memoryManager.
-    return process_handleBrk(
-        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), newBrk);
-}
-
 SyscallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) {
     UntypedForeignPtr addrPtr = args->args[0].as_ptr; // void*
     size_t len = args->args[1].as_u64;
@@ -269,35 +261,4 @@ SyscallReturn syscallhandler_mmap(SysCallHandler* sys, const SysCallArgs* args) 
     int fd = args->args[4].as_i64;
     int64_t offset = args->args[5].as_i64;
     return _syscallhandler_mmap(sys, addrPtr, len, prot, flags, fd, offset);
-}
-
-SyscallReturn syscallhandler_mremap(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr old_addr = args->args[0].as_ptr;
-    uint64_t old_size = args->args[1].as_u64;
-    uint64_t new_size = args->args[2].as_u64;
-    int flags = args->args[3].as_i64;
-    UntypedForeignPtr new_addr = args->args[4].as_ptr;
-
-    // Delegate to the memoryManager.
-    return process_handleMremap(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys),
-                                old_addr, old_size, new_size, flags, new_addr);
-}
-
-SyscallReturn syscallhandler_munmap(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr addr = args->args[0].as_ptr;
-    uint64_t len = args->args[1].as_u64;
-
-    // Delegate to the memoryManager.
-    return process_handleMunmap(
-        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addr, len);
-}
-
-SyscallReturn syscallhandler_mprotect(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr addr = args->args[0].as_ptr;
-    size_t len = args->args[1].as_u64;
-    int prot = args->args[2].as_i64;
-
-    // Delegate to the memoryManager.
-    return process_handleMprotect(
-        _syscallhandler_getProcess(sys), _syscallhandler_getThread(sys), addr, len, prot);
 }
