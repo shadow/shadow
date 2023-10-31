@@ -117,7 +117,8 @@ void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTab
 
     socket->vtable = vtable;
 
-    socket->protocol = type == DT_TCPSOCKET ? PTCP : PLOCAL;
+    utility_debugAssert(type == DT_TCPSOCKET);
+    socket->protocol = type == PTCP;
     socket->inputBuffer = g_queue_new();
     socket->inputBufferSize = receiveBufferSize;
     socket->outputBuffer = g_queue_new();

@@ -530,8 +530,7 @@ static void _tracker_logSocket(Tracker* tracker, LogLevel level, CSimulationTime
                 "%"G_GSIZE_FORMAT",%"G_GSIZE_FORMAT";"
                 "%s;%s;%s;%s",
                 ss->socket, /*inet_ntoa((struct in_addr){socket->peerIP})*/
-                ss->type == PTCP ? "TCP" : ss->type == PUDP ? "UDP" :
-                    ss->type == PLOCAL ? "LOCAL" : "UNKNOWN",
+                ss->type == PTCP ? "TCP" : ss->type == PUDP ? "UDP" : "UNKNOWN",
                 ss->peerHostname, ss->peerPort,
                 ss->inputBufferLength, ss->inputBufferSize,
                 ss->outputBufferLength, ss->outputBufferSize,
