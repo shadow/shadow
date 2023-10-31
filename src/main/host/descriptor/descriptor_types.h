@@ -12,10 +12,7 @@ typedef enum _LegacyFileType LegacyFileType;
 enum _LegacyFileType {
     DT_NONE,
     DT_TCPSOCKET,
-    DT_UDPSOCKET,
     DT_EPOLL,
-    DT_EVENTD,
-    DT_TIMER,
     DT_FILE,
 };
 

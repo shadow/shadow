@@ -21,8 +21,7 @@
 #include "main/utility/utility.h"
 
 static LegacySocket* _legacysocket_fromLegacyFile(LegacyFile* descriptor) {
-    utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET ||
-                        legacyfile_getType(descriptor) == DT_UDPSOCKET);
+    utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
     return (LegacySocket*)descriptor;
 }
 
@@ -118,7 +117,7 @@ void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTab
 
     socket->vtable = vtable;
 
-    socket->protocol = type == DT_TCPSOCKET ? PTCP : type == DT_UDPSOCKET ? PUDP : PLOCAL;
+    socket->protocol = type == DT_TCPSOCKET ? PTCP : PLOCAL;
     socket->inputBuffer = g_queue_new();
     socket->inputBufferSize = receiveBufferSize;
     socket->outputBuffer = g_queue_new();
