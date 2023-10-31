@@ -193,6 +193,25 @@ pub fn assert_true_else_errno(cond: bool) {
     assert!(cond, "{}", get_errno_message(get_errno()));
 }
 
+/// Like the function `assert_true_else_errno`, but shows the original expression in the output
+/// message.
+#[macro_export]
+macro_rules! assert_with_errno {
+    ($f: expr) => {{
+        let result = $f;
+        let errno = test_utils::get_errno();
+        let errno_str =
+            linux_api::errno::Errno::from_u16(errno as u16).expect("errno is not valid");
+        assert!(
+            result,
+            "assertion failed: {} (errno: {})",
+            stringify!($f),
+            errno_str
+        );
+        errno
+    }};
+}
+
 /// Calls check_system_call(), but automatically passes the current line number.
 #[macro_export]
 macro_rules! check_system_call {
