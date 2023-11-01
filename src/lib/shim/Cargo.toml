@@ -38,7 +38,7 @@ shadow-build-common = { path = "../shadow-build-common" }
 # Building the C code from this crate's build script requires
 # that these bindings have been generated.
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
-system-deps = "6.1"
+system-deps = "6.2"
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt
