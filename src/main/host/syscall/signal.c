@@ -3,8 +3,6 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/process.h"
-
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>

@@ -61,6 +61,7 @@ pub mod ldt;
 pub mod limits;
 pub mod mman;
 pub mod posix_types;
+pub mod prctl;
 pub mod resource;
 pub mod rseq;
 pub mod sched;

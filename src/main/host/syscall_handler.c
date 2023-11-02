@@ -28,7 +28,6 @@
 #include "main/host/syscall/futex.h"
 #include "main/host/syscall/mman.h"
 #include "main/host/syscall/poll.h"
-#include "main/host/syscall/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/select.h"
 #include "main/host/syscall/shadow.h"
@@ -392,17 +391,14 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(pipe2);
             HANDLE_C(poll);
             HANDLE_C(ppoll);
-            HANDLE_C(prctl);
+            HANDLE_RUST(prctl);
             HANDLE_RUST(pread64);
             HANDLE_RUST(preadv);
 #ifdef SYS_preadv2
             HANDLE_RUST(preadv2);
 #endif
-#ifdef SYS_prlimit
-            HANDLE_C(prlimit);
-#endif
 #ifdef SYS_prlimit64
-            HANDLE_C(prlimit64);
+            HANDLE_RUST(prlimit64);
 #endif
             HANDLE_C(pselect6);
             HANDLE_RUST(pwrite64);

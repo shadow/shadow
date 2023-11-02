@@ -148,7 +148,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/descriptor/tcp_cong.h")
         .header("host/descriptor/tcp_cong_reno.h")
         .header("host/futex.h")
-        .header("host/process.h")
         .header("host/status.h")
         .header("host/status_listener.h")
         .header("host/syscall/fcntl.h")
@@ -362,7 +361,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/ioctl.c",
         "host/syscall/mman.c",
         "host/syscall/poll.c",
-        "host/syscall/process.c",
         "host/syscall/select.c",
         "host/syscall/shadow.c",
         "host/syscall/signal.c",
