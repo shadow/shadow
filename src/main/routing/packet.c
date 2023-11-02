@@ -36,16 +36,6 @@
 
 /* thread-safe structure representing a data/network packet */
 
-typedef struct _PacketLocalHeader PacketLocalHeader;
-struct _PacketLocalHeader {
-    enum ProtocolLocalFlags flags;
-    gint sourceDescriptorHandle;
-    gint destinationDescriptorHandle;
-
-    // port is in network byte order
-    in_port_t port;
-};
-
 typedef struct _PacketUDPHeader PacketUDPHeader;
 struct _PacketUDPHeader {
     enum ProtocolUDPFlags flags;
@@ -89,7 +79,6 @@ struct _Packet {
 
 const gchar* protocol_toString(ProtocolType type) {
     switch (type) {
-        case PLOCAL: return "LOCAL";
         case PUDP: return "UDP";
         case PTCP: return "TCP";
         case PMOCK: return "MOCK";
@@ -196,11 +185,6 @@ Packet* packet_copy(Packet* packet) {
     copy->protocol = packet->protocol;
     if(packet->header) {
         switch (packet->protocol) {
-            case PLOCAL: {
-                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketLocalHeader));
-                break;
-            }
-
             case PUDP: {
                 copy->header = compat_static_g_memdup(packet->header, sizeof(PacketUDPHeader));
                 break;
@@ -297,24 +281,6 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
 void packet_setMock(Packet* packet) {
     MAGIC_ASSERT(packet);
     packet->protocol = PMOCK;
-}
-
-// The port must be in network byte order.
-void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
-        gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port) {
-    MAGIC_ASSERT(packet);
-    utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
-    utility_debugAssert(port > 0);
-
-    PacketLocalHeader* header = g_new0(PacketLocalHeader, 1);
-
-    header->flags = flags;
-    header->sourceDescriptorHandle = sourceDescriptorHandle;
-    header->destinationDescriptorHandle = destinationDescriptorHandle;
-    header->port = port;
-
-    packet->header = header;
-    packet->protocol = PLOCAL;
 }
 
 // The addresses and ports must be in network byte order.
@@ -440,11 +406,6 @@ in_addr_t packet_getDestinationIP(const Packet* packet) {
     in_addr_t ip = 0;
 
     switch (packet->protocol) {
-        case PLOCAL: {
-            ip = htonl(INADDR_LOOPBACK);
-            break;
-        }
-
         case PUDP: {
             PacketUDPHeader* header = packet->header;
             ip = header->destinationIP;
@@ -473,12 +434,6 @@ in_port_t packet_getDestinationPort(const Packet* packet) {
     in_port_t port = 0;
 
     switch (packet->protocol) {
-        case PLOCAL: {
-            PacketLocalHeader* header = packet->header;
-            port = header->port;
-            break;
-        }
-
         case PUDP: {
             PacketUDPHeader* header = packet->header;
             port = header->destinationPort;
@@ -507,11 +462,6 @@ in_addr_t packet_getSourceIP(const Packet* packet) {
     in_addr_t ip = 0;
 
     switch (packet->protocol) {
-        case PLOCAL: {
-            ip = htonl(INADDR_LOOPBACK);
-            break;
-        }
-
         case PUDP: {
             PacketUDPHeader* header = packet->header;
             ip = header->sourceIP;
@@ -540,12 +490,6 @@ in_port_t packet_getSourcePort(const Packet* packet) {
     in_port_t port = 0;
 
     switch (packet->protocol) {
-        case PLOCAL: {
-            PacketLocalHeader* header = packet->header;
-            port = header->port;
-            break;
-        }
-
         case PUDP: {
             PacketUDPHeader* header = packet->header;
             port = header->sourcePort;
@@ -673,14 +617,6 @@ gchar* packet_toString(Packet* packet) {
     guint payloadLength = (packet->payload) ? (guint)payload_getLength(packet->payload) : 0;
 
     switch (packet->protocol) {
-        case PLOCAL: {
-            PacketLocalHeader* header = packet->header;
-            g_string_append_printf(packetString, "%i -> %i bytes=%u",
-                    header->sourceDescriptorHandle, header->destinationDescriptorHandle,
-                    payloadLength);
-            break;
-        }
-
         case PUDP: {
             PacketUDPHeader* header = packet->header;
             gchar* sourceIPString = address_ipToNewString(header->sourceIP);

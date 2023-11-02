@@ -65,10 +65,6 @@ static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(pack
 void packet_setPriority(Packet *packet, uint64_t value);
 uint64_t packet_getPriority(const Packet* packet);
 
-// The port must be in network byte order.
-void packet_setLocal(Packet* packet, enum ProtocolLocalFlags flags,
-        gint sourceDescriptorHandle, gint destinationDescriptorHandle, in_port_t port);
-
 // The addresses and ports must be in network byte order.
 void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
         in_addr_t sourceIP, in_port_t sourcePort,

@@ -169,7 +169,6 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
 
                 break;
             }
-            case DT_TIMER:
             case DT_EPOLL:
             default: {
                 warning("readv() not yet implemented for descriptor type %i", (int)dType);
@@ -301,7 +300,6 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
 
                 break;
             }
-            case DT_TIMER:
             case DT_EPOLL:
             default: {
                 warning("writev() not yet implemented for descriptor type %i", (int)dType);

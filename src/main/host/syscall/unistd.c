@@ -47,7 +47,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
     }
 
     /* Divert io on sockets to socket handler to pick up special checks. */
-    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+    if (dType == DT_TCPSOCKET) {
         panic("Should have handled this in the rust syscall handler");
     }
 
@@ -78,15 +78,7 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
                     sizeNeeded, offset);
             }
             break;
-        case DT_TIMER:
-            if (doPread) {
-                result = -ESPIPE;
-            } else {
-                panic("Should have handled this in the rust syscall handler");
-            }
-            break;
         case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
             utility_debugAssert(0);
             break;
@@ -136,7 +128,7 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
     }
 
     /* Divert io on sockets to socket handler to pick up special checks. */
-    if (dType == DT_TCPSOCKET || dType == DT_UDPSOCKET) {
+    if (dType == DT_TCPSOCKET) {
         panic("Should have handled this in the rust syscall handler");
     }
 
@@ -167,9 +159,7 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
                     sizeNeeded, offset);
             }
             break;
-        case DT_TIMER: result = -EINVAL; break;
         case DT_TCPSOCKET:
-        case DT_UDPSOCKET:
             // We already diverted these to the socket handler above.
             utility_debugAssert(0);
             break;
