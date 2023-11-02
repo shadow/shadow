@@ -9,7 +9,7 @@ edition = "2021"
 bindgen = { version = "0.68.1" }
 cbindgen = { version = "0.26.0", default_features = false }
 cc = { version = "1.0", features = ["parallel"] }
-system-deps = "6.1"
+system-deps = "6.2"
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt
