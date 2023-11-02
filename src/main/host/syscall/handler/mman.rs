@@ -239,28 +239,9 @@ impl SyscallHandler {
             offset,
         );
 
-        if matches!(mmap_result, Err(SyscallError::Native)) {
-            // TODO: We already made the native syscall above when calling the memory manager's
-            // do_mmap(). Can this really return `SyscallError::Native`, and does trying the native
-            // syscall again really do anything for us?
-            let (process_ctx, thread) = ctx.objs.split_thread();
-            let mmap_result = thread.native_mmap(
-                &process_ctx,
-                addr,
-                len,
-                prot,
-                flags,
-                plugin_fd.unwrap_or(-1),
-                offset,
-            );
-
-            // close the file we asked them to open
-            if let Some(plugin_fd) = plugin_fd {
-                Self::close_plugin_file(ctx.objs, plugin_fd);
-            }
-
-            return Ok(mmap_result?);
-        }
+        // we should have already run the mmap natively above, and it wouldn't make sense to return
+        // `SyscallError::Native` here
+        assert!(!matches!(mmap_result, Err(SyscallError::Native)));
 
         log::trace!(
             "Plugin-native mmap syscall at plugin addr {addr:p} with plugin fd {fd} for \
