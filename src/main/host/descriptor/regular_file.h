@@ -26,6 +26,16 @@ extern const int SHADOW_FLAG_MASK;
 /* Opaque type representing a file-backed file descriptor. */
 typedef struct _RegularFile RegularFile;
 
+typedef enum _FileType FileType;
+enum _FileType {
+    FILE_TYPE_NOTSET,
+    FILE_TYPE_REGULAR,
+    FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
+    FILE_TYPE_HOSTS,     // special handling for /etc/hosts
+    FILE_TYPE_LOCALTIME, // special handling for /etc/localtime
+    FILE_TYPE_IN_MEMORY, // special handling for emulated files like /sys/*
+};
+
 /* In order to operate on a file, you must first create one with regularfile_new()
  * and open it with either regularfile_open() or regularfile_openat(). Internally, we use
  * OS-backed files to support the Shadow file descriptor API.
@@ -62,6 +72,9 @@ mode_t regularfile_getModeAtOpen(RegularFile* file);
 /* Get the file flags that shadow handles manually, but not the flags on the
  * linux-backed file. Will be a subset of SHADOW_FLAG_MASK. */
 int regularfile_getShadowFlags(RegularFile* file);
+
+/* Get the type of file. */
+FileType regularfile_getType(RegularFile* file);
 
 /* Returns the linux-backed fd that shadow uses to perform the file operations.  */
 int regularfile_getOSBackedFD(RegularFile* file);

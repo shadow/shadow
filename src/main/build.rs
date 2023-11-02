@@ -224,6 +224,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("LegacyFile")
         .allowlist_type("Manager")
         .allowlist_type("RegularFile")
+        .allowlist_type("FileType")
         .allowlist_type("Trigger")
         .allowlist_type("TriggerType")
         .allowlist_type("LogInfoFlags")

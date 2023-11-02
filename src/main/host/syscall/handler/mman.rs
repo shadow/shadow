@@ -265,8 +265,12 @@ impl SyscallHandler {
 
         log::trace!("Trying to open file {fd} in the plugin");
 
-        // TODO: make sure we don't open special files like /dev/urandom, /etc/localtime etc. in the
+        // make sure we don't open special files like /dev/urandom, /etc/localtime etc. in the
         // plugin via mmap
+        if unsafe { c::regularfile_getType(file) } != c::_FileType_FILE_TYPE_REGULAR {
+            warn_once_then_debug!("(LOG_ONCE) Tried to mmap a non-regular-file");
+            return Err(());
+        }
 
         let native_fd = unsafe { c::regularfile_getOSBackedFD(file) };
 

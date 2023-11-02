@@ -34,16 +34,6 @@
 
 const int SHADOW_FLAG_MASK = O_CLOEXEC;
 
-typedef enum _FileType FileType;
-enum _FileType {
-    FILE_TYPE_NOTSET,
-    FILE_TYPE_REGULAR,
-    FILE_TYPE_RANDOM,    // special handling for /dev/random etc.
-    FILE_TYPE_HOSTS,     // special handling for /etc/hosts
-    FILE_TYPE_LOCALTIME, // special handling for /etc/localtime
-    FILE_TYPE_IN_MEMORY, // special handling for emulated files like /sys/*
-};
-
 struct _RegularFile {
     /* File is a sub-type of a descriptor. */
     LegacyFile super;
@@ -97,6 +87,11 @@ mode_t regularfile_getModeAtOpen(RegularFile* file) {
 int regularfile_getShadowFlags(RegularFile* file) {
     MAGIC_ASSERT(file);
     return file->shadowFlags;
+}
+
+FileType regularfile_getType(RegularFile* file) {
+    MAGIC_ASSERT(file);
+    return file->type;
 }
 
 static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc) {
