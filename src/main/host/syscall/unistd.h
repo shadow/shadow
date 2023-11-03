@@ -8,7 +8,6 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(exit_group);
 SYSCALL_HANDLER(getpid);
 SYSCALL_HANDLER(pread64);
 SYSCALL_HANDLER(pwrite64);

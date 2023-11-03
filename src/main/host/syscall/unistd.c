@@ -213,11 +213,6 @@ SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* ar
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SyscallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
-    trace("Exit group with exit code %ld", args->args[0].as_i64);
-    return syscallreturn_makeNative();
-}
-
 SyscallReturn syscallhandler_getpid(SysCallHandler* sys, const SysCallArgs* args) {
     // We can't handle this natively in the plugin if we want determinism
     pid_t pid = sys->processId;

@@ -320,7 +320,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(eventfd2);
             HANDLE_RUST(execve);
             HANDLE_RUST(execveat);
-            HANDLE_C(exit_group);
+            HANDLE_RUST(exit_group);
             HANDLE_C(faccessat);
             HANDLE_C(fadvise64);
             HANDLE_C(fallocate);

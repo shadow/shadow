@@ -814,4 +814,13 @@ impl SyscallHandler {
         // and then call `execve_common` with that.
         Err(Errno::ENOSYS.into())
     }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* error_code */ std::ffi::c_int)]
+    pub fn exit_group(
+        _ctx: &mut SyscallContext,
+        error_code: std::ffi::c_int,
+    ) -> Result<(), SyscallError> {
+        log::trace!("Exit group with exit code {error_code}");
+        Err(SyscallError::Native)
+    }
 }
