@@ -20,6 +20,7 @@ mod prctl;
 mod random;
 mod resource;
 mod sched;
+mod shadow;
 mod socket;
 mod sysinfo;
 mod time;
@@ -42,7 +43,12 @@ impl SyscallHandler {
     }
 
     pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+        #[allow(non_upper_case_globals)]
+        const SYS_shadow_yield: i64 = c::ShadowSyscallNum_SYS_shadow_yield as i64;
+
+        #[allow(non_upper_case_globals)]
         match ctx.args.number {
+            SYS_shadow_yield => SyscallHandlerFn::call(Self::shadow_yield, &mut ctx),
             libc::SYS_accept => SyscallHandlerFn::call(Self::accept, &mut ctx),
             libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
             libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),

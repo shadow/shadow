@@ -100,7 +100,3 @@ SyscallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys,
     }
     return syscallreturn_makeDoneI64(0);
 }
-
-SyscallReturn syscallhandler_shadow_yield(SysCallHandler* sys, const SysCallArgs* args) {
-    return syscallreturn_makeDoneI64(0);
-}
