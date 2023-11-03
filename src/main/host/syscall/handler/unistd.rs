@@ -767,10 +767,10 @@ impl SyscallHandler {
     }
 
     #[log_syscall(
-        /*rv*/i32,
-        /*pathname*/SyscallStringArg,
-        /*argv*/*const std::ffi::c_void,
-        /*envp*/*const std::ffi::c_void)]
+        /* rv */ i32,
+        /* pathname */ SyscallStringArg,
+        /* argv */ *const std::ffi::c_void,
+        /* envp */ *const std::ffi::c_void)]
     pub fn execve(
         ctx: &mut SyscallContext,
         pathname: ForeignPtr<std::ffi::c_char>,
@@ -796,12 +796,12 @@ impl SyscallHandler {
     }
 
     #[log_syscall(
-        /*rv*/i32,
-        /*dirfd */std::ffi::c_int,
-        /*pathname*/SyscallStringArg,
-        /*argv*/*const std::ffi::c_void,
-        /*envp*/*const std::ffi::c_void,
-        /*flags*/std::ffi::c_int)]
+        /* rv */ i32,
+        /* dirfd */ std::ffi::c_int,
+        /* pathname */ SyscallStringArg,
+        /* argv */ *const std::ffi::c_void,
+        /* envp */ *const std::ffi::c_void,
+        /* flags */ std::ffi::c_int)]
     pub fn execveat(
         _ctx: &mut SyscallContext,
         _dirfd: std::ffi::c_int,
