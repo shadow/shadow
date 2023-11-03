@@ -26,7 +26,6 @@
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/futex.h"
-#include "main/host/syscall/mman.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/select.h"

@@ -154,7 +154,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/file.h")
         .header("host/syscall/fileat.h")
         .header("host/syscall/ioctl.h")
-        .header("host/syscall/mman.h")
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
         .header("host/syscall_condition.h")
@@ -225,6 +224,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("LegacyFile")
         .allowlist_type("Manager")
         .allowlist_type("RegularFile")
+        .allowlist_type("FileType")
         .allowlist_type("Trigger")
         .allowlist_type("TriggerType")
         .allowlist_type("LogInfoFlags")
@@ -240,6 +240,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_var("SUID_DUMP_USER")
         .allowlist_var("SUID_DUMP_DISABLE")
         .allowlist_var("TCP_CONG_RENO_NAME")
+        .allowlist_var("SHADOW_FLAG_MASK")
         .opaque_type("SysCallCondition")
         .opaque_type("LegacyFile")
         .opaque_type("Manager")
@@ -359,7 +360,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/fileat.c",
         "host/syscall/futex.c",
         "host/syscall/ioctl.c",
-        "host/syscall/mman.c",
         "host/syscall/poll.c",
         "host/syscall/select.c",
         "host/syscall/shadow.c",

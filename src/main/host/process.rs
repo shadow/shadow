@@ -1915,7 +1915,7 @@ mod export {
     use super::*;
     use crate::core::worker::Worker;
     use crate::host::context::ThreadContext;
-    use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
+    use crate::host::syscall_types::ForeignArrayPtr;
     use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
 
@@ -2066,136 +2066,6 @@ mod export {
             }
             Err(e) => e.to_negated_i32(),
         }
-    }
-
-    /// Fully handles the `mmap` syscall
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleMmap(
-        proc: *const Process,
-        thread: *const Thread,
-        addr: UntypedForeignPtr,
-        len: usize,
-        prot: i32,
-        flags: i32,
-        fd: i32,
-        offset: i64,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .do_mmap(
-                    &ThreadContext::new(host, process, thread),
-                    addr.cast::<u8>(),
-                    len,
-                    prot,
-                    flags,
-                    fd,
-                    offset,
-                )
-                .into()
-        })
-        .unwrap()
-    }
-
-    /// Fully handles the `munmap` syscall
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleMunmap(
-        proc: *const Process,
-        thread: *const Thread,
-        addr: UntypedForeignPtr,
-        len: usize,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .handle_munmap(
-                    &ThreadContext::new(host, process, thread),
-                    addr.cast::<u8>(),
-                    len,
-                )
-                .into()
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleMremap(
-        proc: *const Process,
-        thread: *const Thread,
-        old_addr: UntypedForeignPtr,
-        old_size: usize,
-        new_size: usize,
-        flags: i32,
-        new_addr: UntypedForeignPtr,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .handle_mremap(
-                    &ThreadContext::new(host, process, thread),
-                    old_addr.cast::<u8>(),
-                    old_size,
-                    new_size,
-                    flags,
-                    new_addr.cast::<u8>(),
-                )
-                .map(Into::into)
-        })
-        .unwrap()
-        .into()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleMprotect(
-        proc: *const Process,
-        thread: *const Thread,
-        addr: UntypedForeignPtr,
-        size: usize,
-        prot: i32,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .handle_mprotect(
-                    &ThreadContext::new(host, process, thread),
-                    addr.cast::<u8>(),
-                    size,
-                    prot,
-                )
-                .map(Into::into)
-        })
-        .unwrap()
-        .into()
-    }
-
-    /// Fully handles the `brk` syscall, keeping the "heap" mapped in our shared mem file.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_handleBrk(
-        proc: *const Process,
-        thread: *const Thread,
-        plugin_src: UntypedForeignPtr,
-    ) -> SyscallReturn {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            memory_manager
-                .handle_brk(
-                    &ThreadContext::new(host, process, thread),
-                    plugin_src.cast::<u8>(),
-                )
-                .map(Into::into)
-        })
-        .unwrap()
-        .into()
     }
 
     /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
