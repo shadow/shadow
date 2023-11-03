@@ -507,6 +507,8 @@ impl Thread {
         self.tid_address.get()
     }
 
+    /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread will perform a
+    /// futex-wake operation on the given address on termination.
     pub fn set_tid_address(&self, ptr: ForeignPtr<libc::pid_t>) {
         self.tid_address.set(ptr)
     }
@@ -642,17 +644,6 @@ mod export {
     pub unsafe extern "C-unwind" fn thread_getID(thread: *const Thread) -> libc::pid_t {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.id().into()
-    }
-
-    /// Sets the `clear_child_tid` attribute as for `set_tid_address(2)`. The thread
-    /// will perform a futex-wake operation on the given address on termination.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn thread_setTidAddress(
-        thread: *const Thread,
-        addr: UntypedForeignPtr,
-    ) {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        thread.set_tid_address(addr.cast::<libc::pid_t>());
     }
 
     /// Gets the `clear_child_tid` attribute, as set by `thread_setTidAddress`.

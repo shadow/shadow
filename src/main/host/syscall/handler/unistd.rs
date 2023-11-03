@@ -828,4 +828,16 @@ impl SyscallHandler {
         log::trace!("Exit group with exit code {error_code}");
         Err(SyscallError::Native)
     }
+
+    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t,
+                  /* tidptr */ *const std::ffi::c_int)]
+    pub fn set_tid_address(
+        ctx: &mut SyscallContext,
+        tid_ptr: ForeignPtr<std::ffi::c_int>,
+    ) -> Result<kernel_pid_t, SyscallError> {
+        ctx.objs
+            .thread
+            .set_tid_address(tid_ptr.cast::<libc::pid_t>());
+        Ok(ctx.objs.thread.id().into())
+    }
 }

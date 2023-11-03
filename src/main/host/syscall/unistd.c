@@ -213,12 +213,6 @@ SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* ar
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SyscallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr tidptr = args->args[0].as_ptr; // int*
-    thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);
-    return syscallreturn_makeDoneI64(sys->threadId);
-}
-
 SyscallReturn syscallhandler_uname(SysCallHandler* sys, const SysCallArgs* args) {
     struct utsname* buf = NULL;
 

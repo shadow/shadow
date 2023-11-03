@@ -443,7 +443,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(rt_sigprocmask);
             HANDLE_C(set_robust_list);
             HANDLE_RUST(setitimer);
-            HANDLE_C(set_tid_address);
+            HANDLE_RUST(set_tid_address);
             HANDLE_RUST(shutdown);
             HANDLE_RUST(socket);
             HANDLE_RUST(socketpair);

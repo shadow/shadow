@@ -113,6 +113,7 @@ impl SyscallHandler {
             libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
             libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
             libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
+            libc::SYS_set_tid_address => SyscallHandlerFn::call(Self::set_tid_address, &mut ctx),
             libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
             libc::SYS_setpgid => SyscallHandlerFn::call(Self::setpgid, &mut ctx),
             libc::SYS_setsid => SyscallHandlerFn::call(Self::setsid, &mut ctx),
