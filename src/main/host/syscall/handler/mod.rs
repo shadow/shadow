@@ -125,6 +125,7 @@ impl SyscallHandler {
             libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
             libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
             libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
+            libc::SYS_uname => SyscallHandlerFn::call(Self::uname, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),
             libc::SYS_wait4 => SyscallHandlerFn::call(Self::wait4, &mut ctx),

@@ -11,7 +11,6 @@
 SYSCALL_HANDLER(pread64);
 SYSCALL_HANDLER(pwrite64);
 SYSCALL_HANDLER(read);
-SYSCALL_HANDLER(uname);
 SYSCALL_HANDLER(write);
 
 SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,

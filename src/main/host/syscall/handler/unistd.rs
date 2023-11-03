@@ -24,6 +24,7 @@ use crate::host::syscall::io::{read_cstring_vec, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::u8_to_i8_slice;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int)]
@@ -839,5 +840,42 @@ impl SyscallHandler {
             .thread
             .set_tid_address(tid_ptr.cast::<libc::pid_t>());
         Ok(ctx.objs.thread.id().into())
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* name */ *const std::ffi::c_void)]
+    pub fn uname(
+        ctx: &mut SyscallContext,
+        name_ptr: ForeignPtr<linux_api::utsname::new_utsname>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
+        // NOTE: On linux x86-64, `SYS_uname` corresponds with `__NR_uname` which calls
+        // `sys_newuname` and not `sys_uname`. The correct mapping is:
+        //
+        // - __NR_oldolduname -> sys_olduname
+        // - __NR_olduname -> sys_uname
+        // - __NR_uname -> sys_newuname
+        //
+        // Some online resources such as the chromium syscall table are incorrect.
+
+        let mut name: linux_api::utsname::new_utsname = shadow_pod::zeroed();
+
+        let nodename = u8_to_i8_slice(ctx.objs.host.info().name.as_bytes());
+
+        let sysname = u8_to_i8_slice(&b"shadowsys"[..]);
+        let release = u8_to_i8_slice(&b"shadowrelease"[..]);
+        let version = u8_to_i8_slice(&b"shadowversion"[..]);
+        let machine = u8_to_i8_slice(&b"shadowmachine"[..]);
+
+        name.sysname[..sysname.len()].copy_from_slice(sysname);
+        name.nodename[..nodename.len()].copy_from_slice(nodename);
+        name.release[..release.len()].copy_from_slice(release);
+        name.version[..version.len()].copy_from_slice(version);
+        name.machine[..machine.len()].copy_from_slice(machine);
+
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .write(name_ptr, &name)?;
+
+        Ok(0)
     }
 }

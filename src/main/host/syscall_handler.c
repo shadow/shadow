@@ -460,7 +460,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(timerfd_gettime);
             HANDLE_RUST(timerfd_settime);
             HANDLE_C(tkill);
-            HANDLE_C(uname);
+            HANDLE_RUST(uname);
             HANDLE_C(unlinkat);
             HANDLE_C(utimensat);
             HANDLE_RUST(vfork);

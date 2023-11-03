@@ -212,23 +212,3 @@ SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* ar
     return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }
-
-SyscallReturn syscallhandler_uname(SysCallHandler* sys, const SysCallArgs* args) {
-    struct utsname* buf = NULL;
-
-    buf = process_getWriteablePtr(
-        _syscallhandler_getProcess(sys), args->args[0].as_ptr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    const gchar* hostname = host_getName(_syscallhandler_getHost(sys));
-
-    snprintf(buf->sysname, _UTSNAME_SYSNAME_LENGTH, "shadowsys");
-    snprintf(buf->nodename, _UTSNAME_NODENAME_LENGTH, "%s", hostname);
-    snprintf(buf->release, _UTSNAME_RELEASE_LENGTH, "shadowrelease");
-    snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
-    snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
-
-    return syscallreturn_makeDoneI64(0);
-}
