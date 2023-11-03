@@ -69,6 +69,7 @@ pub mod signal;
 pub mod sysinfo;
 pub mod time;
 pub mod ucontext;
+pub mod utsname;
 pub mod wait;
 
 // Internally we often end up needing to convert from types that bindgen inferred, in const

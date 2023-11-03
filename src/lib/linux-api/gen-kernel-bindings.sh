@@ -90,6 +90,9 @@ bindgen_flags+=("--allowlist-type=rusage")
 bindgen_flags+=("--allowlist-type=rlimit")
 bindgen_flags+=("--allowlist-type=rlimit64")
 
+# utsname.h
+bindgen_flags+=("--allowlist-type=new_utsname")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
