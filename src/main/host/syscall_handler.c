@@ -360,7 +360,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(getdents64);
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
-            HANDLE_C(getpid);
+            HANDLE_RUST(getpid);
             HANDLE_RUST(getpgrp);
             HANDLE_RUST(getpgid);
             HANDLE_RUST(getppid);

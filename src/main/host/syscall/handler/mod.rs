@@ -73,6 +73,7 @@ impl SyscallHandler {
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
             libc::SYS_getpgrp => SyscallHandlerFn::call(Self::getpgrp, &mut ctx),
+            libc::SYS_getpid => SyscallHandlerFn::call(Self::getpid, &mut ctx),
             libc::SYS_getppid => SyscallHandlerFn::call(Self::getppid, &mut ctx),
             libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
             libc::SYS_getsid => SyscallHandlerFn::call(Self::getsid, &mut ctx),
