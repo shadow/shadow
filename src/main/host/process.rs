@@ -1914,7 +1914,6 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::host::context::ThreadContext;
     use crate::host::syscall_types::ForeignArrayPtr;
     use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
@@ -2066,24 +2065,6 @@ mod export {
             }
             Err(e) => e.to_negated_i32(),
         }
-    }
-
-    /// Initialize the MemoryMapper if it isn't already initialized. `thread` must
-    /// be running and ready to make native syscalls.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_initMapperIfNeeded(
-        proc: *const Process,
-        thread: *const Thread,
-    ) {
-        let process = unsafe { proc.as_ref().unwrap() };
-        let thread = unsafe { thread.as_ref().unwrap() };
-        Worker::with_active_host(|host| {
-            let mut memory_manager = process.memory_borrow_mut();
-            if !memory_manager.has_mapper() {
-                memory_manager.init_mapper(&ThreadContext::new(host, process, thread))
-            }
-        })
-        .unwrap()
     }
 
     /// Returns the processID that was assigned to us in process_new

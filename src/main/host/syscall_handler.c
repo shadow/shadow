@@ -418,7 +418,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(sched_setaffinity);
             SHIM_ONLY(sched_yield);
             HANDLE_C(shadow_hostname_to_addr_ipv4);
-            HANDLE_C(shadow_init_memory_manager);
+            HANDLE_RUST(shadow_init_memory_manager);
             HANDLE_RUST(shadow_yield);
             HANDLE_C(select);
             HANDLE_RUST(sendmsg);

@@ -12,14 +12,10 @@
 #include <strings.h>
 
 #include "lib/logger/logger.h"
-#include "main/core/support/config_handlers.h"
 #include "main/core/worker.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall_types.h"
 #include "main/routing/address.h"
-
-static bool _useMM = true;
-ADD_CONFIG_HANDLER(config_getUseMemoryManager, _useMM)
 
 SyscallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
                                                           const SysCallArgs* args) {
@@ -87,16 +83,4 @@ SyscallReturn syscallhandler_shadow_hostname_to_addr_ipv4(SysCallHandler* sys,
         // return EFAULT like gethostname
         return syscallreturn_makeDoneErrno(EFAULT);
     }
-}
-
-SyscallReturn syscallhandler_shadow_init_memory_manager(SysCallHandler* sys,
-                                                        const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-    if (_useMM) {
-        trace("Initializing memory manager");
-        process_initMapperIfNeeded(_syscallhandler_getProcess(sys), _syscallhandler_getThread(sys));
-    } else {
-        trace("Not initializing memory manager");
-    }
-    return syscallreturn_makeDoneI64(0);
 }

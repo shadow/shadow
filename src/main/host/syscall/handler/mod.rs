@@ -42,12 +42,16 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
+    #[allow(non_upper_case_globals)]
     pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
-        #[allow(non_upper_case_globals)]
         const SYS_shadow_yield: i64 = c::ShadowSyscallNum_SYS_shadow_yield as i64;
+        const SYS_shadow_init_memory_manager: i64 =
+            c::ShadowSyscallNum_SYS_shadow_init_memory_manager as i64;
 
-        #[allow(non_upper_case_globals)]
         match ctx.args.number {
+            SYS_shadow_init_memory_manager => {
+                SyscallHandlerFn::call(Self::shadow_init_memory_manager, &mut ctx)
+            }
             SYS_shadow_yield => SyscallHandlerFn::call(Self::shadow_yield, &mut ctx),
             libc::SYS_accept => SyscallHandlerFn::call(Self::accept, &mut ctx),
             libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
