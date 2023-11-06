@@ -1315,6 +1315,8 @@ pub const LINUX___NR_memfd_secret: u32 = 447;
 pub const LINUX___NR_process_mrelease: u32 = 448;
 pub const LINUX___NR_futex_waitv: u32 = 449;
 pub const LINUX___NR_set_mempolicy_home_node: u32 = 450;
+pub const LINUX___OLD_UTS_LEN: u32 = 8;
+pub const LINUX___NEW_UTS_LEN: u32 = 64;
 pub const LINUX_WNOHANG: u32 = 1;
 pub const LINUX_WUNTRACED: u32 = 2;
 pub const LINUX_WSTOPPED: u32 = 2;
@@ -3565,6 +3567,91 @@ impl ::core::fmt::Debug for linux_siginfo {
     }
 }
 pub type linux_siginfo_t = linux_siginfo;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_new_utsname {
+    pub sysname: [::core::ffi::c_char; 65usize],
+    pub nodename: [::core::ffi::c_char; 65usize],
+    pub release: [::core::ffi::c_char; 65usize],
+    pub version: [::core::ffi::c_char; 65usize],
+    pub machine: [::core::ffi::c_char; 65usize],
+    pub domainname: [::core::ffi::c_char; 65usize],
+}
+#[test]
+fn bindgen_test_layout_new_utsname() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_new_utsname> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_new_utsname>(),
+        390usize,
+        concat!("Size of: ", stringify!(linux_new_utsname))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_new_utsname>(),
+        1usize,
+        concat!("Alignment of ", stringify!(linux_new_utsname))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).sysname) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(sysname)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nodename) as usize - ptr as usize },
+        65usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(nodename)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).release) as usize - ptr as usize },
+        130usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(release)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).version) as usize - ptr as usize },
+        195usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(version)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).machine) as usize - ptr as usize },
+        260usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(machine)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).domainname) as usize - ptr as usize },
+        325usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_new_utsname),
+            "::",
+            stringify!(domainname)
+        )
+    );
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux__fpx_sw_bytes {

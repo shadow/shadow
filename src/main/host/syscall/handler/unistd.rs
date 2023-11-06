@@ -24,6 +24,7 @@ use crate::host::syscall::io::{read_cstring_vec, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
+use crate::utility::u8_to_i8_slice;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int)]
@@ -487,6 +488,11 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
+    pub fn getpid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+        Ok(ctx.objs.process.id().into())
+    }
+
+    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
     pub fn getppid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(ctx.objs.process.parent_id().into())
     }
@@ -767,10 +773,10 @@ impl SyscallHandler {
     }
 
     #[log_syscall(
-        /*rv*/i32,
-        /*pathname*/SyscallStringArg,
-        /*argv*/*const std::ffi::c_void,
-        /*envp*/*const std::ffi::c_void)]
+        /* rv */ i32,
+        /* pathname */ SyscallStringArg,
+        /* argv */ *const std::ffi::c_void,
+        /* envp */ *const std::ffi::c_void)]
     pub fn execve(
         ctx: &mut SyscallContext,
         pathname: ForeignPtr<std::ffi::c_char>,
@@ -796,12 +802,12 @@ impl SyscallHandler {
     }
 
     #[log_syscall(
-        /*rv*/i32,
-        /*dirfd */std::ffi::c_int,
-        /*pathname*/SyscallStringArg,
-        /*argv*/*const std::ffi::c_void,
-        /*envp*/*const std::ffi::c_void,
-        /*flags*/std::ffi::c_int)]
+        /* rv */ i32,
+        /* dirfd */ std::ffi::c_int,
+        /* pathname */ SyscallStringArg,
+        /* argv */ *const std::ffi::c_void,
+        /* envp */ *const std::ffi::c_void,
+        /* flags */ std::ffi::c_int)]
     pub fn execveat(
         _ctx: &mut SyscallContext,
         _dirfd: std::ffi::c_int,
@@ -813,5 +819,63 @@ impl SyscallHandler {
         // TODO: Implement resolution of the path to the executable,
         // and then call `execve_common` with that.
         Err(Errno::ENOSYS.into())
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* error_code */ std::ffi::c_int)]
+    pub fn exit_group(
+        _ctx: &mut SyscallContext,
+        error_code: std::ffi::c_int,
+    ) -> Result<(), SyscallError> {
+        log::trace!("Exit group with exit code {error_code}");
+        Err(SyscallError::Native)
+    }
+
+    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t,
+                  /* tidptr */ *const std::ffi::c_int)]
+    pub fn set_tid_address(
+        ctx: &mut SyscallContext,
+        tid_ptr: ForeignPtr<std::ffi::c_int>,
+    ) -> Result<kernel_pid_t, SyscallError> {
+        ctx.objs
+            .thread
+            .set_tid_address(tid_ptr.cast::<libc::pid_t>());
+        Ok(ctx.objs.thread.id().into())
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* name */ *const std::ffi::c_void)]
+    pub fn uname(
+        ctx: &mut SyscallContext,
+        name_ptr: ForeignPtr<linux_api::utsname::new_utsname>,
+    ) -> Result<std::ffi::c_int, SyscallError> {
+        // NOTE: On linux x86-64, `SYS_uname` corresponds with `__NR_uname` which calls
+        // `sys_newuname` and not `sys_uname`. The correct mapping is:
+        //
+        // - __NR_oldolduname -> sys_olduname
+        // - __NR_olduname -> sys_uname
+        // - __NR_uname -> sys_newuname
+        //
+        // Some online resources such as the chromium syscall table are incorrect.
+
+        let mut name: linux_api::utsname::new_utsname = shadow_pod::zeroed();
+
+        let nodename = u8_to_i8_slice(ctx.objs.host.info().name.as_bytes());
+
+        let sysname = u8_to_i8_slice(&b"shadowsys"[..]);
+        let release = u8_to_i8_slice(&b"shadowrelease"[..]);
+        let version = u8_to_i8_slice(&b"shadowversion"[..]);
+        let machine = u8_to_i8_slice(&b"shadowmachine"[..]);
+
+        name.sysname[..sysname.len()].copy_from_slice(sysname);
+        name.nodename[..nodename.len()].copy_from_slice(nodename);
+        name.release[..release.len()].copy_from_slice(release);
+        name.version[..version.len()].copy_from_slice(version);
+        name.machine[..machine.len()].copy_from_slice(machine);
+
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .write(name_ptr, &name)?;
+
+        Ok(0)
     }
 }

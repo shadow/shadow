@@ -157,6 +157,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
         .header("host/syscall_condition.h")
+        .header("host/syscall_numbers.h")
         .header("host/syscall_types.h")
         .header("host/tracker.h")
         .header("routing/packet.h")
@@ -231,6 +232,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
         .allowlist_type("PacketDeliveryStatusFlags")
+        .allowlist_type("ShadowSyscallNum")
         .allowlist_var("AFFINITY_UNINIT")
         .allowlist_var("CONFIG_HEADER_SIZE_TCP")
         .allowlist_var("CONFIG_PIPE_BUFFER_SIZE")
@@ -362,7 +364,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/ioctl.c",
         "host/syscall/poll.c",
         "host/syscall/select.c",
-        "host/syscall/shadow.c",
         "host/syscall/signal.c",
         "host/syscall/unistd.c",
         "host/syscall/uio.c",

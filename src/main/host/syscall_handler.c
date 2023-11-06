@@ -29,7 +29,6 @@
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/select.h"
-#include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
@@ -320,7 +319,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(eventfd2);
             HANDLE_RUST(execve);
             HANDLE_RUST(execveat);
-            HANDLE_C(exit_group);
+            HANDLE_RUST(exit_group);
             HANDLE_C(faccessat);
             HANDLE_C(fadvise64);
             HANDLE_C(fallocate);
@@ -360,7 +359,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(getdents64);
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
-            HANDLE_C(getpid);
+            HANDLE_RUST(getpid);
             HANDLE_RUST(getpgrp);
             HANDLE_RUST(getpgid);
             HANDLE_RUST(getppid);
@@ -417,9 +416,9 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
             SHIM_ONLY(sched_yield);
-            HANDLE_C(shadow_hostname_to_addr_ipv4);
-            HANDLE_C(shadow_init_memory_manager);
-            HANDLE_C(shadow_yield);
+            HANDLE_RUST(shadow_hostname_to_addr_ipv4);
+            HANDLE_RUST(shadow_init_memory_manager);
+            HANDLE_RUST(shadow_yield);
             HANDLE_C(select);
             HANDLE_RUST(sendmsg);
             HANDLE_RUST(sendto);
@@ -443,7 +442,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(rt_sigprocmask);
             HANDLE_C(set_robust_list);
             HANDLE_RUST(setitimer);
-            HANDLE_C(set_tid_address);
+            HANDLE_RUST(set_tid_address);
             HANDLE_RUST(shutdown);
             HANDLE_RUST(socket);
             HANDLE_RUST(socketpair);
@@ -460,7 +459,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(timerfd_gettime);
             HANDLE_RUST(timerfd_settime);
             HANDLE_C(tkill);
-            HANDLE_C(uname);
+            HANDLE_RUST(uname);
             HANDLE_C(unlinkat);
             HANDLE_C(utimensat);
             HANDLE_RUST(vfork);

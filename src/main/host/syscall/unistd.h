@@ -8,13 +8,9 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(exit_group);
-SYSCALL_HANDLER(getpid);
 SYSCALL_HANDLER(pread64);
 SYSCALL_HANDLER(pwrite64);
 SYSCALL_HANDLER(read);
-SYSCALL_HANDLER(set_tid_address);
-SYSCALL_HANDLER(uname);
 SYSCALL_HANDLER(write);
 
 SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,

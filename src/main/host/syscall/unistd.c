@@ -19,10 +19,6 @@
 #include "main/host/syscall_condition.h"
 #include "main/host/syscall_handler.h"
 
-#ifndef O_DIRECT
-#define O_DIRECT 040000
-#endif
-
 ///////////////////////////////////////////////////////////
 // Helpers
 ///////////////////////////////////////////////////////////
@@ -211,41 +207,4 @@ SyscallReturn syscallhandler_write(SysCallHandler* sys, const SysCallArgs* args)
 SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_i64, true);
-}
-
-SyscallReturn syscallhandler_exit_group(SysCallHandler* sys, const SysCallArgs* args) {
-    trace("Exit group with exit code %ld", args->args[0].as_i64);
-    return syscallreturn_makeNative();
-}
-
-SyscallReturn syscallhandler_getpid(SysCallHandler* sys, const SysCallArgs* args) {
-    // We can't handle this natively in the plugin if we want determinism
-    pid_t pid = sys->processId;
-    return syscallreturn_makeDoneI64(pid);
-}
-
-SyscallReturn syscallhandler_set_tid_address(SysCallHandler* sys, const SysCallArgs* args) {
-    UntypedForeignPtr tidptr = args->args[0].as_ptr; // int*
-    thread_setTidAddress(_syscallhandler_getThread(sys), tidptr);
-    return syscallreturn_makeDoneI64(sys->threadId);
-}
-
-SyscallReturn syscallhandler_uname(SysCallHandler* sys, const SysCallArgs* args) {
-    struct utsname* buf = NULL;
-
-    buf = process_getWriteablePtr(
-        _syscallhandler_getProcess(sys), args->args[0].as_ptr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    const gchar* hostname = host_getName(_syscallhandler_getHost(sys));
-
-    snprintf(buf->sysname, _UTSNAME_SYSNAME_LENGTH, "shadowsys");
-    snprintf(buf->nodename, _UTSNAME_NODENAME_LENGTH, "%s", hostname);
-    snprintf(buf->release, _UTSNAME_RELEASE_LENGTH, "shadowrelease");
-    snprintf(buf->version, _UTSNAME_VERSION_LENGTH, "shadowversion");
-    snprintf(buf->machine, _UTSNAME_MACHINE_LENGTH, "shadowmachine");
-
-    return syscallreturn_makeDoneI64(0);
 }

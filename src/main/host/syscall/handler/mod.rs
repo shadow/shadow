@@ -20,6 +20,7 @@ mod prctl;
 mod random;
 mod resource;
 mod sched;
+mod shadow;
 mod socket;
 mod sysinfo;
 mod time;
@@ -41,8 +42,22 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
+    #[allow(non_upper_case_globals)]
     pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+        const SYS_shadow_yield: i64 = c::ShadowSyscallNum_SYS_shadow_yield as i64;
+        const SYS_shadow_init_memory_manager: i64 =
+            c::ShadowSyscallNum_SYS_shadow_init_memory_manager as i64;
+        const SYS_shadow_hostname_to_addr_ipv4: i64 =
+            c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4 as i64;
+
         match ctx.args.number {
+            SYS_shadow_hostname_to_addr_ipv4 => {
+                SyscallHandlerFn::call(Self::shadow_hostname_to_addr_ipv4, &mut ctx)
+            }
+            SYS_shadow_init_memory_manager => {
+                SyscallHandlerFn::call(Self::shadow_init_memory_manager, &mut ctx)
+            }
+            SYS_shadow_yield => SyscallHandlerFn::call(Self::shadow_yield, &mut ctx),
             libc::SYS_accept => SyscallHandlerFn::call(Self::accept, &mut ctx),
             libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
             libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
@@ -66,12 +81,14 @@ impl SyscallHandler {
             libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
             libc::SYS_execve => SyscallHandlerFn::call(Self::execve, &mut ctx),
             libc::SYS_execveat => SyscallHandlerFn::call(Self::execveat, &mut ctx),
+            libc::SYS_exit_group => SyscallHandlerFn::call(Self::exit_group, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
             libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
             libc::SYS_getpgrp => SyscallHandlerFn::call(Self::getpgrp, &mut ctx),
+            libc::SYS_getpid => SyscallHandlerFn::call(Self::getpid, &mut ctx),
             libc::SYS_getppid => SyscallHandlerFn::call(Self::getppid, &mut ctx),
             libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
             libc::SYS_getsid => SyscallHandlerFn::call(Self::getsid, &mut ctx),
@@ -111,6 +128,7 @@ impl SyscallHandler {
             libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
             libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
             libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
+            libc::SYS_set_tid_address => SyscallHandlerFn::call(Self::set_tid_address, &mut ctx),
             libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
             libc::SYS_setpgid => SyscallHandlerFn::call(Self::setpgid, &mut ctx),
             libc::SYS_setsid => SyscallHandlerFn::call(Self::setsid, &mut ctx),
@@ -122,6 +140,7 @@ impl SyscallHandler {
             libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
             libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
             libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
+            libc::SYS_uname => SyscallHandlerFn::call(Self::uname, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),
             libc::SYS_wait4 => SyscallHandlerFn::call(Self::wait4, &mut ctx),
