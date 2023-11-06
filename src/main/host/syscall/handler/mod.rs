@@ -47,8 +47,13 @@ impl SyscallHandler {
         const SYS_shadow_yield: i64 = c::ShadowSyscallNum_SYS_shadow_yield as i64;
         const SYS_shadow_init_memory_manager: i64 =
             c::ShadowSyscallNum_SYS_shadow_init_memory_manager as i64;
+        const SYS_shadow_hostname_to_addr_ipv4: i64 =
+            c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4 as i64;
 
         match ctx.args.number {
+            SYS_shadow_hostname_to_addr_ipv4 => {
+                SyscallHandlerFn::call(Self::shadow_hostname_to_addr_ipv4, &mut ctx)
+            }
             SYS_shadow_init_memory_manager => {
                 SyscallHandlerFn::call(Self::shadow_init_memory_manager, &mut ctx)
             }

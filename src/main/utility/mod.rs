@@ -320,6 +320,16 @@ pub fn i8_to_u8_slice(s: &[i8]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(s.as_ptr() as *const u8, s.len()) }
 }
 
+/// Returns `true` if [`eq_ignore_ascii_case`](u8::eq_ignore_ascii_case) returns `true` on all `u8`
+/// ascii pairs. Should only be used for ascii byte strings.
+pub fn case_insensitive_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    a.iter().zip(b).all(|(x, y)| x.eq_ignore_ascii_case(y))
+}
+
 #[derive(Debug)]
 pub enum VerifyPluginPathError {
     NotFound,

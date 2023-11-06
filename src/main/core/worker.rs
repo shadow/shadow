@@ -43,8 +43,7 @@ std::thread_local! {
 }
 
 // shared global state
-// Must not mutably borrow when the simulation is running. Worker threads should access it through
-// `Worker::shared`.
+// Must not mutably borrow when the simulation is running.
 pub static WORKER_SHARED: AtomicRefCell<Option<WorkerShared>> = AtomicRefCell::new(None);
 
 #[derive(Copy, Clone, Debug)]
@@ -494,6 +493,19 @@ impl Worker {
     pub fn is_bootstrapping() -> bool {
         Worker::with(|w| w.clock.borrow().now.unwrap() < w.shared.bootstrap_end_time).unwrap()
     }
+
+    pub fn resolve_name_to_ip(name: &std::ffi::CStr) -> Option<std::net::Ipv4Addr> {
+        Worker::with_dns(|dns| {
+            let addr = unsafe {
+                cshadow::dns_resolveNameToAddress(dns as *const _ as *mut _, name.as_ptr())
+            };
+            if addr.is_null() {
+                return None;
+            }
+            let addr = unsafe { cshadow::address_toNetworkIP(addr) };
+            Some(u32::from_be(addr).into())
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -757,17 +769,6 @@ mod export {
         Worker::with(|w| {
             let dns = w.shared.dns.ptr();
             unsafe { cshadow::dns_resolveIPToAddress(dns, ip) }
-        })
-        .unwrap()
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn worker_resolveNameToAddress(
-        name: *const libc::c_char,
-    ) -> *const cshadow::Address {
-        Worker::with(|w| {
-            let dns = w.shared.dns.ptr();
-            unsafe { cshadow::dns_resolveNameToAddress(dns, name) }
         })
         .unwrap()
     }

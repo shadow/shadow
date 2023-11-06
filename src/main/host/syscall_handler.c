@@ -29,7 +29,6 @@
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/select.h"
-#include "main/host/syscall/shadow.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
@@ -417,7 +416,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
             SHIM_ONLY(sched_yield);
-            HANDLE_C(shadow_hostname_to_addr_ipv4);
+            HANDLE_RUST(shadow_hostname_to_addr_ipv4);
             HANDLE_RUST(shadow_init_memory_manager);
             HANDLE_RUST(shadow_yield);
             HANDLE_C(select);

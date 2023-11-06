@@ -364,7 +364,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/ioctl.c",
         "host/syscall/poll.c",
         "host/syscall/select.c",
-        "host/syscall/shadow.c",
         "host/syscall/signal.c",
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
