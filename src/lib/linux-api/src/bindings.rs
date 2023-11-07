@@ -253,6 +253,55 @@ pub const LINUX_EPOLL_CLOEXEC: u32 = 524288;
 pub const LINUX_EPOLL_CTL_ADD: u32 = 1;
 pub const LINUX_EPOLL_CTL_DEL: u32 = 2;
 pub const LINUX_EPOLL_CTL_MOD: u32 = 3;
+pub const LINUX_FUTEX_WAIT: u32 = 0;
+pub const LINUX_FUTEX_WAKE: u32 = 1;
+pub const LINUX_FUTEX_FD: u32 = 2;
+pub const LINUX_FUTEX_REQUEUE: u32 = 3;
+pub const LINUX_FUTEX_CMP_REQUEUE: u32 = 4;
+pub const LINUX_FUTEX_WAKE_OP: u32 = 5;
+pub const LINUX_FUTEX_LOCK_PI: u32 = 6;
+pub const LINUX_FUTEX_UNLOCK_PI: u32 = 7;
+pub const LINUX_FUTEX_TRYLOCK_PI: u32 = 8;
+pub const LINUX_FUTEX_WAIT_BITSET: u32 = 9;
+pub const LINUX_FUTEX_WAKE_BITSET: u32 = 10;
+pub const LINUX_FUTEX_WAIT_REQUEUE_PI: u32 = 11;
+pub const LINUX_FUTEX_CMP_REQUEUE_PI: u32 = 12;
+pub const LINUX_FUTEX_LOCK_PI2: u32 = 13;
+pub const LINUX_FUTEX_PRIVATE_FLAG: u32 = 128;
+pub const LINUX_FUTEX_CLOCK_REALTIME: u32 = 256;
+pub const LINUX_FUTEX_CMD_MASK: i32 = -385;
+pub const LINUX_FUTEX_WAIT_PRIVATE: u32 = 128;
+pub const LINUX_FUTEX_WAKE_PRIVATE: u32 = 129;
+pub const LINUX_FUTEX_REQUEUE_PRIVATE: u32 = 131;
+pub const LINUX_FUTEX_CMP_REQUEUE_PRIVATE: u32 = 132;
+pub const LINUX_FUTEX_WAKE_OP_PRIVATE: u32 = 133;
+pub const LINUX_FUTEX_LOCK_PI_PRIVATE: u32 = 134;
+pub const LINUX_FUTEX_LOCK_PI2_PRIVATE: u32 = 141;
+pub const LINUX_FUTEX_UNLOCK_PI_PRIVATE: u32 = 135;
+pub const LINUX_FUTEX_TRYLOCK_PI_PRIVATE: u32 = 136;
+pub const LINUX_FUTEX_WAIT_BITSET_PRIVATE: u32 = 137;
+pub const LINUX_FUTEX_WAKE_BITSET_PRIVATE: u32 = 138;
+pub const LINUX_FUTEX_WAIT_REQUEUE_PI_PRIVATE: u32 = 139;
+pub const LINUX_FUTEX_CMP_REQUEUE_PI_PRIVATE: u32 = 140;
+pub const LINUX_FUTEX_32: u32 = 2;
+pub const LINUX_FUTEX_WAITV_MAX: u32 = 128;
+pub const LINUX_FUTEX_WAITERS: u32 = 2147483648;
+pub const LINUX_FUTEX_OWNER_DIED: u32 = 1073741824;
+pub const LINUX_FUTEX_TID_MASK: u32 = 1073741823;
+pub const LINUX_ROBUST_LIST_LIMIT: u32 = 2048;
+pub const LINUX_FUTEX_BITSET_MATCH_ANY: u32 = 4294967295;
+pub const LINUX_FUTEX_OP_SET: u32 = 0;
+pub const LINUX_FUTEX_OP_ADD: u32 = 1;
+pub const LINUX_FUTEX_OP_OR: u32 = 2;
+pub const LINUX_FUTEX_OP_ANDN: u32 = 3;
+pub const LINUX_FUTEX_OP_XOR: u32 = 4;
+pub const LINUX_FUTEX_OP_OPARG_SHIFT: u32 = 8;
+pub const LINUX_FUTEX_OP_CMP_EQ: u32 = 0;
+pub const LINUX_FUTEX_OP_CMP_NE: u32 = 1;
+pub const LINUX_FUTEX_OP_CMP_LT: u32 = 2;
+pub const LINUX_FUTEX_OP_CMP_LE: u32 = 3;
+pub const LINUX_FUTEX_OP_CMP_GT: u32 = 4;
+pub const LINUX_FUTEX_OP_CMP_GE: u32 = 5;
 pub const LINUX___UAPI_DEF_IF_IFCONF: u32 = 1;
 pub const LINUX___UAPI_DEF_IF_IFMAP: u32 = 1;
 pub const LINUX___UAPI_DEF_IF_IFNAMSIZ: u32 = 1;
@@ -1700,6 +1749,89 @@ fn bindgen_test_layout_epoll_event() {
             stringify!(linux_epoll_event),
             "::",
             stringify!(data)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_robust_list {
+    pub next: *mut linux_robust_list,
+}
+#[test]
+fn bindgen_test_layout_robust_list() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_robust_list> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_robust_list>(),
+        8usize,
+        concat!("Size of: ", stringify!(linux_robust_list))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_robust_list>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_robust_list))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).next) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_robust_list),
+            "::",
+            stringify!(next)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_robust_list_head {
+    pub list: linux_robust_list,
+    pub futex_offset: ::core::ffi::c_long,
+    pub list_op_pending: *mut linux_robust_list,
+}
+#[test]
+fn bindgen_test_layout_robust_list_head() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_robust_list_head> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_robust_list_head>(),
+        24usize,
+        concat!("Size of: ", stringify!(linux_robust_list_head))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_robust_list_head>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_robust_list_head))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).list) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_robust_list_head),
+            "::",
+            stringify!(list)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).futex_offset) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_robust_list_head),
+            "::",
+            stringify!(futex_offset)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).list_op_pending) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_robust_list_head),
+            "::",
+            stringify!(list_op_pending)
         )
     );
 }

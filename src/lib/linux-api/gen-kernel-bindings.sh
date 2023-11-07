@@ -96,6 +96,9 @@ bindgen_flags+=("--allowlist-type=rlimit64")
 # utsname.h
 bindgen_flags+=("--allowlist-type=new_utsname")
 
+# futex.h
+bindgen_flags+=("--allowlist-type=robust_list_head")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 

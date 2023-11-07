@@ -55,6 +55,7 @@ pub mod epoll;
 pub mod errno;
 pub mod exit;
 pub mod fcntl;
+pub mod futex;
 pub mod inet;
 pub mod ioctls;
 pub mod ldt;

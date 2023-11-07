@@ -5,6 +5,7 @@
 #include <linux/errno.h>
 #include <linux/eventpoll.h>
 #include <linux/fcntl.h>
+#include <linux/futex.h>
 #include <linux/in.h>
 #include <linux/limits.h>
 #include <linux/mman.h>
