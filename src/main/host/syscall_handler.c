@@ -27,7 +27,6 @@
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/select.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
@@ -397,7 +396,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #ifdef SYS_prlimit64
             HANDLE_RUST(prlimit64);
 #endif
-            HANDLE_C(pselect6);
+            HANDLE_RUST(pselect6);
             HANDLE_RUST(pwrite64);
             HANDLE_RUST(pwritev);
 #ifdef SYS_pwritev2
@@ -418,7 +417,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(shadow_hostname_to_addr_ipv4);
             HANDLE_RUST(shadow_init_memory_manager);
             HANDLE_RUST(shadow_yield);
-            HANDLE_C(select);
+            HANDLE_RUST(select);
             HANDLE_RUST(sendmsg);
             HANDLE_RUST(sendto);
             HANDLE_RUST(setpgid);
