@@ -64,6 +64,11 @@ pub use bindings::linux_timespec;
 pub type timespec = linux_timespec;
 unsafe impl shadow_pod::Pod for timespec {}
 
+pub use bindings::linux___kernel_timespec;
+#[allow(non_camel_case_types)]
+pub type kernel_timespec = linux___kernel_timespec;
+unsafe impl shadow_pod::Pod for kernel_timespec {}
+
 pub use bindings::linux_timeval;
 #[allow(non_camel_case_types)]
 pub type timeval = linux_timeval;

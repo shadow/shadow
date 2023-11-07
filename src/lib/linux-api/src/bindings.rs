@@ -1829,6 +1829,48 @@ fn bindgen_test_layout_sockaddr_in() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux___kernel_timespec {
+    pub tv_sec: linux___kernel_time64_t,
+    pub tv_nsec: ::core::ffi::c_longlong,
+}
+#[test]
+fn bindgen_test_layout___kernel_timespec() {
+    const UNINIT: ::core::mem::MaybeUninit<linux___kernel_timespec> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux___kernel_timespec>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux___kernel_timespec))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux___kernel_timespec>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux___kernel_timespec))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_sec) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_timespec),
+            "::",
+            stringify!(tv_sec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).tv_nsec) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_timespec),
+            "::",
+            stringify!(tv_nsec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___kernel_old_timeval {
     pub tv_sec: linux___kernel_long_t,
     pub tv_usec: linux___kernel_long_t,

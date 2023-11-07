@@ -15,6 +15,7 @@
 #include <linux/signal.h>
 #include <linux/sockios.h>
 #include <linux/time.h>
+#include <linux/time_types.h>
 #include <linux/unistd.h>
 #include <linux/utsname.h>
 #include <linux/wait.h>

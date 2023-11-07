@@ -63,11 +63,14 @@ bindgen_flags+=("--allowlist-type=sigaction")
 bindgen_flags+=("--allowlist-type=stack_t")
 bindgen_flags+=("--allowlist-type=ucontext")
 
-# Time types
+# Time types (time.h)
 bindgen_flags+=("--allowlist-type=__kernel_clockid_t")
 bindgen_flags+=("--allowlist-type=timespec")
 bindgen_flags+=("--allowlist-type=itimerspec")
 bindgen_flags+=("--allowlist-type=itimerval")
+
+# More time types (time_types.h)
+bindgen_flags+=("--allowlist-type=__kernel_timespec")
 
 # Sched types
 bindgen_flags+=("--allowlist-type=clone_args")
