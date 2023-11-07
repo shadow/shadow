@@ -25,7 +25,6 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
-#include "main/host/syscall/futex.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/select.h"
@@ -366,7 +365,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getsid);
             HANDLE_RUST(gettid);
             HANDLE_RUST(getrandom);
-            HANDLE_C(get_robust_list);
+            HANDLE_RUST(get_robust_list);
             HANDLE_RUST(getsockname);
             HANDLE_RUST(getsockopt);
             SHIM_ONLY(gettimeofday);
@@ -440,7 +439,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             UNSUPPORTED(sigprocmask);
 #endif
             HANDLE_C(rt_sigprocmask);
-            HANDLE_C(set_robust_list);
+            HANDLE_RUST(set_robust_list);
             HANDLE_RUST(setitimer);
             HANDLE_RUST(set_tid_address);
             HANDLE_RUST(shutdown);

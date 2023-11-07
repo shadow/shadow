@@ -211,19 +211,3 @@ SyscallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args)
     warning("Unhandled futex operation %i", operation);
     return syscallreturn_makeDoneErrno(ENOSYS);
 }
-
-SyscallReturn syscallhandler_get_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-
-    debug("get_robust_list was called but we don't yet support it");
-
-    return syscallreturn_makeDoneErrno(ENOSYS);
-}
-
-SyscallReturn syscallhandler_set_robust_list(SysCallHandler* sys, const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-
-    debug("set_robust_list was called but we don't yet support it");
-
-    return syscallreturn_makeDoneErrno(ENOSYS);
-}
