@@ -153,6 +153,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/fcntl.h")
         .header("host/syscall/file.h")
         .header("host/syscall/fileat.h")
+        .header("host/syscall/futex.h")
         .header("host/syscall/ioctl.h")
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")

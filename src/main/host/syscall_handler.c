@@ -353,7 +353,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(fstatfs);
             HANDLE_C(fsync);
             HANDLE_C(ftruncate);
-            HANDLE_C(futex);
+            HANDLE_RUST(futex);
             HANDLE_C(futimesat);
             HANDLE_C(getdents);
             HANDLE_C(getdents64);

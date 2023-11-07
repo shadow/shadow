@@ -14,6 +14,7 @@ mod epoll;
 mod eventfd;
 mod fcntl;
 mod file;
+mod futex;
 mod ioctl;
 mod mman;
 mod prctl;
@@ -84,6 +85,7 @@ impl SyscallHandler {
             libc::SYS_exit_group => SyscallHandlerFn::call(Self::exit_group, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
             libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
+            libc::SYS_futex => SyscallHandlerFn::call(Self::futex, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
