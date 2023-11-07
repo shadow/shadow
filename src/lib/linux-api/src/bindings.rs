@@ -1496,6 +1496,37 @@ pub const LINUX_EPOLLET: u32 = 2147483648;
 pub type linux___u16 = ::core::ffi::c_ushort;
 pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___u64 = ::core::ffi::c_ulonglong;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux___kernel_fd_set {
+    pub fds_bits: [::core::ffi::c_ulong; 16usize],
+}
+#[test]
+fn bindgen_test_layout___kernel_fd_set() {
+    const UNINIT: ::core::mem::MaybeUninit<linux___kernel_fd_set> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux___kernel_fd_set>(),
+        128usize,
+        concat!("Size of: ", stringify!(linux___kernel_fd_set))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux___kernel_fd_set>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux___kernel_fd_set))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).fds_bits) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_fd_set),
+            "::",
+            stringify!(fds_bits)
+        )
+    );
+}
 pub type linux___kernel_sighandler_t =
     ::core::option::Option<unsafe extern "C" fn(arg1: ::core::ffi::c_int)>;
 pub type linux___kernel_key_t = ::core::ffi::c_int;

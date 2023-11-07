@@ -22,6 +22,10 @@ pub use bindings::linux___kernel_size_t;
 #[allow(non_camel_case_types)]
 pub type kernel_size_t = linux___kernel_size_t;
 
+pub use bindings::linux___kernel_fd_set;
+#[allow(non_camel_case_types)]
+pub type kernel_fd_set = linux___kernel_fd_set;
+
 /// Type-safe wrapper around [`kernel_pid_t`]. Value is strictly positive.
 /// Interface inspired by `rustix::process::Pid`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]

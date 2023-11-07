@@ -103,6 +103,9 @@ bindgen_flags+=("--allowlist-type=robust_list_head")
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
+# For pselect6
+bindgen_flags+=("--allowlist-type=__kernel_fd_set")
+
 # Output
 bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")
 
