@@ -1563,11 +1563,11 @@ impl Process {
         // the tracking, or dynamically iterate over the threads here and sum
         // the results.
         linux_api::resource::rusage {
-            ru_utime: linux_api::time::old_timeval {
+            ru_utime: linux_api::time::kernel_old_timeval {
                 tv_sec: 0,
                 tv_usec: 0,
             },
-            ru_stime: linux_api::time::old_timeval {
+            ru_stime: linux_api::time::kernel_old_timeval {
                 tv_sec: 0,
                 tv_usec: 0,
             },
