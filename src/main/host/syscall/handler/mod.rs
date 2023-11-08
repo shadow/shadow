@@ -17,6 +17,7 @@ mod file;
 mod futex;
 mod ioctl;
 mod mman;
+mod poll;
 mod prctl;
 mod random;
 mod resource;
@@ -110,6 +111,8 @@ impl SyscallHandler {
             libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
             libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
+            libc::SYS_poll => SyscallHandlerFn::call(Self::poll, &mut ctx),
+            libc::SYS_ppoll => SyscallHandlerFn::call(Self::ppoll, &mut ctx),
             libc::SYS_prctl => SyscallHandlerFn::call(Self::prctl, &mut ctx),
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
             libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),

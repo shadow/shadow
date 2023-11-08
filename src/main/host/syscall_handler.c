@@ -25,7 +25,6 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
-#include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
@@ -385,8 +384,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(openat);
             HANDLE_RUST(pipe);
             HANDLE_RUST(pipe2);
-            HANDLE_C(poll);
-            HANDLE_C(ppoll);
+            HANDLE_RUST(poll);
+            HANDLE_RUST(ppoll);
             HANDLE_RUST(prctl);
             HANDLE_RUST(pread64);
             HANDLE_RUST(preadv);
