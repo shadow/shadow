@@ -1477,6 +1477,19 @@ pub const LINUX_X86_FXSR_MAGIC: u32 = 0;
 pub const LINUX_UC_FP_XSTATE: u32 = 1;
 pub const LINUX_UC_SIGCONTEXT_SS: u32 = 2;
 pub const LINUX_UC_STRICT_RESTORE_SS: u32 = 4;
+pub const LINUX_POLLIN: u32 = 1;
+pub const LINUX_POLLPRI: u32 = 2;
+pub const LINUX_POLLOUT: u32 = 4;
+pub const LINUX_POLLERR: u32 = 8;
+pub const LINUX_POLLHUP: u32 = 16;
+pub const LINUX_POLLNVAL: u32 = 32;
+pub const LINUX_POLLRDNORM: u32 = 64;
+pub const LINUX_POLLRDBAND: u32 = 128;
+pub const LINUX_POLLWRNORM: u32 = 256;
+pub const LINUX_POLLWRBAND: u32 = 512;
+pub const LINUX_POLLMSG: u32 = 1024;
+pub const LINUX_POLLREMOVE: u32 = 4096;
+pub const LINUX_POLLRDHUP: u32 = 8192;
 pub const LINUX_EPOLLIN: u32 = 1;
 pub const LINUX_EPOLLPRI: u32 = 2;
 pub const LINUX_EPOLLOUT: u32 = 4;
@@ -4572,4 +4585,56 @@ impl ::core::fmt::Debug for linux_ucontext {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         write ! (f , "linux_ucontext {{ uc_flags: {:?}, uc_link: {:?}, uc_stack: {:?}, uc_mcontext: {:?}, uc_sigmask: {:?} }}" , self . uc_flags , self . uc_link , self . uc_stack , self . uc_mcontext , self . uc_sigmask)
     }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_pollfd {
+    pub fd: ::core::ffi::c_int,
+    pub events: ::core::ffi::c_short,
+    pub revents: ::core::ffi::c_short,
+}
+#[test]
+fn bindgen_test_layout_pollfd() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_pollfd> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_pollfd>(),
+        8usize,
+        concat!("Size of: ", stringify!(linux_pollfd))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_pollfd>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_pollfd))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).fd) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_pollfd),
+            "::",
+            stringify!(fd)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).events) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_pollfd),
+            "::",
+            stringify!(events)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).revents) as usize - ptr as usize },
+        6usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_pollfd),
+            "::",
+            stringify!(revents)
+        )
+    );
 }

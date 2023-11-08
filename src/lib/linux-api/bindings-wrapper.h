@@ -25,6 +25,8 @@
 #include <asm/sigcontext.h>
 #include <asm/ucontext.h>
 
+#include <asm-generic/poll.h>
+
 /* Epoll flags from eventpoll.h. These seem to be missed because of an inline
  * cast to `(__poll_t)`, so we add them here manually after cleaning up.
  */
