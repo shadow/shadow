@@ -206,9 +206,7 @@ impl TimerFd {
         // The only timerfd-specific ioctl request is for `TFD_IOC_SET_TICKS`, which is available
         // since Linux 3.17 but only if the kernel was configured with `CONFIG_CHECKPOINT_RESTORE`.
         // See timerfd_create(2) for more details.
-        warn_once_then_debug!(
-            "(LOG_ONCE) We do not yet handle ioctl request {request:?} on TimerFds"
-        );
+        warn_once_then_debug!("We do not yet handle ioctl request {request:?} on TimerFds");
         Err(Errno::EINVAL.into())
     }
 

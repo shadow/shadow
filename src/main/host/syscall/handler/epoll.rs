@@ -124,8 +124,8 @@ impl SyscallHandler {
                         // Our implementation doesn't support other legacy types.
                         // We don't think we have such types remaining, but warn anyway.
                         warn_once_then_trace!(
-                            "(LOG_ONCE) Attempted to add a legacy file to an \
-                            epoll file, which shadow doesn't support"
+                            "Attempted to add a legacy file to an epoll file, which \
+                            shadow doesn't support"
                         );
                         return Err(Errno::EINVAL.into());
                     }

@@ -41,14 +41,14 @@ impl SyscallHandler {
             | FcntlCommand::F_OFD_GETLK => {
                 match desc.file() {
                     CompatFile::New(_) => {
-                        warn_once_then_debug!(
-                            "(LOG_ONCE) fcntl({cmd:?}) unimplemented for {:?}",
-                            desc.file()
-                        );
+                        warn_once_then_debug!("fcntl({cmd:?}) unimplemented for {:?}", desc.file());
                         return Err(Errno::ENOSYS.into());
                     }
                     CompatFile::Legacy(_) => {
-                        warn_once_then_debug!("(LOG_ONCE) Using fcntl({cmd:?}) implementation that assumes no lock contention. See https://github.com/shadow/shadow/issues/2258");
+                        warn_once_then_debug!(
+                            "Using fcntl({cmd:?}) implementation that assumes no lock contention. \
+                            See https://github.com/shadow/shadow/issues/2258"
+                        );
                         drop(desc_table);
                         return legacy_syscall_fn(ctx);
                     }
@@ -173,7 +173,7 @@ impl SyscallHandler {
                 }
             }
             cmd => {
-                warn_once_then_debug!("(LOG_ONCE) Unhandled fcntl command: {cmd:?}");
+                warn_once_then_debug!("Unhandled fcntl command: {cmd:?}");
                 return Err(Errno::EINVAL.into());
             }
         })

@@ -130,7 +130,7 @@ impl Epoll {
     ) -> SyscallResult {
         // After checking the epoll man pages and the Linux source for eventpoll.c, we don't think
         // epoll descriptors support any ioctl operations.
-        warn_once_then_trace!("(LOG_ONCE) Epoll does not support any ioctl requests.");
+        warn_once_then_trace!("Epoll does not support any ioctl requests.");
         // From ioctl(2): ENOTTY The specified request does not apply to the kind of object that the
         // file descriptor fd references. Verified that epoll descriptors return this on Linux.
         Err(Errno::ENOTTY.into())

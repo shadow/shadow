@@ -8,19 +8,18 @@ macro_rules! debug_panic {
 }
 
 /// Log a message once at level `lvl_once`, and any later log messages from this line at level
-/// `lvl_remaining`. A log target is not supported. It is recommended to also prepend "(LOG_ONCE)"
-/// to the log message to indicate that it will not be logged again at that level, but will be
-/// logged at a different level.
+/// `lvl_remaining`. A log target is not supported. The string "(LOG_ONCE)" will be prepended to the
+/// message to indicate that future messages won't be logged at `lvl_once`.
 ///
 /// ```
 /// # use log::Level;
 /// # use shadow_rs::log_once_at_level;
-/// log_once_at_level!(Level::Warn, Level::Debug, "(LOG_ONCE) Unexpected flag {}", 10);
+/// log_once_at_level!(Level::Warn, Level::Debug, "Unexpected flag {}", 10);
 /// ```
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! log_once_at_level {
-    ($lvl_once:expr, $lvl_remaining:expr, $($x:tt)+) => {
+    ($lvl_once:expr, $lvl_remaining:expr, $str:literal $($x:tt)*) => {
         // don't do atomic operations if this log statement isn't enabled
         if log::log_enabled!($lvl_once) || log::log_enabled!($lvl_remaining) {
             static HAS_LOGGED: std::sync::atomic::AtomicBool =
@@ -34,20 +33,19 @@ macro_rules! log_once_at_level {
                 std::sync::atomic::Ordering::Relaxed,
                 std::sync::atomic::Ordering::Relaxed,
             ) {
-                Ok(_) => log::log!($lvl_once, $($x)+),
-                Err(_) => log::log!($lvl_remaining, $($x)+),
+                Ok(_) => log::log!($lvl_once, "(LOG_ONCE) {}", format_args!($str $($x)*)),
+                Err(_) => log::log!($lvl_remaining, "(LOG_ONCE) {}", format_args!($str $($x)*)),
             }
         }
     };
 }
 
 /// Log a message once at warn level, and any later log messages from this line at debug level. A
-/// log target is not supported. It is recommended to also prepend "(LOG_ONCE)" to the log message
-/// to indicate that it will not be logged again at that level, but will be logged at a different
-/// level.
+/// log target is not supported. The string "(LOG_ONCE)" will be prepended to the message to
+/// indicate that future messages won't be logged at warn level.
 ///
 /// ```ignore
-/// warn_once_then_debug!("(LOG_ONCE) Unexpected flag {}", 10);
+/// warn_once_then_debug!("Unexpected flag {}", 10);
 /// ```
 #[allow(unused_macros)]
 macro_rules! warn_once_then_debug {
@@ -57,12 +55,11 @@ macro_rules! warn_once_then_debug {
 }
 
 /// Log a message once at warn level, and any later log messages from this line at trace level. A
-/// log target is not supported. It is recommended to also prepend "(LOG_ONCE)" to the log message
-/// to indicate that it will not be logged again at that level, but will be logged at a different
-/// level.
+/// log target is not supported. The string "(LOG_ONCE)" will be prepended to the message to
+/// indicate that future messages won't be logged at warn level.
 ///
 /// ```ignore
-/// warn_once_then_trace!("(LOG_ONCE) Unexpected flag {}", 10);
+/// warn_once_then_trace!("Unexpected flag {}", 10);
 /// ```
 #[allow(unused_macros)]
 macro_rules! warn_once_then_trace {
