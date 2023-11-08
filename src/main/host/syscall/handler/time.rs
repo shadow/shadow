@@ -39,7 +39,7 @@ impl SyscallHandler {
         };
 
         if which != ITimerId::ITIMER_REAL {
-            warn_once_then_debug!("(LOG_ONCE) Timer type {which:?} unsupported");
+            warn_once_then_debug!("Timer type {which:?} unsupported");
             return Err(Errno::EINVAL.into());
         }
 
@@ -66,7 +66,7 @@ impl SyscallHandler {
         };
 
         if which != ITimerId::ITIMER_REAL {
-            warn_once_then_debug!("(LOG_ONCE) Timer type {which:?} unsupported");
+            warn_once_then_debug!("Timer type {which:?} unsupported");
             return Err(Errno::EINVAL.into());
         }
 
@@ -166,7 +166,7 @@ impl SyscallHandler {
             Err(Errno::ENOTSUP.into())
         } else if [ClockId::CLOCK_PROCESS_CPUTIME_ID].contains(&clock_id) {
             // Supported in Linux, not in Shadow.
-            warn_once_then_debug!("(LOG_ONCE) Clock id {clock_id:?} unsupported in Shadow.",);
+            warn_once_then_debug!("Clock id {clock_id:?} unsupported in Shadow.",);
             Err(Errno::ENOTSUP.into())
         } else {
             log::debug!("Unknown clock id {clock_id:?}.");

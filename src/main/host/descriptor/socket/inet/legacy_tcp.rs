@@ -613,7 +613,7 @@ impl LegacyTcpSocket {
             }
             request => {
                 warn_once_then_debug!(
-                    "(LOG_ONCE) We do not yet handle ioctl request {request:?} on tcp sockets"
+                    "We do not yet handle ioctl request {request:?} on tcp sockets"
                 );
                 Err(Errno::EINVAL.into())
             }

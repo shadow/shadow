@@ -49,7 +49,7 @@ impl SyscallHandler {
         // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
         // casting from signed to unsigned)
         if flags as u32 as u64 != flags {
-            warn_once_then_trace!("(LOG_ONCE) ignoring truncated flags from mremap: {flags}");
+            warn_once_then_trace!("Ignoring truncated flags from mremap: {flags}");
         }
 
         let flags = flags as i32;
@@ -98,7 +98,7 @@ impl SyscallHandler {
         // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
         // casting from signed to unsigned)
         if prot as u32 as u64 != prot {
-            warn_once_then_trace!("(LOG_ONCE) ignoring truncated prot flags from mprotect: {prot}");
+            warn_once_then_trace!("Ignoring truncated prot flags from mprotect: {prot}");
         }
 
         let prot = prot as i32;
@@ -139,7 +139,7 @@ impl SyscallHandler {
         // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
         // casting from signed to unsigned)
         if prot as u32 as u64 != prot {
-            warn_once_then_trace!("(LOG_ONCE) ignoring truncated prot flags from mmap: {prot}");
+            warn_once_then_trace!("Ignoring truncated prot flags from mmap: {prot}");
         }
 
         let prot = prot as i32;
@@ -147,7 +147,7 @@ impl SyscallHandler {
         let flags = match MapFlags::from_bits(flags) {
             Some(x) => x,
             None => {
-                warn_once_then_debug!("(LOG_ONCE) Invalid mmap flags: {flags}");
+                warn_once_then_debug!("Invalid mmap flags: {flags}");
                 MapFlags::from_bits_truncate(flags)
             }
         };
@@ -222,7 +222,7 @@ impl SyscallHandler {
         // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
         // casting from signed to unsigned)
         if flags as u32 as u64 != flags {
-            warn_once_then_trace!("(LOG_ONCE) ignoring truncated flags from mmap: {flags}");
+            warn_once_then_trace!("Ignoring truncated flags from mmap: {flags}");
         }
 
         let flags = flags as i32;
@@ -268,7 +268,7 @@ impl SyscallHandler {
         // make sure we don't open special files like /dev/urandom, /etc/localtime etc. in the
         // plugin via mmap
         if unsafe { c::regularfile_getType(file) } != c::_FileType_FILE_TYPE_REGULAR {
-            warn_once_then_debug!("(LOG_ONCE) Tried to mmap a non-regular-file");
+            warn_once_then_debug!("Tried to mmap a non-regular-file");
             return Err(());
         }
 

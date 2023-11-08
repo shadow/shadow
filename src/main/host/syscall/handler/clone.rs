@@ -131,7 +131,8 @@ impl SyscallHandler {
             // "feature" and e.g. writes to non-scratch memory, expecting the
             // parent process to see those writes when it resumes.
             warn_once_then_debug!(
-                "(LOG_ONCE) Ignoring CLONE_VFORK (and CLONE_VM if set). In *typical* usage this won't result in incorrect behavior."
+                "Ignoring CLONE_VFORK (and CLONE_VM if set). In *typical* usage this won't \
+                result in incorrect behavior."
             );
             handled_flags.insert(CloneFlags::CLONE_VFORK);
         }

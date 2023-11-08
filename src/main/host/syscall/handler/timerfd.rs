@@ -203,7 +203,7 @@ fn check_clockid(clockid: ClockId) -> Result<(), Errno> {
         return Ok(());
     }
 
-    warn_once_then_debug!("(LOG_ONCE) Unsupported clockid {clockid:?}");
+    warn_once_then_debug!("Unsupported clockid {clockid:?}");
     Err(Errno::EINVAL)
 }
 
