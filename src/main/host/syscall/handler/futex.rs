@@ -30,7 +30,7 @@ impl SyscallHandler {
         _head_ptr: ForeignPtr<ForeignPtr<linux_api::futex::robust_list_head>>,
         _len_ptr: ForeignPtr<libc::size_t>,
     ) -> Result<(), SyscallError> {
-        log::debug!("get_robust_list was called but we don't yet support it");
+        warn_once_then_debug!("(LOG_ONCE) get_robust_list was called but we don't yet support it");
         Err(Errno::ENOSYS.into())
     }
 
@@ -41,7 +41,7 @@ impl SyscallHandler {
         _head: ForeignPtr<linux_api::futex::robust_list_head>,
         _len: libc::size_t,
     ) -> Result<(), SyscallError> {
-        log::debug!("set_robust_list was called but we don't yet support it");
+        warn_once_then_debug!("(LOG_ONCE) set_robust_list was called but we don't yet support it");
         Err(Errno::ENOSYS.into())
     }
 }
