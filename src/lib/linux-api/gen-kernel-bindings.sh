@@ -63,11 +63,15 @@ bindgen_flags+=("--allowlist-type=sigaction")
 bindgen_flags+=("--allowlist-type=stack_t")
 bindgen_flags+=("--allowlist-type=ucontext")
 
-# Time types
+# Time types (time.h)
 bindgen_flags+=("--allowlist-type=__kernel_clockid_t")
 bindgen_flags+=("--allowlist-type=timespec")
 bindgen_flags+=("--allowlist-type=itimerspec")
 bindgen_flags+=("--allowlist-type=itimerval")
+
+# More time types (time_types.h)
+bindgen_flags+=("--allowlist-type=__kernel_timespec")
+bindgen_flags+=("--allowlist-type=__kernel_old_timeval")
 
 # Sched types
 bindgen_flags+=("--allowlist-type=clone_args")
@@ -93,8 +97,14 @@ bindgen_flags+=("--allowlist-type=rlimit64")
 # utsname.h
 bindgen_flags+=("--allowlist-type=new_utsname")
 
+# futex.h
+bindgen_flags+=("--allowlist-type=robust_list_head")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
+
+# For pselect6
+bindgen_flags+=("--allowlist-type=__kernel_fd_set")
 
 # Output
 bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")

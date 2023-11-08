@@ -25,10 +25,8 @@
 #include "main/host/syscall/fcntl.h"
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
-#include "main/host/syscall/futex.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/select.h"
 #include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
@@ -353,7 +351,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(fstatfs);
             HANDLE_C(fsync);
             HANDLE_C(ftruncate);
-            HANDLE_C(futex);
+            HANDLE_RUST(futex);
             HANDLE_C(futimesat);
             HANDLE_C(getdents);
             HANDLE_C(getdents64);
@@ -366,7 +364,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getsid);
             HANDLE_RUST(gettid);
             HANDLE_RUST(getrandom);
-            HANDLE_C(get_robust_list);
+            HANDLE_RUST(get_robust_list);
             HANDLE_RUST(getsockname);
             HANDLE_RUST(getsockopt);
             SHIM_ONLY(gettimeofday);
@@ -398,7 +396,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #ifdef SYS_prlimit64
             HANDLE_RUST(prlimit64);
 #endif
-            HANDLE_C(pselect6);
+            HANDLE_RUST(pselect6);
             HANDLE_RUST(pwrite64);
             HANDLE_RUST(pwritev);
 #ifdef SYS_pwritev2
@@ -419,7 +417,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(shadow_hostname_to_addr_ipv4);
             HANDLE_RUST(shadow_init_memory_manager);
             HANDLE_RUST(shadow_yield);
-            HANDLE_C(select);
+            HANDLE_RUST(select);
             HANDLE_RUST(sendmsg);
             HANDLE_RUST(sendto);
             HANDLE_RUST(setpgid);
@@ -440,7 +438,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             UNSUPPORTED(sigprocmask);
 #endif
             HANDLE_C(rt_sigprocmask);
-            HANDLE_C(set_robust_list);
+            HANDLE_RUST(set_robust_list);
             HANDLE_RUST(setitimer);
             HANDLE_RUST(set_tid_address);
             HANDLE_RUST(shutdown);

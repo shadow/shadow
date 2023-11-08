@@ -14,12 +14,14 @@ mod epoll;
 mod eventfd;
 mod fcntl;
 mod file;
+mod futex;
 mod ioctl;
 mod mman;
 mod prctl;
 mod random;
 mod resource;
 mod sched;
+mod select;
 mod shadow;
 mod socket;
 mod sysinfo;
@@ -84,6 +86,8 @@ impl SyscallHandler {
             libc::SYS_exit_group => SyscallHandlerFn::call(Self::exit_group, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
             libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
+            libc::SYS_futex => SyscallHandlerFn::call(Self::futex, &mut ctx),
+            libc::SYS_get_robust_list => SyscallHandlerFn::call(Self::get_robust_list, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
@@ -111,6 +115,7 @@ impl SyscallHandler {
             libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
             libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),
             libc::SYS_prlimit64 => SyscallHandlerFn::call(Self::prlimit64, &mut ctx),
+            libc::SYS_pselect6 => SyscallHandlerFn::call(Self::pselect6, &mut ctx),
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
             libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
             libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
@@ -126,8 +131,10 @@ impl SyscallHandler {
                 SyscallHandlerFn::call(Self::sched_setaffinity, &mut ctx)
             }
             libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
+            libc::SYS_select => SyscallHandlerFn::call(Self::select, &mut ctx),
             libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
             libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
+            libc::SYS_set_robust_list => SyscallHandlerFn::call(Self::set_robust_list, &mut ctx),
             libc::SYS_set_tid_address => SyscallHandlerFn::call(Self::set_tid_address, &mut ctx),
             libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
             libc::SYS_setpgid => SyscallHandlerFn::call(Self::setpgid, &mut ctx),

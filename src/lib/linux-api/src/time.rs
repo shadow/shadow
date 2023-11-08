@@ -64,13 +64,20 @@ pub use bindings::linux_timespec;
 pub type timespec = linux_timespec;
 unsafe impl shadow_pod::Pod for timespec {}
 
+pub use bindings::linux___kernel_timespec;
+#[allow(non_camel_case_types)]
+pub type kernel_timespec = linux___kernel_timespec;
+unsafe impl shadow_pod::Pod for kernel_timespec {}
+
 pub use bindings::linux_timeval;
 #[allow(non_camel_case_types)]
 pub type timeval = linux_timeval;
+unsafe impl shadow_pod::Pod for timeval {}
 
 pub use bindings::linux___kernel_old_timeval;
 #[allow(non_camel_case_types)]
-pub type old_timeval = linux___kernel_old_timeval;
+pub type kernel_old_timeval = linux___kernel_old_timeval;
+unsafe impl shadow_pod::Pod for kernel_old_timeval {}
 
 pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<timespec, Errno> {
     let mut t = shadow_pod::zeroed();
