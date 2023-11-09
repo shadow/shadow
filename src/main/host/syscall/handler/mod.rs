@@ -24,6 +24,7 @@ mod resource;
 mod sched;
 mod select;
 mod shadow;
+mod signal;
 mod socket;
 mod sysinfo;
 mod time;
@@ -101,6 +102,7 @@ impl SyscallHandler {
             libc::SYS_getsockopt => SyscallHandlerFn::call(Self::getsockopt, &mut ctx),
             libc::SYS_gettid => SyscallHandlerFn::call(Self::gettid, &mut ctx),
             libc::SYS_ioctl => SyscallHandlerFn::call(Self::ioctl, &mut ctx),
+            libc::SYS_kill => SyscallHandlerFn::call(Self::kill, &mut ctx),
             libc::SYS_listen => SyscallHandlerFn::call(Self::listen, &mut ctx),
             libc::SYS_mmap => SyscallHandlerFn::call(Self::mmap, &mut ctx),
             libc::SYS_mprotect => SyscallHandlerFn::call(Self::mprotect, &mut ctx),
@@ -122,11 +124,13 @@ impl SyscallHandler {
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
             libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
             libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
-            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
             libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
             libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
             libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
             libc::SYS_recvmsg => SyscallHandlerFn::call(Self::recvmsg, &mut ctx),
+            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
+            libc::SYS_rt_sigaction => SyscallHandlerFn::call(Self::rt_sigaction, &mut ctx),
+            libc::SYS_rt_sigprocmask => SyscallHandlerFn::call(Self::rt_sigprocmask, &mut ctx),
             libc::SYS_sched_getaffinity => {
                 SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
             }
@@ -144,12 +148,15 @@ impl SyscallHandler {
             libc::SYS_setsid => SyscallHandlerFn::call(Self::setsid, &mut ctx),
             libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
             libc::SYS_shutdown => SyscallHandlerFn::call(Self::shutdown, &mut ctx),
+            libc::SYS_sigaltstack => SyscallHandlerFn::call(Self::sigaltstack, &mut ctx),
             libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
+            libc::SYS_tgkill => SyscallHandlerFn::call(Self::tgkill, &mut ctx),
             libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
             libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
             libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
+            libc::SYS_tkill => SyscallHandlerFn::call(Self::tkill, &mut ctx),
             libc::SYS_uname => SyscallHandlerFn::call(Self::uname, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),

@@ -26,7 +26,6 @@
 #include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
@@ -368,7 +367,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getsockopt);
             SHIM_ONLY(gettimeofday);
             HANDLE_RUST(ioctl);
-            HANDLE_C(kill);
+            HANDLE_RUST(kill);
             HANDLE_C(linkat);
             HANDLE_RUST(listen);
             HANDLE_C(lseek);
@@ -426,8 +425,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // Superseded by rt_sigaction in Linux 2.2
             UNSUPPORTED(sigaction);
 #endif
-            HANDLE_C(rt_sigaction);
-            HANDLE_C(sigaltstack);
+            HANDLE_RUST(rt_sigaction);
+            HANDLE_RUST(sigaltstack);
 #ifdef SYS_signal
             // Superseded by sigaction in glibc 2.0
             UNSUPPORTED(signal);
@@ -436,7 +435,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // Superseded by rt_sigprocmask in Linux 2.2
             UNSUPPORTED(sigprocmask);
 #endif
-            HANDLE_C(rt_sigprocmask);
+            HANDLE_RUST(rt_sigprocmask);
             HANDLE_RUST(set_robust_list);
             HANDLE_RUST(setitimer);
             HANDLE_RUST(set_tid_address);
@@ -450,12 +449,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(sync_file_range);
             HANDLE_C(syncfs);
             HANDLE_RUST(sysinfo);
-            HANDLE_C(tgkill);
+            HANDLE_RUST(tgkill);
             SHIM_ONLY(time);
             HANDLE_RUST(timerfd_create);
             HANDLE_RUST(timerfd_gettime);
             HANDLE_RUST(timerfd_settime);
-            HANDLE_C(tkill);
+            HANDLE_RUST(tkill);
             HANDLE_RUST(uname);
             HANDLE_C(unlinkat);
             HANDLE_C(utimensat);
