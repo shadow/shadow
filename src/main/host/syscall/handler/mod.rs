@@ -102,33 +102,6 @@ impl SyscallHandler {
             }};
         }
 
-        macro_rules! unsupported {
-            () => {{
-                let rv = Errno::ENOSYS;
-
-                warn_once_then_debug!(
-                    "Returning error {} for explicitly unsupported syscall {} ({})",
-                    rv,
-                    syscall_name,
-                    ctx.args.number,
-                );
-
-                let rv = Err(rv.into());
-
-                log_syscall_simple(
-                    ctx.objs.process,
-                    ctx.objs.process.strace_logging_options(),
-                    ctx.objs.thread.id(),
-                    syscall_name,
-                    "...",
-                    &rv,
-                )
-                .unwrap();
-
-                rv
-            }};
-        }
-
         macro_rules! native {
             () => {{
                 log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
@@ -290,28 +263,6 @@ impl SyscallHandler {
             SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
             SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
             SYS_shadow_yield => handle!(shadow_yield),
-            //
-            // UNSUPPORTED SYSCALLS
-            //
-            // Syscalls that aren't implemented yet. Listing them here gives the same behavior as
-            // the default case (returning ENOSYS), but allows the logging to include the syscall
-            // name instead of just the number.
-            //
-            // Needs to either change *both* the native and emulated working directory, or get rid
-            // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_chdir => unsupported!(),
-            libc::SYS_copy_file_range => unsupported!(),
-            // Needs to either change *both* the native and emulated working directory, or get rid
-            // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_fchdir => unsupported!(),
-            libc::SYS_io_getevents => unsupported!(),
-            libc::SYS_msync => unsupported!(),
-            libc::SYS_recvmmsg => unsupported!(),
-            libc::SYS_sendfile => unsupported!(),
-            libc::SYS_sendmmsg => unsupported!(),
-            libc::SYS_splice => unsupported!(),
-            libc::SYS_tee => unsupported!(),
-            libc::SYS_vmsplice => unsupported!(),
             //
             // SHIM-ONLY SYSCALLS
             //
