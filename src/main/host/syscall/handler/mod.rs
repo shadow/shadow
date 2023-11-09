@@ -93,35 +93,6 @@ impl SyscallHandler {
             }};
         }
 
-        macro_rules! shim_only {
-            () => {{
-                panic!(
-                    "Syscall {} ({}) should have been handled in the shim",
-                    syscall_name, ctx.args.number,
-                )
-            }};
-        }
-
-        macro_rules! native {
-            () => {{
-                log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
-
-                let rv = Err(SyscallError::Native);
-
-                log_syscall_simple(
-                    ctx.objs.process,
-                    ctx.objs.process.strace_logging_options(),
-                    ctx.objs.thread.id(),
-                    syscall_name,
-                    "...",
-                    &rv,
-                )
-                .unwrap();
-
-                rv
-            }};
-        }
-
         let rv = match ctx.args.number {
             // SHADOW-HANDLED SYSCALLS
             //
@@ -266,61 +237,85 @@ impl SyscallHandler {
             //
             // SHIM-ONLY SYSCALLS
             //
-            libc::SYS_clock_gettime => shim_only!(),
-            libc::SYS_gettimeofday => shim_only!(),
-            libc::SYS_sched_yield => shim_only!(),
-            libc::SYS_time => shim_only!(),
+            libc::SYS_clock_gettime
+            | libc::SYS_gettimeofday
+            | libc::SYS_sched_yield
+            | libc::SYS_time => {
+                panic!(
+                    "Syscall {} ({}) should have been handled in the shim",
+                    syscall_name, ctx.args.number,
+                )
+            }
             //
             // NATIVE LINUX-HANDLED SYSCALLS
             //
-            libc::SYS_access => native!(),
-            libc::SYS_arch_prctl => native!(),
-            libc::SYS_chmod => native!(),
-            libc::SYS_chown => native!(),
-            libc::SYS_exit => native!(),
-            libc::SYS_getcwd => native!(),
-            libc::SYS_geteuid => native!(),
-            libc::SYS_getegid => native!(),
-            libc::SYS_getgid => native!(),
-            libc::SYS_getgroups => native!(),
-            libc::SYS_getresgid => native!(),
-            libc::SYS_getresuid => native!(),
-            libc::SYS_getrlimit => native!(),
-            libc::SYS_getuid => native!(),
-            libc::SYS_getxattr => native!(),
-            libc::SYS_lchown => native!(),
-            libc::SYS_lgetxattr => native!(),
-            libc::SYS_link => native!(),
-            libc::SYS_listxattr => native!(),
-            libc::SYS_llistxattr => native!(),
-            libc::SYS_lremovexattr => native!(),
-            libc::SYS_lsetxattr => native!(),
-            libc::SYS_lstat => native!(),
-            libc::SYS_madvise => native!(),
-            libc::SYS_mkdir => native!(),
-            libc::SYS_mknod => native!(),
-            libc::SYS_readlink => native!(),
-            libc::SYS_removexattr => native!(),
-            libc::SYS_rename => native!(),
-            libc::SYS_rmdir => native!(),
-            libc::SYS_rt_sigreturn => native!(),
-            libc::SYS_setfsgid => native!(),
-            libc::SYS_setfsuid => native!(),
-            libc::SYS_setgid => native!(),
-            libc::SYS_setregid => native!(),
-            libc::SYS_setresgid => native!(),
-            libc::SYS_setresuid => native!(),
-            libc::SYS_setreuid => native!(),
-            libc::SYS_setrlimit => native!(),
-            libc::SYS_setuid => native!(),
-            libc::SYS_setxattr => native!(),
-            libc::SYS_stat => native!(),
-            libc::SYS_statfs => native!(),
-            libc::SYS_symlink => native!(),
-            libc::SYS_truncate => native!(),
-            libc::SYS_unlink => native!(),
-            libc::SYS_utime => native!(),
-            libc::SYS_utimes => native!(),
+            libc::SYS_access
+            | libc::SYS_arch_prctl
+            | libc::SYS_chmod
+            | libc::SYS_chown
+            | libc::SYS_exit
+            | libc::SYS_getcwd
+            | libc::SYS_geteuid
+            | libc::SYS_getegid
+            | libc::SYS_getgid
+            | libc::SYS_getgroups
+            | libc::SYS_getresgid
+            | libc::SYS_getresuid
+            | libc::SYS_getrlimit
+            | libc::SYS_getuid
+            | libc::SYS_getxattr
+            | libc::SYS_lchown
+            | libc::SYS_lgetxattr
+            | libc::SYS_link
+            | libc::SYS_listxattr
+            | libc::SYS_llistxattr
+            | libc::SYS_lremovexattr
+            | libc::SYS_lsetxattr
+            | libc::SYS_lstat
+            | libc::SYS_madvise
+            | libc::SYS_mkdir
+            | libc::SYS_mknod
+            | libc::SYS_readlink
+            | libc::SYS_removexattr
+            | libc::SYS_rename
+            | libc::SYS_rmdir
+            | libc::SYS_rt_sigreturn
+            | libc::SYS_setfsgid
+            | libc::SYS_setfsuid
+            | libc::SYS_setgid
+            | libc::SYS_setregid
+            | libc::SYS_setresgid
+            | libc::SYS_setresuid
+            | libc::SYS_setreuid
+            | libc::SYS_setrlimit
+            | libc::SYS_setuid
+            | libc::SYS_setxattr
+            | libc::SYS_stat
+            | libc::SYS_statfs
+            | libc::SYS_symlink
+            | libc::SYS_truncate
+            | libc::SYS_unlink
+            | libc::SYS_utime
+            | libc::SYS_utimes => {
+                log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
+
+                let rv = Err(SyscallError::Native);
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
+            }
+            //
+            // UNSUPPORTED SYSCALL
+            //
             _ => {
                 log::warn!("Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
                     syscall_name,
