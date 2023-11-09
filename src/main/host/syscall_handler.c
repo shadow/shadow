@@ -308,20 +308,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(fchown);
             HANDLE_RUST(fchownat);
             HANDLE_RUST(fcntl);
-#ifdef SYS_fcntl64
-            // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
-            case SYS_fcntl64: {
-                _syscallhandler_pre_syscall(sys, args->number, "fcntl64");
-                SyscallHandler* handler = sys->syscall_handler_rs;
-                sys->syscall_handler_rs = NULL;
-                args->number = SYS_fcntl;
-                scr = rustsyscallhandler_syscall(handler, sys, args);
-                args->number = SYS_fcntl64;
-                sys->syscall_handler_rs = handler;
-                _syscallhandler_post_syscall(sys, args->number, "fcntl64", &scr);
-                break;
-            }
-#endif
             HANDLE_RUST(fdatasync);
             HANDLE_RUST(fgetxattr);
             HANDLE_RUST(flistxattr);
@@ -405,20 +391,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(setpgid);
             HANDLE_RUST(setsid);
             HANDLE_RUST(setsockopt);
-#ifdef SYS_sigaction
-            // Superseded by rt_sigaction in Linux 2.2
-            UNSUPPORTED(sigaction);
-#endif
             HANDLE_RUST(rt_sigaction);
             HANDLE_RUST(sigaltstack);
-#ifdef SYS_signal
-            // Superseded by sigaction in glibc 2.0
-            UNSUPPORTED(signal);
-#endif
-#ifdef SYS_sigprocmask
-            // Superseded by rt_sigprocmask in Linux 2.2
-            UNSUPPORTED(sigprocmask);
-#endif
             HANDLE_RUST(rt_sigprocmask);
             HANDLE_RUST(set_robust_list);
             HANDLE_RUST(setitimer);
@@ -517,9 +491,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             NATIVE(setuid);
             NATIVE(setxattr);
             NATIVE(stat);
-#ifdef SYS_stat64
-            NATIVE(stat64);
-#endif
             NATIVE(statfs);
             NATIVE(symlink);
             NATIVE(truncate);
