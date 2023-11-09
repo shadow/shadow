@@ -223,16 +223,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
                 process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
         }                                                                                          \
         break
-#define UNSUPPORTED(s)                                                                             \
-    case SYS_##s:                                                                                  \
-        warning(                                                                                   \
-            "Returning error ENOSYS for explicitly unsupported syscall %ld " #s, args->number);    \
-        scr = syscallreturn_makeDoneErrno(ENOSYS);                                                 \
-        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
-        }                                                                                          \
-        break
 #define HANDLE_RUST(s)                                                                             \
     case SYS_##s: {                                                                                \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
@@ -425,25 +415,22 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // **************************************
             // Not handled (yet):
             // **************************************
-            //// Needs to either change *both* the native and emulated
-            //// working directory, or get rid of one of them.
-            //// See https://github.com/shadow/shadow/issues/2960
-            UNSUPPORTED(chdir);
-            UNSUPPORTED(fchdir);
+            HANDLE_RUST(chdir);
+            HANDLE_RUST(fchdir);
 
-            UNSUPPORTED(io_getevents);
-            UNSUPPORTED(msync);
+            HANDLE_RUST(io_getevents);
+            HANDLE_RUST(msync);
 
             // copying data between various types of fds
-            UNSUPPORTED(copy_file_range);
-            UNSUPPORTED(sendfile);
-            UNSUPPORTED(splice);
-            UNSUPPORTED(vmsplice);
-            UNSUPPORTED(tee);
+            HANDLE_RUST(copy_file_range);
+            HANDLE_RUST(sendfile);
+            HANDLE_RUST(splice);
+            HANDLE_RUST(vmsplice);
+            HANDLE_RUST(tee);
 
             //// additional socket io
-            UNSUPPORTED(recvmmsg);
-            UNSUPPORTED(sendmmsg);
+            HANDLE_RUST(recvmmsg);
+            HANDLE_RUST(sendmmsg);
 
             // ***************************************
             // We think we don't need to handle these
