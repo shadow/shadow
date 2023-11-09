@@ -92,22 +92,22 @@ impl SyscallHandler {
         }
 
         macro_rules! shim_only {
-            ($name: literal) => {{
+            () => {{
                 panic!(
                     "Syscall {} ({}) should have been handled in the shim",
-                    $name, ctx.args.number,
+                    syscall_name, ctx.args.number,
                 )
             }};
         }
 
         macro_rules! unsupported {
-            ($name: literal) => {{
+            () => {{
                 let rv = Errno::ENOSYS;
 
                 log::warn!(
                     "Returning error {} for explicitly unsupported syscall {} ({})",
                     rv,
-                    $name,
+                    syscall_name,
                     ctx.args.number,
                 );
 
@@ -117,7 +117,7 @@ impl SyscallHandler {
                     ctx.objs.process,
                     ctx.objs.process.strace_logging_options(),
                     ctx.objs.thread.id(),
-                    $name,
+                    syscall_name,
                     "...",
                     &rv,
                 )
@@ -128,8 +128,8 @@ impl SyscallHandler {
         }
 
         macro_rules! native {
-            ($name: literal) => {{
-                log::trace!("Native syscall {} ({})", $name, ctx.args.number);
+            () => {{
+                log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
 
                 let rv = Err(SyscallError::Native);
 
@@ -137,7 +137,7 @@ impl SyscallHandler {
                     ctx.objs.process,
                     ctx.objs.process.strace_logging_options(),
                     ctx.objs.thread.id(),
-                    $name,
+                    syscall_name,
                     "...",
                     &rv,
                 )
@@ -297,77 +297,77 @@ impl SyscallHandler {
             //
             // Needs to either change *both* the native and emulated working directory, or get rid
             // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_chdir => unsupported!("chdir"),
-            libc::SYS_copy_file_range => unsupported!("copy_file_range"),
+            libc::SYS_chdir => unsupported!(),
+            libc::SYS_copy_file_range => unsupported!(),
             // Needs to either change *both* the native and emulated working directory, or get rid
             // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_fchdir => unsupported!("fchdir"),
-            libc::SYS_io_getevents => unsupported!("io_getevents"),
-            libc::SYS_msync => unsupported!("msync"),
-            libc::SYS_recvmmsg => unsupported!("recvmmsg"),
-            libc::SYS_sendfile => unsupported!("sendfile"),
-            libc::SYS_sendmmsg => unsupported!("sendmmsg"),
-            libc::SYS_splice => unsupported!("splice"),
-            libc::SYS_tee => unsupported!("tee"),
-            libc::SYS_vmsplice => unsupported!("vmsplice"),
+            libc::SYS_fchdir => unsupported!(),
+            libc::SYS_io_getevents => unsupported!(),
+            libc::SYS_msync => unsupported!(),
+            libc::SYS_recvmmsg => unsupported!(),
+            libc::SYS_sendfile => unsupported!(),
+            libc::SYS_sendmmsg => unsupported!(),
+            libc::SYS_splice => unsupported!(),
+            libc::SYS_tee => unsupported!(),
+            libc::SYS_vmsplice => unsupported!(),
             //
             // SHIM-ONLY SYSCALLS
             //
-            libc::SYS_clock_gettime => shim_only!("clock_gettime"),
-            libc::SYS_gettimeofday => shim_only!("gettimeofday"),
-            libc::SYS_sched_yield => shim_only!("sched_yield"),
-            libc::SYS_time => shim_only!("time"),
+            libc::SYS_clock_gettime => shim_only!(),
+            libc::SYS_gettimeofday => shim_only!(),
+            libc::SYS_sched_yield => shim_only!(),
+            libc::SYS_time => shim_only!(),
             //
             // NATIVE LINUX-HANDLED SYSCALLS
             //
-            libc::SYS_access => native!("access"),
-            libc::SYS_arch_prctl => native!("arch_prctl"),
-            libc::SYS_chmod => native!("chmod"),
-            libc::SYS_chown => native!("chown"),
-            libc::SYS_exit => native!("exit"),
-            libc::SYS_getcwd => native!("getcwd"),
-            libc::SYS_geteuid => native!("geteuid"),
-            libc::SYS_getegid => native!("getegid"),
-            libc::SYS_getgid => native!("getgid"),
-            libc::SYS_getgroups => native!("getgroups"),
-            libc::SYS_getresgid => native!("getresgid"),
-            libc::SYS_getresuid => native!("getresuid"),
-            libc::SYS_getrlimit => native!("getrlimit"),
-            libc::SYS_getuid => native!("getuid"),
-            libc::SYS_getxattr => native!("getxattr"),
-            libc::SYS_lchown => native!("lchown"),
-            libc::SYS_lgetxattr => native!("lgetxattr"),
-            libc::SYS_link => native!("link"),
-            libc::SYS_listxattr => native!("listxattr"),
-            libc::SYS_llistxattr => native!("llistxattr"),
-            libc::SYS_lremovexattr => native!("lremovexattr"),
-            libc::SYS_lsetxattr => native!("lsetxattr"),
-            libc::SYS_lstat => native!("lstat"),
-            libc::SYS_madvise => native!("madvise"),
-            libc::SYS_mkdir => native!("mkdir"),
-            libc::SYS_mknod => native!("mknod"),
-            libc::SYS_readlink => native!("readlink"),
-            libc::SYS_removexattr => native!("removexattr"),
-            libc::SYS_rename => native!("rename"),
-            libc::SYS_rmdir => native!("rmdir"),
-            libc::SYS_rt_sigreturn => native!("rt_sigreturn"),
-            libc::SYS_setfsgid => native!("setfsgid"),
-            libc::SYS_setfsuid => native!("setfsuid"),
-            libc::SYS_setgid => native!("setgid"),
-            libc::SYS_setregid => native!("setregid"),
-            libc::SYS_setresgid => native!("setresgid"),
-            libc::SYS_setresuid => native!("setresuid"),
-            libc::SYS_setreuid => native!("setreuid"),
-            libc::SYS_setrlimit => native!("setrlimit"),
-            libc::SYS_setuid => native!("setuid"),
-            libc::SYS_setxattr => native!("setxattr"),
-            libc::SYS_stat => native!("stat"),
-            libc::SYS_statfs => native!("statfs"),
-            libc::SYS_symlink => native!("symlink"),
-            libc::SYS_truncate => native!("truncate"),
-            libc::SYS_unlink => native!("unlink"),
-            libc::SYS_utime => native!("utime"),
-            libc::SYS_utimes => native!("utimes"),
+            libc::SYS_access => native!(),
+            libc::SYS_arch_prctl => native!(),
+            libc::SYS_chmod => native!(),
+            libc::SYS_chown => native!(),
+            libc::SYS_exit => native!(),
+            libc::SYS_getcwd => native!(),
+            libc::SYS_geteuid => native!(),
+            libc::SYS_getegid => native!(),
+            libc::SYS_getgid => native!(),
+            libc::SYS_getgroups => native!(),
+            libc::SYS_getresgid => native!(),
+            libc::SYS_getresuid => native!(),
+            libc::SYS_getrlimit => native!(),
+            libc::SYS_getuid => native!(),
+            libc::SYS_getxattr => native!(),
+            libc::SYS_lchown => native!(),
+            libc::SYS_lgetxattr => native!(),
+            libc::SYS_link => native!(),
+            libc::SYS_listxattr => native!(),
+            libc::SYS_llistxattr => native!(),
+            libc::SYS_lremovexattr => native!(),
+            libc::SYS_lsetxattr => native!(),
+            libc::SYS_lstat => native!(),
+            libc::SYS_madvise => native!(),
+            libc::SYS_mkdir => native!(),
+            libc::SYS_mknod => native!(),
+            libc::SYS_readlink => native!(),
+            libc::SYS_removexattr => native!(),
+            libc::SYS_rename => native!(),
+            libc::SYS_rmdir => native!(),
+            libc::SYS_rt_sigreturn => native!(),
+            libc::SYS_setfsgid => native!(),
+            libc::SYS_setfsuid => native!(),
+            libc::SYS_setgid => native!(),
+            libc::SYS_setregid => native!(),
+            libc::SYS_setresgid => native!(),
+            libc::SYS_setresuid => native!(),
+            libc::SYS_setreuid => native!(),
+            libc::SYS_setrlimit => native!(),
+            libc::SYS_setuid => native!(),
+            libc::SYS_setxattr => native!(),
+            libc::SYS_stat => native!(),
+            libc::SYS_statfs => native!(),
+            libc::SYS_symlink => native!(),
+            libc::SYS_truncate => native!(),
+            libc::SYS_unlink => native!(),
+            libc::SYS_utime => native!(),
+            libc::SYS_utimes => native!(),
             _ => {
                 log::warn!("Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
                     syscall_name,
