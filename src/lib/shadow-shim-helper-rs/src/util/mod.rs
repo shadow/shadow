@@ -1,3 +1,5 @@
+pub mod time;
+
 /// A trait to prevent type inference during function calls. Useful when you have a type that wraps
 /// a pointer (like `ForeignArrayPtr`) and you don't want Rust to infer the type of pointer
 /// during creation.  Instead, the caller must specify the generic type.
@@ -82,4 +84,16 @@ impl<T> SendPointer<T> {
     }
 }
 
-pub mod time;
+/// Implements [`Debug`](std::fmt::Debug) using the provided closure.
+pub struct DebugFormatter<F>(pub F)
+where
+    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+
+impl<F> std::fmt::Debug for DebugFormatter<F>
+where
+    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0(f)
+    }
+}
