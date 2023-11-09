@@ -16,7 +16,6 @@ SYSCALL_HANDLER(linkat);
 SYSCALL_HANDLER(mkdirat);
 SYSCALL_HANDLER(mknodat);
 SYSCALL_HANDLER(newfstatat);
-SYSCALL_HANDLER(newfstatat);
 SYSCALL_HANDLER(openat);
 SYSCALL_HANDLER(readlinkat);
 SYSCALL_HANDLER(renameat);

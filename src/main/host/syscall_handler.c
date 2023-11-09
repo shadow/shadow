@@ -23,11 +23,8 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/process.h"
 #include "main/host/syscall/fcntl.h"
-#include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
-#include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/signal.h"
 #include "main/host/syscall/uio.h"
 #include "main/host/syscall/unistd.h"
 #include "main/host/syscall_condition.h"
@@ -303,7 +300,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #endif
             HANDLE_RUST(close);
             HANDLE_RUST(connect);
-            HANDLE_C(creat);
+            HANDLE_RUST(creat);
             HANDLE_RUST(dup);
             HANDLE_RUST(dup2);
             HANDLE_RUST(dup3);
@@ -318,13 +315,13 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(execve);
             HANDLE_RUST(execveat);
             HANDLE_RUST(exit_group);
-            HANDLE_C(faccessat);
-            HANDLE_C(fadvise64);
-            HANDLE_C(fallocate);
-            HANDLE_C(fchmod);
-            HANDLE_C(fchmodat);
-            HANDLE_C(fchown);
-            HANDLE_C(fchownat);
+            HANDLE_RUST(faccessat);
+            HANDLE_RUST(fadvise64);
+            HANDLE_RUST(fallocate);
+            HANDLE_RUST(fchmod);
+            HANDLE_RUST(fchmodat);
+            HANDLE_RUST(fchown);
+            HANDLE_RUST(fchownat);
             HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
             // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
@@ -340,21 +337,21 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
                 break;
             }
 #endif
-            HANDLE_C(fdatasync);
-            HANDLE_C(fgetxattr);
-            HANDLE_C(flistxattr);
-            HANDLE_C(flock);
+            HANDLE_RUST(fdatasync);
+            HANDLE_RUST(fgetxattr);
+            HANDLE_RUST(flistxattr);
+            HANDLE_RUST(flock);
             HANDLE_RUST(fork);
-            HANDLE_C(fremovexattr);
-            HANDLE_C(fsetxattr);
-            HANDLE_C(fstat);
-            HANDLE_C(fstatfs);
-            HANDLE_C(fsync);
-            HANDLE_C(ftruncate);
+            HANDLE_RUST(fremovexattr);
+            HANDLE_RUST(fsetxattr);
+            HANDLE_RUST(fstat);
+            HANDLE_RUST(fstatfs);
+            HANDLE_RUST(fsync);
+            HANDLE_RUST(ftruncate);
             HANDLE_RUST(futex);
-            HANDLE_C(futimesat);
-            HANDLE_C(getdents);
-            HANDLE_C(getdents64);
+            HANDLE_RUST(futimesat);
+            HANDLE_RUST(getdents);
+            HANDLE_RUST(getdents64);
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
             HANDLE_RUST(getpid);
@@ -369,24 +366,24 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(getsockopt);
             SHIM_ONLY(gettimeofday);
             HANDLE_RUST(ioctl);
-            HANDLE_C(kill);
-            HANDLE_C(linkat);
+            HANDLE_RUST(kill);
+            HANDLE_RUST(linkat);
             HANDLE_RUST(listen);
-            HANDLE_C(lseek);
-            HANDLE_C(mkdirat);
-            HANDLE_C(mknodat);
+            HANDLE_RUST(lseek);
+            HANDLE_RUST(mkdirat);
+            HANDLE_RUST(mknodat);
             HANDLE_RUST(mmap);
             HANDLE_RUST(mprotect);
             HANDLE_RUST(mremap);
             HANDLE_RUST(munmap);
             HANDLE_RUST(nanosleep);
-            HANDLE_C(newfstatat);
+            HANDLE_RUST(newfstatat);
             HANDLE_RUST(open);
             HANDLE_RUST(openat);
             HANDLE_RUST(pipe);
             HANDLE_RUST(pipe2);
-            HANDLE_C(poll);
-            HANDLE_C(ppoll);
+            HANDLE_RUST(poll);
+            HANDLE_RUST(ppoll);
             HANDLE_RUST(prctl);
             HANDLE_RUST(pread64);
             HANDLE_RUST(preadv);
@@ -403,13 +400,13 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(pwritev2);
 #endif
             HANDLE_RUST(read);
-            HANDLE_C(readahead);
-            HANDLE_C(readlinkat);
+            HANDLE_RUST(readahead);
+            HANDLE_RUST(readlinkat);
             HANDLE_RUST(readv);
             HANDLE_RUST(recvfrom);
             HANDLE_RUST(recvmsg);
-            HANDLE_C(renameat);
-            HANDLE_C(renameat2);
+            HANDLE_RUST(renameat);
+            HANDLE_RUST(renameat2);
             HANDLE_RUST(rseq);
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
@@ -427,8 +424,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // Superseded by rt_sigaction in Linux 2.2
             UNSUPPORTED(sigaction);
 #endif
-            HANDLE_C(rt_sigaction);
-            HANDLE_C(sigaltstack);
+            HANDLE_RUST(rt_sigaction);
+            HANDLE_RUST(sigaltstack);
 #ifdef SYS_signal
             // Superseded by sigaction in glibc 2.0
             UNSUPPORTED(signal);
@@ -437,7 +434,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // Superseded by rt_sigprocmask in Linux 2.2
             UNSUPPORTED(sigprocmask);
 #endif
-            HANDLE_C(rt_sigprocmask);
+            HANDLE_RUST(rt_sigprocmask);
             HANDLE_RUST(set_robust_list);
             HANDLE_RUST(setitimer);
             HANDLE_RUST(set_tid_address);
@@ -445,21 +442,21 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(socket);
             HANDLE_RUST(socketpair);
 #ifdef SYS_statx
-            HANDLE_C(statx);
+            HANDLE_RUST(statx);
 #endif
-            HANDLE_C(symlinkat);
-            HANDLE_C(sync_file_range);
-            HANDLE_C(syncfs);
+            HANDLE_RUST(symlinkat);
+            HANDLE_RUST(sync_file_range);
+            HANDLE_RUST(syncfs);
             HANDLE_RUST(sysinfo);
-            HANDLE_C(tgkill);
+            HANDLE_RUST(tgkill);
             SHIM_ONLY(time);
             HANDLE_RUST(timerfd_create);
             HANDLE_RUST(timerfd_gettime);
             HANDLE_RUST(timerfd_settime);
-            HANDLE_C(tkill);
+            HANDLE_RUST(tkill);
             HANDLE_RUST(uname);
-            HANDLE_C(unlinkat);
-            HANDLE_C(utimensat);
+            HANDLE_RUST(unlinkat);
+            HANDLE_RUST(utimensat);
             HANDLE_RUST(vfork);
             HANDLE_RUST(waitid);
             HANDLE_RUST(wait4);

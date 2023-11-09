@@ -14,15 +14,18 @@ mod epoll;
 mod eventfd;
 mod fcntl;
 mod file;
+mod fileat;
 mod futex;
 mod ioctl;
 mod mman;
+mod poll;
 mod prctl;
 mod random;
 mod resource;
 mod sched;
 mod select;
 mod shadow;
+mod signal;
 mod socket;
 mod sysinfo;
 mod time;
@@ -70,6 +73,7 @@ impl SyscallHandler {
             libc::SYS_clone3 => SyscallHandlerFn::call(Self::clone3, &mut ctx),
             libc::SYS_close => SyscallHandlerFn::call(Self::close, &mut ctx),
             libc::SYS_connect => SyscallHandlerFn::call(Self::connect, &mut ctx),
+            libc::SYS_creat => SyscallHandlerFn::call(Self::creat, &mut ctx),
             libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),
             libc::SYS_dup2 => SyscallHandlerFn::call(Self::dup2, &mut ctx),
             libc::SYS_dup3 => SyscallHandlerFn::call(Self::dup3, &mut ctx),
@@ -84,10 +88,30 @@ impl SyscallHandler {
             libc::SYS_execve => SyscallHandlerFn::call(Self::execve, &mut ctx),
             libc::SYS_execveat => SyscallHandlerFn::call(Self::execveat, &mut ctx),
             libc::SYS_exit_group => SyscallHandlerFn::call(Self::exit_group, &mut ctx),
+            libc::SYS_faccessat => SyscallHandlerFn::call(Self::faccessat, &mut ctx),
+            libc::SYS_fadvise64 => SyscallHandlerFn::call(Self::fadvise64, &mut ctx),
+            libc::SYS_fallocate => SyscallHandlerFn::call(Self::fallocate, &mut ctx),
+            libc::SYS_fchmod => SyscallHandlerFn::call(Self::fchmod, &mut ctx),
+            libc::SYS_fchmodat => SyscallHandlerFn::call(Self::fchmodat, &mut ctx),
+            libc::SYS_fchown => SyscallHandlerFn::call(Self::fchown, &mut ctx),
+            libc::SYS_fchownat => SyscallHandlerFn::call(Self::fchownat, &mut ctx),
             libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
+            libc::SYS_fdatasync => SyscallHandlerFn::call(Self::fdatasync, &mut ctx),
+            libc::SYS_fgetxattr => SyscallHandlerFn::call(Self::fgetxattr, &mut ctx),
+            libc::SYS_flistxattr => SyscallHandlerFn::call(Self::flistxattr, &mut ctx),
+            libc::SYS_flock => SyscallHandlerFn::call(Self::flock, &mut ctx),
             libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
+            libc::SYS_fremovexattr => SyscallHandlerFn::call(Self::fremovexattr, &mut ctx),
+            libc::SYS_fsetxattr => SyscallHandlerFn::call(Self::fsetxattr, &mut ctx),
+            libc::SYS_fstat => SyscallHandlerFn::call(Self::fstat, &mut ctx),
+            libc::SYS_fstatfs => SyscallHandlerFn::call(Self::fstatfs, &mut ctx),
+            libc::SYS_fsync => SyscallHandlerFn::call(Self::fsync, &mut ctx),
+            libc::SYS_ftruncate => SyscallHandlerFn::call(Self::ftruncate, &mut ctx),
             libc::SYS_futex => SyscallHandlerFn::call(Self::futex, &mut ctx),
+            libc::SYS_futimesat => SyscallHandlerFn::call(Self::futimesat, &mut ctx),
             libc::SYS_get_robust_list => SyscallHandlerFn::call(Self::get_robust_list, &mut ctx),
+            libc::SYS_getdents => SyscallHandlerFn::call(Self::getdents, &mut ctx),
+            libc::SYS_getdents64 => SyscallHandlerFn::call(Self::getdents64, &mut ctx),
             libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
             libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
             libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
@@ -100,16 +124,24 @@ impl SyscallHandler {
             libc::SYS_getsockopt => SyscallHandlerFn::call(Self::getsockopt, &mut ctx),
             libc::SYS_gettid => SyscallHandlerFn::call(Self::gettid, &mut ctx),
             libc::SYS_ioctl => SyscallHandlerFn::call(Self::ioctl, &mut ctx),
+            libc::SYS_kill => SyscallHandlerFn::call(Self::kill, &mut ctx),
+            libc::SYS_linkat => SyscallHandlerFn::call(Self::linkat, &mut ctx),
             libc::SYS_listen => SyscallHandlerFn::call(Self::listen, &mut ctx),
+            libc::SYS_lseek => SyscallHandlerFn::call(Self::lseek, &mut ctx),
+            libc::SYS_mkdirat => SyscallHandlerFn::call(Self::mkdirat, &mut ctx),
+            libc::SYS_mknodat => SyscallHandlerFn::call(Self::mknodat, &mut ctx),
             libc::SYS_mmap => SyscallHandlerFn::call(Self::mmap, &mut ctx),
             libc::SYS_mprotect => SyscallHandlerFn::call(Self::mprotect, &mut ctx),
             libc::SYS_mremap => SyscallHandlerFn::call(Self::mremap, &mut ctx),
             libc::SYS_munmap => SyscallHandlerFn::call(Self::munmap, &mut ctx),
             libc::SYS_nanosleep => SyscallHandlerFn::call(Self::nanosleep, &mut ctx),
+            libc::SYS_newfstatat => SyscallHandlerFn::call(Self::newfstatat, &mut ctx),
             libc::SYS_open => SyscallHandlerFn::call(Self::open, &mut ctx),
             libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
             libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
             libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
+            libc::SYS_poll => SyscallHandlerFn::call(Self::poll, &mut ctx),
+            libc::SYS_ppoll => SyscallHandlerFn::call(Self::ppoll, &mut ctx),
             libc::SYS_prctl => SyscallHandlerFn::call(Self::prctl, &mut ctx),
             libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
             libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
@@ -119,11 +151,17 @@ impl SyscallHandler {
             libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
             libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
             libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
-            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
             libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
+            libc::SYS_readahead => SyscallHandlerFn::call(Self::readahead, &mut ctx),
+            libc::SYS_readlinkat => SyscallHandlerFn::call(Self::readlinkat, &mut ctx),
             libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
             libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
             libc::SYS_recvmsg => SyscallHandlerFn::call(Self::recvmsg, &mut ctx),
+            libc::SYS_renameat => SyscallHandlerFn::call(Self::renameat, &mut ctx),
+            libc::SYS_renameat2 => SyscallHandlerFn::call(Self::renameat2, &mut ctx),
+            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
+            libc::SYS_rt_sigaction => SyscallHandlerFn::call(Self::rt_sigaction, &mut ctx),
+            libc::SYS_rt_sigprocmask => SyscallHandlerFn::call(Self::rt_sigprocmask, &mut ctx),
             libc::SYS_sched_getaffinity => {
                 SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
             }
@@ -141,13 +179,22 @@ impl SyscallHandler {
             libc::SYS_setsid => SyscallHandlerFn::call(Self::setsid, &mut ctx),
             libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
             libc::SYS_shutdown => SyscallHandlerFn::call(Self::shutdown, &mut ctx),
+            libc::SYS_sigaltstack => SyscallHandlerFn::call(Self::sigaltstack, &mut ctx),
             libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
             libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
+            libc::SYS_statx => SyscallHandlerFn::call(Self::statx, &mut ctx),
+            libc::SYS_symlinkat => SyscallHandlerFn::call(Self::symlinkat, &mut ctx),
+            libc::SYS_sync_file_range => SyscallHandlerFn::call(Self::sync_file_range, &mut ctx),
+            libc::SYS_syncfs => SyscallHandlerFn::call(Self::syncfs, &mut ctx),
             libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
+            libc::SYS_tgkill => SyscallHandlerFn::call(Self::tgkill, &mut ctx),
             libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
             libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
             libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
+            libc::SYS_tkill => SyscallHandlerFn::call(Self::tkill, &mut ctx),
             libc::SYS_uname => SyscallHandlerFn::call(Self::uname, &mut ctx),
+            libc::SYS_unlinkat => SyscallHandlerFn::call(Self::unlinkat, &mut ctx),
+            libc::SYS_utimensat => SyscallHandlerFn::call(Self::utimensat, &mut ctx),
             libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
             libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),
             libc::SYS_wait4 => SyscallHandlerFn::call(Self::wait4, &mut ctx),

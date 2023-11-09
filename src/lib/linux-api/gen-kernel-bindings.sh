@@ -100,6 +100,9 @@ bindgen_flags+=("--allowlist-type=new_utsname")
 # futex.h
 bindgen_flags+=("--allowlist-type=robust_list_head")
 
+# For poll
+bindgen_flags+=("--allowlist-type=pollfd")
+
 # Misc integer-ish types
 bindgen_flags+=("--allowlist-type=__kernel_.*_t")
 
