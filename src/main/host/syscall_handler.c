@@ -68,6 +68,10 @@ const Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
     return thread;
 }
 
+Counter* _syscallhandler_getCounter(SysCallHandler* sys) {
+    return sys->syscall_counter;
+}
+
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId) {
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
