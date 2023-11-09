@@ -6,7 +6,9 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use shadow_shim_helper_rs::util::time::TimeParts;
 
+use crate::core::worker::Worker;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::process::Process;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 
@@ -260,57 +262,37 @@ pub fn write_syscall(
     writeln!(writer, "{sim_time} [tid {tid}] {name}({args}) = {rv}")
 }
 
-mod export {
-    use std::ffi::CStr;
+/// For logging unknown syscalls.
+pub fn log_syscall_simple(
+    proc: &Process,
+    logging_mode: Option<FmtOptions>,
+    tid: ThreadId,
+    syscall_name: &str,
+    args_str: &str,
+    result: &SyscallResult,
+) -> std::io::Result<()> {
+    let Some(logging_mode) = logging_mode else {
+        // logging was disabled
+        return Ok(());
+    };
 
-    use super::*;
-    use crate::core::worker::Worker;
-    use crate::host::process::Process;
-    use crate::host::syscall_types::SyscallReturn;
+    let args = [SysCallReg::from(0i64); 6];
+    let mem = proc.memory_borrow();
+    let rv = SyscallResultFmt::<libc::c_long>::new(result, args, logging_mode, &mem);
 
-    #[no_mangle]
-    pub extern "C-unwind" fn log_syscall(
-        proc: *const Process,
-        logging_mode: StraceFmtMode,
-        tid: libc::pid_t,
-        name: *const libc::c_char,
-        args_str: *const libc::c_char,
-        args: &[SysCallReg; 6],
-        result: SyscallReturn,
-    ) -> SyscallReturn {
-        assert!(!proc.is_null());
-        assert!(!name.is_null());
-        assert!(!args_str.is_null());
+    proc.with_strace_file(|file| {
+        let time = Worker::current_time();
 
-        let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
-        let args_str = unsafe { CStr::from_ptr(args_str) }.to_str().unwrap();
-        let result = SyscallResult::from(result);
+        if let Some(time) = time {
+            write_syscall(file, &time, tid, syscall_name, args_str, rv)
+        } else {
+            log::warn!("Could not log syscall {syscall_name} with time {time:?}");
+            Ok(())
+        }
+    })
+    .unwrap_or(Ok(()))?;
 
-        let logging_mode = logging_mode.into();
-        let Some(logging_mode) = logging_mode else {
-            // logging was disabled
-            return result.into();
-        };
-
-        let proc = unsafe { proc.as_ref().unwrap() };
-
-        // we don't know the type, so just show it as an int
-        let memory = proc.memory_borrow();
-        let rv = SyscallResultFmt::<libc::c_long>::new(&result, *args, logging_mode, &memory);
-
-        proc.with_strace_file(|file| {
-            let time = Worker::current_time();
-
-            if let (Some(time), Ok(tid)) = (time, tid.try_into()) {
-                write_syscall(file, &time, tid, name, args_str, rv).unwrap();
-            } else {
-                log::warn!("Could not log syscall {name} with time {time:?} and tid {tid}");
-            }
-        });
-
-        // need to return the result, otherwise the drop impl will free the condition pointer
-        result.into()
-    }
+    Ok(())
 }
 
 #[cfg(test)]

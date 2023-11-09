@@ -6,6 +6,7 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall::table::syscall_num_to_str;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
@@ -101,21 +102,48 @@ impl SyscallHandler {
 
         macro_rules! unsupported {
             ($name: literal) => {{
+                let rv = Errno::ENOSYS;
+
                 log::warn!(
-                    "Returning error ENOSYS for explicitly unsupported syscall {} ({})",
+                    "Returning error {} for explicitly unsupported syscall {} ({})",
+                    rv,
                     $name,
                     ctx.args.number,
                 );
-                // TODO: log syscall to strace file
-                Err(Errno::ENOSYS.into())
+
+                let rv = Err(rv.into());
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    $name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
             }};
         }
 
         macro_rules! native {
             ($name: literal) => {{
-                log::trace!("Native syscall {} ({})", $name, ctx.args.number,);
-                // TODO: log syscall to strace file
-                Err(SyscallError::Native)
+                log::trace!("Native syscall {} ({})", $name, ctx.args.number);
+
+                let rv = Err(SyscallError::Native);
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    $name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
             }};
         }
 
@@ -341,34 +369,53 @@ impl SyscallHandler {
             libc::SYS_utime => native!("utime"),
             libc::SYS_utimes => native!("utimes"),
             _ => {
-                log::warn!("Detected unsupported syscall {} called from thread {} in process {} on host {}",
+                log::warn!("Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
+                    syscall_name,
                     ctx.args.number,
                     ctx.objs.thread.id(),
                     &*ctx.objs.process.plugin_name(),
                     ctx.objs.host.name(),
                 );
 
-                // TODO: log syscall to strace file
+                let rv = Err(Errno::ENOSYS.into());
 
-                Err(Errno::ENOSYS.into())
+                if let Some(syscall_name) = syscall_num_to_str(ctx.args.number) {
+                    log_syscall_simple(
+                        ctx.objs.process,
+                        ctx.objs.process.strace_logging_options(),
+                        ctx.objs.thread.id(),
+                        syscall_name,
+                        "...",
+                        &rv,
+                    )
+                    .unwrap();
+                } else {
+                    // the syscall name isn't known, so we'll log it in the form "syscall(X, ...)"
+                    // instead
+                    log_syscall_simple(
+                        ctx.objs.process,
+                        ctx.objs.process.strace_logging_options(),
+                        ctx.objs.thread.id(),
+                        "syscall",
+                        &format!("{}, ...", ctx.args.number),
+                        &rv,
+                    )
+                    .unwrap();
+                }
+
+                rv
             }
         };
 
         if log::log_enabled!(log::Level::Trace) {
             let rv_formatted = match &rv {
-                Ok(reg) => {
-                    format!("{}", i64::from(*reg))
-                }
+                Ok(reg) => format!("{}", i64::from(*reg)),
                 Err(SyscallError::Failed(failed)) => {
                     let errno = failed.errno;
                     format!("{} ({errno})", errno.to_negated_i64())
                 }
-                Err(SyscallError::Native) => {
-                    format!("<native>")
-                }
-                Err(SyscallError::Blocked(_)) => {
-                    format!("<blocked>")
-                }
+                Err(SyscallError::Native) => "<native>".to_string(),
+                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
             };
 
             log::trace!(
