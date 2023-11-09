@@ -23,7 +23,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/process.h"
 #include "main/host/syscall/fcntl.h"
-#include "main/host/syscall/file.h"
 #include "main/host/syscall/fileat.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/uio.h"
@@ -301,7 +300,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #endif
             HANDLE_RUST(close);
             HANDLE_RUST(connect);
-            HANDLE_C(creat);
+            HANDLE_RUST(creat);
             HANDLE_RUST(dup);
             HANDLE_RUST(dup2);
             HANDLE_RUST(dup3);
@@ -317,11 +316,11 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(execveat);
             HANDLE_RUST(exit_group);
             HANDLE_C(faccessat);
-            HANDLE_C(fadvise64);
-            HANDLE_C(fallocate);
-            HANDLE_C(fchmod);
+            HANDLE_RUST(fadvise64);
+            HANDLE_RUST(fallocate);
+            HANDLE_RUST(fchmod);
             HANDLE_C(fchmodat);
-            HANDLE_C(fchown);
+            HANDLE_RUST(fchown);
             HANDLE_C(fchownat);
             HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
@@ -338,21 +337,21 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
                 break;
             }
 #endif
-            HANDLE_C(fdatasync);
-            HANDLE_C(fgetxattr);
-            HANDLE_C(flistxattr);
-            HANDLE_C(flock);
+            HANDLE_RUST(fdatasync);
+            HANDLE_RUST(fgetxattr);
+            HANDLE_RUST(flistxattr);
+            HANDLE_RUST(flock);
             HANDLE_RUST(fork);
-            HANDLE_C(fremovexattr);
-            HANDLE_C(fsetxattr);
-            HANDLE_C(fstat);
-            HANDLE_C(fstatfs);
-            HANDLE_C(fsync);
-            HANDLE_C(ftruncate);
+            HANDLE_RUST(fremovexattr);
+            HANDLE_RUST(fsetxattr);
+            HANDLE_RUST(fstat);
+            HANDLE_RUST(fstatfs);
+            HANDLE_RUST(fsync);
+            HANDLE_RUST(ftruncate);
             HANDLE_RUST(futex);
             HANDLE_C(futimesat);
-            HANDLE_C(getdents);
-            HANDLE_C(getdents64);
+            HANDLE_RUST(getdents);
+            HANDLE_RUST(getdents64);
             HANDLE_RUST(getitimer);
             HANDLE_RUST(getpeername);
             HANDLE_RUST(getpid);
@@ -370,7 +369,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(kill);
             HANDLE_C(linkat);
             HANDLE_RUST(listen);
-            HANDLE_C(lseek);
+            HANDLE_RUST(lseek);
             HANDLE_C(mkdirat);
             HANDLE_C(mknodat);
             HANDLE_RUST(mmap);
@@ -401,7 +400,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(pwritev2);
 #endif
             HANDLE_RUST(read);
-            HANDLE_C(readahead);
+            HANDLE_RUST(readahead);
             HANDLE_C(readlinkat);
             HANDLE_RUST(readv);
             HANDLE_RUST(recvfrom);
@@ -446,8 +445,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_C(statx);
 #endif
             HANDLE_C(symlinkat);
-            HANDLE_C(sync_file_range);
-            HANDLE_C(syncfs);
+            HANDLE_RUST(sync_file_range);
+            HANDLE_RUST(syncfs);
             HANDLE_RUST(sysinfo);
             HANDLE_RUST(tgkill);
             SHIM_ONLY(time);
