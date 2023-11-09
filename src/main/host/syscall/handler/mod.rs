@@ -234,6 +234,10 @@ impl SyscallHandler {
             //
             // UNSUPPORTED SYSCALLS
             //
+            // Syscalls that aren't implemented yet. Listing them here gives the same behavior as
+            // the default case (returning ENOSYS), but allows the logging to include the syscall
+            // name instead of just the number.
+            //
             // Needs to either change *both* the native and emulated working directory, or get rid
             // of one of them. See https://github.com/shadow/shadow/issues/2960
             libc::SYS_chdir => unsupported!("chdir"),

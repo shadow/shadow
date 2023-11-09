@@ -476,12 +476,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(utime);
             HANDLE_RUST(utimes);
 
-            // ***************************************
-            // Syscalls that aren't implemented yet. Listing them here gives the same behavior
-            // as the default case (returning ENOSYS), but allows the logging to include the
-            // syscall name instead of just the number.
-            // ***************************************
-
             default: {
                 warning("Detected unsupported syscall %ld called from thread %i in process %s on "
                         "host %s",
