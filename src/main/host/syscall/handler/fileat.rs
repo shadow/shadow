@@ -19,4 +19,79 @@ impl SyscallHandler {
     ) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_openat, ctx)
     }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn faccessat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_faccessat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn fchmodat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_fchmodat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn fchownat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_fchownat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn futimesat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_futimesat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn linkat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_linkat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn mkdirat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_mkdirat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn mknodat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_mknodat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn newfstatat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_newfstatat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn readlinkat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_readlinkat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn renameat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_renameat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn renameat2(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_renameat2, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn statx(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_statx, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn symlinkat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_symlinkat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn unlinkat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_unlinkat, ctx)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int)]
+    pub fn utimensat(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_utimensat, ctx)
+    }
 }

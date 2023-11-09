@@ -315,13 +315,13 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(execve);
             HANDLE_RUST(execveat);
             HANDLE_RUST(exit_group);
-            HANDLE_C(faccessat);
+            HANDLE_RUST(faccessat);
             HANDLE_RUST(fadvise64);
             HANDLE_RUST(fallocate);
             HANDLE_RUST(fchmod);
-            HANDLE_C(fchmodat);
+            HANDLE_RUST(fchmodat);
             HANDLE_RUST(fchown);
-            HANDLE_C(fchownat);
+            HANDLE_RUST(fchownat);
             HANDLE_RUST(fcntl);
 #ifdef SYS_fcntl64
             // TODO: is there a nicer way to do this? Rust libc::SYS_fcntl64 does not exist.
@@ -349,7 +349,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(fsync);
             HANDLE_RUST(ftruncate);
             HANDLE_RUST(futex);
-            HANDLE_C(futimesat);
+            HANDLE_RUST(futimesat);
             HANDLE_RUST(getdents);
             HANDLE_RUST(getdents64);
             HANDLE_RUST(getitimer);
@@ -367,17 +367,17 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             SHIM_ONLY(gettimeofday);
             HANDLE_RUST(ioctl);
             HANDLE_RUST(kill);
-            HANDLE_C(linkat);
+            HANDLE_RUST(linkat);
             HANDLE_RUST(listen);
             HANDLE_RUST(lseek);
-            HANDLE_C(mkdirat);
-            HANDLE_C(mknodat);
+            HANDLE_RUST(mkdirat);
+            HANDLE_RUST(mknodat);
             HANDLE_RUST(mmap);
             HANDLE_RUST(mprotect);
             HANDLE_RUST(mremap);
             HANDLE_RUST(munmap);
             HANDLE_RUST(nanosleep);
-            HANDLE_C(newfstatat);
+            HANDLE_RUST(newfstatat);
             HANDLE_RUST(open);
             HANDLE_RUST(openat);
             HANDLE_RUST(pipe);
@@ -401,12 +401,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 #endif
             HANDLE_RUST(read);
             HANDLE_RUST(readahead);
-            HANDLE_C(readlinkat);
+            HANDLE_RUST(readlinkat);
             HANDLE_RUST(readv);
             HANDLE_RUST(recvfrom);
             HANDLE_RUST(recvmsg);
-            HANDLE_C(renameat);
-            HANDLE_C(renameat2);
+            HANDLE_RUST(renameat);
+            HANDLE_RUST(renameat2);
             HANDLE_RUST(rseq);
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
@@ -442,9 +442,9 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(socket);
             HANDLE_RUST(socketpair);
 #ifdef SYS_statx
-            HANDLE_C(statx);
+            HANDLE_RUST(statx);
 #endif
-            HANDLE_C(symlinkat);
+            HANDLE_RUST(symlinkat);
             HANDLE_RUST(sync_file_range);
             HANDLE_RUST(syncfs);
             HANDLE_RUST(sysinfo);
@@ -455,8 +455,8 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(timerfd_settime);
             HANDLE_RUST(tkill);
             HANDLE_RUST(uname);
-            HANDLE_C(unlinkat);
-            HANDLE_C(utimensat);
+            HANDLE_RUST(unlinkat);
+            HANDLE_RUST(utimensat);
             HANDLE_RUST(vfork);
             HANDLE_RUST(waitid);
             HANDLE_RUST(wait4);
