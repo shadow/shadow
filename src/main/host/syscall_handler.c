@@ -214,10 +214,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define SHIM_ONLY(s)                                                                               \
-    case SYS_##s:                                                                                  \
-        panic("syscall " #s " (#%ld) should have been handled in the shim", args->number);         \
-        break
 #define NATIVE(s)                                                                                  \
     case SYS_##s:                                                                                  \
         trace("native syscall %ld " #s, args->number);                                             \
@@ -281,7 +277,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(bind);
             HANDLE_RUST(brk);
             HANDLE_RUST(clock_getres);
-            SHIM_ONLY(clock_gettime);
+            HANDLE_RUST(clock_gettime);
             HANDLE_RUST(clock_nanosleep);
             HANDLE_RUST(clone);
 #ifdef SYS_clone3
@@ -353,7 +349,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(get_robust_list);
             HANDLE_RUST(getsockname);
             HANDLE_RUST(getsockopt);
-            SHIM_ONLY(gettimeofday);
+            HANDLE_RUST(gettimeofday);
             HANDLE_RUST(ioctl);
             HANDLE_RUST(kill);
             HANDLE_RUST(linkat);
@@ -399,7 +395,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(rseq);
             HANDLE_RUST(sched_getaffinity);
             HANDLE_RUST(sched_setaffinity);
-            SHIM_ONLY(sched_yield);
+            HANDLE_RUST(sched_yield);
             HANDLE_RUST(shadow_hostname_to_addr_ipv4);
             HANDLE_RUST(shadow_init_memory_manager);
             HANDLE_RUST(shadow_yield);
@@ -438,7 +434,7 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             HANDLE_RUST(syncfs);
             HANDLE_RUST(sysinfo);
             HANDLE_RUST(tgkill);
-            SHIM_ONLY(time);
+            HANDLE_RUST(time);
             HANDLE_RUST(timerfd_create);
             HANDLE_RUST(timerfd_gettime);
             HANDLE_RUST(timerfd_settime);

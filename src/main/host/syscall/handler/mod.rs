@@ -61,6 +61,15 @@ impl SyscallHandler {
             }};
         }
 
+        macro_rules! shim_only {
+            ($name: literal) => {{
+                panic!(
+                    "Syscall {} ({}) should have been handled in the shim",
+                    $name, ctx.args.number,
+                )
+            }};
+        }
+
         match ctx.args.number {
             SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
             SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
@@ -70,6 +79,7 @@ impl SyscallHandler {
             libc::SYS_bind => handle!(bind),
             libc::SYS_brk => handle!(brk),
             libc::SYS_clock_getres => handle!(clock_getres),
+            libc::SYS_clock_gettime => shim_only!("clock_gettime"),
             libc::SYS_clock_nanosleep => handle!(clock_nanosleep),
             libc::SYS_clone => handle!(clone),
             libc::SYS_clone3 => handle!(clone3),
@@ -125,6 +135,7 @@ impl SyscallHandler {
             libc::SYS_getsockname => handle!(getsockname),
             libc::SYS_getsockopt => handle!(getsockopt),
             libc::SYS_gettid => handle!(gettid),
+            libc::SYS_gettimeofday => shim_only!("gettimeofday"),
             libc::SYS_ioctl => handle!(ioctl),
             libc::SYS_kill => handle!(kill),
             libc::SYS_linkat => handle!(linkat),
@@ -166,6 +177,7 @@ impl SyscallHandler {
             libc::SYS_rt_sigprocmask => handle!(rt_sigprocmask),
             libc::SYS_sched_getaffinity => handle!(sched_getaffinity),
             libc::SYS_sched_setaffinity => handle!(sched_setaffinity),
+            libc::SYS_sched_yield => shim_only!("sched_yield"),
             libc::SYS_select => handle!(select),
             libc::SYS_sendmsg => handle!(sendmsg),
             libc::SYS_sendto => handle!(sendto),
@@ -185,6 +197,7 @@ impl SyscallHandler {
             libc::SYS_syncfs => handle!(syncfs),
             libc::SYS_sysinfo => handle!(sysinfo),
             libc::SYS_tgkill => handle!(tgkill),
+            libc::SYS_time => shim_only!("time"),
             libc::SYS_timerfd_create => handle!(timerfd_create),
             libc::SYS_timerfd_gettime => handle!(timerfd_gettime),
             libc::SYS_timerfd_settime => handle!(timerfd_settime),
