@@ -24,6 +24,7 @@
 #include <asm/ioctls.h>
 #include <asm/sigcontext.h>
 #include <asm/ucontext.h>
+#include <asm/unistd_64.h>
 
 #include <asm-generic/poll.h>
 
