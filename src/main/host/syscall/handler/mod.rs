@@ -83,24 +83,18 @@ impl SyscallHandler {
         }
 
         match ctx.args.number {
-            SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
-            SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
-            SYS_shadow_yield => handle!(shadow_yield),
+            // SHADOW-HANDLED SYSCALLS
+            //
             libc::SYS_accept => handle!(accept),
             libc::SYS_accept4 => handle!(accept4),
             libc::SYS_bind => handle!(bind),
             libc::SYS_brk => handle!(brk),
-            // Needs to either change *both* the native and emulated working directory, or get rid
-            // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_chdir => unsupported!("chdir"),
             libc::SYS_clock_getres => handle!(clock_getres),
-            libc::SYS_clock_gettime => shim_only!("clock_gettime"),
             libc::SYS_clock_nanosleep => handle!(clock_nanosleep),
             libc::SYS_clone => handle!(clone),
             libc::SYS_clone3 => handle!(clone3),
             libc::SYS_close => handle!(close),
             libc::SYS_connect => handle!(connect),
-            libc::SYS_copy_file_range => unsupported!("copy_file_range"),
             libc::SYS_creat => handle!(creat),
             libc::SYS_dup => handle!(dup),
             libc::SYS_dup2 => handle!(dup2),
@@ -119,9 +113,6 @@ impl SyscallHandler {
             libc::SYS_faccessat => handle!(faccessat),
             libc::SYS_fadvise64 => handle!(fadvise64),
             libc::SYS_fallocate => handle!(fallocate),
-            // Needs to either change *both* the native and emulated working directory, or get rid
-            // of one of them. See https://github.com/shadow/shadow/issues/2960
-            libc::SYS_fchdir => unsupported!("fchdir"),
             libc::SYS_fchmod => handle!(fchmod),
             libc::SYS_fchmodat => handle!(fchmodat),
             libc::SYS_fchown => handle!(fchown),
@@ -154,8 +145,6 @@ impl SyscallHandler {
             libc::SYS_getsockname => handle!(getsockname),
             libc::SYS_getsockopt => handle!(getsockopt),
             libc::SYS_gettid => handle!(gettid),
-            libc::SYS_gettimeofday => shim_only!("gettimeofday"),
-            libc::SYS_io_getevents => unsupported!("io_getevents"),
             libc::SYS_ioctl => handle!(ioctl),
             libc::SYS_kill => handle!(kill),
             libc::SYS_linkat => handle!(linkat),
@@ -166,7 +155,6 @@ impl SyscallHandler {
             libc::SYS_mmap => handle!(mmap),
             libc::SYS_mprotect => handle!(mprotect),
             libc::SYS_mremap => handle!(mremap),
-            libc::SYS_msync => unsupported!("msync"),
             libc::SYS_munmap => handle!(munmap),
             libc::SYS_nanosleep => handle!(nanosleep),
             libc::SYS_newfstatat => handle!(newfstatat),
@@ -190,7 +178,6 @@ impl SyscallHandler {
             libc::SYS_readlinkat => handle!(readlinkat),
             libc::SYS_readv => handle!(readv),
             libc::SYS_recvfrom => handle!(recvfrom),
-            libc::SYS_recvmmsg => unsupported!("recvmmsg"),
             libc::SYS_recvmsg => handle!(recvmsg),
             libc::SYS_renameat => handle!(renameat),
             libc::SYS_renameat2 => handle!(renameat2),
@@ -199,10 +186,7 @@ impl SyscallHandler {
             libc::SYS_rt_sigprocmask => handle!(rt_sigprocmask),
             libc::SYS_sched_getaffinity => handle!(sched_getaffinity),
             libc::SYS_sched_setaffinity => handle!(sched_setaffinity),
-            libc::SYS_sched_yield => shim_only!("sched_yield"),
             libc::SYS_select => handle!(select),
-            libc::SYS_sendfile => unsupported!("sendfile"),
-            libc::SYS_sendmmsg => unsupported!("sendmmsg"),
             libc::SYS_sendmsg => handle!(sendmsg),
             libc::SYS_sendto => handle!(sendto),
             libc::SYS_set_robust_list => handle!(set_robust_list),
@@ -215,15 +199,12 @@ impl SyscallHandler {
             libc::SYS_sigaltstack => handle!(sigaltstack),
             libc::SYS_socket => handle!(socket),
             libc::SYS_socketpair => handle!(socketpair),
-            libc::SYS_splice => unsupported!("splice"),
             libc::SYS_statx => handle!(statx),
             libc::SYS_symlinkat => handle!(symlinkat),
             libc::SYS_sync_file_range => handle!(sync_file_range),
             libc::SYS_syncfs => handle!(syncfs),
             libc::SYS_sysinfo => handle!(sysinfo),
-            libc::SYS_tee => unsupported!("tee"),
             libc::SYS_tgkill => handle!(tgkill),
-            libc::SYS_time => shim_only!("time"),
             libc::SYS_timerfd_create => handle!(timerfd_create),
             libc::SYS_timerfd_gettime => handle!(timerfd_gettime),
             libc::SYS_timerfd_settime => handle!(timerfd_settime),
@@ -232,11 +213,41 @@ impl SyscallHandler {
             libc::SYS_unlinkat => handle!(unlinkat),
             libc::SYS_utimensat => handle!(utimensat),
             libc::SYS_vfork => handle!(vfork),
-            libc::SYS_vmsplice => unsupported!("vmsplice"),
             libc::SYS_waitid => handle!(waitid),
             libc::SYS_wait4 => handle!(wait4),
             libc::SYS_write => handle!(write),
             libc::SYS_writev => handle!(writev),
+            //
+            // CUSTOM SHADOW-SPECIFIC SYSCALLS
+            //
+            SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
+            SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
+            SYS_shadow_yield => handle!(shadow_yield),
+            //
+            // UNSUPPORTED SYSCALLS
+            //
+            // Needs to either change *both* the native and emulated working directory, or get rid
+            // of one of them. See https://github.com/shadow/shadow/issues/2960
+            libc::SYS_chdir => unsupported!("chdir"),
+            libc::SYS_copy_file_range => unsupported!("copy_file_range"),
+            // Needs to either change *both* the native and emulated working directory, or get rid
+            // of one of them. See https://github.com/shadow/shadow/issues/2960
+            libc::SYS_fchdir => unsupported!("fchdir"),
+            libc::SYS_io_getevents => unsupported!("io_getevents"),
+            libc::SYS_msync => unsupported!("msync"),
+            libc::SYS_recvmmsg => unsupported!("recvmmsg"),
+            libc::SYS_sendfile => unsupported!("sendfile"),
+            libc::SYS_sendmmsg => unsupported!("sendmmsg"),
+            libc::SYS_splice => unsupported!("splice"),
+            libc::SYS_tee => unsupported!("tee"),
+            libc::SYS_vmsplice => unsupported!("vmsplice"),
+            //
+            // SHIM-ONLY SYSCALLS
+            //
+            libc::SYS_clock_gettime => shim_only!("clock_gettime"),
+            libc::SYS_gettimeofday => shim_only!("gettimeofday"),
+            libc::SYS_sched_yield => shim_only!("sched_yield"),
+            libc::SYS_time => shim_only!("time"),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
