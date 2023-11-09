@@ -6,6 +6,7 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::syscall::table::syscall_num_to_str;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
@@ -55,6 +56,34 @@ impl SyscallHandler {
         const SYS_shadow_hostname_to_addr_ipv4: i64 =
             c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4 as i64;
 
+        let syscall_name = syscall_num_to_str(ctx.args.number).unwrap_or("unknown-syscall");
+        let was_blocked =
+            unsafe { c::_syscallhandler_wasBlocked(ctx.objs.thread.csyscallhandler()) };
+
+        log::trace!(
+            "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
+            syscall_name,
+            ctx.args.number,
+            if was_blocked {
+                " (previously BLOCKed)"
+            } else {
+                ""
+            },
+            &*ctx.objs.process.name(),
+            ctx.objs.thread.id(),
+        );
+
+        // Count the frequency of each syscall, but only on the initial call. This avoids double
+        // counting in the case where the initial call blocked at first, but then later became
+        // unblocked and is now being handled again here.
+        let syscall_counter =
+            unsafe { c::_syscallhandler_getCounter(ctx.objs.thread.csyscallhandler()) };
+        if let Some(syscall_counter) = unsafe { syscall_counter.as_mut() } {
+            if !was_blocked {
+                syscall_counter.add_one(syscall_name);
+            }
+        }
+
         macro_rules! handle {
             ($f:ident) => {{
                 SyscallHandlerFn::call(Self::$f, &mut ctx)
@@ -90,7 +119,7 @@ impl SyscallHandler {
             }};
         }
 
-        match ctx.args.number {
+        let rv = match ctx.args.number {
             // SHADOW-HANDLED SYSCALLS
             //
             libc::SYS_accept => handle!(accept),
@@ -318,7 +347,37 @@ impl SyscallHandler {
                 log::warn!("Rust syscall {} is not mapped", ctx.args.number);
                 Err(Errno::ENOSYS.into())
             }
+        };
+
+        if log::log_enabled!(log::Level::Trace) {
+            let rv_formatted = match &rv {
+                Ok(reg) => {
+                    format!("{}", i64::from(*reg))
+                }
+                Err(SyscallError::Failed(failed)) => {
+                    let errno = failed.errno;
+                    format!("{} ({errno})", errno.to_negated_i64())
+                }
+                Err(SyscallError::Native) => {
+                    format!("<native>")
+                }
+                Err(SyscallError::Blocked(_)) => {
+                    format!("<blocked>")
+                }
+            };
+
+            log::trace!(
+                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
+                syscall_name,
+                ctx.args.number,
+                if was_blocked { "BLOCK -> " } else { "" },
+                rv_formatted,
+                &*ctx.objs.process.name(),
+                ctx.objs.thread.id(),
+            );
         }
+
+        rv
     }
 
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns

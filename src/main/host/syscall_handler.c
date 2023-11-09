@@ -142,17 +142,6 @@ void syscallhandler_free(SysCallHandler* sys) {
 
 static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
                                         const char* name) {
-    trace("SYSCALL_HANDLER_PRE(%s,pid=%u): handling syscall %ld %s%s",
-          _syscallhandler_getProcessName(sys), sys->threadId, number, name,
-          _syscallhandler_wasBlocked(sys) ? " (previously BLOCKed)" : "");
-
-    // Count the frequency of each syscall, but only on the initial call.
-    // This avoids double counting in the case where the initial call blocked at first,
-    // but then later became unblocked and is now being handled again here.
-    if (sys->syscall_counter && !_syscallhandler_wasBlocked(sys)) {
-        counter_add_value(sys->syscall_counter, name, 1);
-    }
-
 #ifdef USE_PERF_TIMERS
     /* Track elapsed time during this syscall by marking the start time. */
     g_timer_start(sys->perfTimer);
@@ -165,26 +154,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
 #endif
-    if (logger_isEnabled(logger_getDefault(), LOGLEVEL_TRACE)) {
-        const char* errstr = "n/a";
-        char errstrbuf[100];
-
-        const char* valstr = "n/a";
-        char valbuf[100];
-        if (scr->tag == SYSCALL_RETURN_DONE) {
-            SyscallReturnDone* done = syscallreturn_done(scr);
-            if (done->retval.as_i64 < 0) {
-                errstr = strerror_r(-done->retval.as_i64, errstrbuf, sizeof(errstrbuf));
-            }
-            snprintf(valbuf, sizeof(valbuf), "%" PRIi64, done->retval.as_i64);
-            valstr = valbuf;
-        }
-        trace("SYSCALL_HANDLER_POST(%s,pid=%u): syscall %ld %s result: state=%s%s "
-              "val=%s(%s)",
-              _syscallhandler_getProcessName(sys), sys->threadId, number, name,
-              _syscallhandler_wasBlocked(sys) ? "BLOCK->" : "", syscallreturnstate_str(scr->tag),
-              valstr, errstr);
-    }
 
 #ifdef USE_PERF_TIMERS
     debug("handling syscall %ld %s took %f seconds", number, name, sys->perfSecondsCurrent);
