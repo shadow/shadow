@@ -14,6 +14,7 @@ mod epoll;
 mod eventfd;
 mod fcntl;
 mod file;
+mod fileat;
 mod futex;
 mod ioctl;
 mod mman;
