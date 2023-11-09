@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
@@ -379,29 +381,22 @@ impl SyscallHandler {
 
                 let rv = Err(Errno::ENOSYS.into());
 
-                if let Some(syscall_name) = syscall_num_to_str(ctx.args.number) {
-                    log_syscall_simple(
-                        ctx.objs.process,
-                        ctx.objs.process.strace_logging_options(),
-                        ctx.objs.thread.id(),
-                        syscall_name,
-                        "...",
-                        &rv,
-                    )
-                    .unwrap();
-                } else {
-                    // the syscall name isn't known, so we'll log it in the form "syscall(X, ...)"
-                    // instead
-                    log_syscall_simple(
-                        ctx.objs.process,
-                        ctx.objs.process.strace_logging_options(),
-                        ctx.objs.thread.id(),
-                        "syscall",
-                        &format!("{}, ...", ctx.args.number),
-                        &rv,
-                    )
-                    .unwrap();
-                }
+                let (syscall_name, syscall_args) = match syscall_num_to_str(ctx.args.number) {
+                    // log it in the form "poll(...)"
+                    Some(syscall_name) => (syscall_name, Cow::Borrowed("...")),
+                    // log it in the form "syscall(X, ...)"
+                    None => ("syscall", Cow::Owned(format!("{}, ...", ctx.args.number))),
+                };
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    &syscall_args,
+                    &rv,
+                )
+                .unwrap();
 
                 rv
             }
