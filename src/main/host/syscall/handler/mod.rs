@@ -166,7 +166,6 @@ impl SyscallHandler {
             libc::SYS_rt_sigprocmask => handle!(rt_sigprocmask),
             libc::SYS_sched_getaffinity => handle!(sched_getaffinity),
             libc::SYS_sched_setaffinity => handle!(sched_setaffinity),
-            libc::SYS_sched_yield => handle!(sched_yield),
             libc::SYS_select => handle!(select),
             libc::SYS_sendmsg => handle!(sendmsg),
             libc::SYS_sendto => handle!(sendto),
