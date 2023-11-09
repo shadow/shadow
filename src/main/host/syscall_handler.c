@@ -218,17 +218,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
     case SYS_##s:                                                                                  \
         panic("syscall " #s " (#%ld) should have been handled in the shim", args->number);         \
         break
-
-#define HANDLE_C(s)                                                                                \
-    case SYS_##s:                                                                                  \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
-        scr = syscallhandler_##s(sys, args);                                                       \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
-        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
-        }                                                                                          \
-        break
 #define NATIVE(s)                                                                                  \
     case SYS_##s:                                                                                  \
         trace("native syscall %ld " #s, args->number);                                             \
