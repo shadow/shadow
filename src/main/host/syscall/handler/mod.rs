@@ -341,10 +341,15 @@ impl SyscallHandler {
             libc::SYS_utime => native!("utime"),
             libc::SYS_utimes => native!("utimes"),
             _ => {
-                // if we added a HANDLE_RUST() macro for this syscall in
-                // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
-                // warning
-                log::warn!("Rust syscall {} is not mapped", ctx.args.number);
+                log::warn!("Detected unsupported syscall {} called from thread {} in process {} on host {}",
+                    ctx.args.number,
+                    ctx.objs.thread.id(),
+                    &*ctx.objs.process.plugin_name(),
+                    ctx.objs.host.name(),
+                );
+
+                // TODO: log syscall to strace file
+
                 Err(Errno::ENOSYS.into())
             }
         };

@@ -140,16 +140,14 @@ void syscallhandler_free(SysCallHandler* sys) {
     worker_count_deallocation(SysCallHandler);
 }
 
-static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number,
-                                        const char* name) {
+static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number) {
 #ifdef USE_PERF_TIMERS
     /* Track elapsed time during this syscall by marking the start time. */
     g_timer_start(sys->perfTimer);
 #endif
 }
 
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const char* name,
-                                         SyscallReturn* scr) {
+static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, SyscallReturn* scr) {
 #ifdef USE_PERF_TIMERS
     /* Add the cumulative elapsed seconds and num syscalls. */
     sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
@@ -187,16 +185,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define HANDLE_RUST(s)                                                                             \
-    case SYS_##s: {                                                                                \
-        _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
-        SyscallHandler* handler = sys->syscall_handler_rs;                                         \
-        sys->syscall_handler_rs = NULL;                                                            \
-        scr = rustsyscallhandler_syscall(handler, sys, args);                                      \
-        sys->syscall_handler_rs = handler;                                                         \
-        _syscallhandler_post_syscall(sys, args->number, #s, &scr);                                 \
-    } break
-
 SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
@@ -225,247 +213,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
     } else {
-        switch (args->number) {
-            HANDLE_RUST(accept);
-            HANDLE_RUST(accept4);
-            HANDLE_RUST(bind);
-            HANDLE_RUST(brk);
-            HANDLE_RUST(clock_getres);
-            HANDLE_RUST(clock_gettime);
-            HANDLE_RUST(clock_nanosleep);
-            HANDLE_RUST(clone);
-#ifdef SYS_clone3
-            HANDLE_RUST(clone3);
-#endif
-            HANDLE_RUST(close);
-            HANDLE_RUST(connect);
-            HANDLE_RUST(creat);
-            HANDLE_RUST(dup);
-            HANDLE_RUST(dup2);
-            HANDLE_RUST(dup3);
-            HANDLE_RUST(epoll_create);
-            HANDLE_RUST(epoll_create1);
-            HANDLE_RUST(epoll_ctl);
-            HANDLE_RUST(epoll_pwait);
-            HANDLE_RUST(epoll_pwait2);
-            HANDLE_RUST(epoll_wait);
-            HANDLE_RUST(eventfd);
-            HANDLE_RUST(eventfd2);
-            HANDLE_RUST(execve);
-            HANDLE_RUST(execveat);
-            HANDLE_RUST(exit_group);
-            HANDLE_RUST(faccessat);
-            HANDLE_RUST(fadvise64);
-            HANDLE_RUST(fallocate);
-            HANDLE_RUST(fchmod);
-            HANDLE_RUST(fchmodat);
-            HANDLE_RUST(fchown);
-            HANDLE_RUST(fchownat);
-            HANDLE_RUST(fcntl);
-            HANDLE_RUST(fdatasync);
-            HANDLE_RUST(fgetxattr);
-            HANDLE_RUST(flistxattr);
-            HANDLE_RUST(flock);
-            HANDLE_RUST(fork);
-            HANDLE_RUST(fremovexattr);
-            HANDLE_RUST(fsetxattr);
-            HANDLE_RUST(fstat);
-            HANDLE_RUST(fstatfs);
-            HANDLE_RUST(fsync);
-            HANDLE_RUST(ftruncate);
-            HANDLE_RUST(futex);
-            HANDLE_RUST(futimesat);
-            HANDLE_RUST(getdents);
-            HANDLE_RUST(getdents64);
-            HANDLE_RUST(getitimer);
-            HANDLE_RUST(getpeername);
-            HANDLE_RUST(getpid);
-            HANDLE_RUST(getpgrp);
-            HANDLE_RUST(getpgid);
-            HANDLE_RUST(getppid);
-            HANDLE_RUST(getsid);
-            HANDLE_RUST(gettid);
-            HANDLE_RUST(getrandom);
-            HANDLE_RUST(get_robust_list);
-            HANDLE_RUST(getsockname);
-            HANDLE_RUST(getsockopt);
-            HANDLE_RUST(gettimeofday);
-            HANDLE_RUST(ioctl);
-            HANDLE_RUST(kill);
-            HANDLE_RUST(linkat);
-            HANDLE_RUST(listen);
-            HANDLE_RUST(lseek);
-            HANDLE_RUST(mkdirat);
-            HANDLE_RUST(mknodat);
-            HANDLE_RUST(mmap);
-            HANDLE_RUST(mprotect);
-            HANDLE_RUST(mremap);
-            HANDLE_RUST(munmap);
-            HANDLE_RUST(nanosleep);
-            HANDLE_RUST(newfstatat);
-            HANDLE_RUST(open);
-            HANDLE_RUST(openat);
-            HANDLE_RUST(pipe);
-            HANDLE_RUST(pipe2);
-            HANDLE_RUST(poll);
-            HANDLE_RUST(ppoll);
-            HANDLE_RUST(prctl);
-            HANDLE_RUST(pread64);
-            HANDLE_RUST(preadv);
-#ifdef SYS_preadv2
-            HANDLE_RUST(preadv2);
-#endif
-#ifdef SYS_prlimit64
-            HANDLE_RUST(prlimit64);
-#endif
-            HANDLE_RUST(pselect6);
-            HANDLE_RUST(pwrite64);
-            HANDLE_RUST(pwritev);
-#ifdef SYS_pwritev2
-            HANDLE_RUST(pwritev2);
-#endif
-            HANDLE_RUST(read);
-            HANDLE_RUST(readahead);
-            HANDLE_RUST(readlinkat);
-            HANDLE_RUST(readv);
-            HANDLE_RUST(recvfrom);
-            HANDLE_RUST(recvmsg);
-            HANDLE_RUST(renameat);
-            HANDLE_RUST(renameat2);
-            HANDLE_RUST(rseq);
-            HANDLE_RUST(sched_getaffinity);
-            HANDLE_RUST(sched_setaffinity);
-            HANDLE_RUST(sched_yield);
-            HANDLE_RUST(shadow_hostname_to_addr_ipv4);
-            HANDLE_RUST(shadow_init_memory_manager);
-            HANDLE_RUST(shadow_yield);
-            HANDLE_RUST(select);
-            HANDLE_RUST(sendmsg);
-            HANDLE_RUST(sendto);
-            HANDLE_RUST(setpgid);
-            HANDLE_RUST(setsid);
-            HANDLE_RUST(setsockopt);
-            HANDLE_RUST(rt_sigaction);
-            HANDLE_RUST(sigaltstack);
-            HANDLE_RUST(rt_sigprocmask);
-            HANDLE_RUST(set_robust_list);
-            HANDLE_RUST(setitimer);
-            HANDLE_RUST(set_tid_address);
-            HANDLE_RUST(shutdown);
-            HANDLE_RUST(socket);
-            HANDLE_RUST(socketpair);
-#ifdef SYS_statx
-            HANDLE_RUST(statx);
-#endif
-            HANDLE_RUST(symlinkat);
-            HANDLE_RUST(sync_file_range);
-            HANDLE_RUST(syncfs);
-            HANDLE_RUST(sysinfo);
-            HANDLE_RUST(tgkill);
-            HANDLE_RUST(time);
-            HANDLE_RUST(timerfd_create);
-            HANDLE_RUST(timerfd_gettime);
-            HANDLE_RUST(timerfd_settime);
-            HANDLE_RUST(tkill);
-            HANDLE_RUST(uname);
-            HANDLE_RUST(unlinkat);
-            HANDLE_RUST(utimensat);
-            HANDLE_RUST(vfork);
-            HANDLE_RUST(waitid);
-            HANDLE_RUST(wait4);
-            HANDLE_RUST(write);
-            HANDLE_RUST(writev);
-
-            // **************************************
-            // Not handled (yet):
-            // **************************************
-            HANDLE_RUST(chdir);
-            HANDLE_RUST(fchdir);
-
-            HANDLE_RUST(io_getevents);
-            HANDLE_RUST(msync);
-
-            // copying data between various types of fds
-            HANDLE_RUST(copy_file_range);
-            HANDLE_RUST(sendfile);
-            HANDLE_RUST(splice);
-            HANDLE_RUST(vmsplice);
-            HANDLE_RUST(tee);
-
-            //// additional socket io
-            HANDLE_RUST(recvmmsg);
-            HANDLE_RUST(sendmmsg);
-
-            // ***************************************
-            // We think we don't need to handle these
-            // (because the plugin can natively):
-            // ***************************************
-            HANDLE_RUST(access);
-            HANDLE_RUST(arch_prctl);
-            HANDLE_RUST(chmod);
-            HANDLE_RUST(chown);
-            HANDLE_RUST(exit);
-            HANDLE_RUST(getcwd);
-            HANDLE_RUST(geteuid);
-            HANDLE_RUST(getegid);
-            HANDLE_RUST(getgid);
-            HANDLE_RUST(getgroups);
-            HANDLE_RUST(getresgid);
-            HANDLE_RUST(getresuid);
-            HANDLE_RUST(getrlimit);
-            HANDLE_RUST(getuid);
-            HANDLE_RUST(getxattr);
-            HANDLE_RUST(lchown);
-            HANDLE_RUST(lgetxattr);
-            HANDLE_RUST(link);
-            HANDLE_RUST(listxattr);
-            HANDLE_RUST(llistxattr);
-            HANDLE_RUST(lremovexattr);
-            HANDLE_RUST(lsetxattr);
-            HANDLE_RUST(lstat);
-            HANDLE_RUST(madvise);
-            HANDLE_RUST(mkdir);
-            HANDLE_RUST(mknod);
-            HANDLE_RUST(readlink);
-            HANDLE_RUST(removexattr);
-            HANDLE_RUST(rename);
-            HANDLE_RUST(rmdir);
-            HANDLE_RUST(rt_sigreturn);
-            HANDLE_RUST(setfsgid);
-            HANDLE_RUST(setfsuid);
-            HANDLE_RUST(setgid);
-            HANDLE_RUST(setregid);
-            HANDLE_RUST(setresgid);
-            HANDLE_RUST(setresuid);
-            HANDLE_RUST(setreuid);
-            HANDLE_RUST(setrlimit);
-            HANDLE_RUST(setuid);
-            HANDLE_RUST(setxattr);
-            HANDLE_RUST(stat);
-            HANDLE_RUST(statfs);
-            HANDLE_RUST(symlink);
-            HANDLE_RUST(truncate);
-            HANDLE_RUST(unlink);
-            HANDLE_RUST(utime);
-            HANDLE_RUST(utimes);
-
-            default: {
-                warning("Detected unsupported syscall %ld called from thread %i in process %s on "
-                        "host %s",
-                        args->number, sys->threadId, process_getPluginName(process),
-                        host_getName(host));
-                scr = syscallreturn_makeDoneI64(-ENOSYS);
-
-                if (straceLoggingMode != STRACE_FMT_MODE_OFF) {
-                    char arg_str[20] = {0};
-                    snprintf(arg_str, sizeof(arg_str), "%ld, ...", args->number);
-                    scr = log_syscall(process, straceLoggingMode, sys->threadId, "syscall", arg_str,
-                                      &args->args, scr);
-                }
-
-                break;
-            }
-        }
+        _syscallhandler_pre_syscall(sys, args->number);
+        SyscallHandler* handler = sys->syscall_handler_rs;
+        sys->syscall_handler_rs = NULL;
+        scr = rustsyscallhandler_syscall(handler, sys, args);
+        sys->syscall_handler_rs = handler;
+        _syscallhandler_post_syscall(sys, args->number, &scr);
     }
 
     // If the syscall would be blocked, but there's a signal pending, fail with
