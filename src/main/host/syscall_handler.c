@@ -214,15 +214,6 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, const
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
 
-#define NATIVE(s)                                                                                  \
-    case SYS_##s:                                                                                  \
-        trace("native syscall %ld " #s, args->number);                                             \
-        scr = syscallreturn_makeNative();                                                          \
-        if (straceLoggingMode != STRACE_FMT_MODE_OFF) {                                            \
-            scr = log_syscall(                                                                     \
-                process, straceLoggingMode, sys->threadId, #s, "...", &args->args, scr);           \
-        }                                                                                          \
-        break
 #define HANDLE_RUST(s)                                                                             \
     case SYS_##s: {                                                                                \
         _syscallhandler_pre_syscall(sys, args->number, #s);                                        \
@@ -436,54 +427,54 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
             // We think we don't need to handle these
             // (because the plugin can natively):
             // ***************************************
-            NATIVE(access);
-            NATIVE(arch_prctl);
-            NATIVE(chmod);
-            NATIVE(chown);
-            NATIVE(exit);
-            NATIVE(getcwd);
-            NATIVE(geteuid);
-            NATIVE(getegid);
-            NATIVE(getgid);
-            NATIVE(getgroups);
-            NATIVE(getresgid);
-            NATIVE(getresuid);
-            NATIVE(getrlimit);
-            NATIVE(getuid);
-            NATIVE(getxattr);
-            NATIVE(lchown);
-            NATIVE(lgetxattr);
-            NATIVE(link);
-            NATIVE(listxattr);
-            NATIVE(llistxattr);
-            NATIVE(lremovexattr);
-            NATIVE(lsetxattr);
-            NATIVE(lstat);
-            NATIVE(madvise);
-            NATIVE(mkdir);
-            NATIVE(mknod);
-            NATIVE(readlink);
-            NATIVE(removexattr);
-            NATIVE(rename);
-            NATIVE(rmdir);
-            NATIVE(rt_sigreturn);
-            NATIVE(setfsgid);
-            NATIVE(setfsuid);
-            NATIVE(setgid);
-            NATIVE(setregid);
-            NATIVE(setresgid);
-            NATIVE(setresuid);
-            NATIVE(setreuid);
-            NATIVE(setrlimit);
-            NATIVE(setuid);
-            NATIVE(setxattr);
-            NATIVE(stat);
-            NATIVE(statfs);
-            NATIVE(symlink);
-            NATIVE(truncate);
-            NATIVE(unlink);
-            NATIVE(utime);
-            NATIVE(utimes);
+            HANDLE_RUST(access);
+            HANDLE_RUST(arch_prctl);
+            HANDLE_RUST(chmod);
+            HANDLE_RUST(chown);
+            HANDLE_RUST(exit);
+            HANDLE_RUST(getcwd);
+            HANDLE_RUST(geteuid);
+            HANDLE_RUST(getegid);
+            HANDLE_RUST(getgid);
+            HANDLE_RUST(getgroups);
+            HANDLE_RUST(getresgid);
+            HANDLE_RUST(getresuid);
+            HANDLE_RUST(getrlimit);
+            HANDLE_RUST(getuid);
+            HANDLE_RUST(getxattr);
+            HANDLE_RUST(lchown);
+            HANDLE_RUST(lgetxattr);
+            HANDLE_RUST(link);
+            HANDLE_RUST(listxattr);
+            HANDLE_RUST(llistxattr);
+            HANDLE_RUST(lremovexattr);
+            HANDLE_RUST(lsetxattr);
+            HANDLE_RUST(lstat);
+            HANDLE_RUST(madvise);
+            HANDLE_RUST(mkdir);
+            HANDLE_RUST(mknod);
+            HANDLE_RUST(readlink);
+            HANDLE_RUST(removexattr);
+            HANDLE_RUST(rename);
+            HANDLE_RUST(rmdir);
+            HANDLE_RUST(rt_sigreturn);
+            HANDLE_RUST(setfsgid);
+            HANDLE_RUST(setfsuid);
+            HANDLE_RUST(setgid);
+            HANDLE_RUST(setregid);
+            HANDLE_RUST(setresgid);
+            HANDLE_RUST(setresuid);
+            HANDLE_RUST(setreuid);
+            HANDLE_RUST(setrlimit);
+            HANDLE_RUST(setuid);
+            HANDLE_RUST(setxattr);
+            HANDLE_RUST(stat);
+            HANDLE_RUST(statfs);
+            HANDLE_RUST(symlink);
+            HANDLE_RUST(truncate);
+            HANDLE_RUST(unlink);
+            HANDLE_RUST(utime);
+            HANDLE_RUST(utimes);
 
             // ***************************************
             // Syscalls that aren't implemented yet. Listing them here gives the same behavior

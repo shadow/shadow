@@ -82,6 +82,14 @@ impl SyscallHandler {
             }};
         }
 
+        macro_rules! native {
+            ($name: literal) => {{
+                log::trace!("Native syscall {} ({})", $name, ctx.args.number,);
+                // TODO: log syscall to strace file
+                Err(SyscallError::Native)
+            }};
+        }
+
         match ctx.args.number {
             // SHADOW-HANDLED SYSCALLS
             //
@@ -248,6 +256,57 @@ impl SyscallHandler {
             libc::SYS_gettimeofday => shim_only!("gettimeofday"),
             libc::SYS_sched_yield => shim_only!("sched_yield"),
             libc::SYS_time => shim_only!("time"),
+            //
+            // NATIVE LINUX-HANDLED SYSCALLS
+            //
+            libc::SYS_access => native!("access"),
+            libc::SYS_arch_prctl => native!("arch_prctl"),
+            libc::SYS_chmod => native!("chmod"),
+            libc::SYS_chown => native!("chown"),
+            libc::SYS_exit => native!("exit"),
+            libc::SYS_getcwd => native!("getcwd"),
+            libc::SYS_geteuid => native!("geteuid"),
+            libc::SYS_getegid => native!("getegid"),
+            libc::SYS_getgid => native!("getgid"),
+            libc::SYS_getgroups => native!("getgroups"),
+            libc::SYS_getresgid => native!("getresgid"),
+            libc::SYS_getresuid => native!("getresuid"),
+            libc::SYS_getrlimit => native!("getrlimit"),
+            libc::SYS_getuid => native!("getuid"),
+            libc::SYS_getxattr => native!("getxattr"),
+            libc::SYS_lchown => native!("lchown"),
+            libc::SYS_lgetxattr => native!("lgetxattr"),
+            libc::SYS_link => native!("link"),
+            libc::SYS_listxattr => native!("listxattr"),
+            libc::SYS_llistxattr => native!("llistxattr"),
+            libc::SYS_lremovexattr => native!("lremovexattr"),
+            libc::SYS_lsetxattr => native!("lsetxattr"),
+            libc::SYS_lstat => native!("lstat"),
+            libc::SYS_madvise => native!("madvise"),
+            libc::SYS_mkdir => native!("mkdir"),
+            libc::SYS_mknod => native!("mknod"),
+            libc::SYS_readlink => native!("readlink"),
+            libc::SYS_removexattr => native!("removexattr"),
+            libc::SYS_rename => native!("rename"),
+            libc::SYS_rmdir => native!("rmdir"),
+            libc::SYS_rt_sigreturn => native!("rt_sigreturn"),
+            libc::SYS_setfsgid => native!("setfsgid"),
+            libc::SYS_setfsuid => native!("setfsuid"),
+            libc::SYS_setgid => native!("setgid"),
+            libc::SYS_setregid => native!("setregid"),
+            libc::SYS_setresgid => native!("setresgid"),
+            libc::SYS_setresuid => native!("setresuid"),
+            libc::SYS_setreuid => native!("setreuid"),
+            libc::SYS_setrlimit => native!("setrlimit"),
+            libc::SYS_setuid => native!("setuid"),
+            libc::SYS_setxattr => native!("setxattr"),
+            libc::SYS_stat => native!("stat"),
+            libc::SYS_statfs => native!("statfs"),
+            libc::SYS_symlink => native!("symlink"),
+            libc::SYS_truncate => native!("truncate"),
+            libc::SYS_unlink => native!("unlink"),
+            libc::SYS_utime => native!("utime"),
+            libc::SYS_utimes => native!("utimes"),
             _ => {
                 // if we added a HANDLE_RUST() macro for this syscall in
                 // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
