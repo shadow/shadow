@@ -96,6 +96,9 @@ impl ManagedThread {
     ) -> nix::Result<Self> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
 
+        let mut envv = envv;
+        envv.push(CString::new("TZ=:/usr/share/zoneinfo/UTC").unwrap());
+
         let envv = inject_preloads(envv, injected_preloads);
 
         debug!("env after preload injection: {envv:?}");
