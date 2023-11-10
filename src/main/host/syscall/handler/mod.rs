@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use linux_api::errno::Errno;
+use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 
@@ -9,7 +10,6 @@ use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
 use crate::host::syscall::formatter::log_syscall_simple;
-use crate::host::syscall::table::syscall_num_to_str;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
@@ -53,13 +53,15 @@ impl SyscallHandler {
 
     #[allow(non_upper_case_globals)]
     pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
-        const SYS_shadow_yield: i64 = c::ShadowSyscallNum_SYS_shadow_yield as i64;
-        const SYS_shadow_init_memory_manager: i64 =
-            c::ShadowSyscallNum_SYS_shadow_init_memory_manager as i64;
-        const SYS_shadow_hostname_to_addr_ipv4: i64 =
-            c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4 as i64;
+        const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
+        const NR_shadow_init_memory_manager: SyscallNum =
+            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
+        const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
+            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
 
-        let syscall_name = syscall_num_to_str(ctx.args.number).unwrap_or("unknown-syscall");
+        let syscall = SyscallNum::new(ctx.args.number.try_into().unwrap());
+        let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
+
         let was_blocked =
             unsafe { c::_syscallhandler_wasBlocked(ctx.objs.thread.csyscallhandler()) };
 
@@ -93,154 +95,154 @@ impl SyscallHandler {
             }};
         }
 
-        let rv = match ctx.args.number {
+        let rv = match syscall {
             // SHADOW-HANDLED SYSCALLS
             //
-            libc::SYS_accept => handle!(accept),
-            libc::SYS_accept4 => handle!(accept4),
-            libc::SYS_bind => handle!(bind),
-            libc::SYS_brk => handle!(brk),
-            libc::SYS_clock_getres => handle!(clock_getres),
-            libc::SYS_clock_nanosleep => handle!(clock_nanosleep),
-            libc::SYS_clone => handle!(clone),
-            libc::SYS_clone3 => handle!(clone3),
-            libc::SYS_close => handle!(close),
-            libc::SYS_connect => handle!(connect),
-            libc::SYS_creat => handle!(creat),
-            libc::SYS_dup => handle!(dup),
-            libc::SYS_dup2 => handle!(dup2),
-            libc::SYS_dup3 => handle!(dup3),
-            libc::SYS_epoll_create => handle!(epoll_create),
-            libc::SYS_epoll_create1 => handle!(epoll_create1),
-            libc::SYS_epoll_ctl => handle!(epoll_ctl),
-            libc::SYS_epoll_pwait => handle!(epoll_pwait),
-            libc::SYS_epoll_pwait2 => handle!(epoll_pwait2),
-            libc::SYS_epoll_wait => handle!(epoll_wait),
-            libc::SYS_eventfd => handle!(eventfd),
-            libc::SYS_eventfd2 => handle!(eventfd2),
-            libc::SYS_execve => handle!(execve),
-            libc::SYS_execveat => handle!(execveat),
-            libc::SYS_exit_group => handle!(exit_group),
-            libc::SYS_faccessat => handle!(faccessat),
-            libc::SYS_fadvise64 => handle!(fadvise64),
-            libc::SYS_fallocate => handle!(fallocate),
-            libc::SYS_fchmod => handle!(fchmod),
-            libc::SYS_fchmodat => handle!(fchmodat),
-            libc::SYS_fchown => handle!(fchown),
-            libc::SYS_fchownat => handle!(fchownat),
-            libc::SYS_fcntl => handle!(fcntl),
-            libc::SYS_fdatasync => handle!(fdatasync),
-            libc::SYS_fgetxattr => handle!(fgetxattr),
-            libc::SYS_flistxattr => handle!(flistxattr),
-            libc::SYS_flock => handle!(flock),
-            libc::SYS_fork => handle!(fork),
-            libc::SYS_fremovexattr => handle!(fremovexattr),
-            libc::SYS_fsetxattr => handle!(fsetxattr),
-            libc::SYS_fstat => handle!(fstat),
-            libc::SYS_fstatfs => handle!(fstatfs),
-            libc::SYS_fsync => handle!(fsync),
-            libc::SYS_ftruncate => handle!(ftruncate),
-            libc::SYS_futex => handle!(futex),
-            libc::SYS_futimesat => handle!(futimesat),
-            libc::SYS_get_robust_list => handle!(get_robust_list),
-            libc::SYS_getdents => handle!(getdents),
-            libc::SYS_getdents64 => handle!(getdents64),
-            libc::SYS_getitimer => handle!(getitimer),
-            libc::SYS_getpeername => handle!(getpeername),
-            libc::SYS_getpgid => handle!(getpgid),
-            libc::SYS_getpgrp => handle!(getpgrp),
-            libc::SYS_getpid => handle!(getpid),
-            libc::SYS_getppid => handle!(getppid),
-            libc::SYS_getrandom => handle!(getrandom),
-            libc::SYS_getsid => handle!(getsid),
-            libc::SYS_getsockname => handle!(getsockname),
-            libc::SYS_getsockopt => handle!(getsockopt),
-            libc::SYS_gettid => handle!(gettid),
-            libc::SYS_ioctl => handle!(ioctl),
-            libc::SYS_kill => handle!(kill),
-            libc::SYS_linkat => handle!(linkat),
-            libc::SYS_listen => handle!(listen),
-            libc::SYS_lseek => handle!(lseek),
-            libc::SYS_mkdirat => handle!(mkdirat),
-            libc::SYS_mknodat => handle!(mknodat),
-            libc::SYS_mmap => handle!(mmap),
-            libc::SYS_mprotect => handle!(mprotect),
-            libc::SYS_mremap => handle!(mremap),
-            libc::SYS_munmap => handle!(munmap),
-            libc::SYS_nanosleep => handle!(nanosleep),
-            libc::SYS_newfstatat => handle!(newfstatat),
-            libc::SYS_open => handle!(open),
-            libc::SYS_openat => handle!(openat),
-            libc::SYS_pipe => handle!(pipe),
-            libc::SYS_pipe2 => handle!(pipe2),
-            libc::SYS_poll => handle!(poll),
-            libc::SYS_ppoll => handle!(ppoll),
-            libc::SYS_prctl => handle!(prctl),
-            libc::SYS_pread64 => handle!(pread64),
-            libc::SYS_preadv => handle!(preadv),
-            libc::SYS_preadv2 => handle!(preadv2),
-            libc::SYS_prlimit64 => handle!(prlimit64),
-            libc::SYS_pselect6 => handle!(pselect6),
-            libc::SYS_pwrite64 => handle!(pwrite64),
-            libc::SYS_pwritev => handle!(pwritev),
-            libc::SYS_pwritev2 => handle!(pwritev2),
-            libc::SYS_read => handle!(read),
-            libc::SYS_readahead => handle!(readahead),
-            libc::SYS_readlinkat => handle!(readlinkat),
-            libc::SYS_readv => handle!(readv),
-            libc::SYS_recvfrom => handle!(recvfrom),
-            libc::SYS_recvmsg => handle!(recvmsg),
-            libc::SYS_renameat => handle!(renameat),
-            libc::SYS_renameat2 => handle!(renameat2),
-            libc::SYS_rseq => handle!(rseq),
-            libc::SYS_rt_sigaction => handle!(rt_sigaction),
-            libc::SYS_rt_sigprocmask => handle!(rt_sigprocmask),
-            libc::SYS_sched_getaffinity => handle!(sched_getaffinity),
-            libc::SYS_sched_setaffinity => handle!(sched_setaffinity),
-            libc::SYS_select => handle!(select),
-            libc::SYS_sendmsg => handle!(sendmsg),
-            libc::SYS_sendto => handle!(sendto),
-            libc::SYS_set_robust_list => handle!(set_robust_list),
-            libc::SYS_set_tid_address => handle!(set_tid_address),
-            libc::SYS_setitimer => handle!(setitimer),
-            libc::SYS_setpgid => handle!(setpgid),
-            libc::SYS_setsid => handle!(setsid),
-            libc::SYS_setsockopt => handle!(setsockopt),
-            libc::SYS_shutdown => handle!(shutdown),
-            libc::SYS_sigaltstack => handle!(sigaltstack),
-            libc::SYS_socket => handle!(socket),
-            libc::SYS_socketpair => handle!(socketpair),
-            libc::SYS_statx => handle!(statx),
-            libc::SYS_symlinkat => handle!(symlinkat),
-            libc::SYS_sync_file_range => handle!(sync_file_range),
-            libc::SYS_syncfs => handle!(syncfs),
-            libc::SYS_sysinfo => handle!(sysinfo),
-            libc::SYS_tgkill => handle!(tgkill),
-            libc::SYS_timerfd_create => handle!(timerfd_create),
-            libc::SYS_timerfd_gettime => handle!(timerfd_gettime),
-            libc::SYS_timerfd_settime => handle!(timerfd_settime),
-            libc::SYS_tkill => handle!(tkill),
-            libc::SYS_uname => handle!(uname),
-            libc::SYS_unlinkat => handle!(unlinkat),
-            libc::SYS_utimensat => handle!(utimensat),
-            libc::SYS_vfork => handle!(vfork),
-            libc::SYS_waitid => handle!(waitid),
-            libc::SYS_wait4 => handle!(wait4),
-            libc::SYS_write => handle!(write),
-            libc::SYS_writev => handle!(writev),
+            SyscallNum::NR_accept => handle!(accept),
+            SyscallNum::NR_accept4 => handle!(accept4),
+            SyscallNum::NR_bind => handle!(bind),
+            SyscallNum::NR_brk => handle!(brk),
+            SyscallNum::NR_clock_getres => handle!(clock_getres),
+            SyscallNum::NR_clock_nanosleep => handle!(clock_nanosleep),
+            SyscallNum::NR_clone => handle!(clone),
+            SyscallNum::NR_clone3 => handle!(clone3),
+            SyscallNum::NR_close => handle!(close),
+            SyscallNum::NR_connect => handle!(connect),
+            SyscallNum::NR_creat => handle!(creat),
+            SyscallNum::NR_dup => handle!(dup),
+            SyscallNum::NR_dup2 => handle!(dup2),
+            SyscallNum::NR_dup3 => handle!(dup3),
+            SyscallNum::NR_epoll_create => handle!(epoll_create),
+            SyscallNum::NR_epoll_create1 => handle!(epoll_create1),
+            SyscallNum::NR_epoll_ctl => handle!(epoll_ctl),
+            SyscallNum::NR_epoll_pwait => handle!(epoll_pwait),
+            SyscallNum::NR_epoll_pwait2 => handle!(epoll_pwait2),
+            SyscallNum::NR_epoll_wait => handle!(epoll_wait),
+            SyscallNum::NR_eventfd => handle!(eventfd),
+            SyscallNum::NR_eventfd2 => handle!(eventfd2),
+            SyscallNum::NR_execve => handle!(execve),
+            SyscallNum::NR_execveat => handle!(execveat),
+            SyscallNum::NR_exit_group => handle!(exit_group),
+            SyscallNum::NR_faccessat => handle!(faccessat),
+            SyscallNum::NR_fadvise64 => handle!(fadvise64),
+            SyscallNum::NR_fallocate => handle!(fallocate),
+            SyscallNum::NR_fchmod => handle!(fchmod),
+            SyscallNum::NR_fchmodat => handle!(fchmodat),
+            SyscallNum::NR_fchown => handle!(fchown),
+            SyscallNum::NR_fchownat => handle!(fchownat),
+            SyscallNum::NR_fcntl => handle!(fcntl),
+            SyscallNum::NR_fdatasync => handle!(fdatasync),
+            SyscallNum::NR_fgetxattr => handle!(fgetxattr),
+            SyscallNum::NR_flistxattr => handle!(flistxattr),
+            SyscallNum::NR_flock => handle!(flock),
+            SyscallNum::NR_fork => handle!(fork),
+            SyscallNum::NR_fremovexattr => handle!(fremovexattr),
+            SyscallNum::NR_fsetxattr => handle!(fsetxattr),
+            SyscallNum::NR_fstat => handle!(fstat),
+            SyscallNum::NR_fstatfs => handle!(fstatfs),
+            SyscallNum::NR_fsync => handle!(fsync),
+            SyscallNum::NR_ftruncate => handle!(ftruncate),
+            SyscallNum::NR_futex => handle!(futex),
+            SyscallNum::NR_futimesat => handle!(futimesat),
+            SyscallNum::NR_get_robust_list => handle!(get_robust_list),
+            SyscallNum::NR_getdents => handle!(getdents),
+            SyscallNum::NR_getdents64 => handle!(getdents64),
+            SyscallNum::NR_getitimer => handle!(getitimer),
+            SyscallNum::NR_getpeername => handle!(getpeername),
+            SyscallNum::NR_getpgid => handle!(getpgid),
+            SyscallNum::NR_getpgrp => handle!(getpgrp),
+            SyscallNum::NR_getpid => handle!(getpid),
+            SyscallNum::NR_getppid => handle!(getppid),
+            SyscallNum::NR_getrandom => handle!(getrandom),
+            SyscallNum::NR_getsid => handle!(getsid),
+            SyscallNum::NR_getsockname => handle!(getsockname),
+            SyscallNum::NR_getsockopt => handle!(getsockopt),
+            SyscallNum::NR_gettid => handle!(gettid),
+            SyscallNum::NR_ioctl => handle!(ioctl),
+            SyscallNum::NR_kill => handle!(kill),
+            SyscallNum::NR_linkat => handle!(linkat),
+            SyscallNum::NR_listen => handle!(listen),
+            SyscallNum::NR_lseek => handle!(lseek),
+            SyscallNum::NR_mkdirat => handle!(mkdirat),
+            SyscallNum::NR_mknodat => handle!(mknodat),
+            SyscallNum::NR_mmap => handle!(mmap),
+            SyscallNum::NR_mprotect => handle!(mprotect),
+            SyscallNum::NR_mremap => handle!(mremap),
+            SyscallNum::NR_munmap => handle!(munmap),
+            SyscallNum::NR_nanosleep => handle!(nanosleep),
+            SyscallNum::NR_newfstatat => handle!(newfstatat),
+            SyscallNum::NR_open => handle!(open),
+            SyscallNum::NR_openat => handle!(openat),
+            SyscallNum::NR_pipe => handle!(pipe),
+            SyscallNum::NR_pipe2 => handle!(pipe2),
+            SyscallNum::NR_poll => handle!(poll),
+            SyscallNum::NR_ppoll => handle!(ppoll),
+            SyscallNum::NR_prctl => handle!(prctl),
+            SyscallNum::NR_pread64 => handle!(pread64),
+            SyscallNum::NR_preadv => handle!(preadv),
+            SyscallNum::NR_preadv2 => handle!(preadv2),
+            SyscallNum::NR_prlimit64 => handle!(prlimit64),
+            SyscallNum::NR_pselect6 => handle!(pselect6),
+            SyscallNum::NR_pwrite64 => handle!(pwrite64),
+            SyscallNum::NR_pwritev => handle!(pwritev),
+            SyscallNum::NR_pwritev2 => handle!(pwritev2),
+            SyscallNum::NR_read => handle!(read),
+            SyscallNum::NR_readahead => handle!(readahead),
+            SyscallNum::NR_readlinkat => handle!(readlinkat),
+            SyscallNum::NR_readv => handle!(readv),
+            SyscallNum::NR_recvfrom => handle!(recvfrom),
+            SyscallNum::NR_recvmsg => handle!(recvmsg),
+            SyscallNum::NR_renameat => handle!(renameat),
+            SyscallNum::NR_renameat2 => handle!(renameat2),
+            SyscallNum::NR_rseq => handle!(rseq),
+            SyscallNum::NR_rt_sigaction => handle!(rt_sigaction),
+            SyscallNum::NR_rt_sigprocmask => handle!(rt_sigprocmask),
+            SyscallNum::NR_sched_getaffinity => handle!(sched_getaffinity),
+            SyscallNum::NR_sched_setaffinity => handle!(sched_setaffinity),
+            SyscallNum::NR_select => handle!(select),
+            SyscallNum::NR_sendmsg => handle!(sendmsg),
+            SyscallNum::NR_sendto => handle!(sendto),
+            SyscallNum::NR_set_robust_list => handle!(set_robust_list),
+            SyscallNum::NR_set_tid_address => handle!(set_tid_address),
+            SyscallNum::NR_setitimer => handle!(setitimer),
+            SyscallNum::NR_setpgid => handle!(setpgid),
+            SyscallNum::NR_setsid => handle!(setsid),
+            SyscallNum::NR_setsockopt => handle!(setsockopt),
+            SyscallNum::NR_shutdown => handle!(shutdown),
+            SyscallNum::NR_sigaltstack => handle!(sigaltstack),
+            SyscallNum::NR_socket => handle!(socket),
+            SyscallNum::NR_socketpair => handle!(socketpair),
+            SyscallNum::NR_statx => handle!(statx),
+            SyscallNum::NR_symlinkat => handle!(symlinkat),
+            SyscallNum::NR_sync_file_range => handle!(sync_file_range),
+            SyscallNum::NR_syncfs => handle!(syncfs),
+            SyscallNum::NR_sysinfo => handle!(sysinfo),
+            SyscallNum::NR_tgkill => handle!(tgkill),
+            SyscallNum::NR_timerfd_create => handle!(timerfd_create),
+            SyscallNum::NR_timerfd_gettime => handle!(timerfd_gettime),
+            SyscallNum::NR_timerfd_settime => handle!(timerfd_settime),
+            SyscallNum::NR_tkill => handle!(tkill),
+            SyscallNum::NR_uname => handle!(uname),
+            SyscallNum::NR_unlinkat => handle!(unlinkat),
+            SyscallNum::NR_utimensat => handle!(utimensat),
+            SyscallNum::NR_vfork => handle!(vfork),
+            SyscallNum::NR_waitid => handle!(waitid),
+            SyscallNum::NR_wait4 => handle!(wait4),
+            SyscallNum::NR_write => handle!(write),
+            SyscallNum::NR_writev => handle!(writev),
             //
             // CUSTOM SHADOW-SPECIFIC SYSCALLS
             //
-            SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
-            SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
-            SYS_shadow_yield => handle!(shadow_yield),
+            NR_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
+            NR_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
+            NR_shadow_yield => handle!(shadow_yield),
             //
             // SHIM-ONLY SYSCALLS
             //
-            libc::SYS_clock_gettime
-            | libc::SYS_gettimeofday
-            | libc::SYS_sched_yield
-            | libc::SYS_time => {
+            SyscallNum::NR_clock_gettime
+            | SyscallNum::NR_gettimeofday
+            | SyscallNum::NR_sched_yield
+            | SyscallNum::NR_time => {
                 panic!(
                     "Syscall {} ({}) should have been handled in the shim",
                     syscall_name, ctx.args.number,
@@ -249,54 +251,54 @@ impl SyscallHandler {
             //
             // NATIVE LINUX-HANDLED SYSCALLS
             //
-            libc::SYS_access
-            | libc::SYS_arch_prctl
-            | libc::SYS_chmod
-            | libc::SYS_chown
-            | libc::SYS_exit
-            | libc::SYS_getcwd
-            | libc::SYS_geteuid
-            | libc::SYS_getegid
-            | libc::SYS_getgid
-            | libc::SYS_getgroups
-            | libc::SYS_getresgid
-            | libc::SYS_getresuid
-            | libc::SYS_getrlimit
-            | libc::SYS_getuid
-            | libc::SYS_getxattr
-            | libc::SYS_lchown
-            | libc::SYS_lgetxattr
-            | libc::SYS_link
-            | libc::SYS_listxattr
-            | libc::SYS_llistxattr
-            | libc::SYS_lremovexattr
-            | libc::SYS_lsetxattr
-            | libc::SYS_lstat
-            | libc::SYS_madvise
-            | libc::SYS_mkdir
-            | libc::SYS_mknod
-            | libc::SYS_readlink
-            | libc::SYS_removexattr
-            | libc::SYS_rename
-            | libc::SYS_rmdir
-            | libc::SYS_rt_sigreturn
-            | libc::SYS_setfsgid
-            | libc::SYS_setfsuid
-            | libc::SYS_setgid
-            | libc::SYS_setregid
-            | libc::SYS_setresgid
-            | libc::SYS_setresuid
-            | libc::SYS_setreuid
-            | libc::SYS_setrlimit
-            | libc::SYS_setuid
-            | libc::SYS_setxattr
-            | libc::SYS_stat
-            | libc::SYS_statfs
-            | libc::SYS_symlink
-            | libc::SYS_truncate
-            | libc::SYS_unlink
-            | libc::SYS_utime
-            | libc::SYS_utimes => {
+            SyscallNum::NR_access
+            | SyscallNum::NR_arch_prctl
+            | SyscallNum::NR_chmod
+            | SyscallNum::NR_chown
+            | SyscallNum::NR_exit
+            | SyscallNum::NR_getcwd
+            | SyscallNum::NR_geteuid
+            | SyscallNum::NR_getegid
+            | SyscallNum::NR_getgid
+            | SyscallNum::NR_getgroups
+            | SyscallNum::NR_getresgid
+            | SyscallNum::NR_getresuid
+            | SyscallNum::NR_getrlimit
+            | SyscallNum::NR_getuid
+            | SyscallNum::NR_getxattr
+            | SyscallNum::NR_lchown
+            | SyscallNum::NR_lgetxattr
+            | SyscallNum::NR_link
+            | SyscallNum::NR_listxattr
+            | SyscallNum::NR_llistxattr
+            | SyscallNum::NR_lremovexattr
+            | SyscallNum::NR_lsetxattr
+            | SyscallNum::NR_lstat
+            | SyscallNum::NR_madvise
+            | SyscallNum::NR_mkdir
+            | SyscallNum::NR_mknod
+            | SyscallNum::NR_readlink
+            | SyscallNum::NR_removexattr
+            | SyscallNum::NR_rename
+            | SyscallNum::NR_rmdir
+            | SyscallNum::NR_rt_sigreturn
+            | SyscallNum::NR_setfsgid
+            | SyscallNum::NR_setfsuid
+            | SyscallNum::NR_setgid
+            | SyscallNum::NR_setregid
+            | SyscallNum::NR_setresgid
+            | SyscallNum::NR_setresuid
+            | SyscallNum::NR_setreuid
+            | SyscallNum::NR_setrlimit
+            | SyscallNum::NR_setuid
+            | SyscallNum::NR_setxattr
+            | SyscallNum::NR_stat
+            | SyscallNum::NR_statfs
+            | SyscallNum::NR_symlink
+            | SyscallNum::NR_truncate
+            | SyscallNum::NR_unlink
+            | SyscallNum::NR_utime
+            | SyscallNum::NR_utimes => {
                 log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
 
                 let rv = Err(SyscallError::Native);
@@ -327,7 +329,7 @@ impl SyscallHandler {
 
                 let rv = Err(Errno::ENOSYS.into());
 
-                let (syscall_name, syscall_args) = match syscall_num_to_str(ctx.args.number) {
+                let (syscall_name, syscall_args) = match syscall.to_str() {
                     // log it in the form "poll(...)"
                     Some(syscall_name) => (syscall_name, Cow::Borrowed("...")),
                     // log it in the form "syscall(X, ...)"
