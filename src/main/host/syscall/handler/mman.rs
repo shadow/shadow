@@ -213,7 +213,7 @@ impl SyscallHandler {
 
         // the file is None for an anonymous mapping, or a non-null Some otherwise
         let Ok(plugin_fd) = plugin_fd.transpose() else {
-            log::warn!("mmap on fd {fd} for {len} bytes failed");
+            log::trace!("mmap on fd {fd} for {len} bytes failed");
             return Err(Errno::EACCES.into());
         };
 
