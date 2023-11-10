@@ -265,10 +265,14 @@ impl SyscallHandler {
 
         log::trace!("Trying to open file {fd} in the plugin");
 
-        // make sure we don't open special files like /dev/urandom, /etc/localtime etc. in the
-        // plugin via mmap
-        if unsafe { c::regularfile_getType(file) } != c::_FileType_FILE_TYPE_REGULAR {
-            warn_once_then_debug!("Tried to mmap a non-regular-file");
+        // Make sure we don't open special files like `/dev/urandom` in the plugin via mmap. We
+        // allow `/etc/localtime`, which should have been swapped with `/usr/share/zoneinfo/Etc/UTC`
+        // in `regularfile_openat`.
+        let file_type = unsafe { c::regularfile_getType(file) };
+        if file_type != c::_FileType_FILE_TYPE_REGULAR
+            && file_type != c::_FileType_FILE_TYPE_LOCALTIME
+        {
+            warn_once_then_debug!("Tried to mmap a non-regular non-localtime file");
             return Err(());
         }
 
