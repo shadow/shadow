@@ -2219,7 +2219,7 @@ fn lookup_address(
             .lookup(socket_type, name)
             .ok_or(linux_api::errno::Errno::ECONNREFUSED)
     } else {
-        log::warn!("Unix sockets with pathname addresses are not yet supported");
+        warn_once_then_debug!("Unix sockets with pathname addresses are not yet supported");
         Err(linux_api::errno::Errno::ENOENT)
     }
 }
