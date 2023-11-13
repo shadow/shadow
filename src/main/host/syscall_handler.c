@@ -154,7 +154,7 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, Sysca
 #endif
 
 #ifdef USE_PERF_TIMERS
-    debug("handling syscall %ld %s took %f seconds", number, name, sys->perfSecondsCurrent);
+    debug("handling syscall %ld took %f seconds", number, sys->perfSecondsCurrent);
 #endif
 
     if (scr->tag != SYSCALL_RETURN_BLOCK) {
