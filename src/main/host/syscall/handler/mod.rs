@@ -104,7 +104,7 @@ impl SyscallHandler {
             () => {{
                 let rv = Errno::ENOSYS;
 
-                log::warn!(
+                warn_once_then_debug!(
                     "Returning error {} for explicitly unsupported syscall {} ({})",
                     rv,
                     syscall_name,
