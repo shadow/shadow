@@ -88,13 +88,6 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ i32)]
-    pub fn sched_yield(_ctx: &mut SyscallContext) -> Result<std::ffi::c_int, SyscallError> {
-        // Do nothing. We already yield and reschedule after some number of
-        // unblocked syscalls.
-        Ok(0)
-    }
-
     #[log_syscall(/* rv */ i32, /* rseq */ *const std::ffi::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
     pub fn rseq(
         ctx: &mut SyscallContext,

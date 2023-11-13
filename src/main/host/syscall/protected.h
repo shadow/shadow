@@ -95,5 +95,6 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
 const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
+Counter* _syscallhandler_getCounter(SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

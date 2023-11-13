@@ -6,6 +6,8 @@ use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::syscall::formatter::log_syscall_simple;
+use crate::host::syscall::table::syscall_num_to_str;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 
@@ -55,159 +57,379 @@ impl SyscallHandler {
         const SYS_shadow_hostname_to_addr_ipv4: i64 =
             c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4 as i64;
 
-        match ctx.args.number {
-            SYS_shadow_hostname_to_addr_ipv4 => {
-                SyscallHandlerFn::call(Self::shadow_hostname_to_addr_ipv4, &mut ctx)
-            }
-            SYS_shadow_init_memory_manager => {
-                SyscallHandlerFn::call(Self::shadow_init_memory_manager, &mut ctx)
-            }
-            SYS_shadow_yield => SyscallHandlerFn::call(Self::shadow_yield, &mut ctx),
-            libc::SYS_accept => SyscallHandlerFn::call(Self::accept, &mut ctx),
-            libc::SYS_accept4 => SyscallHandlerFn::call(Self::accept4, &mut ctx),
-            libc::SYS_bind => SyscallHandlerFn::call(Self::bind, &mut ctx),
-            libc::SYS_brk => SyscallHandlerFn::call(Self::brk, &mut ctx),
-            libc::SYS_clock_getres => SyscallHandlerFn::call(Self::clock_getres, &mut ctx),
-            libc::SYS_clock_nanosleep => SyscallHandlerFn::call(Self::clock_nanosleep, &mut ctx),
-            libc::SYS_clone => SyscallHandlerFn::call(Self::clone, &mut ctx),
-            libc::SYS_clone3 => SyscallHandlerFn::call(Self::clone3, &mut ctx),
-            libc::SYS_close => SyscallHandlerFn::call(Self::close, &mut ctx),
-            libc::SYS_connect => SyscallHandlerFn::call(Self::connect, &mut ctx),
-            libc::SYS_creat => SyscallHandlerFn::call(Self::creat, &mut ctx),
-            libc::SYS_dup => SyscallHandlerFn::call(Self::dup, &mut ctx),
-            libc::SYS_dup2 => SyscallHandlerFn::call(Self::dup2, &mut ctx),
-            libc::SYS_dup3 => SyscallHandlerFn::call(Self::dup3, &mut ctx),
-            libc::SYS_epoll_create => SyscallHandlerFn::call(Self::epoll_create, &mut ctx),
-            libc::SYS_epoll_create1 => SyscallHandlerFn::call(Self::epoll_create1, &mut ctx),
-            libc::SYS_epoll_ctl => SyscallHandlerFn::call(Self::epoll_ctl, &mut ctx),
-            libc::SYS_epoll_pwait => SyscallHandlerFn::call(Self::epoll_pwait, &mut ctx),
-            libc::SYS_epoll_pwait2 => SyscallHandlerFn::call(Self::epoll_pwait2, &mut ctx),
-            libc::SYS_epoll_wait => SyscallHandlerFn::call(Self::epoll_wait, &mut ctx),
-            libc::SYS_eventfd => SyscallHandlerFn::call(Self::eventfd, &mut ctx),
-            libc::SYS_eventfd2 => SyscallHandlerFn::call(Self::eventfd2, &mut ctx),
-            libc::SYS_execve => SyscallHandlerFn::call(Self::execve, &mut ctx),
-            libc::SYS_execveat => SyscallHandlerFn::call(Self::execveat, &mut ctx),
-            libc::SYS_exit_group => SyscallHandlerFn::call(Self::exit_group, &mut ctx),
-            libc::SYS_faccessat => SyscallHandlerFn::call(Self::faccessat, &mut ctx),
-            libc::SYS_fadvise64 => SyscallHandlerFn::call(Self::fadvise64, &mut ctx),
-            libc::SYS_fallocate => SyscallHandlerFn::call(Self::fallocate, &mut ctx),
-            libc::SYS_fchmod => SyscallHandlerFn::call(Self::fchmod, &mut ctx),
-            libc::SYS_fchmodat => SyscallHandlerFn::call(Self::fchmodat, &mut ctx),
-            libc::SYS_fchown => SyscallHandlerFn::call(Self::fchown, &mut ctx),
-            libc::SYS_fchownat => SyscallHandlerFn::call(Self::fchownat, &mut ctx),
-            libc::SYS_fcntl => SyscallHandlerFn::call(Self::fcntl, &mut ctx),
-            libc::SYS_fdatasync => SyscallHandlerFn::call(Self::fdatasync, &mut ctx),
-            libc::SYS_fgetxattr => SyscallHandlerFn::call(Self::fgetxattr, &mut ctx),
-            libc::SYS_flistxattr => SyscallHandlerFn::call(Self::flistxattr, &mut ctx),
-            libc::SYS_flock => SyscallHandlerFn::call(Self::flock, &mut ctx),
-            libc::SYS_fork => SyscallHandlerFn::call(Self::fork, &mut ctx),
-            libc::SYS_fremovexattr => SyscallHandlerFn::call(Self::fremovexattr, &mut ctx),
-            libc::SYS_fsetxattr => SyscallHandlerFn::call(Self::fsetxattr, &mut ctx),
-            libc::SYS_fstat => SyscallHandlerFn::call(Self::fstat, &mut ctx),
-            libc::SYS_fstatfs => SyscallHandlerFn::call(Self::fstatfs, &mut ctx),
-            libc::SYS_fsync => SyscallHandlerFn::call(Self::fsync, &mut ctx),
-            libc::SYS_ftruncate => SyscallHandlerFn::call(Self::ftruncate, &mut ctx),
-            libc::SYS_futex => SyscallHandlerFn::call(Self::futex, &mut ctx),
-            libc::SYS_futimesat => SyscallHandlerFn::call(Self::futimesat, &mut ctx),
-            libc::SYS_get_robust_list => SyscallHandlerFn::call(Self::get_robust_list, &mut ctx),
-            libc::SYS_getdents => SyscallHandlerFn::call(Self::getdents, &mut ctx),
-            libc::SYS_getdents64 => SyscallHandlerFn::call(Self::getdents64, &mut ctx),
-            libc::SYS_getitimer => SyscallHandlerFn::call(Self::getitimer, &mut ctx),
-            libc::SYS_getpeername => SyscallHandlerFn::call(Self::getpeername, &mut ctx),
-            libc::SYS_getpgid => SyscallHandlerFn::call(Self::getpgid, &mut ctx),
-            libc::SYS_getpgrp => SyscallHandlerFn::call(Self::getpgrp, &mut ctx),
-            libc::SYS_getpid => SyscallHandlerFn::call(Self::getpid, &mut ctx),
-            libc::SYS_getppid => SyscallHandlerFn::call(Self::getppid, &mut ctx),
-            libc::SYS_getrandom => SyscallHandlerFn::call(Self::getrandom, &mut ctx),
-            libc::SYS_getsid => SyscallHandlerFn::call(Self::getsid, &mut ctx),
-            libc::SYS_getsockname => SyscallHandlerFn::call(Self::getsockname, &mut ctx),
-            libc::SYS_getsockopt => SyscallHandlerFn::call(Self::getsockopt, &mut ctx),
-            libc::SYS_gettid => SyscallHandlerFn::call(Self::gettid, &mut ctx),
-            libc::SYS_ioctl => SyscallHandlerFn::call(Self::ioctl, &mut ctx),
-            libc::SYS_kill => SyscallHandlerFn::call(Self::kill, &mut ctx),
-            libc::SYS_linkat => SyscallHandlerFn::call(Self::linkat, &mut ctx),
-            libc::SYS_listen => SyscallHandlerFn::call(Self::listen, &mut ctx),
-            libc::SYS_lseek => SyscallHandlerFn::call(Self::lseek, &mut ctx),
-            libc::SYS_mkdirat => SyscallHandlerFn::call(Self::mkdirat, &mut ctx),
-            libc::SYS_mknodat => SyscallHandlerFn::call(Self::mknodat, &mut ctx),
-            libc::SYS_mmap => SyscallHandlerFn::call(Self::mmap, &mut ctx),
-            libc::SYS_mprotect => SyscallHandlerFn::call(Self::mprotect, &mut ctx),
-            libc::SYS_mremap => SyscallHandlerFn::call(Self::mremap, &mut ctx),
-            libc::SYS_munmap => SyscallHandlerFn::call(Self::munmap, &mut ctx),
-            libc::SYS_nanosleep => SyscallHandlerFn::call(Self::nanosleep, &mut ctx),
-            libc::SYS_newfstatat => SyscallHandlerFn::call(Self::newfstatat, &mut ctx),
-            libc::SYS_open => SyscallHandlerFn::call(Self::open, &mut ctx),
-            libc::SYS_openat => SyscallHandlerFn::call(Self::openat, &mut ctx),
-            libc::SYS_pipe => SyscallHandlerFn::call(Self::pipe, &mut ctx),
-            libc::SYS_pipe2 => SyscallHandlerFn::call(Self::pipe2, &mut ctx),
-            libc::SYS_poll => SyscallHandlerFn::call(Self::poll, &mut ctx),
-            libc::SYS_ppoll => SyscallHandlerFn::call(Self::ppoll, &mut ctx),
-            libc::SYS_prctl => SyscallHandlerFn::call(Self::prctl, &mut ctx),
-            libc::SYS_pread64 => SyscallHandlerFn::call(Self::pread64, &mut ctx),
-            libc::SYS_preadv => SyscallHandlerFn::call(Self::preadv, &mut ctx),
-            libc::SYS_preadv2 => SyscallHandlerFn::call(Self::preadv2, &mut ctx),
-            libc::SYS_prlimit64 => SyscallHandlerFn::call(Self::prlimit64, &mut ctx),
-            libc::SYS_pselect6 => SyscallHandlerFn::call(Self::pselect6, &mut ctx),
-            libc::SYS_pwrite64 => SyscallHandlerFn::call(Self::pwrite64, &mut ctx),
-            libc::SYS_pwritev => SyscallHandlerFn::call(Self::pwritev, &mut ctx),
-            libc::SYS_pwritev2 => SyscallHandlerFn::call(Self::pwritev2, &mut ctx),
-            libc::SYS_read => SyscallHandlerFn::call(Self::read, &mut ctx),
-            libc::SYS_readahead => SyscallHandlerFn::call(Self::readahead, &mut ctx),
-            libc::SYS_readlinkat => SyscallHandlerFn::call(Self::readlinkat, &mut ctx),
-            libc::SYS_readv => SyscallHandlerFn::call(Self::readv, &mut ctx),
-            libc::SYS_recvfrom => SyscallHandlerFn::call(Self::recvfrom, &mut ctx),
-            libc::SYS_recvmsg => SyscallHandlerFn::call(Self::recvmsg, &mut ctx),
-            libc::SYS_renameat => SyscallHandlerFn::call(Self::renameat, &mut ctx),
-            libc::SYS_renameat2 => SyscallHandlerFn::call(Self::renameat2, &mut ctx),
-            libc::SYS_rseq => SyscallHandlerFn::call(Self::rseq, &mut ctx),
-            libc::SYS_rt_sigaction => SyscallHandlerFn::call(Self::rt_sigaction, &mut ctx),
-            libc::SYS_rt_sigprocmask => SyscallHandlerFn::call(Self::rt_sigprocmask, &mut ctx),
-            libc::SYS_sched_getaffinity => {
-                SyscallHandlerFn::call(Self::sched_getaffinity, &mut ctx)
-            }
-            libc::SYS_sched_setaffinity => {
-                SyscallHandlerFn::call(Self::sched_setaffinity, &mut ctx)
-            }
-            libc::SYS_sched_yield => SyscallHandlerFn::call(Self::sched_yield, &mut ctx),
-            libc::SYS_select => SyscallHandlerFn::call(Self::select, &mut ctx),
-            libc::SYS_sendmsg => SyscallHandlerFn::call(Self::sendmsg, &mut ctx),
-            libc::SYS_sendto => SyscallHandlerFn::call(Self::sendto, &mut ctx),
-            libc::SYS_set_robust_list => SyscallHandlerFn::call(Self::set_robust_list, &mut ctx),
-            libc::SYS_set_tid_address => SyscallHandlerFn::call(Self::set_tid_address, &mut ctx),
-            libc::SYS_setitimer => SyscallHandlerFn::call(Self::setitimer, &mut ctx),
-            libc::SYS_setpgid => SyscallHandlerFn::call(Self::setpgid, &mut ctx),
-            libc::SYS_setsid => SyscallHandlerFn::call(Self::setsid, &mut ctx),
-            libc::SYS_setsockopt => SyscallHandlerFn::call(Self::setsockopt, &mut ctx),
-            libc::SYS_shutdown => SyscallHandlerFn::call(Self::shutdown, &mut ctx),
-            libc::SYS_sigaltstack => SyscallHandlerFn::call(Self::sigaltstack, &mut ctx),
-            libc::SYS_socket => SyscallHandlerFn::call(Self::socket, &mut ctx),
-            libc::SYS_socketpair => SyscallHandlerFn::call(Self::socketpair, &mut ctx),
-            libc::SYS_statx => SyscallHandlerFn::call(Self::statx, &mut ctx),
-            libc::SYS_symlinkat => SyscallHandlerFn::call(Self::symlinkat, &mut ctx),
-            libc::SYS_sync_file_range => SyscallHandlerFn::call(Self::sync_file_range, &mut ctx),
-            libc::SYS_syncfs => SyscallHandlerFn::call(Self::syncfs, &mut ctx),
-            libc::SYS_sysinfo => SyscallHandlerFn::call(Self::sysinfo, &mut ctx),
-            libc::SYS_tgkill => SyscallHandlerFn::call(Self::tgkill, &mut ctx),
-            libc::SYS_timerfd_create => SyscallHandlerFn::call(Self::timerfd_create, &mut ctx),
-            libc::SYS_timerfd_gettime => SyscallHandlerFn::call(Self::timerfd_gettime, &mut ctx),
-            libc::SYS_timerfd_settime => SyscallHandlerFn::call(Self::timerfd_settime, &mut ctx),
-            libc::SYS_tkill => SyscallHandlerFn::call(Self::tkill, &mut ctx),
-            libc::SYS_uname => SyscallHandlerFn::call(Self::uname, &mut ctx),
-            libc::SYS_unlinkat => SyscallHandlerFn::call(Self::unlinkat, &mut ctx),
-            libc::SYS_utimensat => SyscallHandlerFn::call(Self::utimensat, &mut ctx),
-            libc::SYS_vfork => SyscallHandlerFn::call(Self::vfork, &mut ctx),
-            libc::SYS_waitid => SyscallHandlerFn::call(Self::waitid, &mut ctx),
-            libc::SYS_wait4 => SyscallHandlerFn::call(Self::wait4, &mut ctx),
-            libc::SYS_write => SyscallHandlerFn::call(Self::write, &mut ctx),
-            libc::SYS_writev => SyscallHandlerFn::call(Self::writev, &mut ctx),
-            _ => {
-                // if we added a HANDLE_RUST() macro for this syscall in
-                // 'syscallhandler_make_syscall()' but didn't add an entry here, we should get a
-                // warning
-                log::warn!("Rust syscall {} is not mapped", ctx.args.number);
-                Err(Errno::ENOSYS.into())
+        let syscall_name = syscall_num_to_str(ctx.args.number).unwrap_or("unknown-syscall");
+        let was_blocked =
+            unsafe { c::_syscallhandler_wasBlocked(ctx.objs.thread.csyscallhandler()) };
+
+        log::trace!(
+            "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
+            syscall_name,
+            ctx.args.number,
+            if was_blocked {
+                " (previously BLOCKed)"
+            } else {
+                ""
+            },
+            &*ctx.objs.process.name(),
+            ctx.objs.thread.id(),
+        );
+
+        // Count the frequency of each syscall, but only on the initial call. This avoids double
+        // counting in the case where the initial call blocked at first, but then later became
+        // unblocked and is now being handled again here.
+        let syscall_counter =
+            unsafe { c::_syscallhandler_getCounter(ctx.objs.thread.csyscallhandler()) };
+        if let Some(syscall_counter) = unsafe { syscall_counter.as_mut() } {
+            if !was_blocked {
+                syscall_counter.add_one(syscall_name);
             }
         }
+
+        macro_rules! handle {
+            ($f:ident) => {{
+                SyscallHandlerFn::call(Self::$f, &mut ctx)
+            }};
+        }
+
+        macro_rules! shim_only {
+            () => {{
+                panic!(
+                    "Syscall {} ({}) should have been handled in the shim",
+                    syscall_name, ctx.args.number,
+                )
+            }};
+        }
+
+        macro_rules! unsupported {
+            () => {{
+                let rv = Errno::ENOSYS;
+
+                warn_once_then_debug!(
+                    "Returning error {} for explicitly unsupported syscall {} ({})",
+                    rv,
+                    syscall_name,
+                    ctx.args.number,
+                );
+
+                let rv = Err(rv.into());
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
+            }};
+        }
+
+        macro_rules! native {
+            () => {{
+                log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
+
+                let rv = Err(SyscallError::Native);
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
+            }};
+        }
+
+        let rv = match ctx.args.number {
+            // SHADOW-HANDLED SYSCALLS
+            //
+            libc::SYS_accept => handle!(accept),
+            libc::SYS_accept4 => handle!(accept4),
+            libc::SYS_bind => handle!(bind),
+            libc::SYS_brk => handle!(brk),
+            libc::SYS_clock_getres => handle!(clock_getres),
+            libc::SYS_clock_nanosleep => handle!(clock_nanosleep),
+            libc::SYS_clone => handle!(clone),
+            libc::SYS_clone3 => handle!(clone3),
+            libc::SYS_close => handle!(close),
+            libc::SYS_connect => handle!(connect),
+            libc::SYS_creat => handle!(creat),
+            libc::SYS_dup => handle!(dup),
+            libc::SYS_dup2 => handle!(dup2),
+            libc::SYS_dup3 => handle!(dup3),
+            libc::SYS_epoll_create => handle!(epoll_create),
+            libc::SYS_epoll_create1 => handle!(epoll_create1),
+            libc::SYS_epoll_ctl => handle!(epoll_ctl),
+            libc::SYS_epoll_pwait => handle!(epoll_pwait),
+            libc::SYS_epoll_pwait2 => handle!(epoll_pwait2),
+            libc::SYS_epoll_wait => handle!(epoll_wait),
+            libc::SYS_eventfd => handle!(eventfd),
+            libc::SYS_eventfd2 => handle!(eventfd2),
+            libc::SYS_execve => handle!(execve),
+            libc::SYS_execveat => handle!(execveat),
+            libc::SYS_exit_group => handle!(exit_group),
+            libc::SYS_faccessat => handle!(faccessat),
+            libc::SYS_fadvise64 => handle!(fadvise64),
+            libc::SYS_fallocate => handle!(fallocate),
+            libc::SYS_fchmod => handle!(fchmod),
+            libc::SYS_fchmodat => handle!(fchmodat),
+            libc::SYS_fchown => handle!(fchown),
+            libc::SYS_fchownat => handle!(fchownat),
+            libc::SYS_fcntl => handle!(fcntl),
+            libc::SYS_fdatasync => handle!(fdatasync),
+            libc::SYS_fgetxattr => handle!(fgetxattr),
+            libc::SYS_flistxattr => handle!(flistxattr),
+            libc::SYS_flock => handle!(flock),
+            libc::SYS_fork => handle!(fork),
+            libc::SYS_fremovexattr => handle!(fremovexattr),
+            libc::SYS_fsetxattr => handle!(fsetxattr),
+            libc::SYS_fstat => handle!(fstat),
+            libc::SYS_fstatfs => handle!(fstatfs),
+            libc::SYS_fsync => handle!(fsync),
+            libc::SYS_ftruncate => handle!(ftruncate),
+            libc::SYS_futex => handle!(futex),
+            libc::SYS_futimesat => handle!(futimesat),
+            libc::SYS_get_robust_list => handle!(get_robust_list),
+            libc::SYS_getdents => handle!(getdents),
+            libc::SYS_getdents64 => handle!(getdents64),
+            libc::SYS_getitimer => handle!(getitimer),
+            libc::SYS_getpeername => handle!(getpeername),
+            libc::SYS_getpgid => handle!(getpgid),
+            libc::SYS_getpgrp => handle!(getpgrp),
+            libc::SYS_getpid => handle!(getpid),
+            libc::SYS_getppid => handle!(getppid),
+            libc::SYS_getrandom => handle!(getrandom),
+            libc::SYS_getsid => handle!(getsid),
+            libc::SYS_getsockname => handle!(getsockname),
+            libc::SYS_getsockopt => handle!(getsockopt),
+            libc::SYS_gettid => handle!(gettid),
+            libc::SYS_ioctl => handle!(ioctl),
+            libc::SYS_kill => handle!(kill),
+            libc::SYS_linkat => handle!(linkat),
+            libc::SYS_listen => handle!(listen),
+            libc::SYS_lseek => handle!(lseek),
+            libc::SYS_mkdirat => handle!(mkdirat),
+            libc::SYS_mknodat => handle!(mknodat),
+            libc::SYS_mmap => handle!(mmap),
+            libc::SYS_mprotect => handle!(mprotect),
+            libc::SYS_mremap => handle!(mremap),
+            libc::SYS_munmap => handle!(munmap),
+            libc::SYS_nanosleep => handle!(nanosleep),
+            libc::SYS_newfstatat => handle!(newfstatat),
+            libc::SYS_open => handle!(open),
+            libc::SYS_openat => handle!(openat),
+            libc::SYS_pipe => handle!(pipe),
+            libc::SYS_pipe2 => handle!(pipe2),
+            libc::SYS_poll => handle!(poll),
+            libc::SYS_ppoll => handle!(ppoll),
+            libc::SYS_prctl => handle!(prctl),
+            libc::SYS_pread64 => handle!(pread64),
+            libc::SYS_preadv => handle!(preadv),
+            libc::SYS_preadv2 => handle!(preadv2),
+            libc::SYS_prlimit64 => handle!(prlimit64),
+            libc::SYS_pselect6 => handle!(pselect6),
+            libc::SYS_pwrite64 => handle!(pwrite64),
+            libc::SYS_pwritev => handle!(pwritev),
+            libc::SYS_pwritev2 => handle!(pwritev2),
+            libc::SYS_read => handle!(read),
+            libc::SYS_readahead => handle!(readahead),
+            libc::SYS_readlinkat => handle!(readlinkat),
+            libc::SYS_readv => handle!(readv),
+            libc::SYS_recvfrom => handle!(recvfrom),
+            libc::SYS_recvmsg => handle!(recvmsg),
+            libc::SYS_renameat => handle!(renameat),
+            libc::SYS_renameat2 => handle!(renameat2),
+            libc::SYS_rseq => handle!(rseq),
+            libc::SYS_rt_sigaction => handle!(rt_sigaction),
+            libc::SYS_rt_sigprocmask => handle!(rt_sigprocmask),
+            libc::SYS_sched_getaffinity => handle!(sched_getaffinity),
+            libc::SYS_sched_setaffinity => handle!(sched_setaffinity),
+            libc::SYS_select => handle!(select),
+            libc::SYS_sendmsg => handle!(sendmsg),
+            libc::SYS_sendto => handle!(sendto),
+            libc::SYS_set_robust_list => handle!(set_robust_list),
+            libc::SYS_set_tid_address => handle!(set_tid_address),
+            libc::SYS_setitimer => handle!(setitimer),
+            libc::SYS_setpgid => handle!(setpgid),
+            libc::SYS_setsid => handle!(setsid),
+            libc::SYS_setsockopt => handle!(setsockopt),
+            libc::SYS_shutdown => handle!(shutdown),
+            libc::SYS_sigaltstack => handle!(sigaltstack),
+            libc::SYS_socket => handle!(socket),
+            libc::SYS_socketpair => handle!(socketpair),
+            libc::SYS_statx => handle!(statx),
+            libc::SYS_symlinkat => handle!(symlinkat),
+            libc::SYS_sync_file_range => handle!(sync_file_range),
+            libc::SYS_syncfs => handle!(syncfs),
+            libc::SYS_sysinfo => handle!(sysinfo),
+            libc::SYS_tgkill => handle!(tgkill),
+            libc::SYS_timerfd_create => handle!(timerfd_create),
+            libc::SYS_timerfd_gettime => handle!(timerfd_gettime),
+            libc::SYS_timerfd_settime => handle!(timerfd_settime),
+            libc::SYS_tkill => handle!(tkill),
+            libc::SYS_uname => handle!(uname),
+            libc::SYS_unlinkat => handle!(unlinkat),
+            libc::SYS_utimensat => handle!(utimensat),
+            libc::SYS_vfork => handle!(vfork),
+            libc::SYS_waitid => handle!(waitid),
+            libc::SYS_wait4 => handle!(wait4),
+            libc::SYS_write => handle!(write),
+            libc::SYS_writev => handle!(writev),
+            //
+            // CUSTOM SHADOW-SPECIFIC SYSCALLS
+            //
+            SYS_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
+            SYS_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
+            SYS_shadow_yield => handle!(shadow_yield),
+            //
+            // UNSUPPORTED SYSCALLS
+            //
+            // Syscalls that aren't implemented yet. Listing them here gives the same behavior as
+            // the default case (returning ENOSYS), but allows the logging to include the syscall
+            // name instead of just the number.
+            //
+            // Needs to either change *both* the native and emulated working directory, or get rid
+            // of one of them. See https://github.com/shadow/shadow/issues/2960
+            libc::SYS_chdir => unsupported!(),
+            libc::SYS_copy_file_range => unsupported!(),
+            // Needs to either change *both* the native and emulated working directory, or get rid
+            // of one of them. See https://github.com/shadow/shadow/issues/2960
+            libc::SYS_fchdir => unsupported!(),
+            libc::SYS_io_getevents => unsupported!(),
+            libc::SYS_msync => unsupported!(),
+            libc::SYS_recvmmsg => unsupported!(),
+            libc::SYS_sendfile => unsupported!(),
+            libc::SYS_sendmmsg => unsupported!(),
+            libc::SYS_splice => unsupported!(),
+            libc::SYS_tee => unsupported!(),
+            libc::SYS_vmsplice => unsupported!(),
+            //
+            // SHIM-ONLY SYSCALLS
+            //
+            libc::SYS_clock_gettime => shim_only!(),
+            libc::SYS_gettimeofday => shim_only!(),
+            libc::SYS_sched_yield => shim_only!(),
+            libc::SYS_time => shim_only!(),
+            //
+            // NATIVE LINUX-HANDLED SYSCALLS
+            //
+            libc::SYS_access => native!(),
+            libc::SYS_arch_prctl => native!(),
+            libc::SYS_chmod => native!(),
+            libc::SYS_chown => native!(),
+            libc::SYS_exit => native!(),
+            libc::SYS_getcwd => native!(),
+            libc::SYS_geteuid => native!(),
+            libc::SYS_getegid => native!(),
+            libc::SYS_getgid => native!(),
+            libc::SYS_getgroups => native!(),
+            libc::SYS_getresgid => native!(),
+            libc::SYS_getresuid => native!(),
+            libc::SYS_getrlimit => native!(),
+            libc::SYS_getuid => native!(),
+            libc::SYS_getxattr => native!(),
+            libc::SYS_lchown => native!(),
+            libc::SYS_lgetxattr => native!(),
+            libc::SYS_link => native!(),
+            libc::SYS_listxattr => native!(),
+            libc::SYS_llistxattr => native!(),
+            libc::SYS_lremovexattr => native!(),
+            libc::SYS_lsetxattr => native!(),
+            libc::SYS_lstat => native!(),
+            libc::SYS_madvise => native!(),
+            libc::SYS_mkdir => native!(),
+            libc::SYS_mknod => native!(),
+            libc::SYS_readlink => native!(),
+            libc::SYS_removexattr => native!(),
+            libc::SYS_rename => native!(),
+            libc::SYS_rmdir => native!(),
+            libc::SYS_rt_sigreturn => native!(),
+            libc::SYS_setfsgid => native!(),
+            libc::SYS_setfsuid => native!(),
+            libc::SYS_setgid => native!(),
+            libc::SYS_setregid => native!(),
+            libc::SYS_setresgid => native!(),
+            libc::SYS_setresuid => native!(),
+            libc::SYS_setreuid => native!(),
+            libc::SYS_setrlimit => native!(),
+            libc::SYS_setuid => native!(),
+            libc::SYS_setxattr => native!(),
+            libc::SYS_stat => native!(),
+            libc::SYS_statfs => native!(),
+            libc::SYS_symlink => native!(),
+            libc::SYS_truncate => native!(),
+            libc::SYS_unlink => native!(),
+            libc::SYS_utime => native!(),
+            libc::SYS_utimes => native!(),
+            _ => {
+                log::warn!("Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
+                    syscall_name,
+                    ctx.args.number,
+                    ctx.objs.thread.id(),
+                    &*ctx.objs.process.plugin_name(),
+                    ctx.objs.host.name(),
+                );
+
+                let rv = Err(Errno::ENOSYS.into());
+
+                if let Some(syscall_name) = syscall_num_to_str(ctx.args.number) {
+                    log_syscall_simple(
+                        ctx.objs.process,
+                        ctx.objs.process.strace_logging_options(),
+                        ctx.objs.thread.id(),
+                        syscall_name,
+                        "...",
+                        &rv,
+                    )
+                    .unwrap();
+                } else {
+                    // the syscall name isn't known, so we'll log it in the form "syscall(X, ...)"
+                    // instead
+                    log_syscall_simple(
+                        ctx.objs.process,
+                        ctx.objs.process.strace_logging_options(),
+                        ctx.objs.thread.id(),
+                        "syscall",
+                        &format!("{}, ...", ctx.args.number),
+                        &rv,
+                    )
+                    .unwrap();
+                }
+
+                rv
+            }
+        };
+
+        if log::log_enabled!(log::Level::Trace) {
+            let rv_formatted = match &rv {
+                Ok(reg) => format!("{}", i64::from(*reg)),
+                Err(SyscallError::Failed(failed)) => {
+                    let errno = failed.errno;
+                    format!("{} ({errno})", errno.to_negated_i64())
+                }
+                Err(SyscallError::Native) => "<native>".to_string(),
+                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
+            };
+
+            log::trace!(
+                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
+                syscall_name,
+                ctx.args.number,
+                if was_blocked { "BLOCK -> " } else { "" },
+                rv_formatted,
+                &*ctx.objs.process.name(),
+                ctx.objs.thread.id(),
+            );
+        }
+
+        rv
     }
 
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
