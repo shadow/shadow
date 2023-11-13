@@ -54,7 +54,9 @@ impl SyscallHandler {
     }
 
     #[allow(non_upper_case_globals)]
-    pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+    pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let mut ctx = SyscallContext { objs: ctx, args };
+
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
@@ -603,13 +605,7 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| {
-                let ctx = SyscallContext {
-                    objs: ctx,
-                    args: unsafe { args.as_ref().unwrap() },
-                };
-                sys.syscall(ctx).into()
-            })
+            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
         })
         .unwrap()
     }

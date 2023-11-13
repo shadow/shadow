@@ -188,12 +188,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, Sysca
 SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
     const Host* host = _syscallhandler_getHost(sys);
     const Process* process = _syscallhandler_getProcess(sys);
     const Thread* thread = _syscallhandler_getThread(sys);
-
-    SyscallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -212,14 +209,14 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
         utility_debugAssert(sys->pendingResult.tag != SYSCALL_RETURN_BLOCK);
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
-    } else {
-        _syscallhandler_pre_syscall(sys, args->number);
-        SyscallHandler* handler = sys->syscall_handler_rs;
-        sys->syscall_handler_rs = NULL;
-        scr = rustsyscallhandler_syscall(handler, sys, args);
-        sys->syscall_handler_rs = handler;
-        _syscallhandler_post_syscall(sys, args->number, &scr);
     }
+
+    _syscallhandler_pre_syscall(sys, args->number);
+    SyscallHandler* handler = sys->syscall_handler_rs;
+    sys->syscall_handler_rs = NULL;
+    SyscallReturn scr = rustsyscallhandler_syscall(handler, sys, args);
+    sys->syscall_handler_rs = handler;
+    _syscallhandler_post_syscall(sys, args->number, &scr);
 
     // If the syscall would be blocked, but there's a signal pending, fail with
     // EINTR instead. The shim-side code will run the signal handlers and then
