@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
@@ -319,7 +321,28 @@ impl SyscallHandler {
             // UNSUPPORTED SYSCALL
             //
             _ => {
-                log::warn!("Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
+                // only show a warning the first time we encounter this unsupported syscall
+                static WARNED_SET: Mutex<Option<HashSet<SyscallNum>>> = Mutex::new(None);
+
+                // `insert()` returns `false` if the syscall num was already in the set
+                let has_already_warned = !WARNED_SET
+                    .lock()
+                    .unwrap()
+                    .get_or_insert_with(HashSet::new)
+                    .insert(syscall);
+
+                let level = if has_already_warned {
+                    log::Level::Debug
+                } else {
+                    log::Level::Warn
+                };
+
+                // we can't use the `warn_once_then_debug` macro here since we want to log this for
+                // each unique syscall encountered, not only the first unsupported syscall
+                // encountered
+                log::log!(
+                    level,
+                    "(LOG_ONCE) Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
                     syscall_name,
                     ctx.args.number,
                     ctx.objs.thread.id(),

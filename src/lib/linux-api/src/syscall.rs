@@ -1,7 +1,7 @@
 use crate::bindings;
 
 /// Linux x86-64 syscall number.
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SyscallNum(u32);
 
 #[allow(non_upper_case_globals)]
