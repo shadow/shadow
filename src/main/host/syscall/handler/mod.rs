@@ -54,8 +54,12 @@ impl SyscallHandler {
     }
 
     #[allow(non_upper_case_globals)]
-    pub fn syscall(&self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let mut ctx = SyscallContext { objs: ctx, args };
+    pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        let mut ctx = SyscallContext {
+            objs: ctx,
+            args,
+            handler: self,
+        };
 
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
@@ -448,6 +452,7 @@ impl SyscallHandler {
 pub struct SyscallContext<'a, 'b> {
     pub objs: &'a mut ThreadContext<'b>,
     pub args: &'a SysCallArgs,
+    pub handler: &'a mut SyscallHandler,
 }
 
 pub trait SyscallHandlerFn<T> {
