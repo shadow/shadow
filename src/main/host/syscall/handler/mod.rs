@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
@@ -322,14 +322,23 @@ impl SyscallHandler {
             //
             _ => {
                 // only show a warning the first time we encounter this unsupported syscall
-                static WARNED_SET: Mutex<Option<HashSet<SyscallNum>>> = Mutex::new(None);
+                static WARNED_SET: RwLock<Option<HashSet<SyscallNum>>> = RwLock::new(None);
 
-                // `insert()` returns `false` if the syscall num was already in the set
-                let has_already_warned = !WARNED_SET
-                    .lock()
+                let has_already_warned = WARNED_SET
+                    .read()
                     .unwrap()
-                    .get_or_insert_with(HashSet::new)
-                    .insert(syscall);
+                    .as_ref()
+                    .map(|x| x.contains(&syscall))
+                    .unwrap_or(false);
+
+                if !has_already_warned {
+                    // `insert()` returns `false` if the syscall num was already in the set
+                    assert!(WARNED_SET
+                        .write()
+                        .unwrap()
+                        .get_or_insert_with(HashSet::new)
+                        .insert(syscall));
+                }
 
                 let level = if has_already_warned {
                     log::Level::Debug
