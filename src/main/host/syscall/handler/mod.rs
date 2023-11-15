@@ -53,49 +53,79 @@ impl SyscallHandler {
         SyscallHandler {}
     }
 
-    #[allow(non_upper_case_globals)]
     pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
-        let mut ctx = SyscallContext {
-            objs: ctx,
-            args,
-            handler: self,
-        };
-
-        const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
-        const NR_shadow_init_memory_manager: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
-        const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
-
-        let syscall = SyscallNum::new(ctx.args.number.try_into().unwrap());
+        let syscall = SyscallNum::new(args.number.try_into().unwrap());
         let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
 
-        let was_blocked =
-            unsafe { c::_syscallhandler_wasBlocked(ctx.objs.thread.csyscallhandler()) };
+        let was_blocked = unsafe { c::_syscallhandler_wasBlocked(ctx.thread.csyscallhandler()) };
 
         log::trace!(
             "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
             syscall_name,
-            ctx.args.number,
+            args.number,
             if was_blocked {
                 " (previously BLOCKed)"
             } else {
                 ""
             },
-            &*ctx.objs.process.name(),
-            ctx.objs.thread.id(),
+            &*ctx.process.name(),
+            ctx.thread.id(),
         );
 
         // Count the frequency of each syscall, but only on the initial call. This avoids double
         // counting in the case where the initial call blocked at first, but then later became
         // unblocked and is now being handled again here.
         let syscall_counter =
-            unsafe { c::_syscallhandler_getCounter(ctx.objs.thread.csyscallhandler()) };
+            unsafe { c::_syscallhandler_getCounter(ctx.thread.csyscallhandler()) };
         if let Some(syscall_counter) = unsafe { syscall_counter.as_mut() } {
             if !was_blocked {
                 syscall_counter.add_one(syscall_name);
             }
         }
+
+        let rv = self.run_handler(ctx, args);
+
+        if log::log_enabled!(log::Level::Trace) {
+            let rv_formatted = match &rv {
+                Ok(reg) => format!("{}", i64::from(*reg)),
+                Err(SyscallError::Failed(failed)) => {
+                    let errno = failed.errno;
+                    format!("{} ({errno})", errno.to_negated_i64())
+                }
+                Err(SyscallError::Native) => "<native>".to_string(),
+                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
+            };
+
+            log::trace!(
+                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
+                syscall_name,
+                args.number,
+                if was_blocked { "BLOCK -> " } else { "" },
+                rv_formatted,
+                &*ctx.process.name(),
+                ctx.thread.id(),
+            );
+        }
+
+        rv
+    }
+
+    #[allow(non_upper_case_globals)]
+    fn run_handler(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
+        const NR_shadow_init_memory_manager: SyscallNum =
+            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
+        const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
+            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
+
+        let mut ctx = SyscallContext {
+            objs: ctx,
+            args,
+            handler: self,
+        };
+
+        let syscall = SyscallNum::new(ctx.args.number.try_into().unwrap());
+        let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
 
         macro_rules! handle {
             ($f:ident) => {{
@@ -103,7 +133,7 @@ impl SyscallHandler {
             }};
         }
 
-        let rv = match syscall {
+        match syscall {
             // SHADOW-HANDLED SYSCALLS
             //
             SyscallNum::NR_accept => handle!(accept),
@@ -386,31 +416,7 @@ impl SyscallHandler {
 
                 rv
             }
-        };
-
-        if log::log_enabled!(log::Level::Trace) {
-            let rv_formatted = match &rv {
-                Ok(reg) => format!("{}", i64::from(*reg)),
-                Err(SyscallError::Failed(failed)) => {
-                    let errno = failed.errno;
-                    format!("{} ({errno})", errno.to_negated_i64())
-                }
-                Err(SyscallError::Native) => "<native>".to_string(),
-                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
-            };
-
-            log::trace!(
-                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
-                syscall_name,
-                ctx.args.number,
-                if was_blocked { "BLOCK -> " } else { "" },
-                rv_formatted,
-                &*ctx.objs.process.name(),
-                ctx.objs.thread.id(),
-            );
         }
-
-        rv
     }
 
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
