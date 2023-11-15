@@ -1,4 +1,5 @@
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
+use shadow_shim_helper_rs::util::DebugFormatter;
 
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 use crate::host::memory_manager::MemoryManager;
@@ -351,20 +352,6 @@ fn fmt_msghdr(
         .finish()?;
 
     Ok(())
-}
-
-/// Implements [`Debug`](std::fmt::Debug) using the provided closure.
-struct DebugFormatter<F>(F)
-where
-    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result;
-
-impl<F> std::fmt::Debug for DebugFormatter<F>
-where
-    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0(f)
-    }
 }
 
 /// Displays a byte buffer with a specified length.

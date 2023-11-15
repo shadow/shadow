@@ -1,6 +1,6 @@
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::util::{NoTypeInference, SyncSendPointer};
+use crate::util::{DebugFormatter, NoTypeInference, SyncSendPointer};
 
 /// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
 /// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
@@ -412,10 +412,13 @@ impl From<()> for SysCallReg {
 
 impl std::fmt::Debug for SysCallReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // prepare the pointer for formatting
+        let as_ptr = DebugFormatter(move |fmt| write!(fmt, "{:p}", unsafe { self.as_ptr }));
+
         f.debug_struct("SysCallReg")
             .field("as_i64", unsafe { &self.as_i64 })
             .field("as_u64", unsafe { &self.as_u64 })
-            .field("as_ptr", unsafe { &self.as_ptr })
+            .field("as_ptr", &as_ptr)
             .finish()
     }
 }

@@ -68,6 +68,7 @@ pub mod resource;
 pub mod rseq;
 pub mod sched;
 pub mod signal;
+pub mod syscall;
 pub mod sysinfo;
 pub mod time;
 pub mod ucontext;
