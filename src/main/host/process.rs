@@ -664,6 +664,10 @@ impl RunnableProcess {
             strace_logging,
             dumpable: self.dumpable.clone(),
             native_pid,
+            #[cfg(feature = "perf_timers")]
+            cpu_delay_timer: RefCell::new(PerfTimer::new()),
+            #[cfg(feature = "perf_timers")]
+            total_run_time: Cell::new(Duration::ZERO),
             itimer_real,
             threads,
             unsafe_borrow_mut: RefCell::new(None),
@@ -1146,13 +1150,13 @@ impl Process {
     /// Deprecated wrapper for `RunnableProcess::start_cpu_delay_timer`
     #[cfg(feature = "perf_timers")]
     pub fn start_cpu_delay_timer(&self) {
-        self.runnable().unwrap().start_cpu_delay_timer()
+        self.as_runnable().unwrap().start_cpu_delay_timer()
     }
 
     /// Deprecated wrapper for `RunnableProcess::stop_cpu_delay_timer`
     #[cfg(feature = "perf_timers")]
     pub fn stop_cpu_delay_timer(&self, host: &Host) -> Duration {
-        self.runnable().unwrap().stop_cpu_delay_timer(host)
+        self.as_runnable().unwrap().stop_cpu_delay_timer(host)
     }
 
     pub fn thread_group_leader_id(&self) -> ThreadId {

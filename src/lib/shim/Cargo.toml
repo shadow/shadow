@@ -8,6 +8,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+perf_timers = []
+
 [dependencies]
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
