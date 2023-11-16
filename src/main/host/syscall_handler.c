@@ -84,10 +84,6 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
         .epoll = epoll_new(),
-#ifdef USE_PERF_TIMERS
-        // Used to track syscall handler performance
-        .perfTimer = g_timer_new(),
-#endif
     };
 
     if (_countSyscalls) {
@@ -102,12 +98,6 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
 
 void syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
-
-#ifdef USE_PERF_TIMERS
-    debug("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
-#else
-    debug("handled %li syscalls", sys->numSyscalls);
-#endif
 
     if (_countSyscalls && sys->syscall_counter) {
         // Log the plugin thread specific counts
@@ -129,43 +119,13 @@ void syscallhandler_free(SysCallHandler* sys) {
     if (sys->epoll) {
         legacyfile_unref(sys->epoll);
     }
-#ifdef USE_PERF_TIMERS
-    if (sys->perfTimer) {
-        g_timer_destroy(sys->perfTimer);
-    }
-#endif
 
     MAGIC_CLEAR(sys);
     free(sys);
     worker_count_deallocation(SysCallHandler);
 }
 
-static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number) {
-#ifdef USE_PERF_TIMERS
-    /* Track elapsed time during this syscall by marking the start time. */
-    g_timer_start(sys->perfTimer);
-#endif
-}
-
 static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, SyscallReturn* scr) {
-#ifdef USE_PERF_TIMERS
-    /* Add the cumulative elapsed seconds and num syscalls. */
-    sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
-#endif
-
-#ifdef USE_PERF_TIMERS
-    debug("handling syscall %ld took %f seconds", number, sys->perfSecondsCurrent);
-#endif
-
-    if (scr->tag != SYSCALL_RETURN_BLOCK) {
-        /* The syscall completed, count it and the cumulative time to complete it. */
-        sys->numSyscalls++;
-#ifdef USE_PERF_TIMERS
-        sys->perfSecondsTotal += sys->perfSecondsCurrent;
-        sys->perfSecondsCurrent = 0;
-#endif
-    }
-
     // We need to flush pointers here, so that the syscall formatter can
     // reliably borrow process memory without an incompatible borrow.
     if (!(scr->tag == SYSCALL_RETURN_DONE &&
@@ -211,7 +171,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
         return sys->pendingResult;
     }
 
-    _syscallhandler_pre_syscall(sys, args->number);
     SyscallHandler* handler = sys->syscall_handler_rs;
     sys->syscall_handler_rs = NULL;
     SyscallReturn scr = rustsyscallhandler_syscall(handler, sys, args);

@@ -46,20 +46,6 @@ struct _SysCallHandler {
      * to negative to indicate that no syscalls are currently blocked. */
     long blockedSyscallNR;
 
-    // TODO: if we build bindings on the fly, uncomment the ifdef and endif so that this timer
-    // object is not included in the struct unless necessary.
-    // https://github.com/shadow/shadow/issues/1158
-    //#ifdef USE_PERF_TIMERS
-    /* Used to track the time elapsed while handling a syscall. */
-    GTimer* perfTimer;
-    /* The cumulative time consumed while handling the current syscall.
-     * This includes the time from previous calls that ended up blocking. */
-    gdouble perfSecondsCurrent;
-    /* The total time elapsed while handling all syscalls. */
-    gdouble perfSecondsTotal;
-    //#endif
-    /* The total number of syscalls that we have handled. */
-    long numSyscalls;
     // A counter for individual syscalls
     Counter* syscall_counter;
 

@@ -2,6 +2,9 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::RwLock;
 
+#[cfg(feature = "perf_timers")]
+use std::time::Duration;
+
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
@@ -14,6 +17,9 @@ use crate::host::descriptor::Descriptor;
 use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
+
+#[cfg(feature = "perf_timers")]
+use crate::utility::perf_timer::PerfTimer;
 
 mod clone;
 mod epoll;
@@ -43,14 +49,29 @@ mod wait;
 type LegacySyscallFn =
     unsafe extern "C-unwind" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
 
+// Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
-    // Will eventually contain syscall handler state once migrated from the c handler
+    /// The total number of syscalls that we have handled.
+    num_syscalls: u64,
+    /// The cumulative time consumed while handling the current syscall. This includes the time from
+    /// previous calls that ended up blocking.
+    #[cfg(feature = "perf_timers")]
+    perf_duration_current: Duration,
+    /// The total time elapsed while handling all syscalls.
+    #[cfg(feature = "perf_timers")]
+    perf_duration_total: Duration,
 }
 
 impl SyscallHandler {
     #[allow(clippy::new_without_default)]
     pub fn new() -> SyscallHandler {
-        SyscallHandler {}
+        SyscallHandler {
+            num_syscalls: 0,
+            #[cfg(feature = "perf_timers")]
+            perf_duration_current: Duration::ZERO,
+            #[cfg(feature = "perf_timers")]
+            perf_duration_total: Duration::ZERO,
+        }
     }
 
     pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
@@ -83,7 +104,34 @@ impl SyscallHandler {
             }
         }
 
+        #[cfg(feature = "perf_timers")]
+        let timer = PerfTimer::new();
+
         let rv = self.run_handler(ctx, args);
+
+        #[cfg(feature = "perf_timers")]
+        {
+            // add the cumulative elapsed seconds
+            self.perf_duration_current += timer.elapsed();
+
+            log::debug!(
+                "Handling syscall {} ({}) took cumulative {} ms",
+                syscall_name,
+                args.number,
+                self.perf_duration_current.as_millis(),
+            );
+        }
+
+        if !matches!(rv, Err(SyscallError::Blocked(_))) {
+            // the syscall completed, count it and the cumulative time to complete it
+            self.num_syscalls += 1;
+
+            #[cfg(feature = "perf_timers")]
+            {
+                self.perf_duration_total += self.perf_duration_current;
+                self.perf_duration_current = Duration::ZERO;
+            }
+        }
 
         if log::log_enabled!(log::Level::Trace) {
             let rv_formatted = match &rv {
@@ -452,6 +500,19 @@ impl SyscallHandler {
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
         unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into()
+    }
+}
+
+impl std::ops::Drop for SyscallHandler {
+    fn drop(&mut self) {
+        #[cfg(feature = "perf_timers")]
+        log::debug!(
+            "Handled {} syscalls in {} seconds",
+            self.num_syscalls,
+            self.perf_duration_total.as_secs()
+        );
+        #[cfg(not(feature = "perf_timers"))]
+        log::debug!("Handled {} syscalls", self.num_syscalls);
     }
 }
 
