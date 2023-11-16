@@ -125,22 +125,6 @@ void syscallhandler_free(SysCallHandler* sys) {
     worker_count_deallocation(SysCallHandler);
 }
 
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, SyscallReturn* scr) {
-    // We need to flush pointers here, so that the syscall formatter can
-    // reliably borrow process memory without an incompatible borrow.
-    if (!(scr->tag == SYSCALL_RETURN_DONE &&
-          syscall_rawReturnValueToErrno(syscallreturn_done(scr)->retval.as_i64) == 0)) {
-        // The syscall didn't complete successfully; don't write back pointers.
-        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
-        process_freePtrsWithoutFlushing(_syscallhandler_getProcess(sys));
-    } else {
-        int res = process_flushPtrs(_syscallhandler_getProcess(sys));
-        if (res != 0) {
-            panic("Flushing syscall ptrs: %s", g_strerror(-res));
-        }
-    }
-}
-
 ///////////////////////////////////////////////////////////
 // Single public API function for calling Shadow syscalls
 ///////////////////////////////////////////////////////////
@@ -175,7 +159,6 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
     sys->syscall_handler_rs = NULL;
     SyscallReturn scr = rustsyscallhandler_syscall(handler, sys, args);
     sys->syscall_handler_rs = handler;
-    _syscallhandler_post_syscall(sys, args->number, &scr);
 
     // If the syscall would be blocked, but there's a signal pending, fail with
     // EINTR instead. The shim-side code will run the signal handlers and then

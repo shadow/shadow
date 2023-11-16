@@ -499,7 +499,23 @@ impl SyscallHandler {
 
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
-        unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into()
+        let rv: SyscallResult =
+            unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into();
+
+        // we need to flush pointers here so that the syscall formatter can reliably borrow process
+        // memory without an incompatible borrow
+        if rv.is_err() {
+            // the syscall didn't complete successfully; don't write back pointers
+            log::trace!("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+            ctx.objs.process.free_unsafe_borrows_noflush();
+        } else {
+            ctx.objs
+                .process
+                .free_unsafe_borrows_flush()
+                .expect("flushing syscall ptrs");
+        }
+
+        rv
     }
 }
 
