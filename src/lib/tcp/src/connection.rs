@@ -297,10 +297,10 @@ impl<I: Instant> Connection<I> {
         // update the send window, applying the window scale shift only if it wasn't a SYN packet
         // TODO: should we still update the window if the ACK was not in the valid range?
         if original_packet_had_syn {
-            self.send.window = u32::try_from(header.window_size).unwrap();
+            self.send.window = u32::from(header.window_size);
         } else {
-            self.send.window = u32::try_from(header.window_size).unwrap()
-                << self.window_scaling.send_window_scale_shift();
+            self.send.window =
+                u32::from(header.window_size) << self.window_scaling.send_window_scale_shift();
         }
 
         if header.flags.contains(TcpFlags::ACK) {

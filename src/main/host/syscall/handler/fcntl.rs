@@ -146,7 +146,7 @@ impl SyscallHandler {
                 let new_fd = desc_table
                     .register_descriptor_with_min_fd(new_desc, min_fd)
                     .or(Err(Errno::EINVAL))?;
-                SysCallReg::from(i32::try_from(new_fd).unwrap())
+                SysCallReg::from(i32::from(new_fd))
             }
             FcntlCommand::F_DUPFD_CLOEXEC => {
                 let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
@@ -155,7 +155,7 @@ impl SyscallHandler {
                 let new_fd = desc_table
                     .register_descriptor_with_min_fd(new_desc, min_fd)
                     .or(Err(Errno::EINVAL))?;
-                SysCallReg::from(i32::try_from(new_fd).unwrap())
+                SysCallReg::from(i32::from(new_fd))
             }
             FcntlCommand::F_GETPIPE_SZ => {
                 let file = match desc.file() {

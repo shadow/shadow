@@ -314,5 +314,5 @@ fn create_token_bucket(bytes_per_second: u64) -> TokenBucket {
 /// average is maintained. But I don't think this would happen much in practice,
 /// and we are batching sends for performance reasons.
 fn get_burst_allowance() -> u64 {
-    c::CONFIG_MTU.try_into().unwrap()
+    c::CONFIG_MTU.into()
 }

@@ -303,7 +303,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timespec {
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
         let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
-        let tv_nsec = value.subsec_nanos().try_into().map_err(|_| ())?;
+        let tv_nsec = value.subsec_nanos().into();
         Ok(libc::timespec { tv_sec, tv_nsec })
     }
 }
@@ -327,7 +327,7 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timespec {
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
         let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
-        let tv_nsec = value.subsec_nanos().try_into().map_err(|_| ())?;
+        let tv_nsec = value.subsec_nanos().into();
         Ok(linux_api::time::timespec { tv_sec, tv_nsec })
     }
 }
@@ -351,7 +351,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timeval {
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
         let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
-        let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
+        let tv_usec = value.subsec_micros().into();
         Ok(libc::timeval { tv_sec, tv_usec })
     }
 }
@@ -375,7 +375,7 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
         let value = Duration::from(value);
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
-        let tv_usec = value.subsec_micros().try_into().map_err(|_| ())?;
+        let tv_usec = value.subsec_micros().into();
         Ok(linux_api::time::timeval { tv_sec, tv_usec })
     }
 }

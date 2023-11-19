@@ -119,7 +119,7 @@ pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Gml, E> {
             ErrorKind::Fail,
         )?;
     }
-    let directed = match directed.get(0) {
+    let directed = match directed.first() {
         Some(GmlItem::Directed(x)) => *x,
         Some(_) => panic!(),
         // GML graphs are undirected by default

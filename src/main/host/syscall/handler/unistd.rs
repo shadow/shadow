@@ -65,7 +65,7 @@ impl SyscallHandler {
             .or(Err(Errno::ENFILE))?;
 
         // return the new fd
-        Ok(std::ffi::c_int::try_from(new_fd).unwrap().into())
+        Ok(std::ffi::c_int::from(new_fd).into())
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int)]
@@ -153,7 +153,7 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(std::ffi::c_int::try_from(new_fd).unwrap().into())
+        Ok(std::ffi::c_int::from(new_fd).into())
     }
 
     #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
@@ -463,10 +463,7 @@ impl SyscallHandler {
         let write_fd = dt.register_descriptor(writer_desc).unwrap();
 
         // try to write them to the caller
-        let fds = [
-            i32::try_from(read_fd).unwrap(),
-            i32::try_from(write_fd).unwrap(),
-        ];
+        let fds = [i32::from(read_fd), i32::from(write_fd)];
         let write_res = ctx.objs.process.memory_borrow_mut().write(fd_ptr, &fds);
 
         // clean up in case of error

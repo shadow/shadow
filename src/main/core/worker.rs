@@ -361,8 +361,7 @@ impl Worker {
         // check if network reliability forces us to 'drop' the packet
         let reliability: f64 = Worker::with(|w| w.shared.reliability(src_ip, dst_ip).unwrap())
             .unwrap()
-            .try_into()
-            .unwrap();
+            .into();
         let chance: f64 = src_host.random_mut().gen();
 
         // don't drop control packets with length 0, otherwise congestion control has problems
