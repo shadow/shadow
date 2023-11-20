@@ -120,8 +120,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
                 .export
                 .item_types
                 .iter()
+                .filter(|t| **t != cbindgen::ItemType::Functions)
                 .cloned()
-                .filter(|t| *t != cbindgen::ItemType::Functions)
                 .collect(),
             ..base_config.export.clone()
         };

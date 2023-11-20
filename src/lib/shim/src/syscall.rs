@@ -23,11 +23,7 @@ unsafe fn native_syscall(args: &SysCallArgs) -> SysCallReg {
     if args.number == libc::SYS_clone {
         panic!("Shouldn't get here. Should have gone through ShimEventAddThreadReq");
     } else if args.number == libc::SYS_exit {
-        let exit_status = args.args[0];
-        let exit_status = i32::try_from(exit_status).unwrap_or_else(|_| {
-            log::debug!("Truncating thread exit status {exit_status:?}");
-            i64::from(exit_status) as i32
-        });
+        let exit_status = i32::from(args.args[0]);
         // This thread is exiting. Arrange for its thread-local-storage and
         // signal stack to be freed.
         unsafe { bindings::shim_freeSignalStack() };

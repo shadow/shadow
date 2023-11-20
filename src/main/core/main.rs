@@ -70,11 +70,14 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
 
     let mut signals_list = Signals::new([consts::signal::SIGINT, consts::signal::SIGTERM])?;
     thread::spawn(move || {
-        for signal in signals_list.forever() {
+        // `next()` should block until we've received a signal, or `signals_list` is closed and
+        // `None` is returned
+        if let Some(signal) = signals_list.forever().next() {
             log::info!("Received signal {}. Flushing log and exiting", signal);
             log::logger().flush();
             std::process::exit(1);
         }
+        log::debug!("Finished waiting for a signal");
     });
 
     // unblock all signals in shadow and child processes since cmake's ctest blocks

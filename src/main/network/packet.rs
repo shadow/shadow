@@ -433,7 +433,7 @@ impl PacketDisplay for *const c::Packet {
 
         if payload_len > 0 {
             // shadow's packet payloads are guarded by a mutex, so it's easiest to make a copy of them
-            let mut payload_buf = vec![0u8; payload_len.try_into().unwrap()];
+            let mut payload_buf = vec![0u8; payload_len.into()];
             let count = unsafe {
                 c::packet_copyPayloadShadow(
                     *self,
