@@ -68,10 +68,6 @@ const Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
     return thread;
 }
 
-Counter* _syscallhandler_getCounter(SysCallHandler* sys) {
-    return sys->syscall_counter;
-}
-
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId) {
     SysCallHandler* sys = malloc(sizeof(SysCallHandler));
 
@@ -79,16 +75,12 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         .hostId = hostId,
         .processId = processId,
         .threadId = threadId,
-        .syscall_handler_rs = rustsyscallhandler_new(hostId, processId, threadId),
+        .syscall_handler_rs = rustsyscallhandler_new(hostId, processId, threadId, _countSyscalls),
         .blockedSyscallNR = -1,
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
         .epoll = epoll_new(),
     };
-
-    if (_countSyscalls) {
-        sys->syscall_counter = counter_new();
-    }
 
     MAGIC_INIT(sys);
 
@@ -98,19 +90,6 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
 
 void syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
-
-    if (_countSyscalls && sys->syscall_counter) {
-        // Log the plugin thread specific counts
-        char* str = counter_alloc_string(sys->syscall_counter);
-        debug("Thread %d syscall counts: %s", sys->threadId, str);
-        counter_free_string(sys->syscall_counter, str);
-
-        // Add up the counts at the worker level
-        worker_add_syscall_counts(sys->syscall_counter);
-
-        // Cleanup
-        counter_free(sys->syscall_counter);
-    }
 
     if (sys->syscall_handler_rs) {
         rustsyscallhandler_free(sys->syscall_handler_rs);

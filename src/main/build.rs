@@ -297,7 +297,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::syscall_types::SyscallReturn;")
         .raw_line("use crate::host::thread::Thread;")
-        .raw_line("use crate::utility::counter::Counter;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
         .raw_line("use shadow_shim_helper_rs::HostId;")

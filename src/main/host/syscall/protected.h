@@ -46,9 +46,6 @@ struct _SysCallHandler {
      * to negative to indicate that no syscalls are currently blocked. */
     long blockedSyscallNR;
 
-    // A counter for individual syscalls
-    Counter* syscall_counter;
-
     // In some cases the syscallhandler comples, but we block the caller anyway
     // to move time forward. This stores the result of the completed syscall, to
     // be returned when the caller resumes.
@@ -81,6 +78,5 @@ const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
 const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
-Counter* _syscallhandler_getCounter(SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

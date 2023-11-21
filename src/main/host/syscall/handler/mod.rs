@@ -11,6 +11,7 @@ use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
 use shadow_shim_helper_rs::HostId;
 
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
@@ -20,6 +21,7 @@ use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
+use crate::utility::counter::Counter;
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -62,6 +64,8 @@ pub struct SyscallHandler {
     thread_id: ThreadId,
     /// The total number of syscalls that we have handled.
     num_syscalls: u64,
+    /// A counter for individual syscalls.
+    syscall_counter: Option<Counter>,
     /// The cumulative time consumed while handling the current syscall. This includes the time from
     /// previous calls that ended up blocking.
     #[cfg(feature = "perf_timers")]
@@ -72,12 +76,18 @@ pub struct SyscallHandler {
 }
 
 impl SyscallHandler {
-    pub fn new(host_id: HostId, process_id: ProcessId, thread_id: ThreadId) -> SyscallHandler {
+    pub fn new(
+        host_id: HostId,
+        process_id: ProcessId,
+        thread_id: ThreadId,
+        count_syscalls: bool,
+    ) -> SyscallHandler {
         SyscallHandler {
             host_id,
             process_id,
             thread_id,
             num_syscalls: 0,
+            syscall_counter: count_syscalls.then(Counter::new),
             #[cfg(feature = "perf_timers")]
             perf_duration_current: Duration::ZERO,
             #[cfg(feature = "perf_timers")]
@@ -112,9 +122,7 @@ impl SyscallHandler {
         // Count the frequency of each syscall, but only on the initial call. This avoids double
         // counting in the case where the initial call blocked at first, but then later became
         // unblocked and is now being handled again here.
-        let syscall_counter =
-            unsafe { c::_syscallhandler_getCounter(ctx.thread.csyscallhandler()) };
-        if let Some(syscall_counter) = unsafe { syscall_counter.as_mut() } {
+        if let Some(syscall_counter) = self.syscall_counter.as_mut() {
             if !was_blocked {
                 syscall_counter.add_one(syscall_name);
             }
@@ -545,6 +553,18 @@ impl std::ops::Drop for SyscallHandler {
         );
         #[cfg(not(feature = "perf_timers"))]
         log::debug!("Handled {} syscalls", self.num_syscalls);
+
+        if let Some(syscall_counter) = self.syscall_counter.as_mut() {
+            // log the plugin thread specific counts
+            log::debug!(
+                "Thread {} syscall counts: {}",
+                self.thread_id,
+                syscall_counter,
+            );
+
+            // add up the counts at the worker level
+            Worker::add_syscall_counts(syscall_counter);
+        }
     }
 }
 
@@ -683,18 +703,19 @@ mod export {
     use shadow_shim_helper_rs::notnull::*;
 
     use super::*;
-    use crate::core::worker::Worker;
 
     #[no_mangle]
     pub extern "C-unwind" fn rustsyscallhandler_new(
         host_id: HostId,
         process_id: libc::pid_t,
         thread_id: libc::pid_t,
+        count_syscalls: bool,
     ) -> *mut SyscallHandler {
         Box::into_raw(Box::new(SyscallHandler::new(
             host_id,
             process_id.try_into().unwrap(),
             thread_id.try_into().unwrap(),
+            count_syscalls,
         )))
     }
 
