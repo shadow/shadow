@@ -33,14 +33,6 @@
 #include "main/host/syscall_types.h"
 #include "main/utility/syscall.h"
 
-// Not defined in some older libc's.
-#ifndef SYS_rseq
-#define SYS_rseq 334
-#endif
-#ifndef SYS_epoll_pwait2
-#define SYS_epoll_pwait2 441
-#endif
-
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
@@ -56,20 +48,10 @@ const Process* _syscallhandler_getProcess(const SysCallHandler* sys) {
     return process;
 }
 
-const char* _syscallhandler_getProcessName(const SysCallHandler* sys) {
-    const Process* process = worker_getCurrentProcess();
-    utility_debugAssert(process_getProcessID(process) == sys->processId);
-    return process_getPluginName(process);
-}
-
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
     const Thread* thread = worker_getCurrentThread();
     utility_debugAssert(thread_getID(thread) == sys->threadId);
     return thread;
-}
-
-Counter* _syscallhandler_getCounter(SysCallHandler* sys) {
-    return sys->syscall_counter;
 }
 
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId) {
@@ -79,20 +61,12 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         .hostId = hostId,
         .processId = processId,
         .threadId = threadId,
-        .syscall_handler_rs = rustsyscallhandler_new(),
+        .syscall_handler_rs = rustsyscallhandler_new(hostId, processId, threadId, _countSyscalls),
         .blockedSyscallNR = -1,
-        // Like the timer above, we use an epoll object for servicing
-        // some syscalls, and so we won't assign it a fd handle.
+        // We use an epoll object for servicing some syscalls, and so we won't
+        // assign it a fd handle.
         .epoll = epoll_new(),
-#ifdef USE_PERF_TIMERS
-        // Used to track syscall handler performance
-        .perfTimer = g_timer_new(),
-#endif
     };
-
-    if (_countSyscalls) {
-        sys->syscall_counter = counter_new();
-    }
 
     MAGIC_INIT(sys);
 
@@ -103,25 +77,6 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
 void syscallhandler_free(SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
-#ifdef USE_PERF_TIMERS
-    debug("handled %li syscalls in %f seconds", sys->numSyscalls, sys->perfSecondsTotal);
-#else
-    debug("handled %li syscalls", sys->numSyscalls);
-#endif
-
-    if (_countSyscalls && sys->syscall_counter) {
-        // Log the plugin thread specific counts
-        char* str = counter_alloc_string(sys->syscall_counter);
-        debug("Thread %d syscall counts: %s", sys->threadId, str);
-        counter_free_string(sys->syscall_counter, str);
-
-        // Add up the counts at the worker level
-        worker_add_syscall_counts(sys->syscall_counter);
-
-        // Cleanup
-        counter_free(sys->syscall_counter);
-    }
-
     if (sys->syscall_handler_rs) {
         rustsyscallhandler_free(sys->syscall_handler_rs);
     }
@@ -129,56 +84,10 @@ void syscallhandler_free(SysCallHandler* sys) {
     if (sys->epoll) {
         legacyfile_unref(sys->epoll);
     }
-#ifdef USE_PERF_TIMERS
-    if (sys->perfTimer) {
-        g_timer_destroy(sys->perfTimer);
-    }
-#endif
 
     MAGIC_CLEAR(sys);
     free(sys);
     worker_count_deallocation(SysCallHandler);
-}
-
-static void _syscallhandler_pre_syscall(SysCallHandler* sys, long number) {
-#ifdef USE_PERF_TIMERS
-    /* Track elapsed time during this syscall by marking the start time. */
-    g_timer_start(sys->perfTimer);
-#endif
-}
-
-static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, SyscallReturn* scr) {
-#ifdef USE_PERF_TIMERS
-    /* Add the cumulative elapsed seconds and num syscalls. */
-    sys->perfSecondsCurrent += g_timer_elapsed(sys->perfTimer, NULL);
-#endif
-
-#ifdef USE_PERF_TIMERS
-    debug("handling syscall %ld took %f seconds", number, sys->perfSecondsCurrent);
-#endif
-
-    if (scr->tag != SYSCALL_RETURN_BLOCK) {
-        /* The syscall completed, count it and the cumulative time to complete it. */
-        sys->numSyscalls++;
-#ifdef USE_PERF_TIMERS
-        sys->perfSecondsTotal += sys->perfSecondsCurrent;
-        sys->perfSecondsCurrent = 0;
-#endif
-    }
-
-    // We need to flush pointers here, so that the syscall formatter can
-    // reliably borrow process memory without an incompatible borrow.
-    if (!(scr->tag == SYSCALL_RETURN_DONE &&
-          syscall_rawReturnValueToErrno(syscallreturn_done(scr)->retval.as_i64) == 0)) {
-        // The syscall didn't complete successfully; don't write back pointers.
-        trace("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
-        process_freePtrsWithoutFlushing(_syscallhandler_getProcess(sys));
-    } else {
-        int res = process_flushPtrs(_syscallhandler_getProcess(sys));
-        if (res != 0) {
-            panic("Flushing syscall ptrs: %s", g_strerror(-res));
-        }
-    }
 }
 
 ///////////////////////////////////////////////////////////
@@ -188,12 +97,9 @@ static void _syscallhandler_post_syscall(SysCallHandler* sys, long number, Sysca
 SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs* args) {
     MAGIC_ASSERT(sys);
 
-    StraceFmtMode straceLoggingMode = process_straceLoggingMode(_syscallhandler_getProcess(sys));
     const Host* host = _syscallhandler_getHost(sys);
     const Process* process = _syscallhandler_getProcess(sys);
     const Thread* thread = _syscallhandler_getThread(sys);
-
-    SyscallReturn scr;
 
     /* Make sure that we either don't have a blocked syscall,
      * or if we blocked a syscall, then that same syscall
@@ -212,14 +118,12 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
         utility_debugAssert(sys->pendingResult.tag != SYSCALL_RETURN_BLOCK);
         sys->blockedSyscallNR = -1;
         return sys->pendingResult;
-    } else {
-        _syscallhandler_pre_syscall(sys, args->number);
-        SyscallHandler* handler = sys->syscall_handler_rs;
-        sys->syscall_handler_rs = NULL;
-        scr = rustsyscallhandler_syscall(handler, sys, args);
-        sys->syscall_handler_rs = handler;
-        _syscallhandler_post_syscall(sys, args->number, &scr);
     }
+
+    SyscallHandler* handler = sys->syscall_handler_rs;
+    sys->syscall_handler_rs = NULL;
+    SyscallReturn scr = rustsyscallhandler_syscall(handler, sys, args);
+    sys->syscall_handler_rs = handler;
 
     // If the syscall would be blocked, but there's a signal pending, fail with
     // EINTR instead. The shim-side code will run the signal handlers and then
@@ -308,5 +212,3 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 
     return scr;
 }
-#undef NATIVE
-#undef HANDLE

@@ -46,23 +46,6 @@ struct _SysCallHandler {
      * to negative to indicate that no syscalls are currently blocked. */
     long blockedSyscallNR;
 
-    // TODO: if we build bindings on the fly, uncomment the ifdef and endif so that this timer
-    // object is not included in the struct unless necessary.
-    // https://github.com/shadow/shadow/issues/1158
-    //#ifdef USE_PERF_TIMERS
-    /* Used to track the time elapsed while handling a syscall. */
-    GTimer* perfTimer;
-    /* The cumulative time consumed while handling the current syscall.
-     * This includes the time from previous calls that ended up blocking. */
-    gdouble perfSecondsCurrent;
-    /* The total time elapsed while handling all syscalls. */
-    gdouble perfSecondsTotal;
-    //#endif
-    /* The total number of syscalls that we have handled. */
-    long numSyscalls;
-    // A counter for individual syscalls
-    Counter* syscall_counter;
-
     // In some cases the syscallhandler comples, but we block the caller anyway
     // to move time forward. This stores the result of the completed syscall, to
     // be returned when the caller resumes.
@@ -86,15 +69,11 @@ struct _SysCallHandler {
 #define SYSCALL_HANDLER(s)                                                                         \
     SyscallReturn syscallhandler_##s(SysCallHandler* sys, const SysCallArgs* args);
 
-CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
-bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
 const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
-const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
-Counter* _syscallhandler_getCounter(SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

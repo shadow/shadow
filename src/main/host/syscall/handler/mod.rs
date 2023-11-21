@@ -2,18 +2,29 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::RwLock;
 
+#[cfg(feature = "perf_timers")]
+use std::time::Duration;
+
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::HostId;
 
+use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::process::ProcessId;
 use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::thread::ThreadId;
+use crate::utility::counter::Counter;
+
+#[cfg(feature = "perf_timers")]
+use crate::utility::perf_timer::PerfTimer;
 
 mod clone;
 mod epoll;
@@ -43,53 +54,150 @@ mod wait;
 type LegacySyscallFn =
     unsafe extern "C-unwind" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
 
+// Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
-    // Will eventually contain syscall handler state once migrated from the c handler
+    /// The host that this `SyscallHandler` belongs to. Intended to be used for logging.
+    host_id: HostId,
+    /// The process that this `SyscallHandler` belongs to. Intended to be used for logging.
+    process_id: ProcessId,
+    /// The thread that this `SyscallHandler` belongs to. Intended to be used for logging.
+    thread_id: ThreadId,
+    /// The total number of syscalls that we have handled.
+    num_syscalls: u64,
+    /// A counter for individual syscalls.
+    syscall_counter: Option<Counter>,
+    /// The cumulative time consumed while handling the current syscall. This includes the time from
+    /// previous calls that ended up blocking.
+    #[cfg(feature = "perf_timers")]
+    perf_duration_current: Duration,
+    /// The total time elapsed while handling all syscalls.
+    #[cfg(feature = "perf_timers")]
+    perf_duration_total: Duration,
 }
 
 impl SyscallHandler {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> SyscallHandler {
-        SyscallHandler {}
+    pub fn new(
+        host_id: HostId,
+        process_id: ProcessId,
+        thread_id: ThreadId,
+        count_syscalls: bool,
+    ) -> SyscallHandler {
+        SyscallHandler {
+            host_id,
+            process_id,
+            thread_id,
+            num_syscalls: 0,
+            syscall_counter: count_syscalls.then(Counter::new),
+            #[cfg(feature = "perf_timers")]
+            perf_duration_current: Duration::ZERO,
+            #[cfg(feature = "perf_timers")]
+            perf_duration_total: Duration::ZERO,
+        }
+    }
+
+    pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        // it wouldn't make sense if we were given a different host, process, and thread
+        assert_eq!(ctx.host.id(), self.host_id);
+        assert_eq!(ctx.process.id(), self.process_id);
+        assert_eq!(ctx.thread.id(), self.thread_id);
+
+        let syscall = SyscallNum::new(args.number.try_into().unwrap());
+        let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
+
+        let was_blocked = unsafe { c::_syscallhandler_wasBlocked(ctx.thread.csyscallhandler()) };
+
+        log::trace!(
+            "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
+            syscall_name,
+            args.number,
+            if was_blocked {
+                " (previously BLOCKed)"
+            } else {
+                ""
+            },
+            &*ctx.process.name(),
+            ctx.thread.id(),
+        );
+
+        // Count the frequency of each syscall, but only on the initial call. This avoids double
+        // counting in the case where the initial call blocked at first, but then later became
+        // unblocked and is now being handled again here.
+        if let Some(syscall_counter) = self.syscall_counter.as_mut() {
+            if !was_blocked {
+                syscall_counter.add_one(syscall_name);
+            }
+        }
+
+        #[cfg(feature = "perf_timers")]
+        let timer = PerfTimer::new();
+
+        let rv = self.run_handler(ctx, args);
+
+        #[cfg(feature = "perf_timers")]
+        {
+            // add the cumulative elapsed seconds
+            self.perf_duration_current += timer.elapsed();
+
+            log::debug!(
+                "Handling syscall {} ({}) took cumulative {} ms",
+                syscall_name,
+                args.number,
+                self.perf_duration_current.as_millis(),
+            );
+        }
+
+        if !matches!(rv, Err(SyscallError::Blocked(_))) {
+            // the syscall completed, count it and the cumulative time to complete it
+            self.num_syscalls += 1;
+
+            #[cfg(feature = "perf_timers")]
+            {
+                self.perf_duration_total += self.perf_duration_current;
+                self.perf_duration_current = Duration::ZERO;
+            }
+        }
+
+        if log::log_enabled!(log::Level::Trace) {
+            let rv_formatted = match &rv {
+                Ok(reg) => format!("{}", i64::from(*reg)),
+                Err(SyscallError::Failed(failed)) => {
+                    let errno = failed.errno;
+                    format!("{} ({errno})", errno.to_negated_i64())
+                }
+                Err(SyscallError::Native) => "<native>".to_string(),
+                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
+            };
+
+            log::trace!(
+                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
+                syscall_name,
+                args.number,
+                if was_blocked { "BLOCK -> " } else { "" },
+                rv_formatted,
+                &*ctx.process.name(),
+                ctx.thread.id(),
+            );
+        }
+
+        rv
     }
 
     #[allow(non_upper_case_globals)]
-    pub fn syscall(&self, mut ctx: SyscallContext) -> SyscallResult {
+    fn run_handler(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
         const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
 
+        let mut ctx = SyscallContext {
+            objs: ctx,
+            args,
+            handler: self,
+        };
+
         let syscall = SyscallNum::new(ctx.args.number.try_into().unwrap());
         let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
-
-        let was_blocked =
-            unsafe { c::_syscallhandler_wasBlocked(ctx.objs.thread.csyscallhandler()) };
-
-        log::trace!(
-            "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
-            syscall_name,
-            ctx.args.number,
-            if was_blocked {
-                " (previously BLOCKed)"
-            } else {
-                ""
-            },
-            &*ctx.objs.process.name(),
-            ctx.objs.thread.id(),
-        );
-
-        // Count the frequency of each syscall, but only on the initial call. This avoids double
-        // counting in the case where the initial call blocked at first, but then later became
-        // unblocked and is now being handled again here.
-        let syscall_counter =
-            unsafe { c::_syscallhandler_getCounter(ctx.objs.thread.csyscallhandler()) };
-        if let Some(syscall_counter) = unsafe { syscall_counter.as_mut() } {
-            if !was_blocked {
-                syscall_counter.add_one(syscall_name);
-            }
-        }
 
         macro_rules! handle {
             ($f:ident) => {{
@@ -97,7 +205,7 @@ impl SyscallHandler {
             }};
         }
 
-        let rv = match syscall {
+        match syscall {
             // SHADOW-HANDLED SYSCALLS
             //
             SyscallNum::NR_accept => handle!(accept),
@@ -380,31 +488,7 @@ impl SyscallHandler {
 
                 rv
             }
-        };
-
-        if log::log_enabled!(log::Level::Trace) {
-            let rv_formatted = match &rv {
-                Ok(reg) => format!("{}", i64::from(*reg)),
-                Err(SyscallError::Failed(failed)) => {
-                    let errno = failed.errno;
-                    format!("{} ({errno})", errno.to_negated_i64())
-                }
-                Err(SyscallError::Native) => "<native>".to_string(),
-                Err(SyscallError::Blocked(_)) => "<blocked>".to_string(),
-            };
-
-            log::trace!(
-                "SYSCALL_HANDLER_POST: {} ({}) result {}{} — ({}, tid={})",
-                syscall_name,
-                ctx.args.number,
-                if was_blocked { "BLOCK -> " } else { "" },
-                rv_formatted,
-                &*ctx.objs.process.name(),
-                ctx.objs.thread.id(),
-            );
         }
-
-        rv
     }
 
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
@@ -439,13 +523,55 @@ impl SyscallHandler {
 
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
-        unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into()
+        let rv: SyscallResult =
+            unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into();
+
+        // we need to flush pointers here so that the syscall formatter can reliably borrow process
+        // memory without an incompatible borrow
+        if rv.is_err() {
+            // the syscall didn't complete successfully; don't write back pointers
+            log::trace!("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+            ctx.objs.process.free_unsafe_borrows_noflush();
+        } else {
+            ctx.objs
+                .process
+                .free_unsafe_borrows_flush()
+                .expect("flushing syscall ptrs");
+        }
+
+        rv
+    }
+}
+
+impl std::ops::Drop for SyscallHandler {
+    fn drop(&mut self) {
+        #[cfg(feature = "perf_timers")]
+        log::debug!(
+            "Handled {} syscalls in {} seconds",
+            self.num_syscalls,
+            self.perf_duration_total.as_secs()
+        );
+        #[cfg(not(feature = "perf_timers"))]
+        log::debug!("Handled {} syscalls", self.num_syscalls);
+
+        if let Some(syscall_counter) = self.syscall_counter.as_mut() {
+            // log the plugin thread specific counts
+            log::debug!(
+                "Thread {} syscall counts: {}",
+                self.thread_id,
+                syscall_counter,
+            );
+
+            // add up the counts at the worker level
+            Worker::add_syscall_counts(syscall_counter);
+        }
     }
 }
 
 pub struct SyscallContext<'a, 'b> {
     pub objs: &'a mut ThreadContext<'b>,
     pub args: &'a SysCallArgs,
+    pub handler: &'a mut SyscallHandler,
 }
 
 pub trait SyscallHandlerFn<T> {
@@ -577,11 +703,20 @@ mod export {
     use shadow_shim_helper_rs::notnull::*;
 
     use super::*;
-    use crate::core::worker::Worker;
 
     #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_new() -> *mut SyscallHandler {
-        Box::into_raw(Box::new(SyscallHandler::new()))
+    pub extern "C-unwind" fn rustsyscallhandler_new(
+        host_id: HostId,
+        process_id: libc::pid_t,
+        thread_id: libc::pid_t,
+        count_syscalls: bool,
+    ) -> *mut SyscallHandler {
+        Box::into_raw(Box::new(SyscallHandler::new(
+            host_id,
+            process_id.try_into().unwrap(),
+            thread_id.try_into().unwrap(),
+            count_syscalls,
+        )))
     }
 
     #[no_mangle]
@@ -603,13 +738,7 @@ mod export {
         Worker::with_active_host(|host| {
             let mut objs =
                 unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| {
-                let ctx = SyscallContext {
-                    objs: ctx,
-                    args: unsafe { args.as_ref().unwrap() },
-                };
-                sys.syscall(ctx).into()
-            })
+            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
         })
         .unwrap()
     }
