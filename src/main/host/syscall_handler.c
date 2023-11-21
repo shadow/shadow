@@ -33,14 +33,6 @@
 #include "main/host/syscall_types.h"
 #include "main/utility/syscall.h"
 
-// Not defined in some older libc's.
-#ifndef SYS_rseq
-#define SYS_rseq 334
-#endif
-#ifndef SYS_epoll_pwait2
-#define SYS_epoll_pwait2 441
-#endif
-
 static bool _countSyscalls = false;
 ADD_CONFIG_HANDLER(config_getUseSyscallCounters, _countSyscalls)
 
@@ -54,12 +46,6 @@ const Process* _syscallhandler_getProcess(const SysCallHandler* sys) {
     const Process* process = worker_getCurrentProcess();
     utility_debugAssert(process_getProcessID(process) == sys->processId);
     return process;
-}
-
-const char* _syscallhandler_getProcessName(const SysCallHandler* sys) {
-    const Process* process = worker_getCurrentProcess();
-    utility_debugAssert(process_getProcessID(process) == sys->processId);
-    return process_getPluginName(process);
 }
 
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys) {
@@ -77,8 +63,8 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         .threadId = threadId,
         .syscall_handler_rs = rustsyscallhandler_new(hostId, processId, threadId, _countSyscalls),
         .blockedSyscallNR = -1,
-        // Like the timer above, we use an epoll object for servicing
-        // some syscalls, and so we won't assign it a fd handle.
+        // We use an epoll object for servicing some syscalls, and so we won't
+        // assign it a fd handle.
         .epoll = epoll_new(),
     };
 
@@ -226,5 +212,3 @@ SyscallReturn syscallhandler_make_syscall(SysCallHandler* sys, const SysCallArgs
 
     return scr;
 }
-#undef NATIVE
-#undef HANDLE

@@ -17,7 +17,7 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/syscall_condition.h"
 
-CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
+static CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     MAGIC_ASSERT(sys);
 
     SysCallCondition* cond = thread_getSysCallCondition(_syscallhandler_getThread(sys));
@@ -26,11 +26,6 @@ CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
     }
 
     return syscallcondition_getTimeout(cond);
-}
-
-bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys) {
-    MAGIC_ASSERT(sys);
-    return _syscallhandler_getTimeout(sys) != EMUTIME_INVALID;
 }
 
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {

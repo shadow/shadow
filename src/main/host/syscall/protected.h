@@ -69,14 +69,11 @@ struct _SysCallHandler {
 #define SYSCALL_HANDLER(s)                                                                         \
     SyscallReturn syscallhandler_##s(SysCallHandler* sys, const SysCallArgs* args);
 
-CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys);
-bool _syscallhandler_isListenTimeoutPending(SysCallHandler* sys);
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
 const Host* _syscallhandler_getHost(const SysCallHandler* sys);
 const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
-const char* _syscallhandler_getProcessName(const SysCallHandler* sys);
 const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */
