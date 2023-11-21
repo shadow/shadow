@@ -9,14 +9,17 @@ use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::HostId;
 
 use crate::cshadow as c;
 use crate::host::context::{ThreadContext, ThreadContextObjs};
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::process::ProcessId;
 use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::thread::ThreadId;
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -51,6 +54,12 @@ type LegacySyscallFn =
 
 // Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
+    /// The host that this `SyscallHandler` belongs to. Intended to be used for logging.
+    host_id: HostId,
+    /// The process that this `SyscallHandler` belongs to. Intended to be used for logging.
+    process_id: ProcessId,
+    /// The thread that this `SyscallHandler` belongs to. Intended to be used for logging.
+    thread_id: ThreadId,
     /// The total number of syscalls that we have handled.
     num_syscalls: u64,
     /// The cumulative time consumed while handling the current syscall. This includes the time from
@@ -63,9 +72,11 @@ pub struct SyscallHandler {
 }
 
 impl SyscallHandler {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> SyscallHandler {
+    pub fn new(host_id: HostId, process_id: ProcessId, thread_id: ThreadId) -> SyscallHandler {
         SyscallHandler {
+            host_id,
+            process_id,
+            thread_id,
             num_syscalls: 0,
             #[cfg(feature = "perf_timers")]
             perf_duration_current: Duration::ZERO,
@@ -75,6 +86,11 @@ impl SyscallHandler {
     }
 
     pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+        // it wouldn't make sense if we were given a different host, process, and thread
+        assert_eq!(ctx.host.id(), self.host_id);
+        assert_eq!(ctx.process.id(), self.process_id);
+        assert_eq!(ctx.thread.id(), self.thread_id);
+
         let syscall = SyscallNum::new(args.number.try_into().unwrap());
         let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
 
@@ -670,8 +686,16 @@ mod export {
     use crate::core::worker::Worker;
 
     #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_new() -> *mut SyscallHandler {
-        Box::into_raw(Box::new(SyscallHandler::new()))
+    pub extern "C-unwind" fn rustsyscallhandler_new(
+        host_id: HostId,
+        process_id: libc::pid_t,
+        thread_id: libc::pid_t,
+    ) -> *mut SyscallHandler {
+        Box::into_raw(Box::new(SyscallHandler::new(
+            host_id,
+            process_id.try_into().unwrap(),
+            thread_id.try_into().unwrap(),
+        )))
     }
 
     #[no_mangle]

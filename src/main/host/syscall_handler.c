@@ -79,7 +79,7 @@ SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadI
         .hostId = hostId,
         .processId = processId,
         .threadId = threadId,
-        .syscall_handler_rs = rustsyscallhandler_new(),
+        .syscall_handler_rs = rustsyscallhandler_new(hostId, processId, threadId),
         .blockedSyscallNR = -1,
         // Like the timer above, we use an epoll object for servicing
         // some syscalls, and so we won't assign it a fd handle.
