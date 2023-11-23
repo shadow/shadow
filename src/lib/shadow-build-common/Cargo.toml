@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bindgen = { version = "0.68.1" }
+bindgen = { version = "0.69.1" }
 cbindgen = { version = "0.26.0", default_features = false }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.2"
