@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use linux_api::signal::Signal;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
+use shadow_shim_helper_rs::util::SendPointer;
 
 use super::host::Host;
 use crate::cshadow;
@@ -11,7 +12,7 @@ use crate::host::syscall::Trigger;
 /// An immutable reference to a syscall condition.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SysCallConditionRef<'a> {
-    c_ptr: *mut cshadow::SysCallCondition,
+    c_ptr: SendPointer<cshadow::SysCallCondition>,
     _phantom: PhantomData<&'a ()>,
 }
 
@@ -27,13 +28,13 @@ impl<'a> SysCallConditionRef<'a> {
     pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
-            c_ptr: ptr,
+            c_ptr: unsafe { SendPointer::new(ptr) },
             _phantom: PhantomData,
         }
     }
 
     pub fn active_file(&self) -> Option<&OpenFile> {
-        let file_ptr = unsafe { cshadow::syscallcondition_getActiveFile(self.c_ptr) };
+        let file_ptr = unsafe { cshadow::syscallcondition_getActiveFile(self.c_ptr.ptr()) };
         if file_ptr.is_null() {
             return None;
         }
@@ -42,7 +43,7 @@ impl<'a> SysCallConditionRef<'a> {
     }
 
     pub fn timeout(&self) -> Option<EmulatedTime> {
-        let timeout = unsafe { cshadow::syscallcondition_getTimeout(self.c_ptr) };
+        let timeout = unsafe { cshadow::syscallcondition_getTimeout(self.c_ptr.ptr()) };
         EmulatedTime::from_c_emutime(timeout)
     }
 }
@@ -71,18 +72,22 @@ impl<'a> SysCallConditionRefMut<'a> {
 
     pub fn set_active_file(&mut self, file: OpenFile) {
         let file_ptr = Box::into_raw(Box::new(file));
-        unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr, file_ptr) };
+        unsafe { cshadow::syscallcondition_setActiveFile(self.condition.c_ptr.ptr(), file_ptr) };
     }
 
     pub fn wakeup_for_signal(&mut self, host: &Host, signal: Signal) -> bool {
         unsafe {
-            cshadow::syscallcondition_wakeupForSignal(self.condition.c_ptr, host, signal.into())
+            cshadow::syscallcondition_wakeupForSignal(
+                self.condition.c_ptr.ptr(),
+                host,
+                signal.into(),
+            )
         }
     }
 
     pub fn set_timeout(&mut self, timeout: Option<EmulatedTime>) {
         let timeout = EmulatedTime::to_c_emutime(timeout);
-        unsafe { cshadow::syscallcondition_setTimeout(self.c_ptr, timeout) };
+        unsafe { cshadow::syscallcondition_setTimeout(self.c_ptr.ptr(), timeout) };
     }
 }
 
@@ -143,15 +148,15 @@ impl SysCallCondition {
     /// "Steal" the inner pointer without unref'ing it.
     pub fn into_inner(mut self) -> *mut cshadow::SysCallCondition {
         let condition = self.condition.take().unwrap();
-        condition.c_ptr
+        condition.c_ptr.ptr()
     }
 }
 
 impl Drop for SysCallCondition {
     fn drop(&mut self) {
         if let Some(condition) = &self.condition {
-            if !condition.c_ptr.is_null() {
-                unsafe { cshadow::syscallcondition_unref(condition.c_ptr) }
+            if !condition.c_ptr.ptr().is_null() {
+                unsafe { cshadow::syscallcondition_unref(condition.c_ptr.ptr()) }
             }
         }
     }
