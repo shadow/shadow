@@ -58,6 +58,14 @@ impl<T> std::fmt::Debug for SyncSendPointer<T> {
     }
 }
 
+impl<T> PartialEq for SyncSendPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.ptr(), other.ptr())
+    }
+}
+
+impl<T> Eq for SyncSendPointer<T> {}
+
 /// A type that allows us to make a pointer Send since there is no way
 /// to add this traits to the pointer itself.
 pub struct SendPointer<T>(*mut T);
@@ -93,6 +101,14 @@ impl<T> std::fmt::Debug for SendPointer<T> {
         write!(f, "{:?}", self.ptr())
     }
 }
+
+impl<T> PartialEq for SendPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.ptr(), other.ptr())
+    }
+}
+
+impl<T> Eq for SendPointer<T> {}
 
 /// Implements [`Debug`](std::fmt::Debug) using the provided closure.
 pub struct DebugFormatter<F>(pub F)
