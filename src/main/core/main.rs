@@ -136,9 +136,6 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
         return Ok(());
     }
 
-    // run any global C configuration handlers
-    unsafe { c::runConfigHandlers(&shadow_config as *const ConfigOptions) };
-
     // configure other global state
     if shadow_config.experimental.use_object_counters.unwrap() {
         worker::enable_object_counters();
