@@ -16,6 +16,9 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "StatusListener".into(),
             "NetworkInterface".into(),
             "Tsc".into(),
+            // We have a rust `Epoll` and a C `Epoll`, so don't expose the rust `Epoll` back to C or
+            // else the compiler gets confused
+            "Epoll".into(),
             // We define manually with varargs
             "thread_nativeSyscall".into(),
         ]);
@@ -55,6 +58,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/core/worker.h".into(),
             "main/host/descriptor/descriptor_types.h".into(),
             "main/host/descriptor/tcp.h".into(),
+            "main/host/descriptor/epoll.h".into(),
             "main/host/futex_table.h".into(),
             "main/host/network/network_interface.h".into(),
             "main/host/protocol.h".into(),
@@ -144,6 +148,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("core/worker.h")
         .header("host/descriptor/compat_socket.h")
         .header("host/descriptor/descriptor.h")
+        .header("host/descriptor/epoll.h")
         .header("host/descriptor/regular_file.h")
         .header("host/descriptor/tcp_cong.h")
         .header("host/descriptor/tcp_cong_reno.h")
@@ -220,6 +225,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
         .allowlist_function("packet_.*")
+        .allowlist_function("epoll_new")
         //# Needs GQueue
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
@@ -231,6 +237,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("LegacyFile")
         .allowlist_type("Manager")
         .allowlist_type("RegularFile")
+        .allowlist_type("Epoll")
         .allowlist_type("FileType")
         .allowlist_type("Trigger")
         .allowlist_type("TriggerType")
