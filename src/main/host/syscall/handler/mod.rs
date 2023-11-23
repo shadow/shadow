@@ -10,6 +10,7 @@ use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::worker::Worker;
@@ -78,7 +79,7 @@ pub struct SyscallHandler {
     pending_result: Option<SyscallResult>,
     /// We use this epoll to service syscalls that need to block on the status of multiple
     /// descriptors, like poll.
-    epoll: *mut c::Epoll,
+    epoll: SendPointer<c::Epoll>,
     /// The cumulative time consumed while handling the current syscall. This includes the time from
     /// previous calls that ended up blocking.
     #[cfg(feature = "perf_timers")]
@@ -103,7 +104,7 @@ impl SyscallHandler {
             syscall_counter: count_syscalls.then(Counter::new),
             blocked_syscall: None,
             pending_result: None,
-            epoll: unsafe { c::epoll_new() },
+            epoll: unsafe { SendPointer::new(c::epoll_new()) },
             #[cfg(feature = "perf_timers")]
             perf_duration_current: Duration::ZERO,
             #[cfg(feature = "perf_timers")]
@@ -719,7 +720,7 @@ impl std::ops::Drop for SyscallHandler {
             Worker::add_syscall_counts(syscall_counter);
         }
 
-        unsafe { c::legacyfile_unref(self.epoll as *mut std::ffi::c_void) };
+        unsafe { c::legacyfile_unref(self.epoll.ptr() as *mut std::ffi::c_void) };
     }
 }
 
@@ -975,6 +976,6 @@ mod export {
         sys: *const SyscallHandler,
     ) -> *mut c::Epoll {
         let sys = unsafe { sys.as_ref() }.unwrap();
-        sys.epoll
+        sys.epoll.ptr()
     }
 }
