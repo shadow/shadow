@@ -257,7 +257,7 @@ impl SyscallHandler {
     }
 
     fn open_plugin_file(
-        ctx: &mut ThreadContext,
+        ctx: &ThreadContext,
         fd: std::ffi::c_ulong,
         file: *mut c::RegularFile,
     ) -> Result<i32, ()> {

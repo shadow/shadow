@@ -112,7 +112,7 @@ impl SyscallHandler {
         }
     }
 
-    pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
         // it wouldn't make sense if we were given a different host, process, and thread
         assert_eq!(ctx.host.id(), self.host_id);
         assert_eq!(ctx.process.id(), self.process_id);
@@ -329,7 +329,7 @@ impl SyscallHandler {
     }
 
     #[allow(non_upper_case_globals)]
-    fn run_handler(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    fn run_handler(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
@@ -725,7 +725,7 @@ impl std::ops::Drop for SyscallHandler {
 }
 
 pub struct SyscallContext<'a, 'b> {
-    pub objs: &'a mut ThreadContext<'b>,
+    pub objs: &'a ThreadContext<'b>,
     pub args: &'a SysCallArgs,
     pub handler: &'a mut SyscallHandler,
 }
