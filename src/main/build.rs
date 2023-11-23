@@ -366,7 +366,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/process.c",
         "host/futex.c",
         "host/futex_table.c",
-        "host/syscall_handler.c",
         "host/syscall_types.c",
         "host/syscall/protected.c",
         "host/syscall/fcntl.c",

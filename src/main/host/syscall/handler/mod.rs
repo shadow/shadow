@@ -15,7 +15,7 @@ use shadow_shim_helper_rs::HostId;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
-use crate::host::context::{ThreadContext, ThreadContextObjs};
+use crate::host::context::ThreadContext;
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
 use crate::host::process::ProcessId;
@@ -856,52 +856,11 @@ where
 }
 
 mod export {
-    use shadow_shim_helper_rs::notnull::*;
-
     use crate::host::host::Host;
     use crate::host::process::Process;
     use crate::host::thread::Thread;
 
     use super::*;
-
-    #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_new(
-        host_id: HostId,
-        process_id: libc::pid_t,
-        thread_id: libc::pid_t,
-        count_syscalls: bool,
-    ) -> *mut SyscallHandler {
-        Box::into_raw(Box::new(SyscallHandler::new(
-            host_id,
-            process_id.try_into().unwrap(),
-            thread_id.try_into().unwrap(),
-            count_syscalls,
-        )))
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_free(handler_ptr: *mut SyscallHandler) {
-        if handler_ptr.is_null() {
-            return;
-        }
-        drop(unsafe { Box::from_raw(handler_ptr) });
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_syscall(
-        sys: *mut SyscallHandler,
-        csys: *mut c::SysCallHandler,
-        args: *const SysCallArgs,
-    ) -> SyscallReturn {
-        assert!(!sys.is_null());
-        let sys = unsafe { &mut *sys };
-        Worker::with_active_host(|host| {
-            let mut objs =
-                unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
-        })
-        .unwrap()
-    }
 
     /// Returns a pointer to the current running host. The returned pointer is invalidated the next
     /// time the worker switches hosts. Rust syscall handlers should get the host from the

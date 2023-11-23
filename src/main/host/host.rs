@@ -82,6 +82,7 @@ pub struct HostParameters {
     pub shim_log_level: LogLevel,
     pub use_new_tcp: bool,
     pub use_mem_mapper: bool,
+    pub use_syscall_counters: bool,
 }
 
 use super::cpu::Cpu;

@@ -20,6 +20,7 @@ use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
+use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{syscall, IsSend, ObjectCounter};
@@ -46,7 +47,7 @@ pub struct Thread {
     // See set_tid_address(2).
     tid_address: Cell<ForeignPtr<libc::pid_t>>,
     shim_shared_memory: ShMemBlock<'static, ThreadShmem>,
-    syscallhandler: SendPointer<c::SysCallHandler>,
+    syscallhandler: RootedRefCell<SyscallHandler>,
     /// Descriptor table; potentially shared with other threads and processes.
     // TODO: Consider using an Arc instead of RootedRc, particularly if this
     // continues to be the only RootedRc member. Cloning this object currently
@@ -108,14 +109,15 @@ impl Thread {
             self.shim_shared_memory = shmalloc(thread_shmem);
         }
 
-        unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
-        self.syscallhandler = unsafe {
-            SendPointer::new(c::syscallhandler_new(
+        self.syscallhandler = RootedRefCell::new(
+            host.root(),
+            SyscallHandler::new(
                 host.id(),
-                self.process_id.into(),
-                new_tid.into(),
-            ))
-        };
+                self.process_id,
+                new_tid,
+                host.params.use_syscall_counters,
+            ),
+        );
 
         // Update descriptor table
         {
@@ -201,10 +203,6 @@ impl Thread {
 
     pub fn native_tid(&self) -> Pid {
         self.mthread.borrow().native_tid()
-    }
-
-    pub fn csyscallhandler(&self) -> *mut c::SysCallHandler {
-        self.syscallhandler.ptr()
     }
 
     pub fn id(&self) -> ThreadId {
@@ -433,9 +431,10 @@ impl Thread {
     ) -> Result<Thread, Errno> {
         let child = Self {
             mthread: RefCell::new(mthread),
-            syscallhandler: unsafe {
-                SendPointer::new(c::syscallhandler_new(host.id(), pid.into(), tid.into()))
-            },
+            syscallhandler: RootedRefCell::new(
+                host.root(),
+                SyscallHandler::new(host.id(), pid, tid, host.params.use_syscall_counters),
+            ),
             cond: Cell::new(unsafe { SendPointer::new(std::ptr::null_mut()) }),
             id: tid,
             host_id: host.id(),
@@ -463,7 +462,12 @@ impl Thread {
             unsafe { c::syscallcondition_cancel(c) };
         }
 
-        let res = self.mthread.borrow().resume(&ctx.with_thread(self));
+        let mut syscall_handler = self.syscallhandler.borrow_mut(ctx.host.root());
+
+        let res = self
+            .mthread
+            .borrow()
+            .resume(&ctx.with_thread(self), &mut syscall_handler);
 
         // Now we're done with old condition.
         if let Some(c) = unsafe {
@@ -544,7 +548,6 @@ impl Drop for Thread {
             unsafe { c::syscallcondition_cancel(c) };
             unsafe { c::syscallcondition_unref(c) };
         }
-        unsafe { c::syscallhandler_free(self.syscallhandler.ptr()) };
     }
 }
 
@@ -684,15 +687,6 @@ mod export {
             host as *const _
         })
         .unwrap()
-    }
-
-    /// Get the syscallhandler for this thread.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn thread_getSysCallHandler(
-        thread: *const Thread,
-    ) -> *mut c::SysCallHandler {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        thread.syscallhandler.ptr()
     }
 
     #[no_mangle]

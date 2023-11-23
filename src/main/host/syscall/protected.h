@@ -28,19 +28,6 @@ typedef enum {
     TIMEOUT_RELATIVE,
 } TimeoutType;
 
-struct _SysCallHandler {
-    HostId hostId;
-    pid_t processId;
-    pid_t threadId;
-
-    // For syscalls implemented in rust. Will eventually replace the C handler.
-    SyscallHandler* syscall_handler_rs;
-
-    // Since this structure is shared with Rust, we should always include the magic struct
-    // member so that the struct is always the same size regardless of compile-time options.
-    MAGIC_DECLARE_ALWAYS;
-};
-
 /* Amount of data to transfer between Shadow and the plugin for each
  * send/recv or read/write syscall. It would be more efficient to dynamically
  * compute how much we can read/write rather than using this static size.
