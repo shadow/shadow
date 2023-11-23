@@ -52,7 +52,7 @@ mod unistd;
 mod wait;
 
 type LegacySyscallFn =
-    unsafe extern "C-unwind" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
+    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SysCallArgs) -> SyscallReturn;
 
 // Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
@@ -523,8 +523,7 @@ impl SyscallHandler {
 
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
-        let rv: SyscallResult =
-            unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into();
+        let rv: SyscallResult = unsafe { syscall(ctx.handler, ctx.args as *const _) }.into();
 
         // we need to flush pointers here so that the syscall formatter can reliably borrow process
         // memory without an incompatible borrow

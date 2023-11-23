@@ -67,7 +67,7 @@ struct _SysCallHandler {
  * The functions defined with this macro should never be called outside
  * of syscall_handler.c. */
 #define SYSCALL_HANDLER(s)                                                                         \
-    SyscallReturn syscallhandler_##s(SysCallHandler* sys, const SysCallArgs* args);
+    SyscallReturn syscallhandler_##s(SyscallHandler* sys, const SysCallArgs* args);
 
 bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
 bool _syscallhandler_wasBlocked(const SysCallHandler* sys);

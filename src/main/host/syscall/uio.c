@@ -23,11 +23,11 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, UntypedForeignPtr iovPtr,
+static int _syscallhandler_validateVecParams(SyscallHandler* sys, int fd, UntypedForeignPtr iovPtr,
                                              unsigned long iovlen, off_t offset,
                                              LegacyFile** desc_out, struct iovec** iov_out) {
     /* Get the descriptor. */
-    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
     if (!desc) {
         return -EBADF;
     }
@@ -51,7 +51,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Untype
 
     /* Get the vector of pointers. */
     struct iovec* iov = malloc(iovlen * sizeof(*iov));
-    if (process_readPtr(_syscallhandler_getProcess(sys), iov, iovPtr, iovlen * sizeof(*iov)) != 0) {
+    if (process_readPtr(rustsyscallhandler_getProcess(sys), iov, iovPtr, iovlen * sizeof(*iov)) != 0) {
         warning("Got unreadable pointer [%p..+%zu]", (void*)iovPtr.val, iovlen * sizeof(*iov));
         free(iov);
         return -EFAULT;
@@ -78,7 +78,7 @@ static int _syscallhandler_validateVecParams(SysCallHandler* sys, int fd, Untype
     return 0;
 }
 
-static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
+static SyscallReturn _syscallhandler_readvHelper(SyscallHandler* sys, int fd,
                                                  UntypedForeignPtr iovPtr, unsigned long iovlen,
                                                  unsigned long pos_l, unsigned long pos_h,
                                                  int flags, bool doPreadv,
@@ -145,7 +145,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(_syscallhandler_getProcess(sys));
+                result = process_flushPtrs(rustsyscallhandler_getProcess(sys));
                 if (result != 0) {
                     break;
                 }
@@ -209,7 +209,7 @@ static SyscallReturn _syscallhandler_readvHelper(SysCallHandler* sys, int fd,
     return syscallreturn_makeDoneI64(result);
 }
 
-static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
+static SyscallReturn _syscallhandler_writevHelper(SyscallHandler* sys, int fd,
                                                   UntypedForeignPtr iovPtr, unsigned long iovlen,
                                                   unsigned long pos_l, unsigned long pos_h,
                                                   int flags, bool doPwritev,
@@ -276,7 +276,7 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
 
                 // if the above syscall handler created any pointers, we may
                 // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(_syscallhandler_getProcess(sys));
+                result = process_flushPtrs(rustsyscallhandler_getProcess(sys));
                 if (result != 0) {
                     break;
                 }
@@ -344,35 +344,35 @@ static SyscallReturn _syscallhandler_writevHelper(SysCallHandler* sys, int fd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_readv(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_readv(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SyscallReturn syscallhandler_preadv(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, 0, true, false);
 }
 
-SyscallReturn syscallhandler_preadv2(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv2(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, args->args[5].as_i64, true, true);
 }
 
-SyscallReturn syscallhandler_writev(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_writev(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SyscallReturn syscallhandler_pwritev(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, 0, true, false);
 }
 
-SyscallReturn syscallhandler_pwritev2(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev2(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, args->args[5].as_i64, true, true);

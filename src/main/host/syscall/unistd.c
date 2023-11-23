@@ -23,13 +23,13 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,
+SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedForeignPtr bufPtr,
                                          size_t bufSize, off_t offset, bool doPread) {
     trace(
         "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }
@@ -64,13 +64,13 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
             if (!doPread) {
                 utility_debugAssert(offset == 0);
                 result = regularfile_read(
-                    (RegularFile*)desc, _syscallhandler_getHost(sys),
-                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    (RegularFile*)desc, rustsyscallhandler_getHost(sys),
+                    process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
                     sizeNeeded);
             } else {
                 result = regularfile_pread(
-                    (RegularFile*)desc, _syscallhandler_getHost(sys),
-                    process_getWriteablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    (RegularFile*)desc, rustsyscallhandler_getHost(sys),
+                    process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
                     sizeNeeded, offset);
             }
             break;
@@ -104,13 +104,13 @@ SyscallReturn _syscallhandler_readHelper(SysCallHandler* sys, int fd, UntypedFor
     return syscallreturn_makeDoneI64(result);
 }
 
-SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedForeignPtr bufPtr,
+SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedForeignPtr bufPtr,
                                           size_t bufSize, off_t offset, bool doPwrite) {
     trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
           offset);
 
     /* Get the descriptor. */
-    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
     if (!desc) {
         return syscallreturn_makeDoneErrno(EBADF);
     }
@@ -146,12 +146,12 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
                 utility_debugAssert(offset == 0);
                 result = regularfile_write(
                     (RegularFile*)desc,
-                    process_getReadablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    process_getReadablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
                     sizeNeeded);
             } else {
                 result = regularfile_pwrite(
                     (RegularFile*)desc,
-                    process_getReadablePtr(_syscallhandler_getProcess(sys), bufPtr, sizeNeeded),
+                    process_getReadablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
                     sizeNeeded, offset);
             }
             break;
@@ -189,22 +189,22 @@ SyscallReturn _syscallhandler_writeHelper(SysCallHandler* sys, int fd, UntypedFo
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_read(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_read(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SyscallReturn syscallhandler_pread64(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pread64(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                       args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SyscallReturn syscallhandler_write(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_write(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writeHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SyscallReturn syscallhandler_pwrite64(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwrite64(SyscallHandler* sys, const SysCallArgs* args) {
     return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }
