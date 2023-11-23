@@ -36,22 +36,6 @@ struct _SysCallHandler {
     // For syscalls implemented in rust. Will eventually replace the C handler.
     SyscallHandler* syscall_handler_rs;
 
-    /* We use this epoll to service syscalls that need to block on the status
-     * of multiple descriptors, like poll. */
-    Epoll* epoll;
-
-    /* If we are currently blocking a specific syscall, i.e., waiting for
-     * a socket to be readable/writable or waiting for a timeout, the
-     * syscall number of that function is stored here. The value is set
-     * to negative to indicate that no syscalls are currently blocked. */
-    long blockedSyscallNR;
-
-    // In some cases the syscallhandler comples, but we block the caller anyway
-    // to move time forward. This stores the result of the completed syscall, to
-    // be returned when the caller resumes.
-    bool havePendingResult;
-    SyscallReturn pendingResult;
-
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;
@@ -69,11 +53,6 @@ struct _SysCallHandler {
 #define SYSCALL_HANDLER(s)                                                                         \
     SyscallReturn syscallhandler_##s(SyscallHandler* sys, const SysCallArgs* args);
 
-bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys);
-bool _syscallhandler_wasBlocked(const SysCallHandler* sys);
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
-const Host* _syscallhandler_getHost(const SysCallHandler* sys);
-const Process* _syscallhandler_getProcess(const SysCallHandler* sys);
-const Thread* _syscallhandler_getThread(const SysCallHandler* sys);
 
 #endif /* SRC_MAIN_HOST_SYSCALL_PROTECTED_H_ */

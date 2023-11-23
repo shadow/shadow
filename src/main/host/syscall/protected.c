@@ -17,26 +17,6 @@
 #include "main/host/descriptor/tcp.h"
 #include "main/host/syscall_condition.h"
 
-static CEmulatedTime _syscallhandler_getTimeout(const SysCallHandler* sys) {
-    MAGIC_ASSERT(sys);
-
-    SysCallCondition* cond = thread_getSysCallCondition(_syscallhandler_getThread(sys));
-    if (!cond) {
-        return EMUTIME_INVALID;
-    }
-
-    return syscallcondition_getTimeout(cond);
-}
-
-bool _syscallhandler_didListenTimeoutExpire(const SysCallHandler* sys) {
-    MAGIC_ASSERT(sys);
-
-    CEmulatedTime timeout = _syscallhandler_getTimeout(sys);
-    return timeout != EMUTIME_INVALID && worker_getCurrentEmulatedTime() >= timeout;
-}
-
-bool _syscallhandler_wasBlocked(const SysCallHandler* sys) { return sys->blockedSyscallNR >= 0; }
-
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType) {
     if (descriptor) {
         Status status = legacyfile_getStatus(descriptor);
