@@ -32,18 +32,7 @@ struct _CompatSocket {
 CompatSocket compatsocket_fromLegacySocket(LegacySocket* socket);
 CompatSocket compatsocket_fromInetSocket(const InetSocket* socket);
 
-/* reference counting */
-CompatSocket compatsocket_refAs(const CompatSocket* socket);
-void compatsocket_unref(const CompatSocket* socket);
-
 /* handle to the socket object */
 uintptr_t compatsocket_getCanonicalHandle(const CompatSocket* socket);
-
-/* compatability wrappers */
-int compatsocket_peekNextPacketPriority(const CompatSocket* socket, uint64_t* priorityOut);
-bool compatsocket_hasDataToSend(const CompatSocket* socket);
-void compatsocket_pushInPacket(const CompatSocket* socket, const Host* host, Packet* packet,
-                               CEmulatedTime recvTime);
-Packet* compatsocket_pullOutPacket(const CompatSocket* socket, const Host* host);
 
 #endif /* SRC_MAIN_HOST_DESCRIPTOR_COMPAT_SOCKET_H_ */
