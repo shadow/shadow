@@ -63,6 +63,7 @@ mod export {
     use std::net::Ipv4Addr;
 
     use crate::core::worker;
+    use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::host::Host;
 
     /// Notify listeners using the global callback queue. If the queue hasn't been set using
@@ -92,11 +93,11 @@ mod export {
 
     /// Tell the host that the socket wants to send packets using the global callback queue. If the
     /// queue hasn't been set using [`with_global_cb_queue`], the host will be notified here before
-    /// returning.
+    /// returning. Takes ownership of `inetSocket` (will free/drop).
     #[no_mangle]
     pub unsafe extern "C-unwind" fn socket_wants_to_send_with_global_cb_queue(
         host: *const Host,
-        socket: c::CompatSocket,
+        socket: *mut InetSocket,
         ip: libc::in_addr_t,
     ) {
         let host = unsafe { host.as_ref() }.unwrap();
@@ -113,8 +114,8 @@ mod export {
                 cb_queue.add(move |_cb_queue| {
                     worker::Worker::with_active_host(|host| {
                         assert_eq!(host.id(), host_id);
+                        let socket = unsafe { Box::from_raw(socket) };
                         host.notify_socket_has_packets(ip, &socket);
-                        unsafe { c::compatsocket_unref(&socket) };
                     })
                     .unwrap();
                 });

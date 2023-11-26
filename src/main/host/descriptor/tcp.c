@@ -1347,13 +1347,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* socket will queue it ASAP */
 
         utility_alwaysAssert(tcp->rustSocket != NULL);
-        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+        InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
         utility_alwaysAssert(inetSocket != NULL);
 
-        CompatSocket compatSocket = compatsocket_fromInetSocket(inetSocket);
-
-        gboolean success =
-            legacysocket_addToOutputBuffer(&(tcp->super), compatSocket, host, packet);
+        // takes ownership of `inetSocket`, so we don't need to free it
+        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), inetSocket, host, packet);
 
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);

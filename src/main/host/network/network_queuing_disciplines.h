@@ -9,7 +9,7 @@
 #include <glib.h>
 #include <stdbool.h>
 
-#include "main/host/descriptor/compat_socket.h"
+#include "main/bindings/c/bindings.h"
 #include "main/utility/priority_queue.h"
 
 /* A round-robin socket queue. */
@@ -25,19 +25,19 @@ struct _FifoSocketQueue {
 };
 
 void rrsocketqueue_init(RrSocketQueue* self);
-void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const CompatSocket*));
+void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const InetSocket*));
 
 bool rrsocketqueue_isEmpty(RrSocketQueue* self);
-bool rrsocketqueue_pop(RrSocketQueue* self, CompatSocket* socket);
-void rrsocketqueue_push(RrSocketQueue* self, const CompatSocket* socket);
-bool rrsocketqueue_find(RrSocketQueue* self, const CompatSocket* socket);
+bool rrsocketqueue_pop(RrSocketQueue* self, InetSocket** socket);
+void rrsocketqueue_push(RrSocketQueue* self, const InetSocket* socket);
+bool rrsocketqueue_find(RrSocketQueue* self, const InetSocket* socket);
 
 void fifosocketqueue_init(FifoSocketQueue* self);
-void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const CompatSocket*));
+void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const InetSocket*));
 
 bool fifosocketqueue_isEmpty(FifoSocketQueue* self);
-bool fifosocketqueue_pop(FifoSocketQueue* self, CompatSocket* socket);
-void fifosocketqueue_push(FifoSocketQueue* self, const CompatSocket* socket);
-bool fifosocketqueue_find(FifoSocketQueue* self, const CompatSocket* socket);
+bool fifosocketqueue_pop(FifoSocketQueue* self, InetSocket** socket);
+void fifosocketqueue_push(FifoSocketQueue* self, const InetSocket* socket);
+bool fifosocketqueue_find(FifoSocketQueue* self, const InetSocket* socket);
 
 #endif /* SRC_MAIN_HOST_NETWORK_QUEUING_DISCIPLINES_H_ */

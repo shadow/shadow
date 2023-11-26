@@ -447,9 +447,8 @@ impl UdpSocket {
             let interface_ip = *socket_ref.bound_addr.unwrap().ip();
             cb_queue.add(move |_cb_queue| {
                 Worker::with_active_host(|host| {
-                    let inet_socket = InetSocket::Udp(socket);
-                    let compat_socket = unsafe { c::compatsocket_fromInetSocket(&inet_socket) };
-                    host.notify_socket_has_packets(interface_ip, &compat_socket);
+                    let socket = InetSocket::Udp(socket);
+                    host.notify_socket_has_packets(interface_ip, &socket);
                 })
                 .unwrap();
             });

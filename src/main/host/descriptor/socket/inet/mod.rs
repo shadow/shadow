@@ -506,8 +506,6 @@ fn associate_socket(
         }
     }
 
-    let socket = unsafe { c::compatsocket_fromInetSocket(&socket) };
-
     // associate the interfaces corresponding to addr with socket
     let handle = unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
 
@@ -637,7 +635,8 @@ mod export {
     }
 
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
-    /// references and has been dropped.
+    /// references and has been dropped. Returns an owned `InetSocket` that must be dropped as a
+    /// `Box` later (for example using `inetsocket_drop`).
     #[no_mangle]
     pub extern "C-unwind" fn inetsocketweak_upgrade(
         socket: *const InetSocketWeak,

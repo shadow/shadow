@@ -14,6 +14,7 @@
 #include "lib/logger/logger.h"
 #include "main/core/support/definitions.h"
 #include "main/core/worker.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker.h"
 #include "main/routing/address.h"

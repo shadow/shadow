@@ -9,6 +9,7 @@ use shadow_shim_helper_rs::HostId;
 use crate::core::support::configuration::QDiscMode;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
 use crate::utility::{self, HostTreePointer};
@@ -78,7 +79,7 @@ impl NetworkInterface {
 
     pub fn associate(
         &self,
-        socket_ptr: *const c::CompatSocket,
+        socket_ptr: &InetSocket,
         protocol_type: c::ProtocolType,
         port: u16,
         peer_addr: SocketAddrV4,
@@ -125,8 +126,8 @@ impl NetworkInterface {
         }) != 0
     }
 
-    pub fn add_data_source(&self, socket_ptr: *const c::CompatSocket) {
-        unsafe { c::networkinterface_wantsSend(self.c_ptr.ptr(), socket_ptr) };
+    pub fn add_data_source(&self, socket: &InetSocket) {
+        unsafe { c::networkinterface_wantsSend(self.c_ptr.ptr(), socket) };
     }
 
     /// Disassociate all bound sockets and remove sockets from the sending queue. This should be

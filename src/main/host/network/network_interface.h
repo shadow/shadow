@@ -12,8 +12,8 @@
 
 typedef struct _NetworkInterface NetworkInterface;
 
+#include "main/bindings/c/bindings.h"
 #include "main/core/support/definitions.h"
-#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
 #include "main/routing/address.h"
@@ -27,13 +27,13 @@ void networkinterface_free(NetworkInterface* interface);
 gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType type,
                                        in_port_t port, in_addr_t peerAddr, in_port_t peerPort);
 
-void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
+void networkinterface_associate(NetworkInterface* interface, const InetSocket* socket,
                                 ProtocolType type, in_port_t port, in_addr_t peerIP,
                                 in_port_t peerPort);
 void networkinterface_disassociate(NetworkInterface* interface, ProtocolType type, in_port_t port,
                                    in_addr_t peerIP, in_port_t peerPort);
 
-void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket);
+void networkinterface_wantsSend(NetworkInterface* interface, const InetSocket* socket);
 
 Packet* networkinterface_pop(NetworkInterface* interface);
 void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulatedTime recvTime);

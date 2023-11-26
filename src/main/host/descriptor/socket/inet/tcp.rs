@@ -133,9 +133,8 @@ impl TcpSocket {
 
             cb_queue.add(move |_cb_queue| {
                 Worker::with_active_host(|host| {
-                    let inet_socket = InetSocket::Tcp(socket);
-                    let compat_socket = unsafe { c::compatsocket_fromInetSocket(&inet_socket) };
-                    host.notify_socket_has_packets(interface_ip, &compat_socket);
+                    let socket = InetSocket::Tcp(socket);
+                    host.notify_socket_has_packets(interface_ip, &socket);
                 })
                 .unwrap();
             });
