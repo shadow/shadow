@@ -12,7 +12,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/routing/packet.h"
-#include "main/utility/tagged_ptr.h"
 
 static void compatsockettypes_assertValid(CompatSocketTypes type) {
     switch (type) {
@@ -76,48 +75,6 @@ uintptr_t compatsocket_getCanonicalHandle(const CompatSocket* socket) {
     }
 
     utility_panic("Invalid CompatSocket type");
-}
-
-uintptr_t compatsocket_toTagged(const CompatSocket* socket) {
-    CompatSocketTypes type = socket->type;
-    CompatSocketObject object = socket->object;
-
-    const void* object_ptr;
-
-    switch (socket->type) {
-        case CST_LEGACY_SOCKET: object_ptr = object.as_legacy_socket; break;
-        case CST_INET_SOCKET: object_ptr = object.as_inet_socket; break;
-        case CST_NONE: utility_panic("Unexpected CompatSocket type");
-    }
-
-    compatsockettypes_assertValid(socket->type);
-
-    return tagPtr(object_ptr, type);
-}
-
-CompatSocket compatsocket_fromTagged(uintptr_t ptr) {
-    CompatSocketTypes type;
-    CompatSocketObject object;
-
-    uintptr_t tag = 0;
-    void* object_ptr = untagPtr(ptr, &tag);
-
-    switch (tag) {
-        case CST_LEGACY_SOCKET: object.as_legacy_socket = object_ptr; break;
-        case CST_INET_SOCKET: object.as_inet_socket = object_ptr; break;
-        case CST_NONE: utility_panic("Unexpected socket pointer tag");
-    }
-
-    compatsockettypes_assertValid(tag);
-
-    type = tag;
-
-    CompatSocket socket = {
-        .type = type,
-        .object = object,
-    };
-
-    return socket;
 }
 
 int compatsocket_peekNextPacketPriority(const CompatSocket* socket, uint64_t* priorityOut) {

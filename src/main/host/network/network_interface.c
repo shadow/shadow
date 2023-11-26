@@ -23,7 +23,6 @@
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
-#include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
 
 struct _NetworkInterface {
