@@ -24,12 +24,12 @@ struct _PriorityQueue {
     GDestroyNotify freeFunc;
 };
 
-PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
-        gpointer compareData, GDestroyNotify freeFunc) {
+PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc, gpointer compareData,
+                                 GDestroyNotify freeFunc, GHashFunc hashFunc, GEqualFunc eqFunc) {
     utility_debugAssert(compareFunc);
     PriorityQueue *q = g_slice_new(PriorityQueue);
     q->heap = g_new(gpointer, INITIAL_SIZE);
-    q->map = g_hash_table_new(NULL, NULL);
+    q->map = g_hash_table_new(hashFunc, eqFunc);
     q->size = 0;
     q->heapSize = INITIAL_SIZE;
     q->compareFunc = compareFunc;
@@ -150,39 +150,6 @@ gpointer priorityqueue_peek(PriorityQueue *q) {
 gpointer priorityqueue_find(PriorityQueue *q, gpointer data) {
     utility_debugAssert(q);
     gpointer *entry = g_hash_table_lookup(q->map, data);
-    return (entry == NULL) ? NULL : *entry;
-}
-
-// helper struct to pass additional data from `priorityqueue_find_custom` to
-// `_priorityqueue_find_helper`
-typedef struct FindData {
-    gpointer userData;
-    GCompareFunc compareFunc;
-} FindData;
-
-// runs the compare function against the hash table's key and the user-supplied data
-static gboolean _priorityqueue_find_helper(gpointer key, gpointer value, gpointer user_data) {
-    FindData* findData = (FindData*)user_data;
-    return findData->compareFunc(key, findData->userData) == 0;
-}
-
-gpointer priorityqueue_find_custom(PriorityQueue* q, gpointer data, GCompareFunc compareFunc) {
-    utility_debugAssert(q);
-
-    // try looking it up by key first
-    gpointer lookup = priorityqueue_find(q, data);
-    // `data` exists in the queue, so no need to run `compareFunc`
-    if (lookup != NULL) {
-        return lookup;
-    }
-
-    // search through the hash table's keys, applying `compareFunc` to each key and the
-    // user-supplied data, and looking for a match
-    FindData findData = {
-        .userData = data,
-        .compareFunc = compareFunc,
-    };
-    gpointer* entry = g_hash_table_find(q->map, _priorityqueue_find_helper, &findData);
     return (entry == NULL) ? NULL : *entry;
 }
 

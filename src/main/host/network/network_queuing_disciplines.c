@@ -93,10 +93,14 @@ static gint _compareSocket(const InetSocket* sa, const InetSocket* sb) {
     return pa > pb ? +1 : -1;
 }
 
+// casts the return value from a bool to an int
+static int _inetsocket_eqVoid(gconstpointer a, gconstpointer b) { return inetsocket_eqVoid(a, b); }
+
 void fifosocketqueue_init(FifoSocketQueue* self) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue == NULL);
-    self->queue = priorityqueue_new((GCompareDataFunc)_compareSocket, NULL, NULL);
+    self->queue = priorityqueue_new(
+        (GCompareDataFunc)_compareSocket, NULL, NULL, inetsocket_hashVoid, _inetsocket_eqVoid);
 }
 
 void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const InetSocket*)) {
@@ -152,5 +156,5 @@ void fifosocketqueue_push(FifoSocketQueue* self, const InetSocket* socket) {
 bool fifosocketqueue_find(FifoSocketQueue* self, const InetSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    return priorityqueue_find_custom(self->queue, (void*)socket, _compareInetSocket);
+    return priorityqueue_find(self->queue, (void*)socket);
 }

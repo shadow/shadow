@@ -221,6 +221,27 @@ impl PartialEq for InetSocket {
 
 impl Eq for InetSocket {}
 
+impl std::hash::Hash for InetSocket {
+    /// Returns a hash for the socket based on its address, and not the socket's state. Two
+    /// different sockets with the same state will return different hashes, and the same socket will
+    /// return the same hash even after being mutated.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // To match the `Eq` behaviour of `InetSocket`, the hashes of two sockets *must* be equal if
+        // the types are the same and the Arc's pointers are equal, and the hashes *should not* be
+        // equal if the two types are not the same or the Arc's pointers are not equal. We do return
+        // the same hash if the two types are different but the pointers are equal, but this is
+        // allowed by the `Hash` trait (it's just a hash collision) and we should never run into
+        // this without a variant containing a zero-sized type, which wouldn't make sense in the
+        // context of Shadow's sockets anyways.
+        match self {
+            Self::LegacyTcp(x) => Arc::as_ptr(x).cast::<libc::c_void>(),
+            Self::Tcp(x) => Arc::as_ptr(x).cast(),
+            Self::Udp(x) => Arc::as_ptr(x).cast(),
+        }
+        .hash(state);
+    }
+}
+
 pub enum InetSocketRef<'a> {
     LegacyTcp(atomic_refcell::AtomicRef<'a, LegacyTcpSocket>),
     Tcp(atomic_refcell::AtomicRef<'a, TcpSocket>),
@@ -586,6 +607,26 @@ mod export {
         b: *const libc::c_void,
     ) -> bool {
         inetsocket_eq(a.cast(), b.cast())
+    }
+
+    /// Generate a hash identifying the `InetSocket`. The hash is generated from the socket's
+    /// address.
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_hash(socket: *const InetSocket) -> u64 {
+        use std::hash::{Hash, Hasher};
+
+        let socket = unsafe { socket.as_ref() }.unwrap();
+
+        let mut s = std::collections::hash_map::DefaultHasher::new();
+        socket.hash(&mut s);
+        s.finish()
+    }
+
+    /// Helper for GLib functions that take a `GHashFunc`. See [`inetsocket_hash`].
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_hashVoid(socket: *const libc::c_void) -> libc::c_uint {
+        // disregard some bytes of the hash
+        inetsocket_hash(socket.cast()) as libc::c_uint
     }
 
     /// Returns a handle uniquely identifying the socket. There can be many `InetSocket`s that point

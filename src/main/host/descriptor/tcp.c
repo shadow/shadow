@@ -2869,17 +2869,17 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
 
     tcp->autotune.isEnabled = TRUE;
 
-    tcp->throttledOutput =
-            priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
-    tcp->unorderedInput =
-            priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
+    tcp->throttledOutput = priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL,
+                                             (GDestroyNotify)packet_unref, NULL, NULL);
+    tcp->unorderedInput = priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL,
+                                            (GDestroyNotify)packet_unref, NULL, NULL);
     tcp->retransmit.queue =
             g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)packet_unref);
 
     retransmit_tally_init(&tcp->retransmit.tally);
 
     tcp->retransmit.scheduledTimerExpirations =
-        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free);
+        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free, NULL, NULL);
 
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
