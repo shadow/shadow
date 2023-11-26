@@ -14,17 +14,9 @@
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 
-// returns 0 if the sockets' canonical handles are equal, otherwise returns 1
+// returns 0 if `a` and `b` represent the same object, otherwise returns 1
 static gint _compareInetSocket(gconstpointer a, gconstpointer b) {
-    if (a == b) {
-        // they must have equal canonical handles
-        return 0;
-    }
-
-    const InetSocket* sa = a;
-    const InetSocket* sb = b;
-
-    return inetsocket_getCanonicalHandle(sa) != inetsocket_getCanonicalHandle(sb);
+    return inetsocket_eqVoid(a, b) == false;
 }
 
 void rrsocketqueue_init(RrSocketQueue* self) {

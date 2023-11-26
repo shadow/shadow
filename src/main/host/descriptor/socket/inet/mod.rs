@@ -79,6 +79,9 @@ impl InetSocket {
         }
     }
 
+    /// Useful for getting a unique integer handle for a socket, or when we need to compare a C
+    /// `LegacySocket` to a rust `InetSocket` (which may internally point to the same
+    /// `LegacySocket`).
     pub fn canonical_handle(&self) -> usize {
         match self {
             // usually we'd use `Arc::as_ptr()`, but we want to use the handle for the C `TCP`
@@ -191,6 +194,32 @@ impl std::fmt::Debug for InetSocket {
         }
     }
 }
+
+impl PartialEq for InetSocket {
+    /// Equal only if they are the same type and point to the same object. Two different socket
+    /// objects with the exact same state are not considered equal.
+    // Normally rust types implement `Eq` and `Hash` based on their internal state. So two different
+    // objects with the same state will be equal and produce the same hash. We don't want that
+    // behaviour in Shadow, where two different socket objects should always be considered unique.
+    // I'm not sure if we should implement `Eq` and `Hash` on `InetSocket` directly, or if we should
+    // create a wrapper type around `InetSocket` that implements our non-standard `Eq` and `Hash`
+    // behaviour. For now I'm just implementing them directly on `InetSocket`.
+    fn eq(&self, other: &Self) -> bool {
+        // compare addresses first to shortcut more-expensive check
+        if std::ptr::eq(self, other) {
+            return true;
+        }
+
+        match (self, other) {
+            (Self::LegacyTcp(self_), Self::LegacyTcp(other)) => Arc::ptr_eq(self_, other),
+            (Self::Tcp(self_), Self::Tcp(other)) => Arc::ptr_eq(self_, other),
+            (Self::Udp(self_), Self::Udp(other)) => Arc::ptr_eq(self_, other),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for InetSocket {}
 
 pub enum InetSocketRef<'a> {
     LegacyTcp(atomic_refcell::AtomicRef<'a, LegacyTcpSocket>),
@@ -538,6 +567,25 @@ mod export {
     pub extern "C-unwind" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
         let socket = unsafe { socket.as_ref() }.unwrap();
         Box::into_raw(Box::new(socket.clone()))
+    }
+
+    /// Compare two `InetSocket` objects by the addresses of the socket objects they point to. The
+    /// pointers must be valid (and non-null).
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_eq(a: *const InetSocket, b: *const InetSocket) -> bool {
+        let a = unsafe { a.as_ref() }.unwrap();
+        let b = unsafe { b.as_ref() }.unwrap();
+
+        a == b
+    }
+
+    /// Helper for GLib functions that take a `GCompareFunc`. See [`inetsocket_eq`].
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_eqVoid(
+        a: *const libc::c_void,
+        b: *const libc::c_void,
+    ) -> bool {
+        inetsocket_eq(a.cast(), b.cast())
     }
 
     /// Returns a handle uniquely identifying the socket. There can be many `InetSocket`s that point
