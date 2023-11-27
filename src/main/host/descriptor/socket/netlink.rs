@@ -130,7 +130,9 @@ impl NetlinkSocket {
     }
 
     pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
-        log::warn!("getpeername() syscall not yet supported for netlink sockets; Returning ENOSYS");
+        warn_once_then_debug!(
+            "getpeername() syscall not yet supported for netlink sockets; Returning ENOSYS"
+        );
         Err(Errno::ENOSYS.into())
     }
 
@@ -152,8 +154,9 @@ impl NetlinkSocket {
         _how: Shutdown,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("shutdown() syscall not yet supported for netlink sockets; Returning ENOSYS");
+        warn_once_then_debug!(
+            "shutdown() syscall not yet supported for netlink sockets; Returning ENOSYS"
+        );
         Err(Errno::ENOSYS.into())
     }
 
@@ -166,8 +169,9 @@ impl NetlinkSocket {
         _memory_manager: &mut MemoryManager,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<libc::socklen_t, SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("getsockopt() syscall not yet supported for netlink sockets; Returning ENOSYS");
+        warn_once_then_debug!(
+            "getsockopt() syscall not yet supported for netlink sockets; Returning ENOSYS"
+        );
         Err(Errno::ENOSYS.into())
     }
 
@@ -209,7 +213,9 @@ impl NetlinkSocket {
                 // the send buffer, process it, and return the response immediately to the caller
             }
             _ => {
-                log::warn!("setsockopt called with unsupported level {level} and opt {optname}");
+                warn_once_then_debug!(
+                    "setsockopt called with unsupported level {level} and opt {optname}"
+                );
                 return Err(Errno::ENOPROTOOPT.into());
             }
         }
@@ -290,8 +296,7 @@ impl NetlinkSocket {
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("We do not yet handle listen request on netlink sockets");
+        warn_once_then_debug!("We do not yet handle listen request on netlink sockets");
         Err(Errno::EINVAL.into())
     }
 
@@ -302,8 +307,7 @@ impl NetlinkSocket {
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("We do not yet handle connect request on netlink sockets");
+        warn_once_then_debug!("We do not yet handle connect request on netlink sockets");
         Err(Errno::EINVAL.into())
     }
 
@@ -313,8 +317,7 @@ impl NetlinkSocket {
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<OpenFile, SyscallError> {
-        // We follow the same approach as UnixSocket
-        log::warn!("We do not yet handle accept request on netlink sockets");
+        warn_once_then_debug!("We do not yet handle accept request on netlink sockets");
         Err(Errno::EINVAL.into())
     }
 
@@ -324,8 +327,7 @@ impl NetlinkSocket {
         _arg_ptr: ForeignPtr<()>,
         _memory_manager: &mut MemoryManager,
     ) -> SyscallResult {
-        // We follow the same approach as UnixSocket
-        log::warn!("We do not yet handle ioctl request {request:?} on unix sockets");
+        warn_once_then_debug!("We do not yet handle ioctl request {request:?} on netlink sockets");
         Err(Errno::EINVAL.into())
     }
 
@@ -621,7 +623,7 @@ impl InitialState {
             return Err(Errno::EINVAL.into());
         }
         let Some(flags) = MsgFlags::from_bits(args.flags) else {
-            log::warn!("Unrecognized recv flags: {:#b}", args.flags);
+            warn_once_then_debug!("Unrecognized recv flags: {:#b}", args.flags);
             return Err(Errno::EINVAL.into());
         };
 
@@ -648,7 +650,7 @@ impl InitialState {
                 RTM_GETLINK => self.handle_ifinfomsg(common, &packet_buffer[..]),
                 RTM_GETADDR => self.handle_ifaddrmsg(common, &packet_buffer[..]),
                 _ => {
-                    log::warn!(
+                    warn_once_then_debug!(
                         "Found unsupported nlmsg_type: {nlmsg_type} (only RTM_GETLINK
                         and RTM_GETADDR are supported)"
                     );
@@ -818,7 +820,9 @@ impl InitialState {
         if ifinfomsg.ifi_family != RtAddrFamily::Unspecified
             && ifinfomsg.ifi_family != RtAddrFamily::Inet
         {
-            log::warn!("Unsupported ifi_family (only AF_UNSPEC and AF_INET are supported)");
+            warn_once_then_debug!(
+                "Unsupported ifi_family (only AF_UNSPEC and AF_INET are supported)"
+            );
             return self.handle_error(bytes);
         }
 
@@ -827,7 +831,9 @@ impl InitialState {
             || ifinfomsg.ifi_index != 0
             || ifinfomsg.ifi_flags != IffFlags::empty()
         {
-            log::warn!("Unsupported ifi_type, ifi_index, or ifi_flags (they have to be 0)");
+            warn_once_then_debug!(
+                "Unsupported ifi_type, ifi_index, or ifi_flags (they have to be 0)"
+            );
             return self.handle_error(bytes);
         }
 
@@ -1009,11 +1015,11 @@ impl NetlinkSocketCommon {
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
         let Some(mut flags) = MsgFlags::from_bits(flags) else {
-            log::warn!("Unrecognized send flags: {:#b}", flags);
+            warn_once_then_debug!("Unrecognized send flags: {:#b}", flags);
             return Err(Errno::EINVAL.into());
         };
         if flags.intersects(!supported_flags) {
-            log::warn!("Unsupported send flags: {:?}", flags);
+            warn_once_then_debug!("Unsupported send flags: {:?}", flags);
             return Err(Errno::EINVAL.into());
         }
 
@@ -1089,7 +1095,7 @@ impl NetlinkSocketCommon {
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
         if flags.intersects(!supported_flags) {
-            log::warn!("Unsupported recv flags: {:?}", flags);
+            warn_once_then_debug!("Unsupported recv flags: {:?}", flags);
             return Err(Errno::EINVAL.into());
         }
 
