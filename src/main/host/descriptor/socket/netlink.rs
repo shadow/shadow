@@ -793,7 +793,9 @@ impl InitialState {
             // Use the same sequence number as the request
             let seq = Some(nlmsg.nl_seq);
             let pid = None;
-            // Linux also emits 4 bytes of zeroes after the header. See `strace ip addr`
+            // Linux also emits the errno of zero after the header. See `strace ip addr`
+            // For documentation reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
+            // For code reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
             let payload: NlPayload<Nlmsg, u32> = NlPayload::Payload(0);
             Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
         };
@@ -893,7 +895,9 @@ impl InitialState {
             // Use the same sequence number as the request
             let seq = Some(nlmsg.nl_seq);
             let pid = None;
-            // Linux also emits 4 bytes of zeroes after the header. See `strace ip addr`
+            // Linux also emits the errno of zero after the header. See `strace ip addr`
+            // For documentation reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
+            // For code reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
             let payload: NlPayload<Nlmsg, u32> = NlPayload::Payload(0);
             Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
         };
