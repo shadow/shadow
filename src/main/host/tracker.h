@@ -12,6 +12,7 @@
 
 #include "lib/logger/log_level.h"
 #include "main/core/support/definitions.h"
+#include "main/host/descriptor/compat_socket.h"
 #include "main/host/protocol.h"
 #include "main/host/tracker_types.h"
 #include "main/routing/packet.minimal.h"

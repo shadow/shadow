@@ -11,8 +11,8 @@
 
 typedef struct _PriorityQueue PriorityQueue;
 
-PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc,
-        gpointer compareData, GDestroyNotify freeFunc);
+PriorityQueue* priorityqueue_new(GCompareDataFunc compareFunc, gpointer compareData,
+                                 GDestroyNotify freeFunc, GHashFunc hashFunc, GEqualFunc eqFunc);
 void priorityqueue_clear(PriorityQueue *q);
 void priorityqueue_free(PriorityQueue *q);
 
@@ -21,7 +21,6 @@ gboolean priorityqueue_isEmpty(PriorityQueue *q);
 gboolean priorityqueue_push(PriorityQueue *q, gpointer data);
 gpointer priorityqueue_peek(PriorityQueue *q);
 gpointer priorityqueue_find(PriorityQueue *q, gpointer data);
-gpointer priorityqueue_find_custom(PriorityQueue* q, gpointer data, GCompareFunc compareFunc);
 gpointer priorityqueue_pop(PriorityQueue *q);
 
 #endif /* SHD_PRIORITY_QUEUE_H */

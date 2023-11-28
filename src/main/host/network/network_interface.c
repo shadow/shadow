@@ -23,7 +23,6 @@
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
-#include "main/utility/tagged_ptr.h"
 #include "main/utility/utility.h"
 
 struct _NetworkInterface {
@@ -33,7 +32,7 @@ struct _NetworkInterface {
     /* The address associated with this interface */
     Address* address;
 
-    /* (protocol,port)-to-socket bindings. Stores CompatSocket objects as tagged pointers. */
+    /* (protocol,port)-to-socket bindings. Stores pointers to InetSocket objects. */
     GHashTable* boundSockets;
 
     /* Transports wanting to send data out. */
@@ -45,17 +44,6 @@ struct _NetworkInterface {
 
     MAGIC_DECLARE;
 };
-
-static void _compatsocket_unrefTaggedVoid(void* taggedSocketPtr) {
-    utility_debugAssert(taggedSocketPtr != NULL);
-    if (taggedSocketPtr == NULL) {
-        return;
-    }
-
-    uintptr_t taggedSocket = (uintptr_t)taggedSocketPtr;
-    CompatSocket socket = compatsocket_fromTagged(taggedSocket);
-    compatsocket_unref(&socket);
-}
 
 /* The address and ports must be in network byte order. */
 static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
@@ -86,7 +74,7 @@ gboolean networkinterface_isAssociated(NetworkInterface* interface, ProtocolType
     return isFound;
 }
 
-void networkinterface_associate(NetworkInterface* interface, const CompatSocket* socket,
+void networkinterface_associate(NetworkInterface* interface, const InetSocket* socket,
                                 ProtocolType type, in_port_t port, in_addr_t peerIP,
                                 in_port_t peerPort) {
     MAGIC_ASSERT(interface);
@@ -97,11 +85,11 @@ void networkinterface_associate(NetworkInterface* interface, const CompatSocket*
     utility_debugAssert(!g_hash_table_contains(interface->boundSockets, key));
 
     /* need to store our own reference to the socket object */
-    CompatSocket newSocketRef = compatsocket_refAs(socket);
+    const InetSocket* newSocketRef = inetsocket_cloneRef(socket);
 
     /* insert to our storage, key is now owned by table */
-    bool key_did_not_exist = g_hash_table_replace(
-        interface->boundSockets, key, (void*)compatsocket_toTagged(&newSocketRef));
+    bool key_did_not_exist =
+        g_hash_table_replace(interface->boundSockets, key, (void*)newSocketRef);
 
     utility_debugAssert(key_did_not_exist);
 
@@ -145,16 +133,8 @@ static void _networkinterface_capturePacket(NetworkInterface* interface, Packet*
     }
 }
 
-static CompatSocket _boundsockets_lookup(GHashTable* table, gchar* key) {
-    void* ptr = g_hash_table_lookup(table, key);
-
-    if (ptr == NULL) {
-        CompatSocket compatSocket = {0};
-        compatSocket.type = CST_NONE;
-        return compatSocket;
-    }
-
-    return compatsocket_fromTagged((uintptr_t)ptr);
+static const InetSocket* _boundsockets_lookup(GHashTable* table, gchar* key) {
+    return g_hash_table_lookup(table, key);
 }
 
 void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulatedTime recvTime) {
@@ -178,10 +158,10 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulate
     gchar* key = _networkinterface_getAssociationKey(interface, ptype, bindPort, peerIP, peerPort);
     trace("looking for socket associated with specific key %s", key);
 
-    CompatSocket socket = _boundsockets_lookup(interface->boundSockets, key);
+    const InetSocket* socket = _boundsockets_lookup(interface->boundSockets, key);
     g_free(key);
 
-    if (socket.type == CST_NONE) {
+    if (socket == NULL) {
         /* then check for a socket with a wildcard association */
         key = _networkinterface_getAssociationKey(interface, ptype, bindPort, 0, 0);
         trace("looking for socket associated with general key %s", key);
@@ -198,65 +178,66 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulate
     /* pushing a packet to the socket may cause the socket to be disassociated and freed and cause
      * our socket pointer to become dangling while we're using it, so we need to increase its ref
      * count */
-    if (socket.type != CST_NONE) {
-        socket = compatsocket_refAs(&socket);
+    if (socket != NULL) {
+        socket = inetsocket_cloneRef(socket);
     }
 
     /* if the socket closed, just drop the packet */
-    if (socket.type != CST_NONE) {
-        compatsocket_pushInPacket(&socket, host, packet, recvTime);
+    if (socket != NULL) {
+        inetsocket_pushInPacket(socket, packet, recvTime);
     } else {
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
 
     /* count our bandwidth usage by interface, and by socket if possible */
     Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL && socket.type != CST_NONE) {
-        tracker_addInputBytes(tracker, packet, &socket);
+    if (tracker != NULL && socket != NULL) {
+        CompatSocket compatSocket = compatsocket_fromInetSocket(socket);
+        tracker_addInputBytes(tracker, packet, &compatSocket);
     }
 
-    if (socket.type != CST_NONE) {
-        compatsocket_unref(&socket);
+    if (socket != NULL) {
+        inetsocket_drop(socket);
     }
 }
 
 /* round robin queuing discipline ($ man tc)*/
-static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, const Host* host,
-                                                  CompatSocket* socketOut) {
+static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface,
+                                                  const InetSocket** socketOut) {
     Packet* packet = NULL;
 
     while (!packet && !rrsocketqueue_isEmpty(&interface->rrQueue)) {
         /* do round robin to get the next packet from the next socket */
-        CompatSocket socket = {0};
+        InetSocket* socket = NULL;
         bool found = rrsocketqueue_pop(&interface->rrQueue, &socket);
 
         if (!found) {
             continue;
         }
 
-        packet = compatsocket_pullOutPacket(&socket, host);
+        packet = inetsocket_pullOutPacket(socket);
 
         if (packet == NULL) {
             /* socket had no packet, unref it from the sendable queue */
-            compatsocket_unref(&socket);
+            inetsocket_drop(socket);
             continue;
         }
 
         /* we're returning the socket, so we must ref it */
-        *socketOut = compatsocket_refAs(&socket);
+        *socketOut = inetsocket_cloneRef(socket);
 
-        if (compatsocket_hasDataToSend(&socket)) {
+        if (inetsocket_hasDataToSend(socket)) {
             /* socket has more packets, and is still reffed from before */
-            if (!rrsocketqueue_find(&interface->rrQueue, &socket)) {
-                rrsocketqueue_push(&interface->rrQueue, &socket);
+            if (!rrsocketqueue_find(&interface->rrQueue, socket)) {
+                rrsocketqueue_push(&interface->rrQueue, socket);
             } else {
-                /* socket is already in the rr queue (probably added by `compatsocket_pullOutPacket`
+                /* socket is already in the rr queue (probably added by `inetsocket_pullOutPacket`
                  * above); unref it from the sendable queue */
-                compatsocket_unref(&socket);
+                inetsocket_drop(socket);
             }
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            compatsocket_unref(&socket);
+            inetsocket_drop(socket);
         }
 
         return packet;
@@ -267,43 +248,43 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
 /* first-in-first-out queuing discipline ($ man tc)*/
 static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interface,
-                                                       const Host* host, CompatSocket* socketOut) {
+                                                       const InetSocket** socketOut) {
     /* use packet priority field to select based on application ordering.
      * this is really a simplification of prioritizing on timestamps. */
     Packet* packet = NULL;
 
     while (!packet && !fifosocketqueue_isEmpty(&interface->fifoQueue)) {
         /* do fifo to get the next packet from the next socket */
-        CompatSocket socket = {0};
+        InetSocket* socket = NULL;
         bool found = fifosocketqueue_pop(&interface->fifoQueue, &socket);
 
         if (!found) {
             continue;
         }
 
-        packet = compatsocket_pullOutPacket(&socket, host);
+        packet = inetsocket_pullOutPacket(socket);
 
         if (packet == NULL) {
             /* socket had no packet, unref it from the sendable queue */
-            compatsocket_unref(&socket);
+            inetsocket_drop(socket);
             continue;
         }
 
         /* we're returning the socket, so we must ref it */
-        *socketOut = compatsocket_refAs(&socket);
+        *socketOut = inetsocket_cloneRef(socket);
 
-        if (compatsocket_hasDataToSend(&socket)) {
+        if (inetsocket_hasDataToSend(socket)) {
             /* socket has more packets, and is still reffed from before */
-            if (!fifosocketqueue_find(&interface->fifoQueue, &socket)) {
-                fifosocketqueue_push(&interface->fifoQueue, &socket);
+            if (!fifosocketqueue_find(&interface->fifoQueue, socket)) {
+                fifosocketqueue_push(&interface->fifoQueue, socket);
             } else {
-                /* socket is already in the fifo (probably added by `compatsocket_pullOutPacket`
+                /* socket is already in the fifo (probably added by `inetsocket_pullOutPacket`
                  * above); unref it from the sendable queue */
-                compatsocket_unref(&socket);
+                inetsocket_drop(socket);
             }
         } else {
             /* socket has no more packets, unref it from the sendable queue */
-            compatsocket_unref(&socket);
+            inetsocket_drop(socket);
         }
 
         return packet;
@@ -312,16 +293,16 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
     return NULL;
 }
 
-static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface, const Host* host,
-                                                     CompatSocket* socketOut) {
+static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface,
+                                                     const InetSocket** socketOut) {
     MAGIC_ASSERT(interface);
     switch (interface->qdisc) {
         case Q_DISC_MODE_ROUND_ROBIN: {
-            return _networkinterface_selectRoundRobin(interface, host, socketOut);
+            return _networkinterface_selectRoundRobin(interface, socketOut);
         }
         case Q_DISC_MODE_FIFO:
         default: {
-            return _networkinterface_selectFirstInFirstOut(interface, host, socketOut);
+            return _networkinterface_selectFirstInFirstOut(interface, socketOut);
         }
     }
 }
@@ -329,13 +310,11 @@ static Packet* _networkinterface_pop_next_packet_out(NetworkInterface* interface
 Packet* networkinterface_pop(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
-    const Host* src = worker_getCurrentHost();
-
     // We will have an owned reference, so need to deref later.
-    CompatSocket socket = {0};
+    const InetSocket* socket = NULL;
 
     // Now actually pop and send the packet.
-    Packet* packet = _networkinterface_pop_next_packet_out(interface, src, &socket);
+    Packet* packet = _networkinterface_pop_next_packet_out(interface, &socket);
 
     if (packet != NULL) {
         packet_addDeliveryStatus(packet, PDS_SND_INTERFACE_SENT);
@@ -345,14 +324,16 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
             _networkinterface_capturePacket(interface, packet);
         }
 
+        const Host* src = worker_getCurrentHost();
         Tracker* tracker = host_getTracker(src);
-        if (tracker != NULL && socket.type != CST_NONE) {
-            tracker_addOutputBytes(tracker, packet, &socket);
+        if (tracker != NULL && socket != NULL) {
+            CompatSocket compatSocket = compatsocket_fromInetSocket(socket);
+            tracker_addOutputBytes(tracker, packet, &compatSocket);
         }
     }
 
-    if (socket.type != CST_NONE) {
-        compatsocket_unref(&socket);
+    if (socket != NULL) {
+        inetsocket_drop(socket);
     }
 
     return packet;
@@ -360,10 +341,10 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
 
 // Add the socket to the list of sockets that have data ready for us to send
 // out to the network.
-void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket* socket) {
+void networkinterface_wantsSend(NetworkInterface* interface, const InetSocket* socket) {
     MAGIC_ASSERT(interface);
 
-    if (!compatsocket_hasDataToSend(socket)) {
+    if (!inetsocket_hasDataToSend(socket)) {
         warning("Socket wants send, but no packets available");
         return;
     }
@@ -372,16 +353,16 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
     switch (interface->qdisc) {
         case Q_DISC_MODE_ROUND_ROBIN: {
             if (!rrsocketqueue_find(&interface->rrQueue, socket)) {
-                CompatSocket newSocketRef = compatsocket_refAs(socket);
-                rrsocketqueue_push(&interface->rrQueue, &newSocketRef);
+                const InetSocket* newSocketRef = inetsocket_cloneRef(socket);
+                rrsocketqueue_push(&interface->rrQueue, newSocketRef);
             }
             break;
         }
         case Q_DISC_MODE_FIFO:
         default: {
             if (!fifosocketqueue_find(&interface->fifoQueue, socket)) {
-                CompatSocket newSocketRef = compatsocket_refAs(socket);
-                fifosocketqueue_push(&interface->fifoQueue, &newSocketRef);
+                const InetSocket* newSocketRef = inetsocket_cloneRef(socket);
+                fifosocketqueue_push(&interface->fifoQueue, newSocketRef);
             }
             break;
         }
@@ -391,8 +372,8 @@ void networkinterface_wantsSend(NetworkInterface* interface, const CompatSocket*
 void networkinterface_removeAllSockets(NetworkInterface* interface) {
     /* we want to unref all sockets, but also want to keep the network interface in a valid state */
 
-    rrsocketqueue_destroy(&interface->rrQueue, compatsocket_unref);
-    fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_unref);
+    rrsocketqueue_destroy(&interface->rrQueue, inetsocket_drop);
+    fifosocketqueue_destroy(&interface->fifoQueue, inetsocket_drop);
 
     rrsocketqueue_init(&interface->rrQueue);
     fifosocketqueue_init(&interface->fifoQueue);
@@ -410,7 +391,7 @@ NetworkInterface* networkinterface_new(Address* address, const char* name, const
 
     /* incoming packets get passed along to sockets */
     interface->boundSockets =
-        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _compatsocket_unrefTaggedVoid);
+        g_hash_table_new_full(g_str_hash, g_str_equal, g_free, inetsocket_dropVoid);
 
     /* sockets tell us when they want to start sending */
     rrsocketqueue_init(&interface->rrQueue);
@@ -446,8 +427,8 @@ void networkinterface_free(NetworkInterface* interface) {
     MAGIC_ASSERT(interface);
 
     /* unref all sockets wanting to send */
-    rrsocketqueue_destroy(&interface->rrQueue, compatsocket_unref);
-    fifosocketqueue_destroy(&interface->fifoQueue, compatsocket_unref);
+    rrsocketqueue_destroy(&interface->rrQueue, inetsocket_drop);
+    fifosocketqueue_destroy(&interface->fifoQueue, inetsocket_drop);
 
     g_hash_table_destroy(interface->boundSockets);
 

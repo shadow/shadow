@@ -8,22 +8,15 @@
 #include <glib.h>
 #include <stdbool.h>
 
+#include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 
-// returns 0 if the sockets' canonical handles are equal, otherwise returns 1
-static gint _compareTaggedSocket(gconstpointer a, gconstpointer b) {
-    if (a == b) {
-        // they must have equal canonical handles
-        return 0;
-    }
-
-    CompatSocket sa = compatsocket_fromTagged((uintptr_t)a);
-    CompatSocket sb = compatsocket_fromTagged((uintptr_t)b);
-
-    return compatsocket_getCanonicalHandle(&sa) != compatsocket_getCanonicalHandle(&sb);
+// returns 0 if `a` and `b` represent the same object, otherwise returns 1
+static gint _compareInetSocket(gconstpointer a, gconstpointer b) {
+    return inetsocket_eqVoid(a, b) == false;
 }
 
 void rrsocketqueue_init(RrSocketQueue* self) {
@@ -32,13 +25,13 @@ void rrsocketqueue_init(RrSocketQueue* self) {
     self->queue = g_queue_new();
 }
 
-void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const CompatSocket*)) {
+void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const InetSocket*)) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
 
     if (fn_processItem != NULL) {
         while (!rrsocketqueue_isEmpty(self)) {
-            CompatSocket socket = {0};
+            InetSocket* socket = NULL;
             bool found = rrsocketqueue_pop(self, &socket);
 
             utility_debugAssert(found);
@@ -46,7 +39,7 @@ void rrsocketqueue_destroy(RrSocketQueue* self, void (*fn_processItem)(const Com
                 continue;
             }
 
-            fn_processItem(&socket);
+            fn_processItem(socket);
         }
     }
 
@@ -60,67 +53,63 @@ bool rrsocketqueue_isEmpty(RrSocketQueue* self) {
     return g_queue_is_empty(self->queue);
 }
 
-bool rrsocketqueue_pop(RrSocketQueue* self, CompatSocket* socket) {
+bool rrsocketqueue_pop(RrSocketQueue* self, InetSocket** socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
 
-    uintptr_t taggedSocket = (uintptr_t)g_queue_pop_head(self->queue);
-    if (taggedSocket == 0) {
+    *socket = g_queue_pop_head(self->queue);
+
+    if (*socket == NULL) {
         return false;
     }
 
-    *socket = compatsocket_fromTagged(taggedSocket);
     return true;
 }
 
-void rrsocketqueue_push(RrSocketQueue* self, const CompatSocket* socket) {
+void rrsocketqueue_push(RrSocketQueue* self, const InetSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    utility_debugAssert(socket->type != CST_NONE);
-    g_queue_push_tail(self->queue, (void*)compatsocket_toTagged(socket));
+    utility_debugAssert(socket != NULL);
+    g_queue_push_tail(self->queue, (void*)socket);
 }
 
-bool rrsocketqueue_find(RrSocketQueue* self, const CompatSocket* socket) {
+bool rrsocketqueue_find(RrSocketQueue* self, const InetSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    return g_queue_find_custom(
-        self->queue, (void*)compatsocket_toTagged(socket), _compareTaggedSocket);
+    return g_queue_find_custom(self->queue, (void*)socket, _compareInetSocket);
 }
 
-static gint _compareSocket(const CompatSocket* sa, const CompatSocket* sb) {
+static gint _compareSocket(const InetSocket* sa, const InetSocket* sb) {
     uint64_t pa = 0;
     uint64_t pb = 0;
 
-    if (compatsocket_peekNextPacketPriority(sa, &pa) != 0) {
+    if (inetsocket_peekNextPacketPriority(sa, &pa) != 0) {
         return -1;
     }
-    if (compatsocket_peekNextPacketPriority(sb, &pb) != 0) {
+    if (inetsocket_peekNextPacketPriority(sb, &pb) != 0) {
         return +1;
     }
 
     return pa > pb ? +1 : -1;
 }
 
-static gint _compareSocketTagged(uintptr_t sa_tagged, uintptr_t sb_tagged, gpointer userData) {
-    CompatSocket sa = compatsocket_fromTagged(sa_tagged);
-    CompatSocket sb = compatsocket_fromTagged(sb_tagged);
-
-    return _compareSocket(&sa, &sb);
-}
+// casts the return value from a bool to an int
+static int _inetsocket_eqVoid(gconstpointer a, gconstpointer b) { return inetsocket_eqVoid(a, b); }
 
 void fifosocketqueue_init(FifoSocketQueue* self) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue == NULL);
-    self->queue = priorityqueue_new((GCompareDataFunc)_compareSocketTagged, NULL, NULL);
+    self->queue = priorityqueue_new(
+        (GCompareDataFunc)_compareSocket, NULL, NULL, inetsocket_hashVoid, _inetsocket_eqVoid);
 }
 
-void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const CompatSocket*)) {
+void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const InetSocket*)) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
 
     if (fn_processItem != NULL) {
         while (!fifosocketqueue_isEmpty(self)) {
-            CompatSocket socket = {0};
+            InetSocket* socket = NULL;
             bool found = fifosocketqueue_pop(self, &socket);
 
             utility_debugAssert(found);
@@ -128,7 +117,7 @@ void fifosocketqueue_destroy(FifoSocketQueue* self, void (*fn_processItem)(const
                 continue;
             }
 
-            fn_processItem(&socket);
+            fn_processItem(socket);
         }
     }
 
@@ -142,32 +131,30 @@ bool fifosocketqueue_isEmpty(FifoSocketQueue* self) {
     return priorityqueue_isEmpty(self->queue);
 }
 
-bool fifosocketqueue_pop(FifoSocketQueue* self, CompatSocket* socket) {
+bool fifosocketqueue_pop(FifoSocketQueue* self, InetSocket** socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
 
-    uintptr_t taggedSocket = (uintptr_t)priorityqueue_pop(self->queue);
-    if (taggedSocket == 0) {
+    *socket = priorityqueue_pop(self->queue);
+    if (socket == NULL) {
         return false;
     }
 
-    *socket = compatsocket_fromTagged(taggedSocket);
     return true;
 }
 
-void fifosocketqueue_push(FifoSocketQueue* self, const CompatSocket* socket) {
+void fifosocketqueue_push(FifoSocketQueue* self, const InetSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    utility_debugAssert(socket->type != CST_NONE);
-    gboolean successful = priorityqueue_push(self->queue, (void*)compatsocket_toTagged(socket));
+    utility_debugAssert(socket != NULL);
+    gboolean successful = priorityqueue_push(self->queue, (void*)socket);
     // if this returned FALSE, it would mean that the socket was already in the queue and we would
     // need to drop the socket to avoid a memory leak
     utility_debugAssert(successful == TRUE);
 }
 
-bool fifosocketqueue_find(FifoSocketQueue* self, const CompatSocket* socket) {
+bool fifosocketqueue_find(FifoSocketQueue* self, const InetSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
-    return priorityqueue_find_custom(
-        self->queue, (void*)compatsocket_toTagged(socket), _compareTaggedSocket);
+    return priorityqueue_find(self->queue, (void*)socket);
 }

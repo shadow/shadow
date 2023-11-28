@@ -37,6 +37,7 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, PcapOptions};
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
@@ -979,17 +980,13 @@ impl Host {
     /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
     /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
     /// code called in any indirect way from here.
-    pub fn notify_socket_has_packets(
-        &self,
-        addr: Ipv4Addr,
-        socket_ptr: *const cshadow::CompatSocket,
-    ) {
+    pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
         if self.in_notify_socket_has_packets.replace(&self.root, true) {
             panic!("Recursively calling host.notify_socket_has_packets()");
         }
 
         if let Some(iface) = self.interface_borrow(addr) {
-            iface.add_data_source(socket_ptr);
+            iface.add_data_source(socket);
             match addr {
                 Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
                 _ => self.relay_inet_out.notify(self),
@@ -1440,10 +1437,11 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_socketWantsToSend(
         hostrc: *const Host,
-        socket: *const cshadow::CompatSocket,
+        socket: *const InetSocket,
         addr: in_addr_t,
     ) {
         let host = unsafe { hostrc.as_ref().unwrap() };
+        let socket = unsafe { socket.as_ref().unwrap() };
         let addr = u32::from_be(addr).into();
         host.notify_socket_has_packets(addr, socket);
     }

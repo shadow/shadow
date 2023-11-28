@@ -79,6 +79,9 @@ impl InetSocket {
         }
     }
 
+    /// Useful for getting a unique integer handle for a socket, or when we need to compare a C
+    /// `LegacySocket` to a rust `InetSocket` (which may internally point to the same
+    /// `LegacySocket`).
     pub fn canonical_handle(&self) -> usize {
         match self {
             // usually we'd use `Arc::as_ptr()`, but we want to use the handle for the C `TCP`
@@ -189,6 +192,53 @@ impl std::fmt::Debug for InetSocket {
         } else {
             write!(f, "(already borrowed)")
         }
+    }
+}
+
+impl PartialEq for InetSocket {
+    /// Equal only if they are the same type and point to the same object. Two different socket
+    /// objects with the exact same state are not considered equal.
+    // Normally rust types implement `Eq` and `Hash` based on their internal state. So two different
+    // objects with the same state will be equal and produce the same hash. We don't want that
+    // behaviour in Shadow, where two different socket objects should always be considered unique.
+    // I'm not sure if we should implement `Eq` and `Hash` on `InetSocket` directly, or if we should
+    // create a wrapper type around `InetSocket` that implements our non-standard `Eq` and `Hash`
+    // behaviour. For now I'm just implementing them directly on `InetSocket`.
+    fn eq(&self, other: &Self) -> bool {
+        // compare addresses first to shortcut more-expensive check
+        if std::ptr::eq(self, other) {
+            return true;
+        }
+
+        match (self, other) {
+            (Self::LegacyTcp(self_), Self::LegacyTcp(other)) => Arc::ptr_eq(self_, other),
+            (Self::Tcp(self_), Self::Tcp(other)) => Arc::ptr_eq(self_, other),
+            (Self::Udp(self_), Self::Udp(other)) => Arc::ptr_eq(self_, other),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for InetSocket {}
+
+impl std::hash::Hash for InetSocket {
+    /// Returns a hash for the socket based on its address, and not the socket's state. Two
+    /// different sockets with the same state will return different hashes, and the same socket will
+    /// return the same hash even after being mutated.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // To match the `Eq` behaviour of `InetSocket`, the hashes of two sockets *must* be equal if
+        // the types are the same and the Arc's pointers are equal, and the hashes *should not* be
+        // equal if the two types are not the same or the Arc's pointers are not equal. We do return
+        // the same hash if the two types are different but the pointers are equal, but this is
+        // allowed by the `Hash` trait (it's just a hash collision) and we should never run into
+        // this without a variant containing a zero-sized type, which wouldn't make sense in the
+        // context of Shadow's sockets anyways.
+        match self {
+            Self::LegacyTcp(x) => Arc::as_ptr(x).cast::<libc::c_void>(),
+            Self::Tcp(x) => Arc::as_ptr(x).cast(),
+            Self::Udp(x) => Arc::as_ptr(x).cast(),
+        }
+        .hash(state);
     }
 }
 
@@ -506,8 +556,6 @@ fn associate_socket(
         }
     }
 
-    let socket = unsafe { c::compatsocket_fromInetSocket(&socket) };
-
     // associate the interfaces corresponding to addr with socket
     let handle = unsafe { net_ns.associate_interface(&socket, protocol, local_addr, peer_addr) };
 
@@ -540,6 +588,45 @@ mod export {
     pub extern "C-unwind" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
         let socket = unsafe { socket.as_ref() }.unwrap();
         Box::into_raw(Box::new(socket.clone()))
+    }
+
+    /// Compare two `InetSocket` objects by the addresses of the socket objects they point to. The
+    /// pointers must be valid (and non-null).
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_eq(a: *const InetSocket, b: *const InetSocket) -> bool {
+        let a = unsafe { a.as_ref() }.unwrap();
+        let b = unsafe { b.as_ref() }.unwrap();
+
+        a == b
+    }
+
+    /// Helper for GLib functions that take a `GCompareFunc`. See [`inetsocket_eq`].
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_eqVoid(
+        a: *const libc::c_void,
+        b: *const libc::c_void,
+    ) -> bool {
+        inetsocket_eq(a.cast(), b.cast())
+    }
+
+    /// Generate a hash identifying the `InetSocket`. The hash is generated from the socket's
+    /// address.
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_hash(socket: *const InetSocket) -> u64 {
+        use std::hash::{Hash, Hasher};
+
+        let socket = unsafe { socket.as_ref() }.unwrap();
+
+        let mut s = std::collections::hash_map::DefaultHasher::new();
+        socket.hash(&mut s);
+        s.finish()
+    }
+
+    /// Helper for GLib functions that take a `GHashFunc`. See [`inetsocket_hash`].
+    #[no_mangle]
+    pub extern "C-unwind" fn inetsocket_hashVoid(socket: *const libc::c_void) -> libc::c_uint {
+        // disregard some bytes of the hash
+        inetsocket_hash(socket.cast()) as libc::c_uint
     }
 
     /// Returns a handle uniquely identifying the socket. There can be many `InetSocket`s that point
@@ -637,7 +724,8 @@ mod export {
     }
 
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
-    /// references and has been dropped.
+    /// references and has been dropped. Returns an owned `InetSocket` that must be dropped as a
+    /// `Box` later (for example using `inetsocket_drop`).
     #[no_mangle]
     pub extern "C-unwind" fn inetsocketweak_upgrade(
         socket: *const InetSocketWeak,

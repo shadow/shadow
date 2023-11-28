@@ -382,7 +382,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "routing/dns.c",
         "utility/priority_queue.c",
         "utility/rpath.c",
-        "utility/tagged_ptr.c",
         "utility/utility.c",
     ]);
     build.compile("shadow-c");

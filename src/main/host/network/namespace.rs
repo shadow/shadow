@@ -13,6 +13,7 @@ use crate::core::support::configuration::QDiscMode;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::interface::{NetworkInterface, PcapOptions};
 
 // The start of our random port range in host order, used if application doesn't
@@ -276,7 +277,7 @@ impl NetworkNamespace {
     /// Pointer args must be safely dereferenceable.
     pub unsafe fn associate_interface(
         &self,
-        socket: *const cshadow::CompatSocket,
+        socket: &InetSocket,
         protocol: cshadow::ProtocolType,
         bind_addr: SocketAddrV4,
         peer_addr: SocketAddrV4,

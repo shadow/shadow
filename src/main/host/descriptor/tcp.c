@@ -1347,13 +1347,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* socket will queue it ASAP */
 
         utility_alwaysAssert(tcp->rustSocket != NULL);
-        const InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
+        InetSocket* inetSocket = inetsocketweak_upgrade(tcp->rustSocket);
         utility_alwaysAssert(inetSocket != NULL);
 
-        CompatSocket compatSocket = compatsocket_fromInetSocket(inetSocket);
-
-        gboolean success =
-            legacysocket_addToOutputBuffer(&(tcp->super), compatSocket, host, packet);
+        // takes ownership of `inetSocket`, so we don't need to free it
+        gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), inetSocket, host, packet);
 
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
@@ -2871,17 +2869,17 @@ TCP* tcp_new(const Host* host, guint receiveBufferSize, guint sendBufferSize) {
 
     tcp->autotune.isEnabled = TRUE;
 
-    tcp->throttledOutput =
-            priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
-    tcp->unorderedInput =
-            priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL, (GDestroyNotify)packet_unref);
+    tcp->throttledOutput = priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL,
+                                             (GDestroyNotify)packet_unref, NULL, NULL);
+    tcp->unorderedInput = priorityqueue_new((GCompareDataFunc)packet_compareTCPSequence, NULL,
+                                            (GDestroyNotify)packet_unref, NULL, NULL);
     tcp->retransmit.queue =
             g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)packet_unref);
 
     retransmit_tally_init(&tcp->retransmit.tally);
 
     tcp->retransmit.scheduledTimerExpirations =
-        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free);
+        priorityqueue_new((GCompareDataFunc)_simulationTimeCompare, NULL, g_free, NULL, NULL);
 
     /* initialize tcp retransmission timeout */
     _tcp_setRetransmitTimeout(tcp, CONFIG_TCP_RTO_INIT);
