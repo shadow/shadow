@@ -325,7 +325,3 @@ unsafe impl Pod for libc::utmpx {}
 unsafe impl Pod for libc::utsname {}
 unsafe impl Pod for libc::winsize {}
 unsafe impl Pod for libc::clone_args {}
-
-// linux-raw-sys types
-unsafe impl Pod for linux_raw_sys::general::__user_cap_header_struct {}
-unsafe impl Pod for linux_raw_sys::general::__user_cap_data_struct {}

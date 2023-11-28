@@ -2,6 +2,7 @@
  * See `gen-kernel-bindings.sh`.
  */
 
+#include <linux/capability.h>
 #include <linux/errno.h>
 #include <linux/eventpoll.h>
 #include <linux/fcntl.h>
@@ -12,6 +13,7 @@
 #include <linux/prctl.h>
 #include <linux/resource.h>
 #include <linux/rseq.h>
+#include <linux/rtnetlink.h>
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/sockios.h>

@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
+use linux_api::rtnetlink::{RTM_GETADDR, RTM_GETLINK};
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
 use neli::consts::rtnl::{
     Arphrd, Ifa, IfaF, IfaFFlags, Iff, IffFlags, Ifla, RtAddrFamily, RtScope, Rtm,
@@ -36,10 +37,6 @@ use crate::utility::HostTreePointer;
 
 // this constant is copied from UNIX_SOCKET_DEFAULT_BUFFER_SIZE
 const NETLINK_SOCKET_DEFAULT_BUFFER_SIZE: u64 = 212_992;
-
-// See linux/rtnetlink.h
-const RTM_GETLINK: u16 = 18;
-const RTM_GETADDR: u16 = 22;
 
 pub struct NetlinkSocket {
     /// Data and functionality that is general for all states.
