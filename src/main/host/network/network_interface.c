@@ -247,7 +247,13 @@ static Packet* _networkinterface_selectRoundRobin(NetworkInterface* interface, c
 
         if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
-            rrsocketqueue_push(&interface->rrQueue, &socket);
+            if (!rrsocketqueue_find(&interface->rrQueue, &socket)) {
+                rrsocketqueue_push(&interface->rrQueue, &socket);
+            } else {
+                /* socket is already in the rr queue (probably added by `compatsocket_pullOutPacket`
+                 * above); unref it from the sendable queue */
+                compatsocket_unref(&socket);
+            }
         } else {
             /* socket has no more packets, unref it from the sendable queue */
             compatsocket_unref(&socket);
@@ -288,7 +294,13 @@ static Packet* _networkinterface_selectFirstInFirstOut(NetworkInterface* interfa
 
         if (compatsocket_hasDataToSend(&socket)) {
             /* socket has more packets, and is still reffed from before */
-            fifosocketqueue_push(&interface->fifoQueue, &socket);
+            if (!fifosocketqueue_find(&interface->fifoQueue, &socket)) {
+                fifosocketqueue_push(&interface->fifoQueue, &socket);
+            } else {
+                /* socket is already in the fifo (probably added by `compatsocket_pullOutPacket`
+                 * above); unref it from the sendable queue */
+                compatsocket_unref(&socket);
+            }
         } else {
             /* socket has no more packets, unref it from the sendable queue */
             compatsocket_unref(&socket);

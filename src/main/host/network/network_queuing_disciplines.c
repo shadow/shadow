@@ -159,7 +159,10 @@ void fifosocketqueue_push(FifoSocketQueue* self, const CompatSocket* socket) {
     utility_debugAssert(self != NULL);
     utility_debugAssert(self->queue != NULL);
     utility_debugAssert(socket->type != CST_NONE);
-    priorityqueue_push(self->queue, (void*)compatsocket_toTagged(socket));
+    gboolean successful = priorityqueue_push(self->queue, (void*)compatsocket_toTagged(socket));
+    // if this returned FALSE, it would mean that the socket was already in the queue and we would
+    // need to drop the socket to avoid a memory leak
+    utility_debugAssert(successful == TRUE);
 }
 
 bool fifosocketqueue_find(FifoSocketQueue* self, const CompatSocket* socket) {
