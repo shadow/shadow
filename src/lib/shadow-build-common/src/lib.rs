@@ -85,7 +85,7 @@ impl ShadowBuildCommon {
         let mut builder = bindgen::Builder::default()
             // Tell cargo to invalidate the built crate whenever any of the
             // included header files changed.
-            .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+            .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
             .clang_args(&[
                 &format!("-I{}", self.build_src_root.to_str().unwrap()),
                 &format!("-I{}", self.src_root.to_str().unwrap()),
