@@ -7,17 +7,20 @@ use std::time::Duration;
 
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
+use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::SysCallArgs;
 use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
-use crate::host::context::{ThreadContext, ThreadContextObjs};
+use crate::host::context::ThreadContext;
 use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
 use crate::host::process::ProcessId;
 use crate::host::syscall::formatter::log_syscall_simple;
+use crate::host::syscall::is_shadow_syscall;
 use crate::host::syscall_types::SyscallReturn;
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
@@ -52,7 +55,7 @@ mod unistd;
 mod wait;
 
 type LegacySyscallFn =
-    unsafe extern "C-unwind" fn(*mut c::SysCallHandler, *const SysCallArgs) -> SyscallReturn;
+    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SysCallArgs) -> SyscallReturn;
 
 // Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
@@ -66,6 +69,17 @@ pub struct SyscallHandler {
     num_syscalls: u64,
     /// A counter for individual syscalls.
     syscall_counter: Option<Counter>,
+    /// If we are currently blocking a specific syscall, i.e., waiting for a socket to be
+    /// readable/writable or waiting for a timeout, the syscall number of that function is stored
+    /// here. Will be `None` if a syscall is not currently blocked.
+    blocked_syscall: Option<SyscallNum>,
+    /// In some cases the syscall handler completes, but we block the caller anyway to move time
+    /// forward. This stores the result of the completed syscall, to be returned when the caller
+    /// resumes.
+    pending_result: Option<SyscallResult>,
+    /// We use this epoll to service syscalls that need to block on the status of multiple
+    /// descriptors, like poll.
+    epoll: SendPointer<c::Epoll>,
     /// The cumulative time consumed while handling the current syscall. This includes the time from
     /// previous calls that ended up blocking.
     #[cfg(feature = "perf_timers")]
@@ -88,6 +102,9 @@ impl SyscallHandler {
             thread_id,
             num_syscalls: 0,
             syscall_counter: count_syscalls.then(Counter::new),
+            blocked_syscall: None,
+            pending_result: None,
+            epoll: unsafe { SendPointer::new(c::epoll_new()) },
             #[cfg(feature = "perf_timers")]
             perf_duration_current: Duration::ZERO,
             #[cfg(feature = "perf_timers")]
@@ -95,7 +112,7 @@ impl SyscallHandler {
         }
     }
 
-    pub fn syscall(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
         // it wouldn't make sense if we were given a different host, process, and thread
         assert_eq!(ctx.host.id(), self.host_id);
         assert_eq!(ctx.process.id(), self.process_id);
@@ -104,7 +121,28 @@ impl SyscallHandler {
         let syscall = SyscallNum::new(args.number.try_into().unwrap());
         let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
 
-        let was_blocked = unsafe { c::_syscallhandler_wasBlocked(ctx.thread.csyscallhandler()) };
+        // make sure that we either don't have a blocked syscall, or if we blocked a syscall, then
+        // that same syscall should be executed again when it becomes unblocked
+        if let Some(blocked_syscall) = self.blocked_syscall {
+            if blocked_syscall != syscall {
+                panic!("We blocked syscall {blocked_syscall} but syscall {syscall} is unexpectedly being invoked");
+            }
+        }
+
+        // were we previously blocked on this same syscall?
+        let was_blocked = self.blocked_syscall.is_some();
+
+        if let Some(pending_result) = self.pending_result.take() {
+            // The syscall was already completed, but we delayed the response to yield the CPU.
+            // Return that response now.
+            log::trace!("Returning delayed result");
+            assert!(!matches!(pending_result, Err(SyscallError::Blocked(_))));
+
+            self.blocked_syscall = None;
+            self.pending_result = None;
+
+            return pending_result;
+        }
 
         log::trace!(
             "SYSCALL_HANDLER_PRE: {} ({}){} — ({}, tid={})",
@@ -131,7 +169,7 @@ impl SyscallHandler {
         #[cfg(feature = "perf_timers")]
         let timer = PerfTimer::new();
 
-        let rv = self.run_handler(ctx, args);
+        let mut rv = self.run_handler(ctx, args);
 
         #[cfg(feature = "perf_timers")]
         {
@@ -179,11 +217,119 @@ impl SyscallHandler {
             );
         }
 
+        // If the syscall would be blocked, but there's a signal pending, fail with
+        // EINTR instead. The shim-side code will run the signal handlers and then
+        // either return the EINTR or restart the syscall (See SA_RESTART in
+        // signal(7)).
+        //
+        // We do this check *after* (not before) trying the syscall so that we don't
+        // "interrupt" a syscall that wouldn't have blocked in the first place, or
+        // that can return a "partial" result when interrupted. e.g. consider the
+        // sequence:
+        //
+        // * Thread is blocked on reading a file descriptor.
+        // * The read becomes ready and the thread is scheduled to run.
+        // * The thread receives an unblocked signal.
+        // * The thread runs again.
+        //
+        // In this scenario, the `read` call should be allowed to complete successfully.
+        // from signal(7):  "If an I/O call on a slow device has already transferred
+        // some data by the time it is interrupted by a signal handler, then the
+        // call will return a success  status  (normally,  the  number of bytes
+        // transferred)."
+
+        if let Err(SyscallError::Blocked(ref blocked)) = rv {
+            // the syscall wants to block, but is there a signal pending?
+            let is_unblocked_signal_pending = ctx
+                .thread
+                .unblocked_signal_pending(ctx.process, &ctx.host.shim_shmem_lock_borrow().unwrap());
+
+            if is_unblocked_signal_pending {
+                // return EINTR instead
+                rv = Err(SyscallError::new_interrupted(blocked.restartable));
+            }
+        }
+
+        // we only use unsafe borrows from C code, and we should have only called into C syscall
+        // handlers through `Self::legacy_syscall` which should have already flushed the pointers,
+        // but we may as well do it again here just to be safe
+        if rv.is_err() {
+            // the syscall didn't complete successfully; don't write back pointers
+            log::trace!(
+                "Syscall didn't complete successfully; discarding plugin ptrs without writing back"
+            );
+            ctx.process.free_unsafe_borrows_noflush();
+        } else {
+            ctx.process
+                .free_unsafe_borrows_flush()
+                .expect("flushing syscall ptrs");
+        }
+
+        if ctx.host.shim_shmem().model_unblocked_syscall_latency
+            && ctx.process.is_running()
+            && !matches!(rv, Err(SyscallError::Blocked(_)))
+        {
+            let max_unapplied_cpu_latency = ctx.host.shim_shmem().max_unapplied_cpu_latency;
+
+            // increment unblocked syscall latency, but only for non-shadow-syscalls, since the
+            // latter are part of Shadow's internal plumbing; they shouldn't necessarily "consume"
+            // time
+            if !is_shadow_syscall(syscall) {
+                ctx.host
+                    .shim_shmem_lock_borrow_mut()
+                    .unwrap()
+                    .unapplied_cpu_latency += ctx.host.shim_shmem().unblocked_syscall_latency;
+            }
+
+            let unapplied_cpu_latency = ctx
+                .host
+                .shim_shmem_lock_borrow()
+                .unwrap()
+                .unapplied_cpu_latency;
+
+            log::trace!(
+                "Unapplied CPU latency amt={}ns max={}ns",
+                unapplied_cpu_latency.as_nanos(),
+                max_unapplied_cpu_latency.as_nanos()
+            );
+
+            if unapplied_cpu_latency > max_unapplied_cpu_latency {
+                let new_time = Worker::current_time().unwrap() + unapplied_cpu_latency;
+                let max_time = Worker::max_event_runahead_time(ctx.host);
+
+                if new_time <= max_time {
+                    log::trace!("Reached unblocked syscall limit; Incrementing time");
+
+                    ctx.host
+                        .shim_shmem_lock_borrow_mut()
+                        .unwrap()
+                        .unapplied_cpu_latency = SimulationTime::ZERO;
+                    Worker::set_current_time(new_time);
+                } else {
+                    log::trace!("Reached unblocked syscall limit; Yielding");
+
+                    // block instead, but save the result so that we can return it later instead of
+                    // re-executing the syscall
+                    assert!(self.pending_result.is_none());
+                    self.pending_result = Some(rv);
+                    rv = Err(SyscallError::new_blocked_until(new_time, false));
+                }
+            }
+        }
+
+        if matches!(rv, Err(SyscallError::Blocked(_))) {
+            // we are blocking: store the syscall number so we know to expect the same syscall again
+            // when it unblocks
+            self.blocked_syscall = Some(syscall);
+        } else {
+            self.blocked_syscall = None;
+        }
+
         rv
     }
 
     #[allow(non_upper_case_globals)]
-    fn run_handler(&mut self, ctx: &mut ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    fn run_handler(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
@@ -491,6 +637,15 @@ impl SyscallHandler {
         }
     }
 
+    /// Did the last syscall result in `SyscallError::Blocked`? If called from a syscall handler and
+    /// `is_blocked()` returns `true`, then the current syscall is the same syscall that previously
+    /// blocked. For example, if currently running the `connect` syscall handler and `is_blocked()`
+    /// is `true`, then the previous syscall handler that ran was also `connect` and it returned
+    /// `SyscallError::Blocked`.
+    pub fn is_blocked(&self) -> bool {
+        self.blocked_syscall.is_some()
+    }
+
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor(
@@ -523,8 +678,7 @@ impl SyscallHandler {
 
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
-        let rv: SyscallResult =
-            unsafe { syscall(ctx.objs.thread.csyscallhandler(), ctx.args as *const _) }.into();
+        let rv: SyscallResult = unsafe { syscall(ctx.handler, ctx.args as *const _) }.into();
 
         // we need to flush pointers here so that the syscall formatter can reliably borrow process
         // memory without an incompatible borrow
@@ -565,11 +719,13 @@ impl std::ops::Drop for SyscallHandler {
             // add up the counts at the worker level
             Worker::add_syscall_counts(syscall_counter);
         }
+
+        unsafe { c::legacyfile_unref(self.epoll.ptr() as *mut std::ffi::c_void) };
     }
 }
 
 pub struct SyscallContext<'a, 'b> {
-    pub objs: &'a mut ThreadContext<'b>,
+    pub objs: &'a ThreadContext<'b>,
     pub args: &'a SysCallArgs,
     pub handler: &'a mut SyscallHandler,
 }
@@ -700,46 +856,85 @@ where
 }
 
 mod export {
-    use shadow_shim_helper_rs::notnull::*;
+    use crate::host::host::Host;
+    use crate::host::process::Process;
+    use crate::host::thread::Thread;
 
     use super::*;
 
+    /// Returns a pointer to the current running host. The returned pointer is invalidated the next
+    /// time the worker switches hosts. Rust syscall handlers should get the host from the
+    /// [`SyscallContext`] instead.
     #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_new(
-        host_id: HostId,
-        process_id: libc::pid_t,
-        thread_id: libc::pid_t,
-        count_syscalls: bool,
-    ) -> *mut SyscallHandler {
-        Box::into_raw(Box::new(SyscallHandler::new(
-            host_id,
-            process_id.try_into().unwrap(),
-            thread_id.try_into().unwrap(),
-            count_syscalls,
-        )))
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_free(handler_ptr: *mut SyscallHandler) {
-        if handler_ptr.is_null() {
-            return;
-        }
-        drop(unsafe { Box::from_raw(handler_ptr) });
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn rustsyscallhandler_syscall(
-        sys: *mut SyscallHandler,
-        csys: *mut c::SysCallHandler,
-        args: *const SysCallArgs,
-    ) -> SyscallReturn {
-        assert!(!sys.is_null());
-        let sys = unsafe { &mut *sys };
-        Worker::with_active_host(|host| {
-            let mut objs =
-                unsafe { ThreadContextObjs::from_syscallhandler(host, notnull_mut_debug(csys)) };
-            objs.with_ctx(|ctx| sys.syscall(ctx, unsafe { args.as_ref().unwrap() }).into())
+    pub extern "C-unwind" fn rustsyscallhandler_getHost(sys: *const SyscallHandler) -> *const Host {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+        Worker::with_active_host(|h| {
+            assert_eq!(h.id(), sys.host_id);
+            h as *const _
         })
         .unwrap()
+    }
+
+    /// Returns a pointer to the current running process. The returned pointer is invalidated the
+    /// next time the worker switches processes. Rust syscall handlers should get the process from
+    /// the [`SyscallContext`] instead.
+    #[no_mangle]
+    pub extern "C-unwind" fn rustsyscallhandler_getProcess(
+        sys: *const SyscallHandler,
+    ) -> *const Process {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+        Worker::with_active_process(|p| {
+            assert_eq!(p.id(), sys.process_id);
+            p as *const _
+        })
+        .unwrap()
+    }
+
+    /// Returns a pointer to the current running thread. The returned pointer is invalidated the
+    /// next time the worker switches threads. Rust syscall handlers should get the thread from the
+    /// [`SyscallContext`] instead.
+    #[no_mangle]
+    pub extern "C-unwind" fn rustsyscallhandler_getThread(
+        sys: *const SyscallHandler,
+    ) -> *const Thread {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+        Worker::with_active_thread(|t| {
+            assert_eq!(t.id(), sys.thread_id);
+            t as *const _
+        })
+        .unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn rustsyscallhandler_wasBlocked(sys: *const SyscallHandler) -> bool {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+        sys.is_blocked()
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn rustsyscallhandler_didListenTimeoutExpire(
+        sys: *const SyscallHandler,
+    ) -> bool {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+
+        // will be `None` if the syscall condition doesn't exist or there's no timeout
+        let timeout = Worker::with_active_thread(|t| {
+            assert_eq!(t.id(), sys.thread_id);
+            t.syscall_condition().and_then(|x| x.timeout())
+        })
+        .unwrap();
+
+        // true if there is a timeout and it's before or at the current time
+        timeout
+            .map(|timeout| Worker::current_time().unwrap() >= timeout)
+            .unwrap_or(false)
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn rustsyscallhandler_getEpoll(
+        sys: *const SyscallHandler,
+    ) -> *mut c::Epoll {
+        let sys = unsafe { sys.as_ref() }.unwrap();
+        sys.epoll.ptr()
     }
 }

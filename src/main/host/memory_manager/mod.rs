@@ -723,7 +723,7 @@ where
 {
     /// Allocate memory in the current active process.
     /// Must be freed explicitly via `free`.
-    pub fn new(ctx: &mut ThreadContext, len: usize) -> Self {
+    pub fn new(ctx: &ThreadContext, len: usize) -> Self {
         let prot = libc::PROT_READ | libc::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
@@ -752,7 +752,7 @@ where
         self.ptr
     }
 
-    pub fn free(mut self, ctx: &mut ThreadContext) {
+    pub fn free(mut self, ctx: &ThreadContext) {
         ctx.process
             .memory_borrow_mut()
             .do_munmap(

@@ -40,7 +40,6 @@ use super::managed_thread::ManagedThread;
 use super::process::ProcessId;
 use super::thread::ThreadId;
 use super::{host::Host, process::Process, thread::Thread};
-use crate::cshadow;
 
 /// Represent the "current" Host.
 pub struct HostContext<'a> {
@@ -118,16 +117,6 @@ pub struct ThreadContextObjs<'a> {
 }
 
 impl<'a> ThreadContextObjs<'a> {
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    pub unsafe fn from_syscallhandler(host: &'a Host, sys: *mut cshadow::SysCallHandler) -> Self {
-        let sys = unsafe { sys.as_mut().unwrap() };
-        let pid = ProcessId::try_from(sys.processId).unwrap();
-        let tid = ThreadId::try_from(sys.threadId).unwrap();
-        Self { host, pid, tid }
-    }
-
     pub fn from_thread(host: &'a Host, thread: &'a Thread) -> Self {
         let pid = thread.process_id();
         let tid = thread.id();

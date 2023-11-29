@@ -1,3 +1,5 @@
+use linux_api::syscall::SyscallNum;
+
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 
@@ -5,6 +7,11 @@ pub mod formatter;
 pub mod handler;
 pub mod io;
 pub mod type_formatting;
+
+/// Is the syscall a Shadow-specific syscall?
+fn is_shadow_syscall(n: SyscallNum) -> bool {
+    n.val() >= c::ShadowSyscallNum_SYS_shadow_min && n.val() <= c::ShadowSyscallNum_SYS_shadow_max
+}
 
 // The helpers defined here are syscall-related but not handler-specific.
 

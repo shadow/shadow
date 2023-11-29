@@ -23,7 +23,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* file, int fd,
+static int _syscallhandler_ioctlFileHelper(SyscallHandler* sys, RegularFile* file, int fd,
                                            unsigned long request, UntypedForeignPtr argPtr) {
     int result = 0;
 
@@ -60,14 +60,14 @@ static int _syscallhandler_ioctlFileHelper(SysCallHandler* sys, RegularFile* fil
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_ioctl(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_ioctl(SyscallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long request = args->args[1].as_i64;
     UntypedForeignPtr argPtr = args->args[2].as_ptr; // type depends on request
 
     trace("ioctl called on fd %d for request %ld", fd, request);
 
-    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);

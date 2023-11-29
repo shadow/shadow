@@ -23,7 +23,6 @@ impl<T> NoTypeInference for T {
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
 /// to add these traits to the pointer itself.
-#[derive(Debug)]
 pub struct SyncSendPointer<T>(*mut T);
 
 // We can't automatically `derive` Copy and Clone without unnecessarily
@@ -53,9 +52,22 @@ impl<T> SyncSendPointer<T> {
     }
 }
 
+impl<T> std::fmt::Debug for SyncSendPointer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.ptr())
+    }
+}
+
+impl<T> PartialEq for SyncSendPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.ptr(), other.ptr())
+    }
+}
+
+impl<T> Eq for SyncSendPointer<T> {}
+
 /// A type that allows us to make a pointer Send since there is no way
 /// to add this traits to the pointer itself.
-#[derive(Debug)]
 pub struct SendPointer<T>(*mut T);
 
 // We can't automatically `derive` Copy and Clone without unnecessarily
@@ -83,6 +95,20 @@ impl<T> SendPointer<T> {
         self.0
     }
 }
+
+impl<T> std::fmt::Debug for SendPointer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.ptr())
+    }
+}
+
+impl<T> PartialEq for SendPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.ptr(), other.ptr())
+    }
+}
+
+impl<T> Eq for SendPointer<T> {}
 
 /// Implements [`Debug`](std::fmt::Debug) using the provided closure.
 pub struct DebugFormatter<F>(pub F)

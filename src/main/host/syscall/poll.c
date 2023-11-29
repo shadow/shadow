@@ -61,7 +61,7 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
     }
 }
 
-static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds) {
+static int _syscallhandler_getPollEvents(SyscallHandler* sys, struct pollfd* fds, nfds_t nfds) {
     int num_ready = 0;
 
     for (nfds_t i = 0; i < nfds; i++) {
@@ -78,7 +78,7 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
 
         /* Get the descriptor. */
         const Descriptor* desc =
-            thread_getRegisteredDescriptor(_syscallhandler_getThread(sys), pfd->fd);
+            thread_getRegisteredDescriptor(rustsyscallhandler_getThread(sys), pfd->fd);
         if (desc) {
             _syscallhandler_getPollEventsHelper(desc, pfd);
         } else {
@@ -92,9 +92,9 @@ static int _syscallhandler_getPollEvents(SysCallHandler* sys, struct pollfd* fds
     return num_ready;
 }
 
-static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds) {
+static void _syscallhandler_registerPollFDs(SyscallHandler* sys, struct pollfd* fds, nfds_t nfds) {
     // Epoll should already be clear, but let's make sure
-    epoll_reset(sys->epoll);
+    epoll_reset(rustsyscallhandler_getEpoll(sys));
 
     for (nfds_t i = 0; i < nfds; i++) {
         struct pollfd* pfd = &fds[i];
@@ -104,7 +104,7 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         const Descriptor* desc =
-            thread_getRegisteredDescriptor(_syscallhandler_getThread(sys), pfd->fd);
+            thread_getRegisteredDescriptor(rustsyscallhandler_getThread(sys), pfd->fd);
         utility_debugAssert(desc); // we would have returned POLLNVAL in getPollEvents
 
         struct epoll_event epev = {0};
@@ -116,13 +116,13 @@ static void _syscallhandler_registerPollFDs(SysCallHandler* sys, struct pollfd* 
         }
 
         if (epev.events) {
-            epoll_control(
-                sys->epoll, EPOLL_CTL_ADD, pfd->fd, desc, &epev, _syscallhandler_getHost(sys));
+            epoll_control(rustsyscallhandler_getEpoll(sys), EPOLL_CTL_ADD, pfd->fd, desc, &epev,
+                          rustsyscallhandler_getHost(sys));
         }
     }
 }
 
-SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds, nfds_t nfds,
+SyscallReturn _syscallhandler_pollHelper(SyscallHandler* sys, struct pollfd* fds, nfds_t nfds,
                                          const struct timespec* timeout) {
     // Check if any of the fds have events now
     int num_ready = _syscallhandler_getPollEvents(sys, fds, nfds);
@@ -133,12 +133,12 @@ SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
     if (num_ready == 0) {
         bool dont_block = timeout && timeout->tv_sec == 0 && timeout->tv_nsec == 0;
 
-        if (dont_block || _syscallhandler_didListenTimeoutExpire(sys)) {
+        if (dont_block || rustsyscallhandler_didListenTimeoutExpire(sys)) {
             trace("No events are ready and poll needs to return now");
             goto done;
         } else if (thread_unblockedSignalPending(
-                       _syscallhandler_getThread(sys),
-                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+                       rustsyscallhandler_getThread(sys),
+                       host_getShimShmemLock(rustsyscallhandler_getHost(sys)))) {
             trace("Interrupted by a signal.");
             num_ready = -EINTR;
             goto done;
@@ -150,7 +150,7 @@ SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
 
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
-                                        .object = (LegacyFile*)sys->epoll,
+                                        .object = (LegacyFile*)rustsyscallhandler_getEpoll(sys),
                                         .status = STATUS_FILE_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
@@ -168,18 +168,18 @@ SyscallReturn _syscallhandler_pollHelper(SysCallHandler* sys, struct pollfd* fds
     trace("poll returning %i ready events now", num_ready);
 done:
     // Clear epoll for the next poll
-    epoll_reset(sys->epoll);
+    epoll_reset(rustsyscallhandler_getEpoll(sys));
     return syscallreturn_makeDoneI64(num_ready);
 }
 
-static SyscallReturn _syscallhandler_pollHelperUntypedForeignPtr(SysCallHandler* sys,
+static SyscallReturn _syscallhandler_pollHelperUntypedForeignPtr(SyscallHandler* sys,
                                                                  UntypedForeignPtr fds_ptr,
                                                                  nfds_t nfds,
                                                                  const struct timespec* timeout) {
     // Get the pollfd struct in our memory so we can read from and write to it.
     struct pollfd* fds = NULL;
     if (nfds > 0) {
-        fds = process_getMutablePtr(_syscallhandler_getProcess(sys), fds_ptr, nfds * sizeof(*fds));
+        fds = process_getMutablePtr(rustsyscallhandler_getProcess(sys), fds_ptr, nfds * sizeof(*fds));
         if (!fds) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }
@@ -201,7 +201,7 @@ static int _syscallhandler_checkPollArgs(UntypedForeignPtr fds_ptr, nfds_t nfds)
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_poll(SyscallHandler* sys, const SysCallArgs* args) {
     UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     int timeout_millis = args->args[2].as_i64;
@@ -219,7 +219,7 @@ SyscallReturn syscallhandler_poll(SysCallHandler* sys, const SysCallArgs* args) 
     }
 }
 
-SyscallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_ppoll(SyscallHandler* sys, const SysCallArgs* args) {
     UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     UntypedForeignPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*
@@ -238,7 +238,7 @@ SyscallReturn syscallhandler_ppoll(SysCallHandler* sys, const SysCallArgs* args)
     struct timespec ts_timeout_val;
 
     if (ts_timeout_ptr.val) {
-        if (process_readPtr(_syscallhandler_getProcess(sys), &ts_timeout_val, ts_timeout_ptr,
+        if (process_readPtr(rustsyscallhandler_getProcess(sys), &ts_timeout_val, ts_timeout_ptr,
                             sizeof(ts_timeout_val)) != 0) {
             return syscallreturn_makeDoneErrno(EFAULT);
         }

@@ -598,6 +598,7 @@ impl<'a> Manager<'a> {
                     .to_c_loglevel(),
                 use_new_tcp: self.config.experimental.use_new_tcp.unwrap(),
                 use_mem_mapper: self.config.experimental.use_memory_manager.unwrap(),
+                use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
             };
 
             Box::new(unsafe {

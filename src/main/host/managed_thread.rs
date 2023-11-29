@@ -24,6 +24,7 @@ use super::syscall_condition::SysCallCondition;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
+use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
 use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginPathError};
 
@@ -177,7 +178,11 @@ impl ManagedThread {
         })
     }
 
-    pub fn resume(&self, ctx: &ThreadContext) -> ResumeResult {
+    pub fn resume(
+        &self,
+        ctx: &ThreadContext,
+        syscall_handler: &mut SyscallHandler,
+    ) -> ResumeResult {
         debug_assert!(self.is_running());
 
         self.sync_affinity_with_worker();
@@ -262,12 +267,7 @@ impl ManagedThread {
                         return ResumeResult::ExitedThread(return_code);
                     }
 
-                    let scr = unsafe {
-                        cshadow::syscallhandler_make_syscall(
-                            ctx.thread.csyscallhandler(),
-                            &syscall.syscall_args,
-                        )
-                    };
+                    let scr = syscall_handler.syscall(ctx, &syscall.syscall_args).into();
 
                     // remove the mthread's old syscall condition since it's no longer needed
                     ctx.thread.cleanup_syscall_condition();

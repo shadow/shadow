@@ -20,7 +20,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, int fd,
+static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, int fd,
                                        unsigned long command, SysCallReg argReg) {
     int result = 0;
 
@@ -60,7 +60,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #endif
         {
             struct flock* flk =
-                process_getMutablePtr(_syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
+                process_getMutablePtr(rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -68,7 +68,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #if defined(F_GETLK64) && F_GETLK64 != F_GETLK
         case F_GETLK64: {
             struct flock64* flk =
-                process_getMutablePtr(_syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
+                process_getMutablePtr(rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -84,7 +84,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #endif
         {
             const struct flock* flk = process_getReadablePtr(
-                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
             result = regularfile_fcntl(file, command, (void*)flk);
             break;
         }
@@ -106,14 +106,14 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 
         case F_GETOWN_EX: {
             struct f_owner_ex* foe = process_getWriteablePtr(
-                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
             result = regularfile_fcntl(file, command, foe);
             break;
         }
 
         case F_SETOWN_EX: {
             const struct f_owner_ex* foe = process_getReadablePtr(
-                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
             result = regularfile_fcntl(file, command, (void*)foe);
             break;
         }
@@ -126,7 +126,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #endif
         {
             uint64_t* hint = process_getWriteablePtr(
-                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
             result = regularfile_fcntl(file, command, hint);
             break;
         }
@@ -139,7 +139,7 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 #endif
         {
             const uint64_t* hint = process_getReadablePtr(
-                _syscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
             result = regularfile_fcntl(file, command, (void*)hint);
             break;
         }
@@ -170,14 +170,14 @@ static int _syscallhandler_fcntlHelper(SysCallHandler* sys, RegularFile* file, i
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_fcntl(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_fcntl(SyscallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long command = args->args[1].as_i64;
     SysCallReg argReg = args->args[2]; // type depends on command
 
     trace("fcntl called on fd %d for command %lu", fd, command);
 
-    LegacyFile* desc = thread_getRegisteredLegacyFile(_syscallhandler_getThread(sys), fd);
+    LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
     int errcode = _syscallhandler_validateLegacyFile(desc, DT_NONE);
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);

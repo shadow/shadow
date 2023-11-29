@@ -23,7 +23,7 @@
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
+static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
                                                      UntypedForeignPtr futexVPtr, int expectedVal,
                                                      UntypedForeignPtr timeoutVPtr,
                                                      TimeoutType type) {
@@ -32,7 +32,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
     CSimulationTime timeoutSimTime = SIMTIME_INVALID;
     if (timeoutVPtr.val) {
         struct timespec ts = {0};
-        int rv = process_readPtr(_syscallhandler_getProcess(sys), &ts, timeoutVPtr, sizeof(ts));
+        int rv = process_readPtr(rustsyscallhandler_getProcess(sys), &ts, timeoutVPtr, sizeof(ts));
         if (rv < 0) {
             return syscallreturn_makeDoneErrno(-rv);
         }
@@ -47,7 +47,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
     // `man 2 futex`: blocking via a futex is an atomic compare-and-block operation
     uint32_t futexVal;
     int result =
-        process_readPtr(_syscallhandler_getProcess(sys), &futexVal, futexVPtr, sizeof(futexVal));
+        process_readPtr(rustsyscallhandler_getProcess(sys), &futexVal, futexVPtr, sizeof(futexVal));
     if (result) {
         warning("Couldn't read futex address %p", (void*)futexVPtr.val);
         return syscallreturn_makeDoneErrno(-result);
@@ -55,31 +55,31 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
 
     trace(
         "Futex value is %" PRIu32 ", expected value is %" PRIu32, futexVal, (uint32_t)expectedVal);
-    if (!_syscallhandler_wasBlocked(sys) && futexVal != (uint32_t)expectedVal) {
+    if (!rustsyscallhandler_wasBlocked(sys) && futexVal != (uint32_t)expectedVal) {
         trace("Futex values don't match, try again later");
         return syscallreturn_makeDoneErrno(EAGAIN);
     }
 
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
     ManagedPhysicalMemoryAddr futexPPtr =
-        process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
+        process_getPhysicalAddress(rustsyscallhandler_getProcess(sys), futexVPtr);
 
     // Check if we already have a futex
-    FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));
+    FutexTable* ftable = host_getFutexTable(rustsyscallhandler_getHost(sys));
     Futex* futex = futextable_get(ftable, futexPPtr);
 
-    if (_syscallhandler_wasBlocked(sys)) {
+    if (rustsyscallhandler_wasBlocked(sys)) {
         utility_debugAssert(futex != NULL);
         int result = 0;
 
         // We already blocked on wait, so this is either a timeout or wakeup
-        if (timeoutSimTime != SIMTIME_INVALID && _syscallhandler_didListenTimeoutExpire(sys)) {
+        if (timeoutSimTime != SIMTIME_INVALID && rustsyscallhandler_didListenTimeoutExpire(sys)) {
             // Timeout while waiting for a wakeup
             trace("Futex %p timeout out while waiting", (void*)futexPPtr.val);
             result = -ETIMEDOUT;
         } else if (thread_unblockedSignalPending(
-                       _syscallhandler_getThread(sys),
-                       host_getShimShmemLock(_syscallhandler_getHost(sys)))) {
+                       rustsyscallhandler_getThread(sys),
+                       host_getShimShmemLock(rustsyscallhandler_getHost(sys)))) {
             trace("Futex %p has been interrupted by a signal", (void*)futexPPtr.val);
             result = -EINTR;
         } else {
@@ -121,14 +121,14 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SysCallHandler* sys,
     return syscallreturn_makeBlocked(cond, true);
 }
 
-static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys,
+static SyscallReturn _syscallhandler_futexWakeHelper(SyscallHandler* sys,
                                                      UntypedForeignPtr futexVPtr, int numWakeups) {
     // Convert the virtual ptr to a physical ptr that can uniquely identify the futex
     ManagedPhysicalMemoryAddr futexPPtr =
-        process_getPhysicalAddress(_syscallhandler_getProcess(sys), futexVPtr);
+        process_getPhysicalAddress(rustsyscallhandler_getProcess(sys), futexVPtr);
 
     // Lookup the futex in the futex table
-    FutexTable* ftable = host_getFutexTable(_syscallhandler_getHost(sys));
+    FutexTable* ftable = host_getFutexTable(rustsyscallhandler_getHost(sys));
     Futex* futex = futextable_get(ftable, futexPPtr);
 
     trace("Found futex %p at futex addr %p", futex, (void*)futexPPtr.val);
@@ -151,7 +151,7 @@ static SyscallReturn _syscallhandler_futexWakeHelper(SysCallHandler* sys,
 // Support across different address spaces requires us to compute a unique id from the
 // hardware address (i.e., page table and offset). This is needed, e.g., when using
 // futexes across process boundaries.
-SyscallReturn syscallhandler_futex(SysCallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_futex(SyscallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
 
     UntypedForeignPtr uaddrptr = args->args[0].as_ptr; // int*
