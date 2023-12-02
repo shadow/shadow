@@ -1,0 +1,23 @@
+general:
+  stop_time: 5 min
+  model_unblocked_syscall_latency: true
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  peer1:
+    network_node_id: 0
+    ip_addr: 1.1.1.1
+    processes:
+    - path: ../../../target/debug/test_libp2p_ping
+      args: "9001"
+      start_time: 1
+      expected_final_state: running
+  peer2:
+    network_node_id: 0
+    ip_addr: 1.1.1.2
+    processes:
+    - path: ../../../target/debug/test_libp2p_ping
+      args: ['9001', '/ip4/1.1.1.1/tcp/9001']
+      start_time: 5
+      expected_final_state: running
