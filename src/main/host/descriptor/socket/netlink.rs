@@ -562,7 +562,6 @@ impl InitialState {
                 "Attempted to bind netlink socket to an address with non-zero groups {}",
                 addr.groups()
             );
-            return Err(Errno::EINVAL.into());
         }
 
         Ok(0.into())
