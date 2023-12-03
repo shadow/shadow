@@ -91,10 +91,13 @@ impl NetlinkSocket {
                 interfaces,
             };
             let protocol_state = ProtocolState::new(&mut common, weak);
-            AtomicRefCell::new(Self {
+            let mut socket = Self {
                 common,
                 protocol_state,
-            })
+            };
+            CallbackQueue::queue_and_run(|cb_queue| socket.refresh_file_state(cb_queue));
+
+            AtomicRefCell::new(socket)
         })
     }
 
