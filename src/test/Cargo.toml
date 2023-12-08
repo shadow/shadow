@@ -205,6 +205,6 @@ nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "proce
 rand = { version="0.8.5", features=["small_rng"] }
 rustix = { version = "0.38.19", default-features=false, features=["fs", "mm", "pipe", "time", "thread"]}
 signal-hook = "0.3.17"
-once_cell = "1.18.0"
+once_cell = "1.19.0"
 vasi-sync = { path = "../lib/vasi-sync" }
 static_assertions = "1.1.0"
