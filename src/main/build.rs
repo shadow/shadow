@@ -489,6 +489,12 @@ fn build_info() -> String {
 }
 
 fn main() {
+    // Hack to make cargo always run the build script. We embed a timestamp in shadow's build info,
+    // so we always need to re-run this build script to update the timestamp. We also embed git
+    // information on the build info, so we also need to re-run this build script to update the git
+    // details.
+    println!("cargo:rerun-if-changed=a-non-existent-path-sdafdmgidegegt3qyn5hw4oinqg");
+
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common =
         shadow_build_common::ShadowBuildCommon::new(std::path::Path::new("../.."), Some(deps));
