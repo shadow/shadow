@@ -24,8 +24,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "shd-config.h"
-
 #ifndef SUID_DUMP_DISABLE
 #define SUID_DUMP_DISABLE 0
 #endif
@@ -34,12 +32,7 @@
 #define SUID_DUMP_USER 1
 #endif
 
-#if HAVE_STRUCT_LINUX_DIRENT == 0
 struct linux_dirent;
-#endif
-
-#if HAVE_STRUCT_LINUX_DIRENT64 == 0
 struct linux_dirent64;
-#endif
 
 #endif /* SRC_MAIN_HOST_SYSCALL_KERNEL_TYPES_H_ */

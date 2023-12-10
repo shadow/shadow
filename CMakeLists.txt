@@ -73,12 +73,6 @@ set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-## Check if we are able to compile various compilation units
-compile_test(HAVE_STRUCT_LINUX_DIRENT 
-            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c)
-compile_test(HAVE_STRUCT_LINUX_DIRENT64 
-            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent64.c)
-
 include(FindPkgConfig)
 # Keep consistent with Cargo files that pull in glib: `git grep glib -- '*/Cargo.toml'`
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.58)
