@@ -16,7 +16,6 @@
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "shd-config.h"
 
 int main_checkGlibVersion() {
     /* Technically redundant, since our minimum glib version enforced by cmake is already

@@ -247,5 +247,4 @@ set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.i
 
 ## generate config header and make sure its on the include path
 ## this should come after create the version info to make sure it's included
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/src/shd-config.h)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/build-info.h.in ${CMAKE_BINARY_DIR}/src/shd-build-info.h)
