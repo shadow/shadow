@@ -17,6 +17,9 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
+const HELP_INFO_STR: &str =
+    "For more information, visit https://shadow.github.io or https://github.com/shadow";
+
 fn verify_supported_system() -> anyhow::Result<()> {
     let uts_name = nix::sys::utsname::uname()?;
     let sysname = uts_name
@@ -116,6 +119,7 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
             c::GLIB_MICRO_VERSION
         );
         unsafe { c::main_printBuildInfo(build_info) };
+        eprintln!("{HELP_INFO_STR}");
         std::process::exit(0);
     }
 
@@ -240,6 +244,7 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
         c::GLIB_MICRO_VERSION
     );
     unsafe { c::main_logBuildInfo(build_info) };
+    log::info!("{HELP_INFO_STR}");
     log_environment(args.clone());
 
     if let Err(e) = verify_supported_system() {
@@ -393,7 +398,6 @@ fn log_environment(args: Vec<&OsStr>) {
 #[repr(C)]
 pub struct ShadowBuildInfo {
     build: *const libc::c_char,
-    info: *const libc::c_char,
 }
 
 mod export {

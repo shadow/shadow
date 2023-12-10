@@ -217,8 +217,6 @@ endif(SHADOW_COMPILE_OPTIONS)
 if(SHADOW_LINK_OPTIONS)
     set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} and link options: ${SHADOW_LINK_OPTIONS}")
 endif(SHADOW_LINK_OPTIONS)
-## build info
-set(SHADOW_INFO_STRING_CONF "For more information, visit https://shadow.github.io or https://github.com/shadow")
 
 ## generate config header and make sure its on the include path
 ## this should come after create the version info to make sure it's included

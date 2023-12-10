@@ -12,7 +12,6 @@
 int main(int argc, char* argv[]) {
     ShadowBuildInfo info = {
         .build = SHADOW_BUILD_STRING,
-        .info = SHADOW_INFO_STRING,
     };
     // Initialize C code logger, which delegates to the Rust logger.  This won't
     // actually do much until the Rust logger is initialized in

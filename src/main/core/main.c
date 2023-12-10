@@ -44,11 +44,10 @@ int main_checkGlibVersion() {
 }
 
 void main_printBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
-    g_printerr("%s\n%s\n", shadowBuildInfo->build, shadowBuildInfo->info);
+    g_printerr("%s\n", shadowBuildInfo->build);
 }
 
 void main_logBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
     info("%s", shadowBuildInfo->build);
-    info("%s", shadowBuildInfo->info);
     info("Logging current startup arguments and environment");
 }
