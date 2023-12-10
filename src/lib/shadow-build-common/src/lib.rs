@@ -28,11 +28,11 @@ impl ShadowBuildCommon {
         // changes.
         println!("cargo:rerun-if-changed=.");
 
-        // *Very* conservatively re-run build script if shd-config.h changes.
+        // *Very* conservatively re-run build script if shd-build-info.h changes.
         // It currently ~always changes, particularly since it includes a build
         // timestamp.
         println!(
-            "cargo:rerun-if-changed={}/shd-config.h",
+            "cargo:rerun-if-changed={}/shd-build-info.h",
             build_src_root.to_str().unwrap()
         );
 
