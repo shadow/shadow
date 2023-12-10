@@ -62,7 +62,7 @@ fn verify_supported_system() -> anyhow::Result<()> {
 }
 
 /// Main entry point for the simulator.
-pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Result<()> {
+pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // Install the shared memory allocator's clean up routine on exit. Once this guard is dropped,
     // all shared memory allocations will become invalid.
     let _guard = unsafe { crate::shadow_shmem::allocator::SharedMemAllocatorDropGuard::new() };
@@ -118,7 +118,7 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
             c::GLIB_MINOR_VERSION,
             c::GLIB_MICRO_VERSION
         );
-        unsafe { c::main_printBuildInfo(build_info) };
+        eprintln!("{}", env!("SHADOW_BUILD_INFO"));
         eprintln!("{HELP_INFO_STR}");
         std::process::exit(0);
     }
@@ -243,8 +243,9 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
         c::GLIB_MINOR_VERSION,
         c::GLIB_MICRO_VERSION
     );
-    unsafe { c::main_logBuildInfo(build_info) };
+    log::info!("{}", env!("SHADOW_BUILD_INFO"));
     log::info!("{HELP_INFO_STR}");
+    log::info!("Logging current startup arguments and environment");
     log_environment(args.clone());
 
     if let Err(e) = verify_supported_system() {
@@ -395,25 +396,18 @@ fn log_environment(args: Vec<&OsStr>) {
     }
 }
 
-#[repr(C)]
-pub struct ShadowBuildInfo {
-    build: *const libc::c_char,
-}
-
 mod export {
     use super::*;
 
     #[no_mangle]
     pub extern "C-unwind" fn main_runShadow(
-        build_info: *const ShadowBuildInfo,
         argc: libc::c_int,
         argv: *const *const libc::c_char,
     ) -> libc::c_int {
         let args = (0..argc).map(|x| unsafe { CStr::from_ptr(*argv.add(x as usize)) });
         let args = args.map(|x| OsStr::from_bytes(x.to_bytes()));
-        let build_info = unsafe { build_info.as_ref().unwrap() };
 
-        let result = run_shadow(build_info, args.collect());
+        let result = run_shadow(args.collect());
         log::logger().flush();
 
         if let Err(e) = result {

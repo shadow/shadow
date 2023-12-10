@@ -190,34 +190,6 @@ endif()
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/examples/)
 
-## Add more build info that will appear in 'shadow -v' and in the log file
-## This should come after the project tree recursion so we can pick up the
-## compile options for the shadow target
-string(TIMESTAMP BUILDDATE "%Y-%m-%d--%H:%M:%S")
-get_target_property(SHADOW_COMPILE_OPTIONS shadow COMPILE_OPTIONS)
-get_target_property(SHADOW_LINK_OPTIONS shadow LINK_FLAGS)
-set(SHADOW_BUILD_STRING_CONF "Shadow was built")
-if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    ## current branch name (will be added)
-    EXECUTE_PROCESS(COMMAND "git" "rev-parse" "--abbrev-ref" "HEAD" OUTPUT_VARIABLE BRANCHNAME)
-    if(BRANCHNAME)
-        string(REGEX REPLACE "\n" "" BRANCHNAME ${BRANCHNAME})
-        set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} from branch ${BRANCHNAME}")
-    endif(BRANCHNAME)
-endif()
-if(BUILDDATE)
-    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} on ${BUILDDATE}")
-endif(BUILDDATE)
-if(CMAKE_BUILD_TYPE)
-    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} in ${CMAKE_BUILD_TYPE} mode")
-endif(CMAKE_BUILD_TYPE)
-if(SHADOW_COMPILE_OPTIONS)
-    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} with compile options: ${SHADOW_COMPILE_OPTIONS}")
-endif(SHADOW_COMPILE_OPTIONS)
-if(SHADOW_LINK_OPTIONS)
-    set(SHADOW_BUILD_STRING_CONF "${SHADOW_BUILD_STRING_CONF} and link options: ${SHADOW_LINK_OPTIONS}")
-endif(SHADOW_LINK_OPTIONS)
-
 ## generate config header and make sure its on the include path
 ## this should come after create the version info to make sure it's included
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/build-info.h.in ${CMAKE_BINARY_DIR}/src/shd-build-info.h)

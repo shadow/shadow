@@ -4,6 +4,4 @@
 // This file should *only* be included from the top-level main, since it is
 // regenerated with a different value on every build.
 
-#define SHADOW_BUILD_STRING "${SHADOW_BUILD_STRING_CONF}"
-
 #endif
