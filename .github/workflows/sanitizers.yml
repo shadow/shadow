@@ -32,15 +32,6 @@ jobs:
         rustup component add miri
         cargo miri setup
 
-    # No need to fully build shadow, but we need to run cmake to generate shd-config.h,
-    # which is required for some of the rust modules' build scripts that compile C code.
-    - name: run cmake
-      run: |
-        sudo apt-get install cmake
-        mkdir build
-        cd build
-        cmake ..
-
     - name: Test
       run: |
         cd src
