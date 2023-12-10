@@ -20,47 +20,6 @@ use crate::utility::shm_cleanup;
 const HELP_INFO_STR: &str =
     "For more information, visit https://shadow.github.io or https://github.com/shadow";
 
-fn verify_supported_system() -> anyhow::Result<()> {
-    let uts_name = nix::sys::utsname::uname()?;
-    let sysname = uts_name
-        .sysname()
-        .to_str()
-        .with_context(|| "Decoding system name")?;
-    if sysname != "Linux" {
-        anyhow::bail!("Unsupported sysname: {sysname}");
-    }
-    let version = uts_name
-        .release()
-        .to_str()
-        .with_context(|| "Decoding system release")?;
-    let mut version_parts = version.split('.');
-    let Some(major) = version_parts.next() else {
-        anyhow::bail!("Couldn't find major version in : {version}");
-    };
-    let major: i32 = major
-        .parse()
-        .with_context(|| format!("Parsing major version number '{major}'"))?;
-    let Some(minor) = version_parts.next() else {
-        anyhow::bail!("Couldn't find minor version in : {version}");
-    };
-    let minor: i32 = minor
-        .parse()
-        .with_context(|| format!("Parsing minor version number '{minor}'"))?;
-
-    // Keep in sync with `supported_platforms.md`.
-    const MIN_KERNEL_VERSION: (i32, i32) = (5, 4);
-
-    if (major, minor) < MIN_KERNEL_VERSION {
-        anyhow::bail!(
-            "kernel version {major}.{minor} is older than minimum supported version {}.{}",
-            MIN_KERNEL_VERSION.0,
-            MIN_KERNEL_VERSION.1
-        );
-    }
-
-    Ok(())
-}
-
 /// Main entry point for the simulator.
 pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // Install the shared memory allocator's clean up routine on exit. Once this guard is dropped,
@@ -280,6 +239,47 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     if buffer_log {
         // only show if we disabled buffering above
         log::info!("Log message buffering is disabled during cleanup");
+    }
+
+    Ok(())
+}
+
+fn verify_supported_system() -> anyhow::Result<()> {
+    let uts_name = nix::sys::utsname::uname()?;
+    let sysname = uts_name
+        .sysname()
+        .to_str()
+        .with_context(|| "Decoding system name")?;
+    if sysname != "Linux" {
+        anyhow::bail!("Unsupported sysname: {sysname}");
+    }
+    let version = uts_name
+        .release()
+        .to_str()
+        .with_context(|| "Decoding system release")?;
+    let mut version_parts = version.split('.');
+    let Some(major) = version_parts.next() else {
+        anyhow::bail!("Couldn't find major version in : {version}");
+    };
+    let major: i32 = major
+        .parse()
+        .with_context(|| format!("Parsing major version number '{major}'"))?;
+    let Some(minor) = version_parts.next() else {
+        anyhow::bail!("Couldn't find minor version in : {version}");
+    };
+    let minor: i32 = minor
+        .parse()
+        .with_context(|| format!("Parsing minor version number '{minor}'"))?;
+
+    // Keep in sync with `supported_platforms.md`.
+    const MIN_KERNEL_VERSION: (i32, i32) = (5, 4);
+
+    if (major, minor) < MIN_KERNEL_VERSION {
+        anyhow::bail!(
+            "kernel version {major}.{minor} is older than minimum supported version {}.{}",
+            MIN_KERNEL_VERSION.0,
+            MIN_KERNEL_VERSION.1
+        );
     }
 
     Ok(())
