@@ -382,7 +382,7 @@ impl RunnableProcess {
     }
 
     #[track_caller]
-    pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
+    pub fn memory_borrow_mut(&self) -> impl DerefMut<Target = MemoryManager> + '_ {
         self.memory_manager.borrow_mut()
     }
 
@@ -1352,7 +1352,7 @@ impl Process {
 
     /// Deprecated wrapper for `RunnableProcess::memory_borrow_mut`
     #[track_caller]
-    pub fn memory_borrow_mut(&self) -> impl Deref<Target = MemoryManager> + DerefMut + '_ {
+    pub fn memory_borrow_mut(&self) -> impl DerefMut<Target = MemoryManager> + '_ {
         std_util::nested_ref::NestedRefMut::map(self.as_runnable().unwrap(), |runnable| {
             runnable.memory_manager.borrow_mut()
         })
@@ -1391,7 +1391,7 @@ impl Process {
 
     /// Deprecated wrapper for `RunnableProcess::realtime_timer_borrow_mut`
     #[track_caller]
-    pub fn realtime_timer_borrow_mut(&self) -> impl Deref<Target = Timer> + DerefMut + '_ {
+    pub fn realtime_timer_borrow_mut(&self) -> impl DerefMut<Target = Timer> + '_ {
         std_util::nested_ref::NestedRefMut::map(self.as_runnable().unwrap(), |runnable| {
             runnable.itimer_real.borrow_mut()
         })

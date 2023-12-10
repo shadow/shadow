@@ -267,7 +267,7 @@ impl Thread {
     pub fn descriptor_table_borrow_mut<'a>(
         &'a self,
         host: &'a Host,
-    ) -> impl Deref<Target = DescriptorTable> + DerefMut + 'a {
+    ) -> impl DerefMut<Target = DescriptorTable> + 'a {
         self.desc_table.as_ref().unwrap().borrow_mut(host.root())
     }
 

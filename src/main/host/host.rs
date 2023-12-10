@@ -572,7 +572,7 @@ impl Host {
         self.cpu.borrow()
     }
 
-    pub fn cpu_borrow_mut(&self) -> impl Deref<Target = Cpu> + DerefMut + '_ {
+    pub fn cpu_borrow_mut(&self) -> impl DerefMut<Target = Cpu> + '_ {
         self.cpu.borrow_mut()
     }
 
@@ -617,7 +617,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn upstream_router_borrow_mut(&self) -> impl Deref<Target = Router> + DerefMut + '_ {
+    pub fn upstream_router_borrow_mut(&self) -> impl DerefMut<Target = Router> + '_ {
         self.router.borrow_mut()
     }
 
@@ -627,9 +627,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn tracker_borrow_mut(
-        &self,
-    ) -> Option<impl Deref<Target = cshadow::Tracker> + DerefMut + '_> {
+    pub fn tracker_borrow_mut(&self) -> Option<impl DerefMut<Target = cshadow::Tracker> + '_> {
         let tracker = self.tracker.borrow_mut();
         if let Some(tracker) = &*tracker {
             debug_assert!(!tracker.ptr().is_null());
@@ -641,9 +639,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn futextable_borrow_mut(
-        &self,
-    ) -> impl Deref<Target = cshadow::FutexTable> + DerefMut + '_ {
+    pub fn futextable_borrow_mut(&self) -> impl DerefMut<Target = cshadow::FutexTable> + '_ {
         let futex_table_ref = self.futex_table.borrow_mut();
         RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
     }
@@ -664,7 +660,7 @@ impl Host {
     pub fn interface_borrow_mut(
         &self,
         addr: Ipv4Addr,
-    ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
+    ) -> Option<impl DerefMut<Target = NetworkInterface> + '_> {
         self.net_ns.interface_borrow_mut(addr)
     }
 
@@ -679,7 +675,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn random_mut(&self) -> impl Deref<Target = Xoshiro256PlusPlus> + DerefMut + '_ {
+    pub fn random_mut(&self) -> impl DerefMut<Target = Xoshiro256PlusPlus> + '_ {
         self.random.borrow_mut()
     }
 

@@ -70,9 +70,7 @@ impl LogicalProcessors {
     }
 
     /// Returns an iterator of logical processor indexes.
-    pub fn iter(
-        &self,
-    ) -> impl std::iter::Iterator<Item = usize> + Clone + std::iter::ExactSizeIterator {
+    pub fn iter(&self) -> impl std::iter::ExactSizeIterator<Item = usize> + Clone {
         0..self.lps.len()
     }
 }
