@@ -74,10 +74,6 @@ set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 #set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 ## Check if we are able to compile various compilation units
-compile_test(HAVE_STRUCT_STATX 
-            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx.c)
-compile_test(HAVE_STRUCT_STATX_TIMESTAMP 
-            ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_statx_timestamp.c)
 compile_test(HAVE_STRUCT_LINUX_DIRENT 
             ${CMAKE_SOURCE_DIR}/cmake/compile_tests/struct_linux_dirent.c)
 compile_test(HAVE_STRUCT_LINUX_DIRENT64 
