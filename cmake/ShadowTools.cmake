@@ -17,19 +17,3 @@ macro(add_ldflags)
     # We do *not* add to CMAKE_STATIC_LINKER_FLAGS, since that is used when "linking" a static
     # library with `ar`, not when statically linking an executable.
 endmacro(add_ldflags)
-
-######################################################################################################
-## COMPILE_TEST - helper for testing if a source file compiles correctly in our environment         ##
-######################################################################################################
-
-macro(compile_test resultvar srcfile)
-    try_compile(${resultvar} "${CMAKE_BINARY_DIR}" "${srcfile}" COMPILE_DEFINITIONS "-D_GNU_SOURCE=1 -c")
-    if(${resultvar} STREQUAL "TRUE")
-        set(${resultvar} 1)
-    else()
-        set(${resultvar} 0)
-    endif()
-    MESSAGE(STATUS "${resultvar} = ${${resultvar}}")
-endmacro()
-
-######################################################################################################
