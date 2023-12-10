@@ -1,3 +1,4 @@
+use std::process::Command;
 use std::{env, path::PathBuf};
 
 use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
@@ -390,6 +391,46 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
     build.compile("shadow-c");
 }
 
+fn git_version() -> Option<String> {
+    // current git commit version and hash
+    //
+    // `--always` allows us to still get the commit hash and dirty status when tags aren't
+    // available, as sometimes happens when building from a shallow clone
+    let Ok(git_describe) = Command::new("git")
+        .args(["describe", "--always", "--long", "--dirty"])
+        .output()
+    else {
+        return None;
+    };
+
+    if !git_describe.status.success() {
+        return None;
+    }
+
+    // current git commit short date
+    let Ok(git_date) = Command::new("git")
+        .args([
+            "log",
+            "--pretty=format:%ad",
+            "--date=format:%Y-%m-%d--%H:%M:%S",
+            "-n",
+            "1",
+        ])
+        .output()
+    else {
+        return None;
+    };
+
+    if !git_date.status.success() {
+        return None;
+    }
+
+    let git_describe = std::str::from_utf8(&git_describe.stdout).ok()?.trim();
+    let git_date = std::str::from_utf8(&git_date.stdout).ok()?.trim();
+
+    Some(format!("{git_describe} {git_date}"))
+}
+
 fn main() {
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common =
@@ -406,4 +447,8 @@ fn main() {
 
     build_remora(&build_common);
     build_shadow_c(&build_common);
+
+    if let Some(git_version) = git_version() {
+        println!("cargo:rustc-env=SHADOW_GIT_VERSION={git_version}");
+    }
 }

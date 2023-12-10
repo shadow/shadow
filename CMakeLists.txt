@@ -92,31 +92,6 @@ message(STATUS "SHADOW_VERSION_MAJOR=${SHADOW_VERSION_MAJOR}")
 message(STATUS "SHADOW_VERSION_MINOR=${SHADOW_VERSION_MINOR}")
 message(STATUS "SHADOW_VERSION_PATCH=${SHADOW_VERSION_PATCH}")
 
-if(EXISTS ${CMAKE_SOURCE_DIR}/.git)
-    ## current git commit version and hash
-    ##
-    ## `--always` allows us to still get the commit hash and dirty status,
-    ## when tags aren't available, as sometimes happens when building from
-    ## a shallow clone.
-    EXECUTE_PROCESS(COMMAND "git" "describe" "--always" "--long" "--dirty" OUTPUT_VARIABLE DESCRIBE)
-    if(DESCRIBE)
-        string(REGEX REPLACE "\n" "" DESCRIBE ${DESCRIBE})
-    endif(DESCRIBE)
-
-    ## current git commit short date
-    EXECUTE_PROCESS(COMMAND "git" "log" "--pretty=format:%ad" "--date=format:%Y-%m-%d--%H:%M:%S" "-n"  "1" OUTPUT_VARIABLE COMMITDATE)
-
-    if(DESCRIBE AND COMMITDATE)
-        set(SHADOW_VERSION_STRING_CONF "${DESCRIBE} ${COMMITDATE}")
-    endif()
-endif()
-
-if(NOT DEFINED SHADOW_VERSION_STRING_CONF)
-    set(SHADOW_VERSION_STRING_CONF "v${SHADOW_VERSION_FULL}")
-endif()
-
-message(STATUS "Building Shadow ${SHADOW_VERSION_STRING_CONF}")
-
 ## setup shadow options
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)

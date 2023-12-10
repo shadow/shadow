@@ -44,14 +44,14 @@ int main_checkGlibVersion() {
 }
 
 void main_printBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
-    g_printerr("Shadow %s running GLib v%u.%u.%u\n%s\n%s\n", shadowBuildInfo->version,
+    g_printerr("GLib v%u.%u.%u\n%s\n%s\n",
                (guint)GLIB_MAJOR_VERSION, (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION,
                shadowBuildInfo->build, shadowBuildInfo->info);
 }
 
 void main_logBuildInfo(const ShadowBuildInfo* shadowBuildInfo) {
-    gchar* startupStr = g_strdup_printf("Starting Shadow %s with GLib v%u.%u.%u",
-                                        shadowBuildInfo->version, (guint)GLIB_MAJOR_VERSION,
+    gchar* startupStr = g_strdup_printf("GLib v%u.%u.%u",
+                                        (guint)GLIB_MAJOR_VERSION,
                                         (guint)GLIB_MINOR_VERSION, (guint)GLIB_MICRO_VERSION);
 
     info("%s", startupStr);

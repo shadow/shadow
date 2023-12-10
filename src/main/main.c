@@ -11,7 +11,6 @@
 
 int main(int argc, char* argv[]) {
     ShadowBuildInfo info = {
-        .version = SHADOW_VERSION_STRING,
         .build = SHADOW_BUILD_STRING,
         .info = SHADOW_INFO_STRING,
     };
