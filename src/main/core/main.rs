@@ -28,9 +28,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
 
     let version_display = option_env!("SHADOW_GIT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
 
-    if unsafe { c::main_checkGlibVersion() } != 0 {
-        return Err(anyhow::anyhow!("Unsupported GLib version"));
-    }
+    verify_glib_version().context("Unsupported GLib version")?;
 
     let mut signals_list = Signals::new([consts::signal::SIGINT, consts::signal::SIGTERM])?;
     thread::spawn(move || {
@@ -279,6 +277,47 @@ fn verify_supported_system() -> anyhow::Result<()> {
             "kernel version {major}.{minor} is older than minimum supported version {}.{}",
             MIN_KERNEL_VERSION.0,
             MIN_KERNEL_VERSION.1
+        );
+    }
+
+    Ok(())
+}
+
+fn verify_glib_version() -> anyhow::Result<()> {
+    // Technically redundant, since our minimum glib version enforced by cmake is already larger
+    // than this version. Still, doesn't hurt to keep this check for posterity in case we ever try
+    // to go back to supporting older versions.
+    if c::GLIB_MAJOR_VERSION == 2 && c::GLIB_MINOR_VERSION == 40 {
+        anyhow::bail!(
+            "You compiled against GLib version {}.{}.{}, which has bugs known to break \"
+            Shadow. Please update to a newer version of GLib.",
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+        );
+    }
+
+    // check the that run-time GLib matches the compiled version
+    let mismatch = unsafe {
+        c::glib_check_version(
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+        )
+    };
+
+    if !mismatch.is_null() {
+        let mismatch = unsafe { std::ffi::CStr::from_ptr(mismatch) };
+        anyhow::bail!(
+            "The version of the run-time GLib library ({}.{}.{}) is not compatible with \
+            the version against which Shadow was compiled ({}.{}.{}). GLib message: '{}'.",
+            unsafe { c::glib_major_version },
+            unsafe { c::glib_minor_version },
+            unsafe { c::glib_micro_version },
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+            mismatch.to_string_lossy(),
         );
     }
 

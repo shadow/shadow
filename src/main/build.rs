@@ -145,7 +145,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
         .header("core/affinity.h")
-        .header("core/main.h")
         .header("core/support/definitions.h")
         .header("core/worker.h")
         .header("host/descriptor/compat_socket.h")
@@ -228,6 +227,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("workerc_.*")
         .allowlist_function("packet_.*")
         .allowlist_function("epoll_new")
+        .allowlist_function("glib_check_version")
         //# Needs GQueue
         .blocklist_function("worker_finish")
         .blocklist_function("worker_bootHosts")
@@ -261,6 +261,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_var("GLIB_MAJOR_VERSION")
         .allowlist_var("GLIB_MINOR_VERSION")
         .allowlist_var("GLIB_MICRO_VERSION")
+        .allowlist_var("glib_major_version")
+        .allowlist_var("glib_minor_version")
+        .allowlist_var("glib_micro_version")
         .opaque_type("SysCallCondition")
         .opaque_type("LegacyFile")
         .opaque_type("Manager")
@@ -278,6 +281,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("Counter")
         .blocklist_type("Descriptor")
         .blocklist_type("Process")
+        .blocklist_type("Host")
         .blocklist_type("HostId")
         .blocklist_type("TaskRef")
         .allowlist_type("WorkerC")
@@ -355,7 +359,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
 
     build.files(&[
         "core/affinity.c",
-        "core/main.c",
         "host/descriptor/descriptor.c",
         "host/status_listener.c",
         "host/descriptor/compat_socket.c",
