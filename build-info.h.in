@@ -1,7 +1,0 @@
-#ifndef BUILD_INFO_H
-#define BUILD_INFO_H
-
-// This file should *only* be included from the top-level main, since it is
-// regenerated with a different value on every build.
-
-#endif

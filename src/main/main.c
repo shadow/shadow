@@ -7,7 +7,6 @@
 #include "lib/log-c2rust/log-c2rust.h"
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "shd-build-info.h"
 
 int main(int argc, char* argv[]) {
     // Initialize C code logger, which delegates to the Rust logger.  This won't

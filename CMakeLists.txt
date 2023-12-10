@@ -189,7 +189,3 @@ endif()
 ## recurse our project tree
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/)
 add_subdirectory(${CMAKE_SOURCE_DIR}/examples/)
-
-## generate config header and make sure its on the include path
-## this should come after create the version info to make sure it's included
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/build-info.h.in ${CMAKE_BINARY_DIR}/src/shd-build-info.h)
