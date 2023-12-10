@@ -109,6 +109,12 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
 
     if options.show_build_info {
         eprintln!("Shadow {version_display}");
+        eprintln!(
+            "GLib v{}.{}.{}",
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION
+        );
         unsafe { c::main_printBuildInfo(build_info) };
         std::process::exit(0);
     }
@@ -226,6 +232,13 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
 
     // log some information
     log::info!("Starting Shadow {version_display}");
+    eprintln!("** Starting Shadow {version_display}");
+    log::info!(
+        "GLib v{}.{}.{}",
+        c::GLIB_MAJOR_VERSION,
+        c::GLIB_MINOR_VERSION,
+        c::GLIB_MICRO_VERSION
+    );
     unsafe { c::main_logBuildInfo(build_info) };
     log_environment(args.clone());
 
