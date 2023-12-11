@@ -1,7 +1,4 @@
-use std::process::Command;
 use std::{env, path::PathBuf};
-
-use time::OffsetDateTime;
 
 use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
 
@@ -398,51 +395,7 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
     build.compile("shadow-c");
 }
 
-fn git_version() -> Option<String> {
-    // current git commit version and hash
-    //
-    // `--always` allows us to still get the commit hash and dirty status when tags aren't
-    // available, as sometimes happens when building from a shallow clone
-    let Ok(git_describe) = Command::new("git")
-        .args(["describe", "--always", "--long", "--dirty"])
-        .output()
-    else {
-        return None;
-    };
-
-    if !git_describe.status.success() {
-        return None;
-    }
-
-    // current git commit short date
-    let Ok(git_date) = Command::new("git")
-        .args([
-            "log",
-            "--pretty=format:%ad",
-            "--date=format:%Y-%m-%d--%H:%M:%S",
-            "-n",
-            "1",
-        ])
-        .output()
-    else {
-        return None;
-    };
-
-    if !git_date.status.success() {
-        return None;
-    }
-
-    let git_describe = std::str::from_utf8(&git_describe.stdout).ok()?.trim();
-    let git_date = std::str::from_utf8(&git_date.stdout).ok()?.trim();
-
-    Some(format!("{git_describe} {git_date}"))
-}
-
 fn build_info() -> String {
-    let date_format = "[year]-[month]-[day]--[hour]:[minute]:[second]";
-    let date_format = time::format_description::parse(date_format).unwrap();
-
-    let date = OffsetDateTime::now_utc().format(&date_format).unwrap();
     let profile = std::env::var("PROFILE").unwrap();
     let opt_level = std::env::var("OPT_LEVEL").unwrap();
     let debug = std::env::var("DEBUG").unwrap();
@@ -452,24 +405,6 @@ fn build_info() -> String {
         .trim()
         .to_string();
 
-    let mut git_branch = None;
-
-    if let Ok(git_rev_parse) = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-    {
-        if git_rev_parse.status.success() {
-            git_branch = Some(
-                std::str::from_utf8(&git_rev_parse.stdout)
-                    .unwrap()
-                    .trim()
-                    .to_string(),
-            );
-        }
-    };
-
-    let git_branch = git_branch.unwrap_or("<unknown>".to_string());
-
     // Note that the CFLAGS aren't necessarily the flags that the C code is built with. The `cc`
     // library is in charge of the flags. By default it's supposed to use CFLAGS (which I think we
     // should get from CMake), as well as any flags that are added manually through `flag()` or
@@ -478,8 +413,7 @@ fn build_info() -> String {
     // effort.
 
     format!(
-        "Shadow was built on {date} UTC from \
-        branch {git_branch} with \
+        "Shadow was built with \
         PROFILE={profile}, \
         OPT_LEVEL={opt_level}, \
         DEBUG={debug}, \
@@ -489,12 +423,6 @@ fn build_info() -> String {
 }
 
 fn main() {
-    // Hack to make cargo always run the build script. We embed a timestamp in shadow's build info,
-    // so we always need to re-run this build script to update the timestamp. We also embed git
-    // information on the build info, so we also need to re-run this build script to update the git
-    // details.
-    println!("cargo:rerun-if-changed=a-non-existent-path-sdafdmgidegegt3qyn5hw4oinqg");
-
     let deps = system_deps::Config::new().probe().unwrap();
     let build_common =
         shadow_build_common::ShadowBuildCommon::new(std::path::Path::new("../.."), Some(deps));
@@ -510,10 +438,6 @@ fn main() {
 
     build_remora(&build_common);
     build_shadow_c(&build_common);
-
-    if let Some(git_version) = git_version() {
-        println!("cargo:rustc-env=SHADOW_GIT_VERSION={git_version}");
-    }
 
     println!("cargo:rustc-env=SHADOW_BUILD_INFO={}", build_info());
 }

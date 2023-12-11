@@ -1,0 +1,7 @@
+[package]
+name = "shadow-build-info"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+time = { version = "0.3.30", features = ["formatting"] }

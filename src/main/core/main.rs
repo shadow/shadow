@@ -17,6 +17,8 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
+use shadow_build_info::{BUILD_TIMESTAMP, GIT_BRANCH, GIT_COMMIT_INFO, GIT_DATE};
+
 const HELP_INFO_STR: &str =
     "For more information, visit https://shadow.github.io or https://github.com/shadow";
 
@@ -25,8 +27,6 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // Install the shared memory allocator's clean up routine on exit. Once this guard is dropped,
     // all shared memory allocations will become invalid.
     let _guard = unsafe { crate::shadow_shmem::allocator::SharedMemAllocatorDropGuard::new() };
-
-    let version_display = option_env!("SHADOW_GIT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
 
     verify_glib_version().context("Unsupported GLib version")?;
 
@@ -68,15 +68,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     };
 
     if options.show_build_info {
-        eprintln!("Shadow {version_display}");
-        eprintln!(
-            "GLib v{}.{}.{}",
-            c::GLIB_MAJOR_VERSION,
-            c::GLIB_MINOR_VERSION,
-            c::GLIB_MICRO_VERSION
-        );
-        eprintln!("{}", env!("SHADOW_BUILD_INFO"));
-        eprintln!("{HELP_INFO_STR}");
+        write_build_info(std::io::stderr()).unwrap();
         std::process::exit(0);
     }
 
@@ -192,16 +184,12 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     }
 
     // log some information
-    log::info!("Starting Shadow {version_display}");
-    eprintln!("** Starting Shadow {version_display}");
-    log::info!(
-        "GLib v{}.{}.{}",
-        c::GLIB_MAJOR_VERSION,
-        c::GLIB_MINOR_VERSION,
-        c::GLIB_MICRO_VERSION
-    );
-    log::info!("{}", env!("SHADOW_BUILD_INFO"));
-    log::info!("{HELP_INFO_STR}");
+    eprintln!("** Starting Shadow {}", env!("CARGO_PKG_VERSION"));
+    let mut build_info = Vec::new();
+    write_build_info(&mut build_info).unwrap();
+    for line in std::str::from_utf8(&build_info).unwrap().split('\n') {
+        log::info!("{line}");
+    }
     log::info!("Logging current startup arguments and environment");
     log_environment(args.clone());
 
@@ -238,6 +226,33 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
         // only show if we disabled buffering above
         log::info!("Log message buffering is disabled during cleanup");
     }
+
+    Ok(())
+}
+
+fn write_build_info(mut w: impl std::io::Write) -> std::io::Result<()> {
+    let git_info = if let (Some(commit), Some(date)) = (GIT_COMMIT_INFO, GIT_DATE) {
+        format!(" — {commit} {date}")
+    } else {
+        "".to_string()
+    };
+
+    writeln!(w, "Shadow {}{}", env!("CARGO_PKG_VERSION"), git_info)?;
+    writeln!(
+        w,
+        "GLib {}.{}.{}",
+        c::GLIB_MAJOR_VERSION,
+        c::GLIB_MINOR_VERSION,
+        c::GLIB_MICRO_VERSION,
+    )?;
+    writeln!(w, "Built on {}", BUILD_TIMESTAMP)?;
+    writeln!(
+        w,
+        "Built from git branch {}",
+        GIT_BRANCH.unwrap_or("<unknown>"),
+    )?;
+    writeln!(w, "{}", env!("SHADOW_BUILD_INFO"))?;
+    writeln!(w, "{HELP_INFO_STR}")?;
 
     Ok(())
 }

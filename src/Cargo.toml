@@ -17,6 +17,7 @@ members = [
     "lib/logger",
     "lib/pod",
     "lib/shadow-build-common",
+    "lib/shadow-build-info",
     "lib/shadow-shim-helper-rs",
     "lib/shmem",
     "lib/shim",
