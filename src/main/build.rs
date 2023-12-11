@@ -399,11 +399,15 @@ fn build_info() -> String {
     let profile = std::env::var("PROFILE").unwrap();
     let opt_level = std::env::var("OPT_LEVEL").unwrap();
     let debug = std::env::var("DEBUG").unwrap();
-    let rflags = std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap();
     let cflags = std::env::var("CFLAGS")
         .unwrap_or("<none>".to_string())
         .trim()
         .to_string();
+
+    // replace the unicode separator character with a space
+    let rflags = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .unwrap()
+        .replace('\u{1f}', " ");
 
     // Note that the CFLAGS aren't necessarily the flags that the C code is built with. The `cc`
     // library is in charge of the flags. By default it's supposed to use CFLAGS (which I think we

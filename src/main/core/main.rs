@@ -187,7 +187,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     eprintln!("** Starting Shadow {}", env!("CARGO_PKG_VERSION"));
     let mut build_info = Vec::new();
     write_build_info(&mut build_info).unwrap();
-    for line in std::str::from_utf8(&build_info).unwrap().split('\n') {
+    for line in std::str::from_utf8(&build_info).unwrap().trim().split('\n') {
         log::info!("{line}");
     }
     log::info!("Logging current startup arguments and environment");
