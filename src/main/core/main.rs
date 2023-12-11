@@ -17,56 +17,18 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::utility::shm_cleanup;
 
-fn verify_supported_system() -> anyhow::Result<()> {
-    let uts_name = nix::sys::utsname::uname()?;
-    let sysname = uts_name
-        .sysname()
-        .to_str()
-        .with_context(|| "Decoding system name")?;
-    if sysname != "Linux" {
-        anyhow::bail!("Unsupported sysname: {sysname}");
-    }
-    let version = uts_name
-        .release()
-        .to_str()
-        .with_context(|| "Decoding system release")?;
-    let mut version_parts = version.split('.');
-    let Some(major) = version_parts.next() else {
-        anyhow::bail!("Couldn't find major version in : {version}");
-    };
-    let major: i32 = major
-        .parse()
-        .with_context(|| format!("Parsing major version number '{major}'"))?;
-    let Some(minor) = version_parts.next() else {
-        anyhow::bail!("Couldn't find minor version in : {version}");
-    };
-    let minor: i32 = minor
-        .parse()
-        .with_context(|| format!("Parsing minor version number '{minor}'"))?;
-
-    // Keep in sync with `supported_platforms.md`.
-    const MIN_KERNEL_VERSION: (i32, i32) = (5, 4);
-
-    if (major, minor) < MIN_KERNEL_VERSION {
-        anyhow::bail!(
-            "kernel version {major}.{minor} is older than minimum supported version {}.{}",
-            MIN_KERNEL_VERSION.0,
-            MIN_KERNEL_VERSION.1
-        );
-    }
-
-    Ok(())
-}
+const HELP_INFO_STR: &str =
+    "For more information, visit https://shadow.github.io or https://github.com/shadow";
 
 /// Main entry point for the simulator.
-pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Result<()> {
+pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // Install the shared memory allocator's clean up routine on exit. Once this guard is dropped,
     // all shared memory allocations will become invalid.
     let _guard = unsafe { crate::shadow_shmem::allocator::SharedMemAllocatorDropGuard::new() };
 
-    if unsafe { c::main_checkGlibVersion() } != 0 {
-        return Err(anyhow::anyhow!("Unsupported GLib version"));
-    }
+    let version_display = option_env!("SHADOW_GIT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+
+    verify_glib_version().context("Unsupported GLib version")?;
 
     let mut signals_list = Signals::new([consts::signal::SIGINT, consts::signal::SIGTERM])?;
     thread::spawn(move || {
@@ -106,7 +68,15 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     };
 
     if options.show_build_info {
-        unsafe { c::main_printBuildInfo(build_info) };
+        eprintln!("Shadow {version_display}");
+        eprintln!(
+            "GLib v{}.{}.{}",
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION
+        );
+        eprintln!("{}", env!("SHADOW_BUILD_INFO"));
+        eprintln!("{HELP_INFO_STR}");
         std::process::exit(0);
     }
 
@@ -222,7 +192,17 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     }
 
     // log some information
-    unsafe { c::main_logBuildInfo(build_info) };
+    log::info!("Starting Shadow {version_display}");
+    eprintln!("** Starting Shadow {version_display}");
+    log::info!(
+        "GLib v{}.{}.{}",
+        c::GLIB_MAJOR_VERSION,
+        c::GLIB_MINOR_VERSION,
+        c::GLIB_MICRO_VERSION
+    );
+    log::info!("{}", env!("SHADOW_BUILD_INFO"));
+    log::info!("{HELP_INFO_STR}");
+    log::info!("Logging current startup arguments and environment");
     log_environment(args.clone());
 
     if let Err(e) = verify_supported_system() {
@@ -257,6 +237,88 @@ pub fn run_shadow(build_info: &ShadowBuildInfo, args: Vec<&OsStr>) -> anyhow::Re
     if buffer_log {
         // only show if we disabled buffering above
         log::info!("Log message buffering is disabled during cleanup");
+    }
+
+    Ok(())
+}
+
+fn verify_supported_system() -> anyhow::Result<()> {
+    let uts_name = nix::sys::utsname::uname()?;
+    let sysname = uts_name
+        .sysname()
+        .to_str()
+        .with_context(|| "Decoding system name")?;
+    if sysname != "Linux" {
+        anyhow::bail!("Unsupported sysname: {sysname}");
+    }
+    let version = uts_name
+        .release()
+        .to_str()
+        .with_context(|| "Decoding system release")?;
+    let mut version_parts = version.split('.');
+    let Some(major) = version_parts.next() else {
+        anyhow::bail!("Couldn't find major version in : {version}");
+    };
+    let major: i32 = major
+        .parse()
+        .with_context(|| format!("Parsing major version number '{major}'"))?;
+    let Some(minor) = version_parts.next() else {
+        anyhow::bail!("Couldn't find minor version in : {version}");
+    };
+    let minor: i32 = minor
+        .parse()
+        .with_context(|| format!("Parsing minor version number '{minor}'"))?;
+
+    // Keep in sync with `supported_platforms.md`.
+    const MIN_KERNEL_VERSION: (i32, i32) = (5, 4);
+
+    if (major, minor) < MIN_KERNEL_VERSION {
+        anyhow::bail!(
+            "kernel version {major}.{minor} is older than minimum supported version {}.{}",
+            MIN_KERNEL_VERSION.0,
+            MIN_KERNEL_VERSION.1
+        );
+    }
+
+    Ok(())
+}
+
+fn verify_glib_version() -> anyhow::Result<()> {
+    // Technically redundant, since our minimum glib version enforced by cmake is already larger
+    // than this version. Still, doesn't hurt to keep this check for posterity in case we ever try
+    // to go back to supporting older versions.
+    if c::GLIB_MAJOR_VERSION == 2 && c::GLIB_MINOR_VERSION == 40 {
+        anyhow::bail!(
+            "You compiled against GLib version {}.{}.{}, which has bugs known to break \"
+            Shadow. Please update to a newer version of GLib.",
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+        );
+    }
+
+    // check the that run-time GLib matches the compiled version
+    let mismatch = unsafe {
+        c::glib_check_version(
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+        )
+    };
+
+    if !mismatch.is_null() {
+        let mismatch = unsafe { std::ffi::CStr::from_ptr(mismatch) };
+        anyhow::bail!(
+            "The version of the run-time GLib library ({}.{}.{}) is not compatible with \
+            the version against which Shadow was compiled ({}.{}.{}). GLib message: '{}'.",
+            unsafe { c::glib_major_version },
+            unsafe { c::glib_minor_version },
+            unsafe { c::glib_micro_version },
+            c::GLIB_MAJOR_VERSION,
+            c::GLIB_MINOR_VERSION,
+            c::GLIB_MICRO_VERSION,
+            mismatch.to_string_lossy(),
+        );
     }
 
     Ok(())
@@ -373,27 +435,18 @@ fn log_environment(args: Vec<&OsStr>) {
     }
 }
 
-#[repr(C)]
-pub struct ShadowBuildInfo {
-    version: *const libc::c_char,
-    build: *const libc::c_char,
-    info: *const libc::c_char,
-}
-
 mod export {
     use super::*;
 
     #[no_mangle]
     pub extern "C-unwind" fn main_runShadow(
-        build_info: *const ShadowBuildInfo,
         argc: libc::c_int,
         argv: *const *const libc::c_char,
     ) -> libc::c_int {
         let args = (0..argc).map(|x| unsafe { CStr::from_ptr(*argv.add(x as usize)) });
         let args = args.map(|x| OsStr::from_bytes(x.to_bytes()));
-        let build_info = unsafe { build_info.as_ref().unwrap() };
 
-        let result = run_shadow(build_info, args.collect());
+        let result = run_shadow(args.collect());
         log::logger().flush();
 
         if let Err(e) = result {

@@ -17,22 +17,29 @@
 #include "main/routing/packet.h"
 #include "main/routing/payload.h"
 #include "main/utility/utility.h"
-#include "shd-config.h"
 
 /* g_memdup() is deprecated due to a security issue and has been replaced
  * by g_memdup2(), but not all of our supported platforms support this yet.
  * https://gitlab.gnome.org/GNOME/glib/-/issues/2319
+ *
+ * Instead we'll use our own version.
+ *
+ * https://docs.gtk.org/glib/func.memdup2.html
+ * > Allocates byte_size bytes of memory, and copies byte_size bytes into it
+ * > from mem. If mem is NULL it returns NULL.
  */
 
-#if HAS_MEMDUP2
-#define compat_static_g_memdup g_memdup2
-#else
-#define compat_static_g_memdup(mem, byte_size)                                                     \
-    ({                                                                                             \
-        static_assert(byte_size < UINT_MAX, "g_memdup() overflow");                                \
-        g_memdup(mem, byte_size);                                                                  \
-    })
-#endif
+void* memdup(const void* ptr, size_t byteSize) {
+    if (ptr == NULL) {
+        return NULL;
+    }
+
+    void* newPtr = malloc(byteSize);
+    utility_alwaysAssert(newPtr != NULL);
+
+    memcpy(newPtr, ptr, byteSize);
+    return newPtr;
+}
 
 /* thread-safe structure representing a data/network packet */
 
@@ -186,12 +193,12 @@ Packet* packet_copy(Packet* packet) {
     if(packet->header) {
         switch (packet->protocol) {
             case PUDP: {
-                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketUDPHeader));
+                copy->header = memdup(packet->header, sizeof(PacketUDPHeader));
                 break;
             }
 
             case PTCP: {
-                copy->header = compat_static_g_memdup(packet->header, sizeof(PacketTCPHeader));
+                copy->header = memdup(packet->header, sizeof(PacketTCPHeader));
 
                 PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
                 PacketTCPHeader* copyHeader = (PacketTCPHeader*)copy->header;

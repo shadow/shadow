@@ -77,15 +77,6 @@ jobs:
       - name: Set Rust toolchain
         run: ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
 
-      # No need to fully build shadow, but we need to run cmake to generate shd-config.h,
-      # which is required for some of the rust modules' build scripts that compile C code.
-      - name: run cmake
-        run: |
-          sudo apt-get install cmake
-          mkdir build
-          cd build
-          cmake ..
-
       - name: check rust version
         run: cargo --version
 
@@ -123,6 +114,4 @@ jobs:
       - name: Add rustdoc
         run: rustup component add rust-docs
       - name: Cargo doc check
-        run: |
-          cmake -S . -B build
-          (cd src && RUSTDOCFLAGS='-D warnings' cargo doc)
+        run: (cd src && RUSTDOCFLAGS='-D warnings' cargo doc)

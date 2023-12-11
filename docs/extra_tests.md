@@ -38,7 +38,5 @@ rustup +nightly component add miri
 # Disable leak-checking for now. Some tests intentionally panic, causing leaks.
 export MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
-# You must build shadow without miri first to run CMake.
-./setup build --test --debug
 (cd src && cargo +nightly miri test --workspace)
 ```

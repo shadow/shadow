@@ -76,6 +76,7 @@ system-deps = "6.2"
 # Building the C code from this crate's build script requires
 # that these bindings have been generated.
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
+time = { version = "0.3.30", features = ["formatting"] }
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt
