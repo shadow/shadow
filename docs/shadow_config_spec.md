@@ -72,6 +72,7 @@ hosts:
 - [`network.graph.file.compression`](#networkgraphfilecompression)
 - [`network.use_shortest_path`](#networkuse_shortest_path)
 - [`experimental`](#experimental)
+- [`experimental.dump_preload_libs`](#experimentaldump_preload_libs)
 - [`experimental.host_heartbeat_interval`](#experimentalhost_heartbeat_interval)
 - [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
@@ -97,6 +98,7 @@ hosts:
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.use_worker_spinning`](#experimentaluse_worker_spinning)
+- [`experimental.with_preload_libs`](#experimentalwith_preload_libs)
 - [`experimental.log_errors_to_stderr`](#experimentallog_errors_to_stderr)
 - [`host_option_defaults`](#host_option_defaults)
 - [`host_option_defaults.log_level`](#host_option_defaultslog_level)
@@ -310,6 +312,20 @@ nodes.
 
 Experimental experiment settings. Unstable and may change or be removed at any
 time, regardless of Shadow version.
+
+#### `experimental.dump_preload_libs`
+
+Default: null  
+Type: String OR null
+
+Write the preload libraries to the given directory.
+
+#### `experimental.with_preload_libs`
+
+Default: null  
+Type: String OR null
+
+Use the preload libraries in the given directory instead of the embedded libraries.
 
 #### `experimental.host_heartbeat_interval`
 

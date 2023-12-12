@@ -12,6 +12,7 @@ use signal_hook::{consts, iterator::Signals};
 use crate::core::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::core::controller::Controller;
 use crate::core::logger::shadow_logger;
+use crate::core::preload;
 use crate::core::sim_config::SimConfig;
 use crate::core::worker;
 use crate::cshadow as c;
@@ -143,6 +144,19 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
         );
     }
 
+    let dump_preload_libs = shadow_config
+        .experimental
+        .dump_preload_libs
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .to_option();
+
+    if let Some(path) = dump_preload_libs {
+        preload::dump_libraries(path).context("Could not dump preload libraries")?;
+        return Ok(());
+    }
+
     // before we run the simulation, clean up any orphaned shared memory
     if let Err(e) = shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH) {
         log::warn!("Unable to clean up shared memory files: {:?}", e);
@@ -183,6 +197,9 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
         );
     }
 
+    let preload_files =
+        preload::init(&shadow_config).context("Could not initialize preload libraries")?;
+
     // log some information
     eprintln!("** Starting Shadow {}", env!("CARGO_PKG_VERSION"));
     let mut build_info = Vec::new();
@@ -208,7 +225,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
         .context("Failed to initialize the simulation")?;
 
     // allocate and initialize our main simulation driver
-    let controller = Controller::new(sim_config, &shadow_config);
+    let controller = Controller::new(sim_config, &shadow_config, &preload_files);
 
     // enable log buffering if not at trace level
     let buffer_log = !log::log_enabled!(log::Level::Trace);

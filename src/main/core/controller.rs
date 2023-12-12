@@ -11,6 +11,7 @@ use shadow_shim_helper_rs::util::time::TimeParts;
 
 use crate::core::configuration::ConfigOptions;
 use crate::core::manager::{Manager, ManagerConfig};
+use crate::core::preload::PreloadFiles;
 use crate::core::sim_config::SimConfig;
 use crate::core::worker;
 use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
@@ -19,13 +20,18 @@ pub struct Controller<'a> {
     // general options and user configuration for the simulation
     config: &'a ConfigOptions,
     sim_config: Option<SimConfig>,
+    preload_files: &'a PreloadFiles,
 
     // the simulator should attempt to end immediately after this time
     end_time: EmulatedTime,
 }
 
 impl<'a> Controller<'a> {
-    pub fn new(sim_config: SimConfig, config: &'a ConfigOptions) -> Self {
+    pub fn new(
+        sim_config: SimConfig,
+        config: &'a ConfigOptions,
+        preload_files: &'a PreloadFiles,
+    ) -> Self {
         let end_time: Duration = config.general.stop_time.unwrap().into();
         let end_time: SimulationTime = end_time.try_into().unwrap();
         let end_time = EmulatedTime::SIMULATION_START + end_time;
@@ -33,6 +39,7 @@ impl<'a> Controller<'a> {
         Self {
             config,
             sim_config: Some(sim_config),
+            preload_files,
             end_time,
         }
     }
@@ -59,8 +66,14 @@ impl<'a> Controller<'a> {
             hosts: sim_config.hosts,
         };
 
-        let manager = Manager::new(manager_config, &self, self.config, self.end_time)
-            .context("Failed to initialize the manager")?;
+        let manager = Manager::new(
+            manager_config,
+            &self,
+            self.config,
+            self.preload_files,
+            self.end_time,
+        )
+        .context("Failed to initialize the manager")?;
 
         log::info!("Running simulation");
         let num_plugin_errors = manager.run(status_logger.as_ref().map(|x| x.status()))?;

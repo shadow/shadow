@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
@@ -467,6 +468,18 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_new_tcp").unwrap().as_str())]
     pub use_new_tcp: Option<bool>,
+
+    /// Write the preload libraries to the given directory
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "directory")]
+    #[clap(help = EXP_HELP.get("dump_preload_libs").unwrap().as_str())]
+    pub dump_preload_libs: Option<NullableOption<PathBuf>>,
+
+    /// Use the preload libraries in the given directory instead of the embedded libraries
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "directory")]
+    #[clap(help = EXP_HELP.get("with_preload_libs").unwrap().as_str())]
+    pub with_preload_libs: Option<NullableOption<PathBuf>>,
 }
 
 impl ExperimentalOptions {
@@ -517,6 +530,8 @@ impl Default for ExperimentalOptions {
             scheduler: Some(Scheduler::ThreadPerCore),
             log_errors_to_tty: Some(true),
             use_new_tcp: Some(false),
+            dump_preload_libs: Some(NullableOption::Null),
+            with_preload_libs: Some(NullableOption::Null),
         }
     }
 }

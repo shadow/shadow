@@ -197,6 +197,9 @@ pub struct Host {
 
     /// Paths to be added to LD_PRELOAD of managed processes.
     preload_paths: Arc<Vec<PathBuf>>,
+
+    /// Paths to be added to LD_LIBRARY_PATH of managed processes.
+    injected_ld_library_path: PathBuf,
 }
 
 /// Host must be `Send`.
@@ -222,6 +225,7 @@ impl Host {
         dns: *mut cshadow::DNS,
         manager_shmem: &ShMemBlock<ManagerShmem>,
         preload_paths: Arc<Vec<PathBuf>>,
+        injected_ld_library_path: PathBuf,
     ) -> Self {
         #[cfg(feature = "perf_timers")]
         let execution_timer = RefCell::new(PerfTimer::new());
@@ -337,6 +341,7 @@ impl Host {
             execution_timer,
             in_notify_socket_has_packets,
             preload_paths,
+            injected_ld_library_path,
         };
 
         res.stop_execution_timer();
@@ -1008,6 +1013,10 @@ impl Host {
     /// Paths of libraries that should be preloaded into managed processes.
     pub fn preload_paths(&self) -> &[PathBuf] {
         &self.preload_paths
+    }
+
+    pub fn injected_ld_library_path(&self) -> &Path {
+        &self.injected_ld_library_path
     }
 }
 

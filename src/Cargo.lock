@@ -1432,6 +1432,7 @@ dependencies = [
  "bytes",
  "cbindgen",
  "cc",
+ "cfg-if",
  "clap",
  "crossbeam",
  "gml-parser",

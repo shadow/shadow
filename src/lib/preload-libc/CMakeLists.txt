@@ -13,6 +13,3 @@ target_compile_options(shadow_libc PRIVATE -D_GNU_SOURCE
 
 # Link to the shim so we can forward intercepted syscalls and libcalls there.
 target_link_libraries(shadow_libc shadow-shim)
-
-# We install the libc library so we can preload it.
-install(TARGETS shadow_libc DESTINATION lib)

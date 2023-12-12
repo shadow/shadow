@@ -310,6 +310,7 @@ impl RunnableProcess {
                 .as_deref(),
             &self.shimlog_file,
             host.preload_paths(),
+            host.injected_ld_library_path(),
         )
     }
 
@@ -1021,6 +1022,7 @@ impl Process {
                 .as_deref(),
             &shimlog_file,
             host.preload_paths(),
+            host.injected_ld_library_path(),
         )?;
         let native_pid = mthread.native_pid();
         let main_thread =

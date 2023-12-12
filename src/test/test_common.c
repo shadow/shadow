@@ -130,5 +130,5 @@ bool running_in_shadow() {
     if (ld_preload == NULL) {
         return false;
     }
-    return strstr(ld_preload, "libshadow_injector.so") != NULL;
+    return strstr(ld_preload, "/proc/") != NULL;
 }

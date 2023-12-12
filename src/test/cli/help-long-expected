@@ -83,6 +83,9 @@ Host Defaults (Default options for hosts):
           Should shadow generate pcap files? [default: false]
 
 Experimental (Unstable and may change or be removed at any time, regardless of Shadow version):
+      --dump-preload-libs <directory>
+          Write the preload libraries to the given directory [default: null]
+
       --host-heartbeat-interval <seconds>
           Amount of time between heartbeat messages for this host [default: "1 sec"]
 
@@ -179,6 +182,10 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
       --use-worker-spinning <bool>
           Each worker thread will spin in a `sched_yield` loop while waiting for a new task. This is
           ignored if not using the thread-per-core scheduler. [default: true]
+
+      --with-preload-libs <directory>
+          Use the preload libraries in the given directory instead of the embedded libraries
+          [default: null]
 
 If units are not specified, all values are assumed to be given in their base unit (seconds, bytes,
 bits, etc). Units can optionally be specified (for example: '1024 B', '1024 bytes', '1 KiB', '1

@@ -3,6 +3,7 @@ pub mod controller;
 pub mod cpu;
 pub mod logger;
 pub mod manager;
+pub mod preload;
 pub mod resource_usage;
 pub mod runahead;
 pub mod sim_config;

@@ -6,6 +6,3 @@ add_library(${LIB_NAME} SHARED injector.c)
 
 # Link to the shim so the shim gets injected into the managed process.
 target_link_libraries(${LIB_NAME} shadow-shim)
-
-# We install the library so we can preload it at runtime.
-install(TARGETS ${LIB_NAME} DESTINATION lib)

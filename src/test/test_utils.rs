@@ -287,7 +287,7 @@ pub fn running_in_shadow() -> bool {
     let Ok(ld_preload) = std::env::var("LD_PRELOAD") else {
         return false;
     };
-    ld_preload.contains("libshadow_injector.so")
+    ld_preload.contains("/proc/")
 }
 
 /// Returns `true` if the `POLLIN` flag is set.

@@ -171,16 +171,12 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
-# build the shim after shadow (cargo already parallelizes the build)
-add_dependencies(rust-shadow-shim-project rust-workspace-project)
+# build the shim before shadow (cargo already parallelizes the build)
+add_dependencies(rust-workspace-project rust-shadow-shim-project)
 add_library(shadow-shim SHARED IMPORTED GLOBAL)
 add_dependencies(shadow-shim rust-shadow-shim-project)
 set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_DEBUG ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so)
 set_target_properties(shadow-shim PROPERTIES IMPORTED_LOCATION_RELEASE ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim.so)
-# Use this instead when we're able to bump the cmake min version to >= 3.21:
-# > install(IMPORTED_RUNTIME_ARTIFACTS shadow-shim LIBRARY DESTINATION lib)
-install(FILES ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim.so DESTINATION lib CONFIGURATIONS Debug)
-install(FILES ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim.so DESTINATION lib CONFIGURATIONS Release)
 
 # Outside of external, inclusion of headers within the project should be
 # relative to this directory.

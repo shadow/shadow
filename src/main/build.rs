@@ -166,7 +166,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall_numbers.h")
         .header("host/tracker.h")
         .header("routing/packet.h")
-        .header("utility/rpath.h")
         .header("utility/utility.h")
         // Haven't decided how to handle glib struct types yet. Avoid using them
         // until we do.
@@ -382,7 +381,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "routing/address.c",
         "routing/dns.c",
         "utility/priority_queue.c",
-        "utility/rpath.c",
         "utility/utility.c",
     ]);
     build.compile("shadow-c");

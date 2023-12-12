@@ -1,9 +1,9 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, OsString};
 use std::io::Write;
 use std::os::fd::AsRawFd;
 use std::os::unix::prelude::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{atomic, Arc};
 
 use linux_api::sched::CloneFlags;
@@ -93,10 +93,16 @@ impl ManagedThread {
         strace_file: Option<&std::fs::File>,
         log_file: &std::fs::File,
         injected_preloads: &[PathBuf],
+        injected_ld_library_path: &Path,
     ) -> nix::Result<Self> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
 
-        let envv = inject_preloads(envv, injected_preloads);
+        let mut envv = inject_preloads(envv, injected_preloads);
+
+        let mut ld_library_path = OsString::new();
+        ld_library_path.push("LD_LIBRARY_PATH=");
+        ld_library_path.push(injected_ld_library_path.as_os_str());
+        envv.push(CString::new(ld_library_path.as_bytes()).unwrap());
 
         debug!("env after preload injection: {envv:?}");
 

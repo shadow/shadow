@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString, OsStr, OsString};
+use std::ffi::{CString, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
@@ -23,6 +23,7 @@ use shadow_shmem::allocator::ShMemBlock;
 use crate::core::configuration::{self, ConfigOptions, Flatten};
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::cpu;
+use crate::core::preload::PreloadFiles;
 use crate::core::resource_usage;
 use crate::core::runahead::Runahead;
 use crate::core::sim_config::{Bandwidth, HostInfo};
@@ -48,6 +49,7 @@ pub struct Manager<'a> {
     hosts_path: PathBuf,
 
     preload_paths: Arc<Vec<PathBuf>>,
+    injected_ld_library_path: PathBuf,
 
     check_fd_usage: bool,
     check_mem_usage: bool,
@@ -61,6 +63,7 @@ impl<'a> Manager<'a> {
         manager_config: ManagerConfig,
         controller: &'a Controller<'a>,
         config: &'a ConfigOptions,
+        preload_files: &'a PreloadFiles,
         end_time: EmulatedTime,
     ) -> anyhow::Result<Self> {
         // get the system's CPU frequency
@@ -83,50 +86,11 @@ impl<'a> Manager<'a> {
             raw_frequency
         };
 
-        let mut preload_paths = Vec::new();
-
-        // we always preload the injector lib to ensure that the shim is loaded into the managed
-        // processes
-        const PRELOAD_INJECTOR_LIB: &str = "libshadow_injector.so";
-        preload_paths.push(
-            get_required_preload_path(PRELOAD_INJECTOR_LIB).with_context(|| {
-                format!("Failed to get path to preload library '{PRELOAD_INJECTOR_LIB}'")
-            })?,
-        );
-
-        // preload libc lib if option is enabled
-        const PRELOAD_LIBC_LIB: &str = "libshadow_libc.so";
-        if config.experimental.use_preload_libc.unwrap() {
-            let path = get_required_preload_path(PRELOAD_LIBC_LIB).with_context(|| {
-                format!("Failed to get path to preload library '{PRELOAD_LIBC_LIB}'")
-            })?;
-            preload_paths.push(path);
-        } else {
-            log::info!("Preloading the libc library is disabled");
-        };
-
-        // preload openssl rng lib if option is enabled
-        const PRELOAD_OPENSSL_RNG_LIB: &str = "libshadow_openssl_rng.so";
-        if config.experimental.use_preload_openssl_rng.unwrap() {
-            let path = get_required_preload_path(PRELOAD_OPENSSL_RNG_LIB).with_context(|| {
-                format!("Failed to get path to preload library '{PRELOAD_OPENSSL_RNG_LIB}'")
-            })?;
-            preload_paths.push(path);
-        } else {
-            log::info!("Preloading the openssl rng library is disabled");
-        };
-
-        // preload openssl crypto lib if option is enabled
-        const PRELOAD_OPENSSL_CRYPTO_LIB: &str = "libshadow_openssl_crypto.so";
-        if config.experimental.use_preload_openssl_crypto.unwrap() {
-            let path =
-                get_required_preload_path(PRELOAD_OPENSSL_CRYPTO_LIB).with_context(|| {
-                    format!("Failed to get path to preload library '{PRELOAD_OPENSSL_CRYPTO_LIB}'")
-                })?;
-            preload_paths.push(path);
-        } else {
-            log::info!("Preloading the openssl crypto library is disabled");
-        };
+        let preload_paths = preload_files
+            .files
+            .iter()
+            .map(|preload| preload.path.clone())
+            .collect();
 
         // use the working dir to generate absolute paths
         let cwd = std::env::current_dir()?;
@@ -207,6 +171,7 @@ impl<'a> Manager<'a> {
             data_path,
             hosts_path,
             preload_paths: Arc::new(preload_paths),
+            injected_ld_library_path: preload_files.shim_dir().to_path_buf(),
             check_fd_usage: true,
             check_mem_usage: true,
             meminfo_file,
@@ -618,6 +583,7 @@ impl<'a> Manager<'a> {
                     dns,
                     self.shmem(),
                     self.preload_paths.clone(),
+                    self.injected_ld_library_path.clone(),
                 )
             })
         };
@@ -825,36 +791,4 @@ fn get_raw_cpu_frequency_hz() -> anyhow::Result<u64> {
     const CONFIG_CPU_MAX_FREQ_FILE: &str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
     let khz: u64 = std::fs::read_to_string(CONFIG_CPU_MAX_FREQ_FILE)?.parse()?;
     Ok(khz * 1000)
-}
-
-fn get_required_preload_path(libname: &str) -> anyhow::Result<PathBuf> {
-    let libname_c = CString::new(libname).unwrap();
-    let libpath_c = unsafe { c::scanRpathForLib(libname_c.as_ptr()) };
-
-    // scope needed to make sure the CStr is dropped before we free libpath_c
-    let libpath = if !libpath_c.is_null() {
-        let libpath = unsafe { CStr::from_ptr(libpath_c) };
-        let libpath = OsStr::from_bytes(libpath.to_bytes());
-        Some(PathBuf::from(libpath.to_os_string()))
-    } else {
-        None
-    };
-
-    unsafe { libc::free(libpath_c as *mut libc::c_void) };
-
-    let libpath = libpath.ok_or_else(|| anyhow::anyhow!(format!("Could not library in rpath")))?;
-
-    let bytes = libpath.as_os_str().as_bytes();
-    if bytes.iter().any(|c| *c == b' ' || *c == b':') {
-        // These are unescapable separators in LD_PRELOAD.
-        anyhow::bail!("Preload path contains LD_PRELOAD-incompatible characters: {libpath:?}");
-    }
-
-    log::debug!(
-        "Found required preload library {} at path {}",
-        libname,
-        libpath.display(),
-    );
-
-    Ok(libpath)
 }
