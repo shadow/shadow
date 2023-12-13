@@ -1,7 +1,6 @@
 use linux_api::epoll::EpollEvents;
 
-use crate::host::descriptor::FileState;
-use crate::utility::callback_queue::Handle;
+use crate::host::descriptor::{FileState, StateListenHandle};
 
 /// Used to track the status of a file we are monitoring for events. Any complicated logic for
 /// deciding when a file has events that epoll should report should be specified in this object's
@@ -14,7 +13,7 @@ pub(super) struct Entry {
     /// The data registered by the managed process, to be returned upon event notification.
     data: u64,
     /// The handle to the currently registered file status listener.
-    listener_handle: Option<Handle<(FileState, FileState)>>,
+    listener_handle: Option<StateListenHandle>,
     /// The current state of the file.
     state: FileState,
     /// The file state changes we have already reported since the state last changed. When a state
@@ -85,7 +84,7 @@ impl Entry {
         Self::state_from_events(self.interest).union(FileState::CLOSED)
     }
 
-    pub fn set_listener_handle(&mut self, handle: Option<Handle<(FileState, FileState)>>) {
+    pub fn set_listener_handle(&mut self, handle: Option<StateListenHandle>) {
         self.listener_handle = handle;
     }
 

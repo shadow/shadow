@@ -11,14 +11,14 @@ use shadow_shim_helper_rs::{
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
+    FileMode, FileState, FileStatus, StateEventSource, StateListenHandle, StateListenerFilter,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecWriter};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
 use crate::host::timer::Timer;
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::HostTreePointer;
 
 pub struct TimerFd {
@@ -215,7 +215,7 @@ impl TimerFd {
         monitoring: FileState,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }

@@ -9,7 +9,8 @@ use unix::UnixSocket;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, Handle, OpenFile, StateListenerFilter, SyscallResult,
+    FileMode, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
+    SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
@@ -249,7 +250,7 @@ impl SocketRefMut<'_> {
             monitoring: FileState,
             filter: StateListenerFilter,
             notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-        ) -> Handle<(FileState, FileState)>
+        ) -> StateListenHandle
     );
     enum_passthrough!(self, (ptr), Unix, Inet;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

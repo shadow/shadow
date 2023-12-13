@@ -6,21 +6,17 @@ use rand::seq::SliceRandom;
 
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::FileState;
-use crate::host::descriptor::{StateEventSource, StateListenerFilter};
-use crate::utility::callback_queue::Handle;
+use crate::host::descriptor::{StateEventSource, StateListenHandle, StateListenerFilter};
 
 struct NamespaceEntry {
     /// The bound socket.
     socket: Weak<AtomicRefCell<UnixSocket>>,
     /// The event listener handle, which removes the listener when dropped.
-    _handle: Handle<(FileState, FileState)>,
+    _handle: StateListenHandle,
 }
 
 impl NamespaceEntry {
-    pub fn new(
-        socket: Weak<AtomicRefCell<UnixSocket>>,
-        handle: Handle<(FileState, FileState)>,
-    ) -> Self {
+    pub fn new(socket: Weak<AtomicRefCell<UnixSocket>>, handle: StateListenHandle) -> Self {
         Self {
             socket,
             _handle: handle,
@@ -189,7 +185,7 @@ impl AbstractUnixNamespace {
         ns: Weak<AtomicRefCell<Self>>,
         event_source: &mut StateEventSource,
         f: impl Fn(&mut Self) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         event_source.add_listener(
             FileState::CLOSED,
             StateListenerFilter::OffToOn,

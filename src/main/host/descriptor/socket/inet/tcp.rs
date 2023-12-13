@@ -17,7 +17,8 @@ use crate::host::descriptor::socket::inet;
 use crate::host::descriptor::socket::{InetSocket, RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{File, Socket};
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenerFilter, SyscallResult,
+    FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenHandle,
+    StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
@@ -25,7 +26,7 @@ use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
@@ -948,7 +949,7 @@ impl TcpSocket {
         monitoring: FileState,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }

@@ -173,12 +173,15 @@ impl Drop for LegacyListener {
     }
 }
 
+/// [Handles](Handle) for [event source](StateEventSource) listeners.
+pub type StateListenHandle = Handle<(FileState, FileState)>;
+
 /// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
 struct LegacyListenerHelper {
     // We expect only a small number of listeners at a time, which means that performance is
     // generally better and memory usage is lower with a `Vec` than a `HashMap`. The `usize` is the
     // pointer of the [`c::StatusListener`] that corresponds to this [`Handle`].
-    handles: Vec<(usize, Handle<(FileState, FileState)>)>,
+    handles: Vec<(usize, StateListenHandle)>,
 }
 
 impl LegacyListenerHelper {
@@ -246,7 +249,7 @@ impl StateEventSource {
         monitoring: FileState,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         self.inner.add_listener(move |(state, changed), cb_queue| {
             // true if any of the bits we're monitoring have changed
             let flipped = monitoring.intersects(changed);
@@ -453,7 +456,7 @@ impl FileRefMut<'_> {
             monitoring: FileState,
             filter: StateListenerFilter,
             notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-        ) -> Handle<(FileState, FileState)>
+        ) -> StateListenHandle
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

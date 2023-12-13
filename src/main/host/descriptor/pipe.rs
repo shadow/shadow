@@ -10,12 +10,12 @@ use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
+    FileMode, FileState, FileStatus, StateEventSource, StateListenHandle, StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::HostTreePointer;
 
 pub struct Pipe {
@@ -318,7 +318,7 @@ impl Pipe {
         monitoring: FileState,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }

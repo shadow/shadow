@@ -9,12 +9,13 @@ use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
+    File, FileMode, FileState, FileStatus, StateEventSource, StateListenHandle,
+    StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
 use self::entry::Entry;
@@ -213,7 +214,7 @@ impl Epoll {
         monitoring: FileState,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+    ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
     }
