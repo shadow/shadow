@@ -189,7 +189,7 @@ impl AbstractUnixNamespace {
         event_source.add_listener(
             FileState::CLOSED,
             StateListenerFilter::OffToOn,
-            move |state, _changed, _cb_queue| {
+            move |state, _changed, _signals, _cb_queue| {
                 assert!(state.contains(FileState::CLOSED));
                 if let Some(ns) = ns.upgrade() {
                     f(&mut ns.borrow_mut());

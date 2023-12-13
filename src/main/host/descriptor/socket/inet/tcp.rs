@@ -17,7 +17,7 @@ use crate::host::descriptor::socket::inet;
 use crate::host::descriptor::socket::{InetSocket, RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{File, Socket};
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenHandle,
+    FileMode, FileSignals, FileState, FileStatus, OpenFile, StateEventSource, StateListenHandle,
     StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
@@ -948,7 +948,10 @@ impl TcpSocket {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
@@ -984,8 +987,12 @@ impl TcpSocket {
             return;
         }
 
-        self.event_source
-            .notify_listeners(self.file_state, states_changed, cb_queue);
+        self.event_source.notify_listeners(
+            self.file_state,
+            states_changed,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 }
 

@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs};
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
+    FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
     SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
@@ -341,7 +341,7 @@ impl InetSocketRefMut<'_> {
             &mut self,
             monitoring: FileState,
             filter: StateListenerFilter,
-            notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+            notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue) + Send + Sync + 'static,
         ) -> StateListenHandle
     );
     enum_passthrough!(self, (ptr), LegacyTcp, Tcp, Udp;

@@ -139,6 +139,14 @@ impl From<FileState> for c::Status {
     }
 }
 
+bitflags::bitflags! {
+    /// File-related signals that listeners can watch for.
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct FileSignals: u32 {
+        // TODO: this will be useful for supporting edge-triggered epoll "buffer changed" signals
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum StateListenerFilter {
     Never,
@@ -174,7 +182,7 @@ impl Drop for LegacyListener {
 }
 
 /// [Handles](Handle) for [event source](StateEventSource) listeners.
-pub type StateListenHandle = Handle<(FileState, FileState)>;
+pub type StateListenHandle = Handle<(FileState, FileState, FileSignals)>;
 
 /// Stores event listener handles so that `c::StatusListener` objects can subscribe to events.
 struct LegacyListenerHelper {
@@ -194,7 +202,7 @@ impl LegacyListenerHelper {
     fn add_listener(
         &mut self,
         ptr: HostTreePointer<c::StatusListener>,
-        event_source: &mut EventSource<(FileState, FileState)>,
+        event_source: &mut EventSource<(FileState, FileState, FileSignals)>,
     ) {
         assert!(!unsafe { ptr.ptr() }.is_null());
 
@@ -210,9 +218,10 @@ impl LegacyListenerHelper {
         // this will ref the pointer and unref it when the closure is dropped
         let ptr_wrapper = LegacyListener::new(ptr);
 
-        let handle = event_source.add_listener(move |(state, changed), _cb_queue| unsafe {
-            c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state.into(), changed.into())
-        });
+        let handle =
+            event_source.add_listener(move |(state, changed, _signals), _cb_queue| unsafe {
+                c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state.into(), changed.into())
+            });
 
         // use a usize as the key so we don't accidentally deref the pointer
         self.handles.push((unsafe { ptr.ptr() } as usize, handle));
@@ -232,7 +241,7 @@ impl LegacyListenerHelper {
 /// A specified event source that passes a state and the changed bits to the function, but only if
 /// the monitored bits have changed and if the change the filter is satisfied.
 pub struct StateEventSource {
-    inner: EventSource<(FileState, FileState)>,
+    inner: EventSource<(FileState, FileState, FileSignals)>,
     legacy_helper: LegacyListenerHelper,
 }
 
@@ -248,31 +257,35 @@ impl StateEventSource {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
-        self.inner.add_listener(move |(state, changed), cb_queue| {
-            // true if any of the bits we're monitoring have changed
-            let flipped = monitoring.intersects(changed);
+        self.inner
+            .add_listener(move |(state, changed, signal), cb_queue| {
+                // true if any of the bits we're monitoring have changed
+                let flipped = monitoring.intersects(changed);
 
-            // true if any of the bits we're monitoring are set
-            let on = monitoring.intersects(state);
+                // true if any of the bits we're monitoring are set
+                let on = monitoring.intersects(state);
 
-            let notify = match filter {
-                // at least one monitored bit is on, and at least one has changed
-                StateListenerFilter::OffToOn => flipped && on,
-                // all monitored bits are off, and at least one has changed
-                StateListenerFilter::OnToOff => flipped && !on,
-                // at least one monitored bit has changed
-                StateListenerFilter::Always => flipped,
-                StateListenerFilter::Never => false,
-            };
+                let notify = match filter {
+                    // at least one monitored bit is on, and at least one has changed
+                    StateListenerFilter::OffToOn => flipped && on,
+                    // all monitored bits are off, and at least one has changed
+                    StateListenerFilter::OnToOff => flipped && !on,
+                    // at least one monitored bit has changed
+                    StateListenerFilter::Always => flipped,
+                    StateListenerFilter::Never => false,
+                };
 
-            if !notify {
-                return;
-            }
+                if !notify {
+                    return;
+                }
 
-            (notify_fn)(state, changed, cb_queue)
-        })
+                (notify_fn)(state, changed, signal, cb_queue)
+            })
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
@@ -287,9 +300,11 @@ impl StateEventSource {
         &mut self,
         state: FileState,
         changed: FileState,
+        signals: FileSignals,
         cb_queue: &mut CallbackQueue,
     ) {
-        self.inner.notify_listeners((state, changed), cb_queue)
+        self.inner
+            .notify_listeners((state, changed, signals), cb_queue)
     }
 }
 
@@ -455,7 +470,7 @@ impl FileRefMut<'_> {
             &mut self,
             monitoring: FileState,
             filter: StateListenerFilter,
-            notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+            notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue) + Send + Sync + 'static,
         ) -> StateListenHandle
     );
     enum_passthrough!(self, (ptr), Pipe, EventFd, Socket, TimerFd, Epoll;

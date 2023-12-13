@@ -16,8 +16,8 @@ use crate::host::descriptor::shared_buf::{
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, OpenFile, StateEventSource, StateListenHandle,
-    StateListenerFilter, SyscallResult,
+    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, StateEventSource,
+    StateListenHandle, StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
@@ -324,7 +324,10 @@ impl UnixSocket {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
         self.common
             .event_source
@@ -2202,8 +2205,12 @@ impl UnixSocketCommon {
             return;
         }
 
-        self.event_source
-            .notify_listeners(self.state, states_changed, cb_queue);
+        self.event_source.notify_listeners(
+            self.state,
+            states_changed,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 }
 

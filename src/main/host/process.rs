@@ -32,7 +32,7 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
-use super::descriptor::{FileState, StateEventSource};
+use super::descriptor::{FileSignals, FileState, StateEventSource};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
@@ -770,6 +770,7 @@ impl ZombieProcess {
             parent_child_listeners.notify_listeners(
                 FileState::CHILD_EVENT,
                 FileState::CHILD_EVENT,
+                FileSignals::empty(),
                 q,
             );
         });

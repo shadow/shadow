@@ -6,7 +6,8 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenHandle, StateListenerFilter,
+    FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
+    StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
@@ -194,7 +195,10 @@ impl EventFd {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
@@ -249,7 +253,11 @@ impl EventFd {
             return;
         }
 
-        self.event_source
-            .notify_listeners(self.state, states_changed, cb_queue);
+        self.event_source.notify_listeners(
+            self.state,
+            states_changed,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 }

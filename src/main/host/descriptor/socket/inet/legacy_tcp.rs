@@ -14,7 +14,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
-    CompatFile, File, FileMode, FileState, FileStatus, OpenFile, StateListenHandle,
+    CompatFile, File, FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle,
     StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
@@ -1258,7 +1258,10 @@ impl LegacyTcpSocket {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
         let event_source = unsafe { c::legacyfile_getEventSource(self.as_legacy_file()) };
         let event_source = unsafe { event_source.as_ref() }.unwrap();

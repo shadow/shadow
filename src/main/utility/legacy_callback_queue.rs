@@ -64,6 +64,7 @@ mod export {
 
     use crate::core::worker;
     use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::host::descriptor::FileSignals;
     use crate::host::host::Host;
 
     /// Notify listeners using the global callback queue. If the queue hasn't been set using
@@ -84,7 +85,12 @@ mod export {
 
                 worker::Worker::with_active_host(|host| {
                     let mut event_source = event_source.borrow_mut(host.root());
-                    event_source.notify_listeners(status.into(), changed.into(), cb_queue)
+                    event_source.notify_listeners(
+                        status.into(),
+                        changed.into(),
+                        FileSignals::empty(),
+                        cb_queue,
+                    )
                 })
                 .unwrap();
             });

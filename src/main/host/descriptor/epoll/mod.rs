@@ -9,7 +9,7 @@ use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateEventSource, StateListenHandle,
+    File, FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
     StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
@@ -213,7 +213,10 @@ impl Epoll {
         &mut self,
         monitoring: FileState,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring, filter, notify_fn)
@@ -254,8 +257,12 @@ impl Epoll {
 
         // If something changed, notify our listeners.
         if !states_changed.is_empty() {
-            self.event_source
-                .notify_listeners(self.state, states_changed, cb_queue);
+            self.event_source.notify_listeners(
+                self.state,
+                states_changed,
+                FileSignals::empty(),
+                cb_queue,
+            );
         }
     }
 
@@ -271,15 +278,17 @@ impl Epoll {
 
         // Set up a callback so we get informed when the file changes.
         let file = key.file().clone();
-        let handle =
-            file.borrow_mut()
-                .add_listener(listen, filter, move |state, changed, cb_queue| {
-                    if let Some(epoll) = weak_self.upgrade() {
-                        epoll
-                            .borrow_mut()
-                            .notify_entry(&key, state, changed, cb_queue);
-                    }
-                });
+        let handle = file.borrow_mut().add_listener(
+            listen,
+            filter,
+            move |state, changed, _signals, cb_queue| {
+                if let Some(epoll) = weak_self.upgrade() {
+                    epoll
+                        .borrow_mut()
+                        .notify_entry(&key, state, changed, cb_queue);
+                }
+            },
+        );
         entry.set_listener_handle(Some(handle));
     }
 
