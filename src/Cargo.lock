@@ -1414,6 +1414,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadow-build-info"
+version = "0.1.0"
+dependencies = [
+ "time",
+]
+
+[[package]]
 name = "shadow-pod"
 version = "0.1.0"
 dependencies = [
@@ -1458,6 +1465,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "shadow-build-common",
+ "shadow-build-info",
  "shadow-pod",
  "shadow-shim-helper-rs",
  "shadow_shmem",
@@ -1469,7 +1477,6 @@ dependencies = [
  "system-deps",
  "tcp",
  "tempfile",
- "time",
  "vasi-sync",
  "vsprintf",
  "which 5.0.0",
