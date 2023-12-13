@@ -74,6 +74,7 @@ mod export {
         event_source: *const RootedRefCell_StateEventSource,
         status: c::Status,
         changed: c::Status,
+        signals: FileSignals,
     ) {
         let event_source = unsafe { event_source.as_ref() }.unwrap();
 
@@ -85,12 +86,7 @@ mod export {
 
                 worker::Worker::with_active_host(|host| {
                     let mut event_source = event_source.borrow_mut(host.root());
-                    event_source.notify_listeners(
-                        status.into(),
-                        changed.into(),
-                        FileSignals::empty(),
-                        cb_queue,
-                    )
+                    event_source.notify_listeners(status.into(), changed.into(), signals, cb_queue)
                 })
                 .unwrap();
             });

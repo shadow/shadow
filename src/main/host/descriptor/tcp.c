@@ -669,7 +669,7 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
     /* some state transitions require us to update the descriptor status */
     switch (state) {
         case TCPS_LISTEN: {
-            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, TRUE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, TRUE, 0);
             break;
         }
         case TCPS_SYNSENT: {
@@ -681,7 +681,7 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
         case TCPS_ESTABLISHED: {
             tcp->flags |= TCPF_WAS_ESTABLISHED;
             legacyfile_adjustStatus(
-                (LegacyFile*)tcp, STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
+                (LegacyFile*)tcp, STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE, 0);
             break;
         }
         case TCPS_CLOSING: {
@@ -694,7 +694,7 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
             _tcp_clearRetransmit(tcp, (guint)-1);
 
             /* user can no longer use socket */
-            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE, 0);
 
             bool disassociate = true;
 
@@ -826,7 +826,7 @@ static void _tcp_bufferPacketOut(TCP* tcp, Packet* packet) {
         /* the packet takes up more space */
         tcp->throttledOutputLength += packet_getPayloadSize(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE, 0);
         }
 
         packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_THROTTLED);
@@ -986,7 +986,7 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
 
         tcp->retransmit.queueLength += packet_getPayloadSize(packet);
         if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE, 0);
         }
     }
 }
@@ -1032,7 +1032,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
 
     if (_tcp_getBufferSpaceOut(tcp) > 0 &&
         (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE, 0);
     }
 }
 
@@ -1056,7 +1056,7 @@ static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
 
     if (_tcp_getBufferSpaceOut(tcp) > 0 &&
         (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE, 0);
     }
 }
 
@@ -1196,7 +1196,7 @@ static void _tcp_retransmitPacket(TCP* tcp, const Host* host, gint sequence) {
 
     if (_tcp_getBufferSpaceOut(tcp) > 0 &&
         (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE)) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE, 0);
     }
 
     /* reset retransmit timer since we are resending it now */
@@ -1429,18 +1429,18 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         if((tcp->receive.next >= tcp->receive.end) && !(tcp->flags & TCPF_EOF_RD_SIGNALED)) {
             /* user needs to read a 0 so it knows we closed */
             tcp->error |= TCPE_RECEIVE_EOF;
-            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE);
+            legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE, 0);
         }
     }
 
     if((tcp->error & TCPE_CONNECTION_RESET) && (tcp->flags & TCPF_RESET_SIGNALED)) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE, 0);
     } else if((tcp->error & TCPE_SEND_EOF) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE, 0);
     } else if(_tcp_getBufferSpaceOut(tcp) <= 0) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, FALSE, 0);
     } else if (legacyfile_getStatus((LegacyFile*)tcp) & STATUS_FILE_ACTIVE) {
-        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE);
+        legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_WRITABLE, TRUE, 0);
     }
 }
 
@@ -1716,7 +1716,7 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
     if(g_queue_get_length(tcp->server->pending) <= 0) {
         /* listen sockets should have no data, and should not be readable if no pending conns */
         utility_debugAssert(legacysocket_getInputBufferLength(&tcp->super) == 0);
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE, 0);
         return -EWOULDBLOCK;
     }
 
@@ -1742,13 +1742,13 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
 
     /* update child descriptor status */
     legacyfile_adjustStatus(
-        &(tcpChild->super.super), STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE);
+        &(tcpChild->super.super), STATUS_FILE_ACTIVE | STATUS_FILE_WRITABLE, TRUE, 0);
 
     /* update server descriptor status */
     if(g_queue_get_length(tcp->server->pending) > 0) {
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE, 0);
     } else {
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE, 0);
     }
 
     /* if we're trying to accept the socket from a different process than the process that the
@@ -2167,7 +2167,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                     g_queue_push_tail(tcp->child->parent->server->pending, tcp);
                     /* user should accept new child from parent */
                     legacyfile_adjustStatus(
-                        &(tcp->child->parent->super.super), STATUS_FILE_READABLE, TRUE);
+                        &(tcp->child->parent->super.super), STATUS_FILE_READABLE, TRUE, 0);
                 }
             }
             break;
@@ -2406,8 +2406,8 @@ static void _tcp_endOfFileSignalled(TCP* tcp, enum TCPFlags flags) {
     if((tcp->flags & TCPF_EOF_RD_SIGNALED) && (tcp->flags & TCPF_EOF_WR_SIGNALED)) {
         /* user can no longer access socket */
         /* FIXME: a file should not be closed if there are still file handles (fds) to it */
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_CLOSED, TRUE);
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_ACTIVE, FALSE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_CLOSED, TRUE, 0);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_ACTIVE, FALSE, 0);
     }
 }
 
@@ -2608,7 +2608,7 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
     if ((legacysocket_getInputBufferLength(&(tcp->super)) > 0) ||
         (tcp->partialUserDataPacket != NULL)) {
         /* we still have readable data */
-        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
+        legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE, 0);
         more_readable_data = true;
     } else {
         /* all of our ordered user data has been read */
@@ -2617,7 +2617,7 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
             if(totalCopied > 0) {
                 /* we just received bytes, so we can't EOF until the next call.
                  * make sure we stay readable so we DO actually EOF the socket */
-                legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE);
+                legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE, 0);
             } else {
                 /* OK, no more data and nothing just received. */
                 if(tcp->state == TCPS_CLOSED) {
@@ -2629,7 +2629,7 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
             }
         } else {
             /* our socket still has unordered data or is still open, but empty for now */
-            legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE);
+            legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, FALSE, 0);
         }
     }
 
@@ -2733,7 +2733,7 @@ static void _tcp_close(LegacyFile* descriptor, const Host* host) {
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
     /* the user closed the connection, so should never interact with the socket again */
-    legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE);
+    legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_ACTIVE, FALSE, 0);
 
     switch (tcp->state) {
         case TCPS_LISTEN:

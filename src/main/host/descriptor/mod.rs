@@ -142,6 +142,7 @@ impl From<FileState> for c::Status {
 bitflags::bitflags! {
     /// File-related signals that listeners can watch for.
     #[derive(Default, Copy, Clone, Debug)]
+    #[repr(transparent)]
     pub struct FileSignals: u32 {
         // TODO: this will be useful for supporting edge-triggered epoll "buffer changed" signals
     }

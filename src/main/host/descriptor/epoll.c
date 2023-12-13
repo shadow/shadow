@@ -335,7 +335,7 @@ Epoll* epoll_new() {
     epoll->ready = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
 
     /* the epoll descriptor itself is always able to be epolled */
-    legacyfile_adjustStatus(&(epoll->super), STATUS_FILE_ACTIVE, TRUE);
+    legacyfile_adjustStatus(&(epoll->super), STATUS_FILE_ACTIVE, TRUE, 0);
 
     worker_count_allocation(Epoll);
 
@@ -728,7 +728,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
     legacyfile_adjustStatus(
-        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
+        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
 
     return 0;
 }
@@ -770,5 +770,5 @@ static void _epoll_fileStatusChanged(Epoll* epoll, const EpollKey* key) {
 
     /* check the status on the parent epoll fd and adjust as needed */
     legacyfile_adjustStatus(
-        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE);
+        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
 }
