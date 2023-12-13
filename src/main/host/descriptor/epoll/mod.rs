@@ -211,7 +211,8 @@ impl Epoll {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
             + Send
@@ -219,7 +220,7 @@ impl Epoll {
             + 'static,
     ) -> StateListenHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<crate::cshadow::StatusListener>) {
@@ -273,13 +274,15 @@ impl Epoll {
 
         // Check what state we need to listen for this entry.
         // We always listen for closed so we know when to stop monitoring the entry.
-        let listen = entry.get_listener_state().union(FileState::CLOSED);
+        let listen_state = entry.get_listener_state().union(FileState::CLOSED);
+        let listen_signals = FileSignals::empty();
         let filter = StateListenerFilter::Always;
 
         // Set up a callback so we get informed when the file changes.
         let file = key.file().clone();
         let handle = file.borrow_mut().add_listener(
-            listen,
+            listen_state,
+            listen_signals,
             filter,
             move |state, changed, _signals, cb_queue| {
                 if let Some(epoll) = weak_self.upgrade() {

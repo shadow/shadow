@@ -1256,7 +1256,8 @@ impl LegacyTcpSocket {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
             + Send
@@ -1268,7 +1269,7 @@ impl LegacyTcpSocket {
 
         Worker::with_active_host(|host| {
             let mut event_source = event_source.borrow_mut(host.root());
-            event_source.add_listener(monitoring, filter, notify_fn)
+            event_source.add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
         })
         .unwrap()
     }

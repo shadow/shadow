@@ -5,7 +5,7 @@ use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
-use crate::host::descriptor::FileState;
+use crate::host::descriptor::{FileSignals, FileState};
 use crate::host::descriptor::{StateEventSource, StateListenHandle, StateListenerFilter};
 
 struct NamespaceEntry {
@@ -188,6 +188,7 @@ impl AbstractUnixNamespace {
     ) -> StateListenHandle {
         event_source.add_listener(
             FileState::CLOSED,
+            FileSignals::empty(),
             StateListenerFilter::OffToOn,
             move |state, _changed, _signals, _cb_queue| {
                 assert!(state.contains(FileState::CLOSED));

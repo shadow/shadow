@@ -336,10 +336,11 @@ impl InetSocketRefMut<'_> {
     enum_passthrough!(self, (request, arg_ptr, memory_manager), LegacyTcp, Tcp, Udp;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (monitoring, filter, notify_fn), LegacyTcp, Tcp, Udp;
+    enum_passthrough!(self, (monitoring_state, monitoring_signals, filter, notify_fn), LegacyTcp, Tcp, Udp;
         pub fn add_listener(
             &mut self,
-            monitoring: FileState,
+            monitoring_state: FileState,
+            monitoring_signals: FileSignals,
             filter: StateListenerFilter,
             notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue) + Send + Sync + 'static,
         ) -> StateListenHandle

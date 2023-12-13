@@ -951,7 +951,8 @@ impl UdpSocket {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
             + Send
@@ -959,7 +960,7 @@ impl UdpSocket {
             + 'static,
     ) -> StateListenHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {

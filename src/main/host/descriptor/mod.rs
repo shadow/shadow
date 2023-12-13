@@ -253,9 +253,12 @@ impl StateEventSource {
         }
     }
 
+    /// Add a listener. The filter applies only to state changes, not signals. Only signals that are
+    /// monitored will be passed to the listener.
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
             + Send
@@ -263,12 +266,12 @@ impl StateEventSource {
             + 'static,
     ) -> StateListenHandle {
         self.inner
-            .add_listener(move |(state, changed, signal), cb_queue| {
+            .add_listener(move |(state, changed, signals), cb_queue| {
                 // true if any of the bits we're monitoring have changed
-                let flipped = monitoring.intersects(changed);
+                let flipped = monitoring_state.intersects(changed);
 
                 // true if any of the bits we're monitoring are set
-                let on = monitoring.intersects(state);
+                let on = monitoring_state.intersects(state);
 
                 let notify = match filter {
                     // at least one monitored bit is on, and at least one has changed
@@ -280,11 +283,17 @@ impl StateEventSource {
                     StateListenerFilter::Never => false,
                 };
 
+                // filter the signals to only the ones we're monitoring
+                let signals = signals.intersection(monitoring_signals);
+
+                // also want to notify if a monitored signal was emitted
+                let notify = notify || !signals.is_empty();
+
                 if !notify {
                     return;
                 }
 
-                (notify_fn)(state, changed, signal, cb_queue)
+                (notify_fn)(state, changed, signals, cb_queue)
             })
     }
 
@@ -465,10 +474,11 @@ impl FileRefMut<'_> {
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (monitoring, filter, notify_fn), Pipe, EventFd, Socket, TimerFd, Epoll;
+    enum_passthrough!(self, (monitoring_state, monitoring_signals, filter, notify_fn), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn add_listener(
             &mut self,
-            monitoring: FileState,
+            monitoring_state: FileState,
+            monitoring_signals: FileSignals,
             filter: StateListenerFilter,
             notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue) + Send + Sync + 'static,
         ) -> StateListenHandle
