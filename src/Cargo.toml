@@ -41,4 +41,10 @@ members = [
 # In our test suite the main place we see failures without this is in the
 # `clone-shadow` test, but it could also affect golang or other environments
 # with "light" user-space threading.
-opt-level = 1 
+opt-level = 1
+
+[profile.dev.build-override]
+# Our build scripts are slow due to bindgen, cbindgen, and cc. Using optimizations for build scripts
+# significantly reduces the runtime of the build scripts, which is most impactful during incremental
+# builds.
+opt-level = 3
