@@ -227,9 +227,10 @@ impl UdpSocket {
         // drop the existing association handle to disassociate the socket
         self.association = None;
 
-        self.copy_state(
+        self.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
         Ok(())
@@ -982,37 +983,45 @@ impl UdpSocket {
         let readable = readable.then_some(FileState::READABLE).unwrap_or_default();
         let writable = writable.then_some(FileState::WRITABLE).unwrap_or_default();
 
-        self.copy_state(
+        self.update_state(
             /* mask= */ FileState::READABLE | FileState::WRITABLE,
             readable | writable,
+            FileSignals::empty(),
             cb_queue,
         );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
-        self.event_source.notify_listeners(
-            self.state,
-            states_changed,
-            FileSignals::empty(),
-            cb_queue,
-        );
+        self.event_source
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
 

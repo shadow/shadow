@@ -985,9 +985,10 @@ impl Protocol for ConnOrientedInitial {
     }
 
     fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
-        common.copy_state(
+        common.update_state(
             /* mask= */ FileState::all(),
             FileState::ACTIVE,
+            FileSignals::empty(),
             cb_queue,
         );
     }
@@ -1278,7 +1279,12 @@ impl Protocol for ConnOrientedListening {
         // In practice this should be uncommon so we don't worry about it, and avoids requiring that
         // the server keep a list of all connecting clients.
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
+        common.update_state(
+            /* mask= */ FileState::all(),
+            new_state,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 
     fn close(
@@ -1448,7 +1454,12 @@ impl Protocol for ConnOrientedConnected {
             );
         }
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
+        common.update_state(
+            /* mask= */ FileState::all(),
+            new_state,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 
     fn close(
@@ -1571,9 +1582,10 @@ impl Protocol for ConnOrientedClosed {
     }
 
     fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
-        common.copy_state(
+        common.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
     }
@@ -1619,7 +1631,12 @@ impl Protocol for ConnLessInitial {
             new_state.set(FileState::WRITABLE, common.sent_len < common.send_limit);
         }
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
+        common.update_state(
+            /* mask= */ FileState::all(),
+            new_state,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 
     fn close(
@@ -1821,9 +1838,10 @@ impl Protocol for ConnLessClosed {
     }
 
     fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
-        common.copy_state(
+        common.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
     }
@@ -1874,9 +1892,10 @@ impl UnixSocketCommon {
         if !self.state.contains(FileState::CLOSED) {
             // set the flag here since we missed doing it before
             // do this before the below panic, otherwise rust gives us warnings
-            self.copy_state(
+            self.update_state(
                 /* mask= */ FileState::all(),
                 FileState::CLOSED,
+                FileSignals::empty(),
                 cb_queue,
             );
 
@@ -2191,30 +2210,37 @@ impl UnixSocketCommon {
         Err(Errno::EINVAL.into())
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
-        self.event_source.notify_listeners(
-            self.state,
-            states_changed,
-            FileSignals::empty(),
-            cb_queue,
-        );
+        self.event_source
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
 

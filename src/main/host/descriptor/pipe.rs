@@ -112,9 +112,10 @@ impl Pipe {
         self.buffer = None;
 
         // set the closed flag and remove the active, readable, and writable flags
-        self.copy_state(
+        self.update_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
 
@@ -371,33 +372,40 @@ impl Pipe {
         }
 
         // update the file's state
-        self.copy_state(mask, file_state, cb_queue);
+        self.update_state(mask, file_state, FileSignals::empty(), cb_queue);
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
-        self.event_source.notify_listeners(
-            self.state,
-            states_changed,
-            FileSignals::empty(),
-            cb_queue,
-        );
+        self.event_source
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
 

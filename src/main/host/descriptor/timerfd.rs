@@ -65,7 +65,7 @@ impl TimerFd {
         // here to make sure that any listeners that need to wake up and handle a readable TimerFd
         // are not invoked until after we release the borrow.
         CallbackQueue::queue_and_run(|cb_queue| {
-            timerfd.borrow_mut().update_state(cb_queue);
+            timerfd.borrow_mut().refresh_state(cb_queue);
         });
     }
 
@@ -97,7 +97,7 @@ impl TimerFd {
     ) {
         // Make sure to update our READABLE status.
         self.timer.arm(host, expire_time, interval);
-        self.update_state(cb_queue);
+        self.refresh_state(cb_queue);
     }
 
     /// Disarm the timer so that it no longer fires expiration events, enabling support for
@@ -105,7 +105,7 @@ impl TimerFd {
     pub fn disarm_timer(&mut self, cb_queue: &mut CallbackQueue) {
         // Make sure to update our READABLE status.
         self.timer.disarm();
-        self.update_state(cb_queue);
+        self.refresh_state(cb_queue);
     }
 
     pub fn status(&self) -> FileStatus {
@@ -170,7 +170,7 @@ impl TimerFd {
         writer.write_all(&to_write)?;
 
         // We just read the expiration counter and so are not readable anymore.
-        self.update_state(cb_queue);
+        self.refresh_state(cb_queue);
 
         Ok(NUM_BYTES.try_into().unwrap())
     }
@@ -189,9 +189,10 @@ impl TimerFd {
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         // Set the closed flag and remove the active and readable flags.
-        self.copy_state(
+        self.update_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE,
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
 
@@ -237,7 +238,7 @@ impl TimerFd {
         self.state
     }
 
-    fn update_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
         if self.state.contains(FileState::CLOSED) {
             return;
         }
@@ -247,32 +248,44 @@ impl TimerFd {
         // Set the descriptor as readable if we have a non-zero expiration count.
         new_state.set(FileState::READABLE, self.get_timer_count() > 0);
 
-        self.copy_state(FileState::READABLE, new_state, cb_queue);
+        self.update_state(
+            FileState::READABLE,
+            new_state,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // Remove the mask, then copy the masked flags.
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // Just return if nothing changed.
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
-        self.event_source.notify_listeners(
-            self.state,
-            states_changed,
-            FileSignals::empty(),
-            cb_queue,
-        );
+        self.event_source
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
