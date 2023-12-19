@@ -14,7 +14,8 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
-    CompatFile, File, FileMode, FileState, FileStatus, OpenFile, StateListenerFilter, SyscallResult,
+    CompatFile, File, FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle,
+    StateListenerFilter, SyscallResult,
 };
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
@@ -24,7 +25,7 @@ use crate::host::syscall::io::{write_partial, IoVec};
 use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::packet::PacketRc;
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
@@ -1255,16 +1256,20 @@ impl LegacyTcpSocket {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
+    ) -> StateListenHandle {
         let event_source = unsafe { c::legacyfile_getEventSource(self.as_legacy_file()) };
         let event_source = unsafe { event_source.as_ref() }.unwrap();
 
         Worker::with_active_host(|host| {
             let mut event_source = event_source.borrow_mut(host.root());
-            event_source.add_listener(monitoring, filter, notify_fn)
+            event_source.add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
         })
         .unwrap()
     }

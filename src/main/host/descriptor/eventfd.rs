@@ -6,12 +6,13 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter,
+    FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
+    StateListenerFilter,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::{SyscallError, SyscallResult};
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::HostTreePointer;
 
 pub struct EventFd {
@@ -63,9 +64,10 @@ impl EventFd {
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         // set the closed flag and remove the active, readable, and writable flags
-        self.copy_state(
+        self.update_state(
             FileState::CLOSED | FileState::ACTIVE | FileState::READABLE | FileState::WRITABLE,
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
 
@@ -118,7 +120,7 @@ impl EventFd {
             self.counter = 0;
         }
 
-        self.update_state(cb_queue);
+        self.refresh_state(cb_queue);
 
         Ok(NUM_BYTES.try_into().unwrap())
     }
@@ -175,7 +177,7 @@ impl EventFd {
         }
 
         self.counter += value;
-        self.update_state(cb_queue);
+        self.refresh_state(cb_queue);
 
         Ok(NUM_BYTES.try_into().unwrap())
     }
@@ -192,12 +194,16 @@ impl EventFd {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
+    ) -> StateListenHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
@@ -212,7 +218,7 @@ impl EventFd {
         self.state
     }
 
-    fn update_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
         if self.state.contains(FileState::CLOSED) {
             return;
         }
@@ -224,32 +230,44 @@ impl EventFd {
         // set the descriptor as writable if we can write a value of at least 1
         readable_writable.set(FileState::WRITABLE, self.counter < u64::MAX - 1);
 
-        self.copy_state(
+        self.update_state(
             FileState::READABLE | FileState::WRITABLE,
             readable_writable,
+            FileSignals::empty(),
             cb_queue,
         );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, cb_queue);
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }

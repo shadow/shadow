@@ -16,8 +16,8 @@ use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, ShutdownFlags};
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, OpenFile, Socket, StateEventSource, StateListenerFilter,
-    SyscallResult,
+    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, Socket, StateEventSource,
+    StateListenHandle, StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
@@ -25,7 +25,7 @@ use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall_types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
@@ -227,9 +227,10 @@ impl UdpSocket {
         // drop the existing association handle to disassociate the socket
         self.association = None;
 
-        self.copy_state(
+        self.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
         Ok(())
@@ -951,12 +952,16 @@ impl UdpSocket {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
+    ) -> StateListenHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
@@ -978,33 +983,45 @@ impl UdpSocket {
         let readable = readable.then_some(FileState::READABLE).unwrap_or_default();
         let writable = writable.then_some(FileState::WRITABLE).unwrap_or_default();
 
-        self.copy_state(
+        self.update_state(
             /* mask= */ FileState::READABLE | FileState::WRITABLE,
             readable | writable,
+            FileSignals::empty(),
             cb_queue,
         );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
         self.event_source
-            .notify_listeners(self.state, states_changed, cb_queue);
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
 

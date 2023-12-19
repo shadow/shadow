@@ -9,7 +9,8 @@ use unix::UnixSocket;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{
-    FileMode, FileState, FileStatus, Handle, OpenFile, StateListenerFilter, SyscallResult,
+    FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
+    SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
@@ -243,13 +244,14 @@ impl SocketRefMut<'_> {
     enum_passthrough!(self, (request, arg_ptr, memory_manager), Unix, Inet;
         pub fn ioctl(&mut self, request: IoctlRequest, arg_ptr: ForeignPtr<()>, memory_manager: &mut MemoryManager) -> SyscallResult
     );
-    enum_passthrough!(self, (monitoring, filter, notify_fn), Unix, Inet;
+    enum_passthrough!(self, (monitoring_state, monitoring_signals, filter, notify_fn), Unix, Inet;
         pub fn add_listener(
             &mut self,
-            monitoring: FileState,
+            monitoring_state: FileState,
+            monitoring_signals: FileSignals,
             filter: StateListenerFilter,
-            notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-        ) -> Handle<(FileState, FileState)>
+            notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue) + Send + Sync + 'static,
+        ) -> StateListenHandle
     );
     enum_passthrough!(self, (ptr), Unix, Inet;
         pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>)

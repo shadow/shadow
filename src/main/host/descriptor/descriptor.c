@@ -149,7 +149,7 @@ void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     }
 
     trace("Descriptor %p calling vtable close now", descriptor);
-    legacyfile_adjustStatus(descriptor, STATUS_FILE_CLOSED, TRUE);
+    legacyfile_adjustStatus(descriptor, STATUS_FILE_CLOSED, TRUE, 0);
 
     descriptor->funcTable->close(descriptor, host);
 }
@@ -187,13 +187,14 @@ static gchar* _legacyfile_statusToString(Status ds) {
 }
 #endif
 
-static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldStatus) {
+static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldStatus,
+                                           FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
     Status statusesChanged = descriptor->status ^ oldStatus;
 
-    if (!statusesChanged) {
+    if (!statusesChanged && !signals) {
         return;
     }
 
@@ -206,10 +207,11 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
 #endif
 
     notify_listeners_with_global_cb_queue(
-        descriptor->event_source, descriptor->status, statusesChanged);
+        descriptor->event_source, descriptor->status, statusesChanged, signals);
 }
 
-void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits) {
+void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits,
+                             FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
     Status oldStatus = descriptor->status;
@@ -224,7 +226,7 @@ void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doS
     }
 
     /* Let helper handle the change. */
-    _legacyfile_handleStatusChange(descriptor, oldStatus);
+    _legacyfile_handleStatusChange(descriptor, oldStatus, signals);
 }
 
 Status legacyfile_getStatus(LegacyFile* descriptor) {

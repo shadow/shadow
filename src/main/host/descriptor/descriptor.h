@@ -9,6 +9,7 @@
 
 #include <glib.h>
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/process.h"
 #include "main/host/status_listener.h"
@@ -60,7 +61,8 @@ void legacyfile_removeFlags(LegacyFile* descriptor, gint flags);
  * listener will trigger notifications via callback functions if the listener is
  * configured to monitor a bit that flipped.
  */
-void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits);
+void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits,
+                             FileSignals signals);
 
 /* Gets the current status of the descriptor. */
 Status legacyfile_getStatus(LegacyFile* descriptor);

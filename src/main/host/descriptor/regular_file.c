@@ -126,7 +126,7 @@ static void _regularfile_closeHelper(RegularFile* file) {
             file->osfile.fd = OSFILE_INVALID;
 
             /* The os-backed file is no longer ready. */
-            legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE);
+            legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, FALSE, 0);
         }
     }
 }
@@ -355,7 +355,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
 
     /* The os-backed file is now ready. */
-    legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, TRUE);
+    legacyfile_adjustStatus(&file->super, STATUS_FILE_ACTIVE, TRUE, 0);
 
     return 0;
 }

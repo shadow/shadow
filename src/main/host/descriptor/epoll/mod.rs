@@ -9,12 +9,13 @@ use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::{
-    File, FileMode, FileState, FileStatus, StateEventSource, StateListenerFilter, SyscallResult,
+    File, FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
+    StateListenerFilter, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall_types::SyscallError;
-use crate::utility::callback_queue::{CallbackQueue, Handle};
+use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, ObjectCounter};
 
 use self::entry::Entry;
@@ -90,9 +91,10 @@ impl Epoll {
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
-        self.copy_state(
+        self.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            FileSignals::empty(),
             cb_queue,
         );
         Ok(())
@@ -210,12 +212,16 @@ impl Epoll {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
+        monitoring_signals: FileSignals,
         filter: StateListenerFilter,
-        notify_fn: impl Fn(FileState, FileState, &mut CallbackQueue) + Send + Sync + 'static,
-    ) -> Handle<(FileState, FileState)> {
+        notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
+            + Send
+            + Sync
+            + 'static,
+    ) -> StateListenHandle {
         self.event_source
-            .add_listener(monitoring, filter, notify_fn)
+            .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<crate::cshadow::StatusListener>) {
@@ -235,26 +241,42 @@ impl Epoll {
             .has_ready_events()
             .then_some(FileState::READABLE)
             .unwrap_or_default();
-        self.copy_state(/* mask= */ FileState::READABLE, readable, cb_queue);
+        self.update_state(
+            /* mask= */ FileState::READABLE,
+            readable,
+            FileSignals::empty(),
+            cb_queue,
+        );
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // Remove the masked flags, then copy the masked flags.
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // If something changed, notify our listeners.
-        if !states_changed.is_empty() {
+        if !states_changed.is_empty() || !signals.is_empty() {
             self.event_source
-                .notify_listeners(self.state, states_changed, cb_queue);
+                .notify_listeners(self.state, states_changed, signals, cb_queue);
         }
     }
 
@@ -265,20 +287,24 @@ impl Epoll {
 
         // Check what state we need to listen for this entry.
         // We always listen for closed so we know when to stop monitoring the entry.
-        let listen = entry.get_listener_state().union(FileState::CLOSED);
+        let listen_state = entry.get_listener_state().union(FileState::CLOSED);
+        let listen_signals = FileSignals::empty();
         let filter = StateListenerFilter::Always;
 
         // Set up a callback so we get informed when the file changes.
         let file = key.file().clone();
-        let handle =
-            file.borrow_mut()
-                .add_listener(listen, filter, move |state, changed, cb_queue| {
-                    if let Some(epoll) = weak_self.upgrade() {
-                        epoll
-                            .borrow_mut()
-                            .notify_entry(&key, state, changed, cb_queue);
-                    }
-                });
+        let handle = file.borrow_mut().add_listener(
+            listen_state,
+            listen_signals,
+            filter,
+            move |state, changed, _signals, cb_queue| {
+                if let Some(epoll) = weak_self.upgrade() {
+                    epoll
+                        .borrow_mut()
+                        .notify_entry(&key, state, changed, cb_queue);
+                }
+            },
+        );
         entry.set_listener_handle(Some(handle));
     }
 
