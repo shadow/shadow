@@ -29,6 +29,7 @@
     - [Compatibility Notes](compatibility_notes.md)
 - [Contributing](contributing.md)
     - [Coding style](coding_style.md)
+    - [Writing tests](writing_tests.md)
     - [Pull requests](pull_requests.md)
 - [Developer Guide]()
     - [Coding](coding.md)
