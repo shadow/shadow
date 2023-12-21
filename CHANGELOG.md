@@ -36,6 +36,10 @@ currently be disabled via the (unstable) option `log-errors-to-tty`.
 
 * Added support for the `SIOCGSTAMP` ioctl for TCP and UDP sockets.
 
+* Improved the simulation run time performance when there are a large number of
+  active sockets on a single host.
+  ([#3238](https://github.com/shadow/shadow/discussions/3238))
+
 PATCH changes (bugfixes):
 
 * Updated documentation and tests to reflect that shadow no longer requires
@@ -60,6 +64,10 @@ that use an inlined syscall instruction to make `sched_yield` syscalls.
 
 * Fixed the behaviour of the `read` and `recv` syscalls when called with
   0-length buffers.
+
+* Fixed incorrect behaviour (incorrect return value or panic) when `connect`
+  is called on a listening unix or tcp socket.
+  ([#3191](https://github.com/shadow/shadow/pull/3191))
 
 Full changelog since v3.0.0:
 
