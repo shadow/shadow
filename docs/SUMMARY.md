@@ -27,6 +27,10 @@
     - [Non-goal: Security](security.md)
     - [Known limitations and workarounds](limitations.md)
     - [Compatibility Notes](compatibility_notes.md)
+- [Contributing](contributing.md)
+    - [Coding style](coding_style.md)
+    - [Writing tests](writing_tests.md)
+    - [Pull requests](pull_requests.md)
 - [Developer Guide]()
     - [Coding](coding.md)
     - [Debugging](debugging.md)
@@ -38,10 +42,4 @@
     - [Shadow Output]()
         - [Format of the Log Messages](log_format.md)
         - [Parsing Statistics from the Logs](parsing_shadow_logs.md)
-
-# The Shadow Project
-
-- [Contributing](contributing.md)
-    - [Coding style](coding_style.md)
-    - [Pull requests](pull_requests.md)
 - [NSF Sponsorship](nsf_sponsorship.md)
