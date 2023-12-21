@@ -67,8 +67,8 @@ with hundreds of thousands of processes.
 Shadow implements **over 150 functions from the system call API**, but does not
 yet fully support all API features. Although applications that make _basic_ use
 of the supported system calls should work out of the box, those that use more
-_complex_ features or functions (e.g., `fork()`) may not yet function correctly
-when running in Shadow. Extending support for the API is a work-in-progress.
+_complex_ features or functions may not yet function correctly when running in
+Shadow. Extending support for the API is a work-in-progress.
 
 That being said, we are particularly motivated to run large-scale [Tor
 Network](https://www.torproject.org) simulations. This use-case is already
