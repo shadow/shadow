@@ -20,6 +20,7 @@ pub mod status_bar;
 pub mod stream_len;
 pub mod synchronization;
 pub mod syscall;
+pub mod units;
 
 use std::collections::HashSet;
 use std::ffi::CString;

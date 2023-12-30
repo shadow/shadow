@@ -11,9 +11,9 @@ use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
-use super::units::{self, Unit};
 use crate::cshadow as c;
 use crate::host::syscall::formatter::FmtOptions;
+use crate::utility::units::{self, Unit};
 
 const START_HELP_TEXT: &str = "\
     Run real applications over simulated networks.\n\n\

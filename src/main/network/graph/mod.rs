@@ -13,9 +13,9 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use crate::core::support::configuration::{
     self, Compression, FileSource, GraphOptions, GraphSource,
 };
-use crate::core::support::{units, units::Unit};
 use crate::network::graph::petgraph_wrapper::GraphWrapper;
 use crate::utility::tilde_expansion;
+use crate::utility::units::{self, Unit};
 
 type NetGraphError = Box<dyn Error + Send + Sync + 'static>;
 
