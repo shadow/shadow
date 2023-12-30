@@ -160,13 +160,9 @@ impl Worker {
     {
         Worker::with(|w| {
             let host = w.active_host.borrow();
-            let Some(host) = host.as_ref() else {
-                return None;
-            };
+            let host = host.as_ref()?;
             let thread = w.active_thread.borrow();
-            let Some(thread) = thread.as_ref() else {
-                return None;
-            };
+            let thread = thread.as_ref()?;
             let thread = thread.borrow(host.root());
             Some(f(&thread))
         })

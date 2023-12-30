@@ -394,10 +394,7 @@ impl RunnableProcess {
     pub fn with_strace_file<T>(&self, f: impl FnOnce(&mut std::fs::File) -> T) -> Option<T> {
         // TODO: get Host from caller. Would need t update syscall-logger.
         Worker::with_active_host(|host| {
-            let Some(ref strace_logging) = self.strace_logging else {
-                return None;
-            };
-
+            let strace_logging = self.strace_logging.as_ref()?;
             let mut file = strace_logging.file.borrow_mut(host.root());
             Some(f(&mut file))
         })
