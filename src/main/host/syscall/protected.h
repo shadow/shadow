@@ -19,7 +19,6 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/epoll.h"
 #include "main/host/process.h"
-#include "main/host/syscall_handler.h"
 #include "main/utility/utility.h"
 
 typedef enum {

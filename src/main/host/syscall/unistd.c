@@ -17,7 +17,6 @@
 #include "main/host/process.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/syscall_condition.h"
-#include "main/host/syscall_handler.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

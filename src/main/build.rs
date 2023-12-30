@@ -63,7 +63,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/network/network_interface.h".into(),
             "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
-            "main/host/syscall_handler.h".into(),
             "main/host/tracker_types.h".into(),
             "main/routing/dns.h".into(),
             "main/routing/packet.minimal.h".into(),
