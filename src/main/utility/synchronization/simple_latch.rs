@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use nix::errno::Errno;
+use linux_api::errno::Errno;
 
 /// A simple reusable latch. Multiple waiters can wait for the latch to open. After opening the
 /// latch with [`open()`](Self::open), you must not open the latch again until all waiters have
@@ -64,31 +64,20 @@ impl Latch {
     /// Open the latch.
     pub fn open(&mut self) {
         // the addition is wrapping
-        let _prev = self.latch_gen.fetch_add(1, Ordering::Release);
+        self.latch_gen.fetch_add(1, Ordering::Release);
 
-        // This is safe since `AtomicU32` "has the same in-memory representation as the underlying
-        // integer type, u32": https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html.
-        //
-        // TODO: Consider using `as_mut_ptr` here once it's stabilized.
-        // https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html#method.as_mut_ptr
-        static_assertions::assert_eq_size!(AtomicU32, u32);
-        static_assertions::assert_eq_align!(AtomicU32, u32);
-
-        let futex_word: &AtomicU32 = self.latch_gen.as_ref();
-
-        let rv = unsafe {
-            libc::syscall(
-                libc::SYS_futex,
-                futex_word.as_ptr(),
-                libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
-                // the man page says to use INT_MAX, even though this is a uint32_t
-                i32::MAX,
-                std::ptr::null::<libc::timespec>(),
-                std::ptr::null_mut::<u32>(),
-                0u32,
-            )
-        };
-        assert!(rv >= 0);
+        libc_futex(
+            &self.latch_gen,
+            libc::FUTEX_WAKE | libc::FUTEX_PRIVATE_FLAG,
+            // the man page says to use INT_MAX which is weird since this is a u32, but the kernel
+            // `do_futex` function implicitly casts this to an int when passing it to `futex_wake`
+            // (as of linux 6.6.8), so this seems like the right value to use
+            i32::MAX as u32,
+            None,
+            None,
+            0,
+        )
+        .expect("FUTEX_WAKE failed");
     }
 }
 
@@ -114,21 +103,16 @@ impl LatchWaiter {
             }
 
             if !self.spin_yield {
-                let futex_word: &AtomicU32 = self.latch_gen.as_ref();
-
-                let rv = Errno::result(unsafe {
-                    libc::syscall(
-                        libc::SYS_futex,
-                        futex_word.as_ptr(),
-                        libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
-                        latch_gen,
-                        std::ptr::null::<libc::timespec>(),
-                        std::ptr::null_mut::<u32>(),
-                        0u32,
-                    )
-                });
+                let rv = libc_futex(
+                    &self.latch_gen,
+                    libc::FUTEX_WAIT | libc::FUTEX_PRIVATE_FLAG,
+                    latch_gen,
+                    None,
+                    None,
+                    0,
+                );
                 assert!(
-                    rv.is_ok() || rv == Err(Errno::EAGAIN) || rv == Err(Errno::EINTR),
+                    matches!(rv, Ok(_) | Err(Errno::EAGAIN | Errno::EINTR)),
                     "FUTEX_WAIT failed with {rv:?}"
                 );
             } else {
@@ -145,6 +129,39 @@ impl LatchWaiter {
 
     pub fn enable_spinning(&mut self, value: bool) {
         self.spin_yield = value;
+    }
+}
+
+// Perform a futex operation using libc. Miri only understands futex syscalls made through the
+// [`libc::syscall`] function so we need to use it here. I don't see any reason to mark this as
+// "unsafe", but I didn't look through all of the possible futex operations.
+pub fn libc_futex(
+    uaddr: &AtomicU32,
+    op: core::ffi::c_int,
+    val: u32,
+    utime: Option<&libc::timespec>,
+    uaddr2: Option<&AtomicU32>,
+    val3: u32,
+) -> Result<core::ffi::c_int, Errno> {
+    let uaddr: *mut u32 = uaddr.as_ptr();
+    let utime: *const libc::timespec = utime
+        // TODO: in rust 1.76 use `core::ptr::from_ref`
+        .map(|x| x as *const _)
+        .unwrap_or(core::ptr::null_mut());
+    let uaddr2: *mut u32 = uaddr2
+        .map(AtomicU32::as_ptr)
+        .unwrap_or(core::ptr::null_mut());
+
+    let rv = unsafe { libc::syscall(libc::SYS_futex, uaddr, op, val, utime, uaddr2, val3) };
+
+    if rv >= 0 {
+        // the linux x86-64 syscall implementation returns an int so I don't think this should ever
+        // fail
+        Ok(rv.try_into().expect("futex() returned invalid int"))
+    } else {
+        let errno = unsafe { *libc::__errno_location() };
+        debug_assert_eq!(rv, -1);
+        Err(Errno::try_from(errno).unwrap())
     }
 }
 
