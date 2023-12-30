@@ -20,8 +20,8 @@ use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
+use crate::host::syscall::condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::host::syscall::handler::SyscallHandler;
-use crate::host::syscall_condition::{SysCallConditionRef, SysCallConditionRefMut};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{syscall, IsSend, ObjectCounter};
 

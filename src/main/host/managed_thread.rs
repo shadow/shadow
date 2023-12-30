@@ -20,7 +20,7 @@ use vasi_sync::scchannel::SelfContainedChannelError;
 
 use super::context::ThreadContext;
 use super::host::Host;
-use super::syscall_condition::SysCallCondition;
+use super::syscall::condition::SysCallCondition;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;

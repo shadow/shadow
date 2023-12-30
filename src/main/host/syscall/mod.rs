@@ -3,6 +3,7 @@ use linux_api::syscall::SyscallNum;
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
 
+pub mod condition;
 pub mod formatter;
 pub mod handler;
 pub mod io;

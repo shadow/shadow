@@ -4,9 +4,9 @@ use linux_api::signal::Signal;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::util::SendPointer;
 
-use super::host::Host;
 use crate::cshadow;
 use crate::host::descriptor::OpenFile;
+use crate::host::host::Host;
 use crate::host::syscall::Trigger;
 
 /// An immutable reference to a syscall condition.

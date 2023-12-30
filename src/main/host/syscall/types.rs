@@ -10,8 +10,8 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
+use crate::host::syscall::condition::SysCallCondition;
 use crate::host::syscall::Trigger;
-use crate::host::syscall_condition::SysCallCondition;
 
 /// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
 #[derive(Copy, Clone)]

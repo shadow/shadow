@@ -1157,11 +1157,11 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::syscall::condition::SysCallCondition;
     use crate::host::syscall::types::{
         Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
     use crate::host::syscall::Trigger;
-    use crate::host::syscall_condition::SysCallCondition;
 
     #[test]
     // can't call foreign function: syscallcondition_new
