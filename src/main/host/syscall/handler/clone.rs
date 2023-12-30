@@ -11,7 +11,7 @@ use syscall_logger::log_syscall;
 
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 use super::{SyscallContext, SyscallHandler};

@@ -5,7 +5,7 @@ use syscall_logger::log_syscall;
 use crate::cshadow;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallStringArg;
-use crate::host::syscall_types::SyscallResult;
+use crate::host::syscall::types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* dirfd */ std::ffi::c_int, /* pathname */ SyscallStringArg,

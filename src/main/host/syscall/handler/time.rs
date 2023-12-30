@@ -8,7 +8,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::timer::Timer;
 
 fn itimerval_from_timer(timer: &Timer) -> linux_api::time::itimerval {

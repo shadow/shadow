@@ -140,7 +140,7 @@ pub struct Failed {
     pub restartable: bool,
 }
 
-pub type SyscallResult = Result<crate::host::syscall_types::SysCallReg, SyscallError>;
+pub type SyscallResult = Result<SysCallReg, SyscallError>;
 
 impl From<SyscallReturn> for SyscallResult {
     fn from(r: SyscallReturn) -> Self {

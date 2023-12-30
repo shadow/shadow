@@ -16,7 +16,7 @@ use crate::host::descriptor::{
 };
 use crate::host::{
     syscall::handler::{SyscallContext, SyscallHandler},
-    syscall_types::SyscallError,
+    syscall::types::SyscallError,
 };
 use crate::utility::callback_queue::CallbackQueue;
 

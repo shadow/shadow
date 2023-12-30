@@ -11,7 +11,7 @@ use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
 
@@ -1157,11 +1157,11 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::syscall::Trigger;
-    use crate::host::syscall_condition::SysCallCondition;
-    use crate::host::syscall_types::{
+    use crate::host::syscall::types::{
         Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
+    use crate::host::syscall::Trigger;
+    use crate::host::syscall_condition::SysCallCondition;
 
     #[test]
     // can't call foreign function: syscallcondition_new

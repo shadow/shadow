@@ -7,6 +7,7 @@ pub mod formatter;
 pub mod handler;
 pub mod io;
 pub mod type_formatting;
+pub mod types;
 
 /// Is the syscall a Shadow-specific syscall?
 fn is_shadow_syscall(n: SyscallNum) -> bool {

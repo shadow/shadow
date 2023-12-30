@@ -21,8 +21,8 @@ use crate::host::descriptor::Descriptor;
 use crate::host::process::ProcessId;
 use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall::is_shadow_syscall;
-use crate::host::syscall_types::SyscallReturn;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::SyscallReturn;
+use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::counter::Counter;
 

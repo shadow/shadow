@@ -305,7 +305,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::memory_manager::MemoryManager;")
         .raw_line("use crate::host::process::Process;")
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
-        .raw_line("use crate::host::syscall_types::SyscallReturn;")
+        .raw_line("use crate::host::syscall::types::SyscallReturn;")
         .raw_line("use crate::host::thread::Thread;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")

@@ -29,7 +29,7 @@ use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use super::context::ThreadContext;
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::Thread;
 
 mod memory_copier;

@@ -36,7 +36,7 @@ use super::descriptor::{FileSignals, FileState, StateEventSource};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::ForeignArrayPtr;
+use super::syscall::types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
 use crate::core::configuration::{ProcessFinalState, RunningVal};
@@ -1916,7 +1916,7 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::host::syscall_types::ForeignArrayPtr;
+    use crate::host::syscall::types::ForeignArrayPtr;
     use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
 

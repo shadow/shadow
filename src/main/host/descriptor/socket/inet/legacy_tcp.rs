@@ -22,7 +22,7 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{write_partial, IoVec};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::packet::PacketRc;
 use crate::utility::callback_queue::CallbackQueue;

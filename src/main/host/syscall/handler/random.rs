@@ -5,7 +5,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallResult};
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ isize, /* buf */ *const std::ffi::c_void, /* count */ usize,

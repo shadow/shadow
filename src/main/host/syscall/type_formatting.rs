@@ -4,7 +4,7 @@ use shadow_shim_helper_rs::util::DebugFormatter;
 use super::formatter::{FmtOptions, SyscallDisplay, SyscallVal};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::read_sockaddr;
-use crate::host::syscall_types::ForeignArrayPtr;
+use crate::host::syscall::types::ForeignArrayPtr;
 
 /// Implement `SyscallDisplay` using its `Display` implementation. The type must implement
 /// `TryFromSyscallReg`.

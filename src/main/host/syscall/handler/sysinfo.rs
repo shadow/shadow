@@ -5,7 +5,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallResult;
+use crate::host::syscall::types::SyscallResult;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* info */ *const linux_api::sysinfo::sysinfo)]

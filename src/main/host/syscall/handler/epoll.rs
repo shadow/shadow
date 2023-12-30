@@ -14,7 +14,7 @@ use crate::host::descriptor::epoll::Epoll;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, OpenFile};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
