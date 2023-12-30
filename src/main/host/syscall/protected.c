@@ -15,7 +15,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType) {
     if (descriptor) {

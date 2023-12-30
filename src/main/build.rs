@@ -162,9 +162,9 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/protected.h")
         .header("host/syscall/select.h")
         .header("host/syscall/signal.h")
+        .header("host/syscall/syscall_condition.h")
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
-        .header("host/syscall_condition.h")
         .header("host/syscall_numbers.h")
         .header("host/syscall_types.h")
         .header("host/tracker.h")
@@ -377,9 +377,9 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/poll.c",
         "host/syscall/select.c",
         "host/syscall/signal.c",
+        "host/syscall/syscall_condition.c",
         "host/syscall/unistd.c",
         "host/syscall/uio.c",
-        "host/syscall_condition.c",
         "host/network/network_interface.c",
         "host/network/network_queuing_disciplines.c",
         "host/tracker.c",

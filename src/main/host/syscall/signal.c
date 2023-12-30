@@ -13,7 +13,7 @@
 #include "main/bindings/c/bindings.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 #include "main/utility/syscall.h"
 
 // Signals for which the shim installs a signal handler. We don't let managed

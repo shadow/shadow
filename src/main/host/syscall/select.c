@@ -14,7 +14,7 @@
 #include "main/host/process.h"
 #include "main/host/syscall/poll.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

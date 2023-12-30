@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

@@ -18,7 +18,7 @@
 #include "main/host/process.h"
 #include "main/host/status.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 #define NANOS_PER_MILLISEC 1000000
 #define MILLIS_PER_SEC 1000
