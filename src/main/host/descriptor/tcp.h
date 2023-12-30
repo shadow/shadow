@@ -12,7 +12,7 @@
 #include <netinet/tcp.h>
 #include <sys/un.h>
 
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/host/syscall_types.h"
 #include "main/routing/packet.minimal.h"
 

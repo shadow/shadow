@@ -24,7 +24,7 @@ typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, const Host* host);
 typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
 typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
 
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/host/status.h"
 #include "main/utility/utility.h"
 

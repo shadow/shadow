@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/routing/address.h"
 #include "main/routing/dns.h"
 #include "main/utility/utility.h"

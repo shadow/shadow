@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 
 #define utility_alwaysAssert(expr)                                                                 \
     do {                                                                                           \

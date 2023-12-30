@@ -142,7 +142,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
         .bindgen_builder()
         .header("core/affinity.h")
-        .header("core/support/definitions.h")
+        .header("core/definitions.h")
         .header("core/worker.h")
         .header("host/descriptor/compat_socket.h")
         .header("host/descriptor/descriptor.h")
