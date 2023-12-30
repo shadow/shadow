@@ -10,9 +10,9 @@
 #include <stdbool.h>
 
 #include "lib/logger/logger.h"
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/core/definitions.h"
 #include "main/core/worker.h"
-#include "main/host/syscall_types.h"
 #include "main/utility/utility.h"
 
 struct _Futex {

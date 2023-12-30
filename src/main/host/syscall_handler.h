@@ -14,7 +14,6 @@ typedef struct _SysCallHandler SysCallHandler;
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/process.h"
-#include "main/host/syscall_types.h"
 
 SysCallHandler* syscallhandler_new(HostId hostId, pid_t processId, pid_t threadId);
 void syscallhandler_free(SysCallHandler* sys);

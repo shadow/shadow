@@ -12,8 +12,8 @@
 #include <netinet/tcp.h>
 #include <sys/un.h>
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/core/definitions.h"
-#include "main/host/syscall_types.h"
 #include "main/routing/packet.minimal.h"
 
 #define TCP_MIN_CWND 10

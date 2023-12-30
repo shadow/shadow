@@ -64,7 +64,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
             "main/host/syscall_handler.h".into(),
-            "main/host/syscall_types.h".into(),
             "main/host/tracker_types.h".into(),
             "main/routing/dns.h".into(),
             "main/routing/packet.minimal.h".into(),
@@ -166,7 +165,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/uio.h")
         .header("host/syscall/unistd.h")
         .header("host/syscall_numbers.h")
-        .header("host/syscall_types.h")
         .header("host/tracker.h")
         .header("routing/packet.h")
         .header("utility/rpath.h")
@@ -367,7 +365,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/process.c",
         "host/futex.c",
         "host/futex_table.c",
-        "host/syscall_types.c",
         "host/syscall/protected.c",
         "host/syscall/fcntl.c",
         "host/syscall/file.c",

@@ -11,7 +11,6 @@
 #include "main/host/futex.h"
 #include "main/host/process.h"
 #include "main/host/status.h"
-#include "main/host/syscall_types.h"
 
 /* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;
@@ -41,6 +40,11 @@ struct _Trigger {
     TriggerObject object;
     Status status;
 };
+
+/* This is an opaque structure holding the state needed to resume a thread
+ * previously blocked by a syscall. Any syscall that returns SYSCALL_BLOCK
+ * should include a SysCallCondition by which the thread should be unblocked. */
+typedef struct _SysCallCondition SysCallCondition;
 
 /* Create a new object that will cause a signal to be delivered to
  * a waiting process and thread, conditional upon the given trigger object

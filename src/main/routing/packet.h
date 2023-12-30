@@ -15,7 +15,6 @@
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/definitions.h"
 #include "main/host/protocol.h"
-#include "main/host/syscall_types.h"
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
 struct _PacketTCPHeader {
