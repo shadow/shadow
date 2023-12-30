@@ -2,7 +2,6 @@ pub mod configuration;
 pub mod controller;
 pub mod cpu;
 pub mod logger;
-pub mod main;
 pub mod manager;
 pub mod resource_usage;
 pub mod scheduler;
