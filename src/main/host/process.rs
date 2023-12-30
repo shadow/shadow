@@ -39,7 +39,7 @@ use super::syscall::formatter::StraceFmtMode;
 use super::syscall_types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
-use crate::core::support::configuration::{ProcessFinalState, RunningVal};
+use crate::core::configuration::{ProcessFinalState, RunningVal};
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;

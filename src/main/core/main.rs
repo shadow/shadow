@@ -9,10 +9,10 @@ use clap::Parser;
 use nix::sys::{personality, resource, signal};
 use signal_hook::{consts, iterator::Signals};
 
+use crate::core::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::core::controller::Controller;
 use crate::core::logger::shadow_logger;
 use crate::core::sim_config::SimConfig;
-use crate::core::support::configuration::{CliOptions, ConfigFileOptions, ConfigOptions};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::utility::shm_cleanup;

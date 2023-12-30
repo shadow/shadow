@@ -29,8 +29,8 @@ use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
 use vasi_sync::scmutex::SelfContainedMutexGuard;
 
+use crate::core::configuration::{ProcessFinalState, QDiscMode};
 use crate::core::sim_config::PcapConfig;
-use crate::core::support::configuration::{ProcessFinalState, QDiscMode};
 use crate::core::work::event::{Event, EventData};
 use crate::core::work::event_queue::EventQueue;
 use crate::core::work::task::TaskRef;

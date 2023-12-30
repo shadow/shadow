@@ -18,6 +18,7 @@ use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
+use crate::core::configuration::{self, ConfigOptions, Flatten};
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::cpu;
 use crate::core::resource_usage;
@@ -25,7 +26,6 @@ use crate::core::scheduler::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
-use crate::core::support::configuration::{self, ConfigOptions, Flatten};
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};

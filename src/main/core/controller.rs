@@ -9,9 +9,9 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::util::time::TimeParts;
 
+use crate::core::configuration::ConfigOptions;
 use crate::core::manager::{Manager, ManagerConfig};
 use crate::core::sim_config::SimConfig;
-use crate::core::support::configuration::ConfigOptions;
 use crate::core::worker;
 use crate::utility::status_bar::{self, StatusBar, StatusPrinter};
 
