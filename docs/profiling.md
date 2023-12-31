@@ -1,21 +1,4 @@
 # Profiling
-
-## Profiling with `gprof`
-
-This method only provides profiling info for the core of Shadow, not for
-plug-ins, or other libraries. Also, the profiling info is limited since gprof
-only measures active CPU usage and function call counts and misses performance
-related to blocking IO and barrier waits.
-
-```bash
-./setup build -cgo
-./setup install
-cd resource/examples
-shadow shadow.config.yaml > shadow.log
-gprof `which shadow` gmon.out > analysis.txt
-less analysis.txt
-```
-
 ## Profiling with `perf`
 
 Either run perf when starting Shadow:
