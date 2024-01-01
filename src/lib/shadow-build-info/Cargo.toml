@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-time = { version = "0.3.30", features = ["formatting"] }
+time = { version = "0.3.31", features = ["formatting"] }

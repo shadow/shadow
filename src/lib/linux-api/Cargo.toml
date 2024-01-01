@@ -11,22 +11,22 @@ std = []
 rustix = ["dep:rustix"]
 
 [dependencies]
-bitflags = "2.4.0"
+bitflags = "2.4.1"
 log = { version = "0.4.20", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
-num_enum = { version = "0.7.0", default-features=false }
+num_enum = { version = "0.7.1", default-features=false }
 memoffset = "0.9.0"
 bytemuck = "1.14.0"
 linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
-linux-raw-sys = "0.6.0"
-rustix = { optional=true, version = "0.38.19", default-features=false, features = ["process"] }
+linux-raw-sys = "0.6.3"
+rustix = { optional=true, version = "0.38.28", default-features=false, features = ["process"] }
 
 [dev-dependencies]
-rustix = { version = "0.38.19", default-features=false, features = ["thread", "process", "time"] }
+rustix = { version = "0.38.28", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
 shadow-build-common = { path = "../shadow-build-common" }

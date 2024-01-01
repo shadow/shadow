@@ -9,9 +9,9 @@ edition = "2021"
 proc_macro=true
 
 [dependencies]
-proc-macro2 = "1.0.67"
-quote = "1.0.33"
-syn = "2.0.37"
+proc-macro2 = "1.0.73"
+quote = "1.0.34"
+syn = "2.0.45"
 
 [dev-dependencies]
 static_assertions = "1.1.0"
