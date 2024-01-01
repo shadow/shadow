@@ -33,8 +33,8 @@ jobs:
           Shadow's dependencies may also need to be updated.
 
           \`\`\`bash
-          # "cargo upgrade" won't update the lock file for all
-          # dependencies, so "cargo update" is also needed
+          # The cargo `upgrade` subcommand requires `cargo install cargo-edit`. `cargo upgrade`
+          # won't update the lock file for all dependencies, so `cargo update` is also needed.
           cd src && cargo upgrade --incompatible && cargo update
           \`\`\`
 
