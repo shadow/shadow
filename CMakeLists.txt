@@ -48,8 +48,8 @@ if(((CMAKE_C_COMPILER MATCHES "[/^]gcc") AND (NOT (CMAKE_CXX_COMPILER MATCHES "[
 endif()
 
 ## https://github.com/shadow/shadow/issues/1741
-if((CMAKE_C_COMPILER MATCHES "[/^]clang") AND (CMAKE_C_COMPILER_VERSION VERSION_EQUAL 13.1.0))
-	message(FATAL_ERROR "Clang 13.1.0 is not supported (see https://github.com/shadow/shadow/issues/1741)")
+if((CMAKE_C_COMPILER MATCHES "[/^]clang") AND (CMAKE_C_COMPILER_VERSION VERSION_EQUAL 13.0.0))
+	message(FATAL_ERROR "Clang 13.0.0 is not supported (see https://github.com/shadow/shadow/issues/1741)")
 endif()
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
