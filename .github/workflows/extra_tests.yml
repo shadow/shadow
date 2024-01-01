@@ -220,7 +220,7 @@ jobs:
       matrix:
         # when changing the tor versions, make sure to also update the
         # required CI tests in the GitHub repository settings
-        tor: ['tor-0.4.8.7']
+        tor: ['tor-0.4.8.10']
 
     steps:
       - run: apt-get update
