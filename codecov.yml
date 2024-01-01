@@ -1,6 +1,0 @@
-codecov:
-  branch: main
-coverage:
-  status:
-    project: off
-    patch: off
