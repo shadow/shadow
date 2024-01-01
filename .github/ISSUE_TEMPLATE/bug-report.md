@@ -22,8 +22,8 @@ Steps to reproduce the behavior. If you problem involves a simulation, please in
 **Shadow (please complete the following information):**
  - Version: post the output of `shadow --version`  
 [e.g. Shadow v1.13.0-36-g337d565-dirty 2019-02-07 (built 2019-02-08) running GLib v2.54.2 and IGraph v0.7.1]
- - Which plug-ins you are using:  
-[e.g. Shadow-Tor]
+ - Which processes you are trying to run inside the Shadow simulation:
+[e.g. tor, tgen, nginx, python, etc.]
 
 **Additional context**
 Add any other context about the problem here.
