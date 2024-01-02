@@ -23,6 +23,7 @@
     - [Performance Tuning]()
         - [Disabling Side-channel Mitigations](sidechannels.md)
         - [Parallel Simulations](parallel_sims.md)
+        - [Profiling](profiling.md)
     - [Stability Guarantees](semver.md)
     - [Non-goal: Security](security.md)
     - [Known limitations and workarounds](limitations.md)
