@@ -58,3 +58,17 @@ later identify and filter out the intermediate commits if desired, e.g. with
 We've disabled the "Rebase and merge" option, since it does a fast-forward
 merge, which makes the intermediate commits indistingishuable from the validated
 and reviewed final state of the PR.
+
+A common task is to rebase a PR on main so that it is up to date, and push
+the updated branch to test it in the CI before merging. Suppose a user
+`contributor` submitted a branch `bugfix` as PR `1234`, and has allowed
+the maintainers to update the PR. Then you could quickly perform a rebase:
+
+    git fetch origin pull/1234/head:pr-1234
+    git checkout pr-1234
+    git rebase main
+    git push -f git@github.com:contributor/shadow.git pr-1234:bugfix
+    git checkout main
+    git branch -D pr-1234
+
+If it passes the tests, you can merge the PR in the Github interface as usual.
