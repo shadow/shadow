@@ -1,5 +1,12 @@
 ## (c) 2010-2012 Shadow, Rob Jansen jansen@cs.umn.edu
 
+## ensure cmake version. Setting the upper bound equal to the lower bound
+## requests that we don't get new behaviors introduced since that lowest version.
+##
+## We use the oldest version provided in our supported platforms, which
+## is currently 3.13.4 on debian 10.
+cmake_minimum_required(VERSION 3.13.4...3.13.4 FATAL_ERROR)
+
 ## set build parameters
 project(Shadow)
 set(SHADOW_VERSION_FULL 3.1.0)
@@ -14,13 +21,6 @@ set (CMAKE_CXX_STANDARD 11)
 message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
-
-## ensure cmake version. Setting the upper bound equal to the lower bound
-## requests that we don't get new behaviors introduced since that lowest version.
-##
-## We use the oldest version provided in our supported platforms, which
-## is currently 3.13.4 on debian 10.
-cmake_minimum_required(VERSION 3.13.4...3.13.4 FATAL_ERROR)
 
 ## building with support for C11 on platforms that default to C99 or C89
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
