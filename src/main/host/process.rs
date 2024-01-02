@@ -32,7 +32,8 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
-use super::descriptor::{FileSignals, FileState, StateEventSource};
+use super::descriptor::listener::StateEventSource;
+use super::descriptor::{FileSignals, FileState};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;

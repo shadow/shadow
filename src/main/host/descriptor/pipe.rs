@@ -6,13 +6,11 @@ use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
+use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
-use crate::host::descriptor::{
-    FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
-    StateListenerFilter,
-};
+use crate::host::descriptor::{FileMode, FileSignals, FileState, FileStatus};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall::types::{SyscallError, SyscallResult};

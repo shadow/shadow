@@ -8,9 +8,9 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use unix::UnixSocket;
 
 use crate::cshadow as c;
+use crate::host::descriptor::listener::{StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::{
-    FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
-    SyscallResult,
+    FileMode, FileSignals, FileState, FileStatus, OpenFile, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;

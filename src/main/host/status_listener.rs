@@ -7,7 +7,7 @@ use super::host::Host;
 
 /// An object that listens for status changes.
 ///
-/// ~Deprecated: In new code consider using [`crate::host::descriptor::StateEventSource`],
+/// ~Deprecated: In new code consider using [`crate::host::descriptor::listener::StateEventSource`],
 /// which supports Rust closures or directly takes [`crate::cshadow::StatusListener`].
 #[derive(Debug)]
 pub struct StatusListener {

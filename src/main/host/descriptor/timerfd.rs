@@ -10,10 +10,8 @@ use shadow_shim_helper_rs::{
 };
 
 use crate::cshadow as c;
-use crate::host::descriptor::{
-    FileMode, FileSignals, FileState, FileStatus, StateEventSource, StateListenHandle,
-    StateListenerFilter,
-};
+use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
+use crate::host::descriptor::{FileMode, FileSignals, FileState, FileStatus};
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecWriter};
