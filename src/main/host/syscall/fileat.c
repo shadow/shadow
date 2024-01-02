@@ -18,7 +18,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
-#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
 
 ///////////////////////////////////////////////////////////

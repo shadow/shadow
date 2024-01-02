@@ -47,3 +47,9 @@
 #define EPOLLWAKEUP    0x20000000
 #define EPOLLONESHOT   0x40000000
 #define EPOLLET        0x80000000
+
+// SUID_DUMP_* flags that aren't exposed in kernel headers.
+// https://elixir.bootlin.com/linux/v6.6.9/source/include/linux/sched/coredump.h#L7
+#define SUID_DUMP_DISABLE   0
+#define SUID_DUMP_USER      1
+#define SUID_DUMP_ROOT      2

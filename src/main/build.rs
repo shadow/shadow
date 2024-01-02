@@ -248,8 +248,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_var("CONFIG_MTU")
         .allowlist_var("SYSCALL_IO_BUFSIZE")
         .allowlist_var("SHADOW_SOMAXCONN")
-        .allowlist_var("SUID_DUMP_USER")
-        .allowlist_var("SUID_DUMP_DISABLE")
         .allowlist_var("TCP_CONG_RENO_NAME")
         .allowlist_var("SHADOW_FLAG_MASK")
         .allowlist_var("GLIB_MAJOR_VERSION")

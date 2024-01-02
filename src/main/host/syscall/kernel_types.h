@@ -24,14 +24,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifndef SUID_DUMP_DISABLE
-#define SUID_DUMP_DISABLE 0
-#endif
-
-#ifndef SUID_DUMP_USER
-#define SUID_DUMP_USER 1
-#endif
-
 struct linux_dirent;
 struct linux_dirent64;
 

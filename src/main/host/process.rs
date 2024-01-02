@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use linux_api::errno::Errno;
-use linux_api::sched::CloneFlags;
+use linux_api::sched::{CloneFlags, SuidDump};
 use linux_api::signal::{
     defaultaction, siginfo_t, sigset_t, LinuxDefaultAction, SigActionFlags, Signal,
     SignalFromI32Error,
@@ -245,7 +245,7 @@ pub struct RunnableProcess {
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
-    dumpable: Cell<u32>,
+    dumpable: Cell<SuidDump>,
 
     native_pid: Pid,
 
@@ -1083,7 +1083,7 @@ impl Process {
                         memory_manager: Box::new(RefCell::new(memory_manager)),
                         itimer_real,
                         strace_logging,
-                        dumpable: Cell::new(cshadow::SUID_DUMP_USER),
+                        dumpable: Cell::new(SuidDump::SUID_DUMP_USER),
                         native_pid,
                         unsafe_borrow_mut: RefCell::new(None),
                         unsafe_borrows: RefCell::new(Vec::new()),
@@ -1134,14 +1134,14 @@ impl Process {
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
     /// `PR_GET_DUMPABLE`.
-    pub fn dumpable(&self) -> u32 {
+    pub fn dumpable(&self) -> SuidDump {
         self.as_runnable().unwrap().dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
     /// `PR_GET_DUMPABLE`.
-    pub fn set_dumpable(&self, val: u32) {
-        assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
+    pub fn set_dumpable(&self, val: SuidDump) {
+        assert!(val == SuidDump::SUID_DUMP_DISABLE || val == SuidDump::SUID_DUMP_USER);
         self.as_runnable().unwrap().dumpable.set(val)
     }
 
