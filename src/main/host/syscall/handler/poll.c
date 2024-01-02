@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/poll.h"
+#include "main/host/syscall/handler/poll.h"
 
 #include <errno.h>
 #include <poll.h>

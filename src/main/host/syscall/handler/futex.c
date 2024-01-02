@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/futex.h"
+#include "main/host/syscall/handler/futex.h"
 
 #include <errno.h>
 #include <inttypes.h>

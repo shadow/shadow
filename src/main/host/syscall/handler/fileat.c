@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/fileat.h"
+#include "main/host/syscall/handler/fileat.h"
 
 #include <errno.h>
 #include <fcntl.h>

@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/ioctl.h"
+#include "main/host/syscall/handler/ioctl.h"
 
 #include <errno.h>
 #include <linux/sockios.h>

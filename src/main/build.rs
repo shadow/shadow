@@ -151,18 +151,18 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/futex.h")
         .header("host/status.h")
         .header("host/status_listener.h")
-        .header("host/syscall/fcntl.h")
-        .header("host/syscall/file.h")
-        .header("host/syscall/fileat.h")
-        .header("host/syscall/futex.h")
-        .header("host/syscall/ioctl.h")
-        .header("host/syscall/poll.h")
+        .header("host/syscall/handler/fcntl.h")
+        .header("host/syscall/handler/file.h")
+        .header("host/syscall/handler/fileat.h")
+        .header("host/syscall/handler/futex.h")
+        .header("host/syscall/handler/ioctl.h")
+        .header("host/syscall/handler/poll.h")
+        .header("host/syscall/handler/select.h")
+        .header("host/syscall/handler/signal.h")
+        .header("host/syscall/handler/uio.h")
+        .header("host/syscall/handler/unistd.h")
         .header("host/syscall/protected.h")
-        .header("host/syscall/select.h")
-        .header("host/syscall/signal.h")
         .header("host/syscall/syscall_condition.h")
-        .header("host/syscall/uio.h")
-        .header("host/syscall/unistd.h")
         .header("host/syscall_numbers.h")
         .header("host/tracker.h")
         .header("routing/packet.h")
@@ -362,18 +362,18 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/process.c",
         "host/futex.c",
         "host/futex_table.c",
+        "host/syscall/handler/fcntl.c",
+        "host/syscall/handler/file.c",
+        "host/syscall/handler/fileat.c",
+        "host/syscall/handler/futex.c",
+        "host/syscall/handler/ioctl.c",
+        "host/syscall/handler/poll.c",
+        "host/syscall/handler/select.c",
+        "host/syscall/handler/signal.c",
+        "host/syscall/handler/unistd.c",
+        "host/syscall/handler/uio.c",
         "host/syscall/protected.c",
-        "host/syscall/fcntl.c",
-        "host/syscall/file.c",
-        "host/syscall/fileat.c",
-        "host/syscall/futex.c",
-        "host/syscall/ioctl.c",
-        "host/syscall/poll.c",
-        "host/syscall/select.c",
-        "host/syscall/signal.c",
         "host/syscall/syscall_condition.c",
-        "host/syscall/unistd.c",
-        "host/syscall/uio.c",
         "host/network/network_interface.c",
         "host/network/network_queuing_disciplines.c",
         "host/tracker.c",
