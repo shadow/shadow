@@ -227,12 +227,9 @@ impl std::fmt::Debug for File {
         }
 
         if let Ok(file) = self.try_borrow() {
-            write!(
-                f,
-                "(state: {:?}, status: {:?})",
-                file.state(),
-                file.status()
-            )
+            let state = file.state();
+            let status = file.status();
+            write!(f, "(state: {state:?}, status: {status:?})")
         } else {
             write!(f, "(already borrowed)")
         }
@@ -336,12 +333,9 @@ impl std::fmt::Debug for FileRef<'_> {
             Self::Epoll(_) => write!(f, "Epoll")?,
         }
 
-        write!(
-            f,
-            "(state: {:?}, status: {:?})",
-            self.state(),
-            self.status()
-        )
+        let state = self.state();
+        let status = self.status();
+        write!(f, "(state: {state:?}, status: {status:?})")
     }
 }
 
@@ -355,12 +349,9 @@ impl std::fmt::Debug for FileRefMut<'_> {
             Self::Epoll(_) => write!(f, "Epoll")?,
         }
 
-        write!(
-            f,
-            "(state: {:?}, status: {:?})",
-            self.state(),
-            self.status()
-        )
+        let state = self.state();
+        let status = self.status();
+        write!(f, "(state: {state:?}, status: {status:?})")
     }
 }
 
