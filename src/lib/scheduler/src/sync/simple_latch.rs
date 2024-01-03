@@ -126,10 +126,6 @@ impl LatchWaiter {
 
         self.gen = self.gen.wrapping_add(1);
     }
-
-    pub fn enable_spinning(&mut self, value: bool) {
-        self.spin_yield = value;
-    }
 }
 
 // Perform a futex operation using libc. Miri only understands futex syscalls made through the
