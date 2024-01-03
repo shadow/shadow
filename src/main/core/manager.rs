@@ -23,7 +23,7 @@ use crate::core::configuration::{self, ConfigOptions, Flatten};
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::cpu;
 use crate::core::resource_usage;
-use crate::core::scheduler::runahead::Runahead;
+use crate::core::runahead::Runahead;
 use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;

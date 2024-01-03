@@ -1,5 +1,3 @@
-pub mod runahead;
-
 // re-export schedulers
 pub use thread_per_core::ThreadPerCoreSched;
 pub use thread_per_host::ThreadPerHostSched;
