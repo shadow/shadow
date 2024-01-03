@@ -29,7 +29,7 @@ pub fn core_affinity() -> Option<u32> {
 /// A wrapper for different host schedulers. It would have been nice to make this a trait, but would
 /// require support for GATs.
 pub enum Scheduler {
-    ThreadPerHost(thread_per_host::ThreadPerHostSched),
+    ThreadPerHost(thread_per_host::ThreadPerHostSched<Box<Host>>),
     ThreadPerCore(thread_per_core::ThreadPerCoreSched<Box<Host>>),
 }
 
@@ -64,7 +64,7 @@ impl Scheduler {
 }
 
 pub enum SchedulerScope<'sched, 'pool, 'scope> {
-    ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope>),
+    ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope, Box<Host>>),
     ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, Box<Host>>),
 }
 
@@ -133,7 +133,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread.
 pub enum HostIter<'a, 'b> {
-    ThreadPerHost(&'a mut thread_per_host::HostIter),
+    ThreadPerHost(&'a mut thread_per_host::HostIter<Box<Host>>),
     ThreadPerCore(&'a mut thread_per_core::HostIter<'b, Box<Host>>),
 }
 

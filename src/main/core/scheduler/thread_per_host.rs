@@ -1,20 +1,23 @@
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::sync::Mutex;
 use std::thread::LocalKey;
 
 use super::CORE_AFFINITY;
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
-use crate::host::host::Host;
+
+pub trait Host: Debug + Send + 'static {}
+impl<T> Host for T where T: Debug + Send + 'static {}
 
 /// A host scheduler.
-pub struct ThreadPerHostSched {
+pub struct ThreadPerHostSched<HostType: Host> {
     /// The thread pool.
     pool: ParallelismBoundedThreadPool,
     /// Thread-local storage where a thread can store its host.
-    host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
+    host_storage: &'static LocalKey<RefCell<Option<HostType>>>,
 }
 
-impl ThreadPerHostSched {
+impl<HostType: Host> ThreadPerHostSched<HostType> {
     /// A new host scheduler with logical processors that are pinned to the provided OS processors.
     /// Each logical processor is assigned many threads, and each thread is given a single host. The
     /// number of threads created will be the length of `hosts`.
@@ -24,11 +27,11 @@ impl ThreadPerHostSched {
     /// borrowed while the scheduler is in use.
     pub fn new<T>(
         cpu_ids: &[Option<u32>],
-        host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
+        host_storage: &'static LocalKey<RefCell<Option<HostType>>>,
         hosts: T,
     ) -> Self
     where
-        T: IntoIterator<Item = Box<Host>>,
+        T: IntoIterator<Item = HostType>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let hosts = hosts.into_iter();
@@ -36,7 +39,7 @@ impl ThreadPerHostSched {
         let mut pool = ParallelismBoundedThreadPool::new(cpu_ids, hosts.len(), "shadow-worker");
 
         // for determinism, threads will take hosts from a vec rather than a queue
-        let hosts: Vec<Mutex<Option<Box<Host>>>> = hosts.map(|x| Mutex::new(Some(x))).collect();
+        let hosts: Vec<Mutex<Option<HostType>>> = hosts.map(|x| Mutex::new(Some(x))).collect();
 
         // have each thread take a host and store it as a thread-local
         pool.scope(|s| {
@@ -60,7 +63,7 @@ impl ThreadPerHostSched {
     /// See [`crate::core::scheduler::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
-        f: impl for<'a> FnOnce(SchedulerScope<'a, 'scope>) + 'scope,
+        f: impl for<'a> FnOnce(SchedulerScope<'a, 'scope, HostType>) + 'scope,
     ) {
         let host_storage = self.host_storage;
         self.pool.scope(move |s| {
@@ -75,7 +78,7 @@ impl ThreadPerHostSched {
 
     /// See [`crate::core::scheduler::Scheduler::join`].
     pub fn join(mut self) {
-        let hosts: Vec<Mutex<Option<Box<Host>>>> = (0..self.pool.num_threads())
+        let hosts: Vec<Mutex<Option<HostType>>> = (0..self.pool.num_threads())
             .map(|_| Mutex::new(None))
             .collect();
 
@@ -94,14 +97,14 @@ impl ThreadPerHostSched {
 }
 
 /// A wrapper around the work pool's scoped runner.
-pub struct SchedulerScope<'pool, 'scope> {
+pub struct SchedulerScope<'pool, 'scope, HostType: Host> {
     /// The work pool's scoped runner.
     runner: TaskRunner<'pool, 'scope>,
     /// Thread-local storage where a thread can retrieve its host.
-    host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
+    host_storage: &'static LocalKey<RefCell<Option<HostType>>>,
 }
 
-impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
+impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
     /// See [`crate::core::scheduler::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(move |task_context| {
@@ -115,7 +118,7 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
     }
 
     /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
-    pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter) + Send + Sync + 'scope) {
+    pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter<HostType>) + Send + Sync + 'scope) {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
@@ -138,7 +141,7 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
-        f: impl Fn(usize, &mut HostIter, &T) + Send + Sync + 'scope,
+        f: impl Fn(usize, &mut HostIter<HostType>, &T) + Send + Sync + 'scope,
     ) where
         T: Sync,
     {
@@ -165,15 +168,15 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread. For this thread-per-host scheduler,
 /// there will only ever be one host per thread.
-pub struct HostIter {
-    host: Option<Box<Host>>,
+pub struct HostIter<HostType: Host> {
+    host: Option<HostType>,
 }
 
-impl HostIter {
+impl<HostType: Host> HostIter<HostType> {
     /// See [`crate::core::scheduler::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
-        F: FnMut(Box<Host>) -> Box<Host>,
+        F: FnMut(HostType) -> HostType,
     {
         let host = self.host.take().unwrap();
         self.host.replace(f(host));
