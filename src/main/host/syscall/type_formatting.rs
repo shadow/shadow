@@ -6,6 +6,30 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::read_sockaddr;
 use crate::host::syscall::types::ForeignArrayPtr;
 
+fn fmt_int_with_suffix(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: u64,
+    suffix: &str,
+) -> std::fmt::Result {
+    if ptr == 0 {
+        write!(f, "{ptr:#x} <null>")
+    } else {
+        write!(f, "{ptr:#x} {}", suffix)
+    }
+}
+
+fn fmt_ptr_with_suffix<T>(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: ForeignPtr<T>,
+    suffix: &str,
+) -> std::fmt::Result {
+    if ptr.is_null() {
+        write!(f, "{ptr:p} <null>")
+    } else {
+        write!(f, "{ptr:p} {}", suffix)
+    }
+}
+
 /// Implement `SyscallDisplay` using its `Display` implementation. The type must implement
 /// `TryFromSyscallReg`.
 macro_rules! simple_display_impl {
@@ -24,7 +48,7 @@ macro_rules! simple_display_impl {
                 match <$type>::try_from(self.reg).ok() {
                     Some(x) => write!(f, "{x}"),
                     // if the conversion to type T was unsuccessful, just show an integer
-                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
+                    None => fmt_int_with_suffix(f, u64::from(self.reg), "<invalid-value>"),
                 }
             }
         }
@@ -49,7 +73,7 @@ macro_rules! simple_debug_impl {
                 match <$type>::try_from(self.reg).ok() {
                     Some(x) => write!(f, "{x:?}"),
                     // if the conversion to type T was unsuccessful, just show an integer
-                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
+                    None => fmt_int_with_suffix(f, u64::from(self.reg), "<invalid-value>"),
                 }
             }
         }
@@ -79,7 +103,7 @@ macro_rules! bitflags_impl {
                         }
                     }
                     // if the conversion to type T was unsuccessful, just show an integer
-                    None => write!(f, "{:#x} <invalid>", u64::from(self.reg)),
+                    None => fmt_int_with_suffix(f, u64::from(self.reg), "<invalid-value>"),
                 }
             }
         }
@@ -105,7 +129,7 @@ macro_rules! deref_pointer_impl {
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -157,7 +181,7 @@ macro_rules! deref_array_impl {
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => write!(f, "{ptr:p}"),
+                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -216,7 +240,7 @@ fn fmt_buffer(
     let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
-        Err(_) => return write!(f, "{ptr:p}"),
+        Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
     };
 
     let mut s = String::with_capacity(DISPLAY_LEN);
@@ -271,7 +295,7 @@ fn fmt_string(
     let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
-        Err(_) => return write!(f, "{ptr:p}"),
+        Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
     };
 
     let mut s = String::with_capacity(DISPLAY_LEN);
@@ -312,22 +336,18 @@ fn fmt_msghdr(
     _options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
+    let ptr = ForeignPtr::from_raw_ptr(msg.msg_name as *mut u8);
+
     // read the socket address from `msg.msg_name`
-    let addr = match read_sockaddr(
-        mem,
-        ForeignPtr::from_raw_ptr(msg.msg_name as *mut u8),
-        msg.msg_namelen,
-    ) {
-        Ok(Some(addr)) => Some(addr),
-        Ok(None) | Err(_) => None,
-    };
+    let addr = read_sockaddr(mem, ptr, msg.msg_namelen);
 
     // prepare the socket address for formatting
     let msg_name = DebugFormatter(move |fmt| {
         match addr {
-            Some(addr) => write!(fmt, "{addr} ({:p})", msg.msg_name),
+            Ok(Some(addr)) => write!(fmt, "{addr} ({:p})", ptr),
+            Ok(None) => write!(fmt, "{:p}", ptr),
             // if we weren't able to read the sockaddr (NULL, EFAULT, etc), just show the pointer
-            None => write!(fmt, "{:p}", msg.msg_name),
+            Err(_) => fmt_ptr_with_suffix(fmt, ptr, "<invalid-read>"),
         }
     });
 
@@ -401,7 +421,11 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrAr
         let ptr = self.reg.into();
         let len = self.args[LEN_INDEX].into();
 
-        let Ok(Some(addr)) = read_sockaddr(mem, ptr, len) else {
+        let Ok(addr) = read_sockaddr(mem, ptr, len) else {
+            return fmt_ptr_with_suffix(f, ptr, "<invalid-read>");
+        };
+
+        let Some(addr) = addr else {
             return write!(f, "{ptr:p}");
         };
 
@@ -426,7 +450,7 @@ impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
         let ptr = ForeignArrayPtr::new(ptr, 1);
         let Ok(msg) = mem.memory_ref(ptr) else {
             // if we couldn't read the memory, just show the pointer instead
-            return write!(f, "{:p}", ptr.ptr());
+            return fmt_ptr_with_suffix(f, ptr.ptr(), "<invalid-read>");
         };
         let msg = &(*msg)[0];
 
