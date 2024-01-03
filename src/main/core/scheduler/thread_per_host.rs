@@ -182,3 +182,124 @@ impl<HostType: Host> HostIter<HostType> {
         self.host.replace(f(host));
     }
 }
+
+#[cfg(any(test, doctest))]
+mod tests {
+    use std::cell::RefCell;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestHost {}
+
+    std::thread_local! {
+        static SCHED_HOST_STORAGE: RefCell<Option<TestHost>> = const { RefCell::new(None) };
+    }
+
+    #[test]
+    fn test_parallelism() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+
+        assert_eq!(sched.parallelism(), 2);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_no_join() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let _sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panic() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+
+        sched.scope(|s| {
+            s.run(|x| {
+                if x == 1 {
+                    panic!();
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn test_run() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+
+        let counter = AtomicU32::new(0);
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run(|_| {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                });
+            });
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), 5 * 3);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_run_with_hosts() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+
+        let counter = AtomicU32::new(0);
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run_with_hosts(|_, hosts| {
+                    hosts.for_each(|host| {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        host
+                    });
+                });
+            });
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), 5 * 3);
+
+        sched.join();
+    }
+
+    #[test]
+    fn test_run_with_data() {
+        let hosts = [(); 5].map(|_| TestHost {});
+        let mut sched: ThreadPerHostSched<TestHost> =
+            ThreadPerHostSched::new(&[None, None], &SCHED_HOST_STORAGE, hosts);
+
+        let data = vec![0u32; sched.parallelism()];
+        let data: Vec<_> = data.into_iter().map(std::sync::Mutex::new).collect();
+
+        for _ in 0..3 {
+            sched.scope(|s| {
+                s.run_with_data(&data, |_, hosts, elem| {
+                    let mut elem = elem.lock().unwrap();
+                    hosts.for_each(|host| {
+                        *elem += 1;
+                        host
+                    });
+                });
+            });
+        }
+
+        let sum: u32 = data.into_iter().map(|x| x.into_inner().unwrap()).sum();
+        assert_eq!(sum, 5 * 3);
+
+        sched.join();
+    }
+}
