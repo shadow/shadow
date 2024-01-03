@@ -60,8 +60,8 @@ def get_consts(s):
     See module-level section "Caveats"
     """
 
-    # From "pub const FOO" extract "FOO"
-    return re.findall(r"pub const (\w+)", s)
+    # From "pub const FOO: " extract "FOO"
+    return re.findall(r"pub const (\w+): ", s)
     
 def prefix_consts(consts, s):
     """
@@ -112,7 +112,7 @@ def mangle(s):
     """
     Mangle the Rust source `s` to prefix identifiers.
 
-    See  module-level documentation for details.   
+    See module-level documentation for details.
     """
 
     types = get_types(s)
