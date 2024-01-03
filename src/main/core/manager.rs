@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
@@ -324,7 +325,15 @@ impl<'a> Manager<'a> {
         {
             let mut scheduler = match self.config.experimental.scheduler.unwrap() {
                 configuration::Scheduler::ThreadPerHost => {
-                    Scheduler::ThreadPerHost(ThreadPerHostSched::new(&cpus, hosts))
+                    std::thread_local! {
+                        /// A thread-local required by the thread-per-host scheduler.
+                        static SCHED_HOST_STORAGE: RefCell<Option<Box<Host>>> = const { RefCell::new(None) };
+                    }
+                    Scheduler::ThreadPerHost(ThreadPerHostSched::new(
+                        &cpus,
+                        &SCHED_HOST_STORAGE,
+                        hosts,
+                    ))
                 }
                 configuration::Scheduler::ThreadPerCore => {
                     Scheduler::ThreadPerCore(ThreadPerCoreSched::new(

@@ -1,25 +1,32 @@
 use std::cell::RefCell;
 use std::sync::Mutex;
+use std::thread::LocalKey;
 
 use super::CORE_AFFINITY;
 use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
 use crate::host::host::Host;
 
-std::thread_local! {
-    /// The host that belongs to this thread.
-    static THREAD_HOST: RefCell<Option<Box<Host>>> = const { RefCell::new(None) };
-}
-
 /// A host scheduler.
 pub struct ThreadPerHostSched {
+    /// The thread pool.
     pool: ParallelismBoundedThreadPool,
+    /// Thread-local storage where a thread can store its host.
+    host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
 }
 
 impl ThreadPerHostSched {
     /// A new host scheduler with logical processors that are pinned to the provided OS processors.
     /// Each logical processor is assigned many threads, and each thread is given a single host. The
     /// number of threads created will be the length of `hosts`.
-    pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T) -> Self
+    ///
+    /// An empty `host_storage` for thread-local storage is required for each thread to have
+    /// efficient access to its host. A panic may occur if `host_storage` is not `None`, or if it is
+    /// borrowed while the scheduler is in use.
+    pub fn new<T>(
+        cpu_ids: &[Option<u32>],
+        host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
+        hosts: T,
+    ) -> Self
     where
         T: IntoIterator<Item = Box<Host>>,
         <T as IntoIterator>::IntoIter: ExactSizeIterator,
@@ -34,14 +41,15 @@ impl ThreadPerHostSched {
         // have each thread take a host and store it as a thread-local
         pool.scope(|s| {
             s.run(|t| {
-                THREAD_HOST.with(|x| {
+                host_storage.with(|x| {
+                    assert!(x.borrow().is_none());
                     let host = hosts[t.thread_idx].lock().unwrap().take().unwrap();
                     *x.borrow_mut() = Some(host);
                 });
             });
         });
 
-        Self { pool }
+        Self { pool, host_storage }
     }
 
     /// See [`crate::core::scheduler::Scheduler::parallelism`].
@@ -54,8 +62,12 @@ impl ThreadPerHostSched {
         &'scope mut self,
         f: impl for<'a> FnOnce(SchedulerScope<'a, 'scope>) + 'scope,
     ) {
+        let host_storage = self.host_storage;
         self.pool.scope(move |s| {
-            let sched_scope = SchedulerScope { runner: s };
+            let sched_scope = SchedulerScope {
+                runner: s,
+                host_storage,
+            };
 
             (f)(sched_scope);
         });
@@ -70,7 +82,7 @@ impl ThreadPerHostSched {
         // collect all of the hosts from the threads
         self.pool.scope(|s| {
             s.run(|t| {
-                THREAD_HOST.with(|x| {
+                self.host_storage.with(|x| {
                     let host = x.borrow_mut().take().unwrap();
                     *hosts[t.thread_idx].lock().unwrap() = Some(host);
                 });
@@ -83,7 +95,10 @@ impl ThreadPerHostSched {
 
 /// A wrapper around the work pool's scoped runner.
 pub struct SchedulerScope<'pool, 'scope> {
+    /// The work pool's scoped runner.
     runner: TaskRunner<'pool, 'scope>,
+    /// Thread-local storage where a thread can retrieve its host.
+    host_storage: &'static LocalKey<RefCell<Option<Box<Host>>>>,
 }
 
 impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
@@ -107,7 +122,7 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
                 CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
             }
 
-            THREAD_HOST.with(|host| {
+            self.host_storage.with(|host| {
                 let mut host = host.borrow_mut();
 
                 let mut host_iter = HostIter { host: host.take() };
@@ -135,7 +150,7 @@ impl<'pool, 'scope> SchedulerScope<'pool, 'scope> {
 
             let this_elem = &data[task_context.processor_idx];
 
-            THREAD_HOST.with(|host| {
+            self.host_storage.with(|host| {
                 let mut host = host.borrow_mut();
 
                 let mut host_iter = HostIter { host: host.take() };
