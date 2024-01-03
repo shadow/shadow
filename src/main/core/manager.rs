@@ -809,7 +809,7 @@ pub struct ManagerConfig {
 }
 
 /// Helper function to initialize the global [`Host`] before running the closure.
-fn for_each_host(host_iter: &mut HostIter, mut f: impl FnMut(&Host)) {
+fn for_each_host(host_iter: &mut HostIter<Box<Host>>, mut f: impl FnMut(&Host)) {
     host_iter.for_each(|host| {
         worker::Worker::set_active_host(host);
         worker::Worker::with_active_host(|host| {
