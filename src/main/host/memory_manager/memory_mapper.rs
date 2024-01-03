@@ -21,7 +21,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
 use crate::host::memory_manager::{page_size, MemoryManager};
-use crate::host::syscall_types::ForeignArrayPtr;
+use crate::host::syscall::types::ForeignArrayPtr;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};

@@ -12,7 +12,7 @@
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/compat_socket.h"
 #include "main/host/protocol.h"

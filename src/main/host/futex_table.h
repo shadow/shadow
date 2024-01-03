@@ -11,8 +11,8 @@
 /* Opaque object to store the state needed to implement the module. */
 typedef struct _FutexTable FutexTable;
 
+#include "main/bindings/c/bindings-opaque.h"
 #include "main/host/futex.h"
-#include "main/host/syscall_types.h"
 
 /* Create an object that can be used to store all futexes created by
  * a host. The reference count starts at 1; when the table is no longer

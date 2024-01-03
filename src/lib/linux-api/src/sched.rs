@@ -48,6 +48,59 @@ pub type clone_args = linux_clone_args;
 
 unsafe impl shadow_pod::Pod for clone_args {}
 
+/// The "dumpable" state, as manipulated via the prctl operations `PR_SET_DUMPABLE` and
+/// `PR_GET_DUMPABLE`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct SuidDump(i32);
+
+impl SuidDump {
+    pub const SUID_DUMP_DISABLE: Self = Self(const_conversions::i32_from_u32(
+        bindings::LINUX_SUID_DUMP_DISABLE,
+    ));
+    pub const SUID_DUMP_USER: Self = Self(const_conversions::i32_from_u32(
+        bindings::LINUX_SUID_DUMP_USER,
+    ));
+    pub const SUID_DUMP_ROOT: Self = Self(const_conversions::i32_from_u32(
+        bindings::LINUX_SUID_DUMP_ROOT,
+    ));
+    // NOTE: add new entries to `to_str` below
+
+    pub const fn new(val: i32) -> Self {
+        Self(val)
+    }
+
+    pub const fn val(&self) -> i32 {
+        self.0
+    }
+
+    pub const fn to_str(&self) -> Option<&'static str> {
+        match *self {
+            Self::SUID_DUMP_DISABLE => Some("SUID_DUMP_DISABLE"),
+            Self::SUID_DUMP_USER => Some("SUID_DUMP_USER"),
+            Self::SUID_DUMP_ROOT => Some("SUID_DUMP_ROOT"),
+            _ => None,
+        }
+    }
+}
+
+impl core::fmt::Display for SuidDump {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "(unknown dumpable option {})", self.0),
+        }
+    }
+}
+
+impl core::fmt::Debug for SuidDump {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => write!(formatter, "SuidDump::{s}"),
+            None => write!(formatter, "SuidDump::<{}>", self.0),
+        }
+    }
+}
+
 pub fn sched_yield() -> Result<(), Errno> {
     unsafe { linux_syscall::syscall!(linux_syscall::SYS_sched_yield) }
         .check()

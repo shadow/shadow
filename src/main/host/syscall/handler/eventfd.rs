@@ -9,7 +9,7 @@ use syscall_logger::log_syscall;
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* initval */ std::ffi::c_uint)]

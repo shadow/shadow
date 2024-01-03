@@ -12,7 +12,7 @@ use syscall_logger::log_syscall;
 
 use crate::host::process::{ExitStatus, Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 
 enum WaitTarget {
     Pid(ProcessId),

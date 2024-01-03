@@ -9,7 +9,7 @@
 #include <string.h>
 
 #include "lib/logger/logger.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/core/worker.h"
 #include "main/utility/utility.h"
 

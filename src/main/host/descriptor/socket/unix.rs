@@ -10,19 +10,19 @@ use nix::sys::socket::{MsgFlags, Shutdown};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
+use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::shared_buf::{
     BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{
-    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, StateEventSource,
-    StateListenHandle, StateListenerFilter, SyscallResult,
+    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
 use crate::utility::HostTreePointer;

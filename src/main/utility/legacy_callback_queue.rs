@@ -4,7 +4,7 @@ use std::ops::DerefMut;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
 use crate::cshadow as c;
-use crate::host::descriptor::StateEventSource;
+use crate::host::descriptor::listener::StateEventSource;
 use crate::utility::callback_queue::CallbackQueue;
 
 /// An event source stored by a `LegacyFile`.

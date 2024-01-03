@@ -15,10 +15,9 @@ typedef struct _LegacySocket LegacySocket;
 typedef struct _SocketFunctionTable SocketFunctionTable;
 
 #include "main/bindings/c/bindings-opaque.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/protocol.h"
-#include "main/host/syscall_types.h"
 #include "main/routing/packet.minimal.h"
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);

@@ -4,9 +4,9 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use rand::seq::SliceRandom;
 
+use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::{FileSignals, FileState};
-use crate::host::descriptor::{StateEventSource, StateListenHandle, StateListenerFilter};
 
 struct NamespaceEntry {
     /// The bound socket.

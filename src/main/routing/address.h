@@ -11,7 +11,7 @@
 #include <netinet/in.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 
 /**
  * An Address structure holds information used to identify nodes, allowing for

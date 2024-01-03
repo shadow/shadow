@@ -3,14 +3,14 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/descriptor_types.h"

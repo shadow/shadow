@@ -1,11 +1,11 @@
 use linux_api::errno::Errno;
 use linux_api::prctl::PrctlOp;
+use linux_api::sched::SuidDump;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
-use crate::cshadow as c;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* option */ PrctlOp,
@@ -89,15 +89,16 @@ impl SyscallHandler {
                 Ok(0)
             }
             PrctlOp::PR_SET_DUMPABLE => {
-                if [c::SUID_DUMP_DISABLE as u64, c::SUID_DUMP_USER as u64].contains(&arg2) {
-                    ctx.objs.process.set_dumpable(arg2.try_into().unwrap());
+                let dumpable = SuidDump::new(arg2.try_into().or(Err(Errno::EINVAL))?);
+                if [SuidDump::SUID_DUMP_DISABLE, SuidDump::SUID_DUMP_USER].contains(&dumpable) {
+                    ctx.objs.process.set_dumpable(dumpable);
                     Ok(0)
                 } else {
                     Err(Errno::EINVAL.into())
                 }
             }
             PrctlOp::PR_GET_DUMPABLE => {
-                Ok(ctx.objs.process.dumpable().try_into().unwrap())
+                Ok(ctx.objs.process.dumpable().val())
             }
             _ => {
                 log::warn!("Unknown prctl operation {option}");

@@ -6,7 +6,7 @@ In Rust, use `EmulatedTime` to represent an instant in time, or
 replace [`SimulationTime`] from the C APIs.
 
 This module contains some identically-named constants defined as C macros in
-`main/core/support/definitions.h`.
+`main/core/definitions.h`.
 */
 
 use std::time::Duration;

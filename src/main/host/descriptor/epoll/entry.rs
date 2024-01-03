@@ -1,6 +1,7 @@
 use linux_api::epoll::EpollEvents;
 
-use crate::host::descriptor::{FileState, StateListenHandle};
+use crate::host::descriptor::listener::StateListenHandle;
+use crate::host::descriptor::FileState;
 
 /// Used to track the status of a file we are monitoring for events. Any complicated logic for
 /// deciding when a file has events that epoll should report should be specified in this object's

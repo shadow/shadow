@@ -22,7 +22,7 @@ use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{read_cstring_vec, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError, SyscallResult};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::u8_to_i8_slice;
 

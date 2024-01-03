@@ -9,7 +9,7 @@ use atomic_refcell::AtomicRefCell;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 
-use crate::core::support::configuration::QDiscMode;
+use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;

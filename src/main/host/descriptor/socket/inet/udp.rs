@@ -13,17 +13,17 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
+use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::socket::inet::{self, InetSocket};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, ShutdownFlags};
 use crate::host::descriptor::{
-    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, Socket, StateEventSource,
-    StateListenHandle, StateListenerFilter, SyscallResult,
+    File, FileMode, FileSignals, FileState, FileStatus, OpenFile, Socket, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;

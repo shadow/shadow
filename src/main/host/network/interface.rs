@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::HostId;
 
-use crate::core::support::configuration::QDiscMode;
+use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::InetSocket;

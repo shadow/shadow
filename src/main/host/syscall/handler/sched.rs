@@ -6,7 +6,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 
 // We always report that the thread is running on CPU 0, Node 0

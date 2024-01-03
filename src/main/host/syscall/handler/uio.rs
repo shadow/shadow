@@ -7,7 +7,7 @@ use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, S
 use crate::host::descriptor::{CompatFile, File, FileState, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {

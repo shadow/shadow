@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use linux_api::errno::Errno;
-use linux_api::sched::CloneFlags;
+use linux_api::sched::{CloneFlags, SuidDump};
 use linux_api::signal::{
     defaultaction, siginfo_t, sigset_t, LinuxDefaultAction, SigActionFlags, Signal,
     SignalFromI32Error,
@@ -32,14 +32,15 @@ use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
-use super::descriptor::{FileSignals, FileState, StateEventSource};
+use super::descriptor::listener::StateEventSource;
+use super::descriptor::{FileSignals, FileState};
 use super::host::Host;
 use super::memory_manager::{MemoryManager, ProcessMemoryRef, ProcessMemoryRefMut};
 use super::syscall::formatter::StraceFmtMode;
-use super::syscall_types::ForeignArrayPtr;
+use super::syscall::types::ForeignArrayPtr;
 use super::thread::{Thread, ThreadId};
 use super::timer::Timer;
-use crate::core::support::configuration::{ProcessFinalState, RunningVal};
+use crate::core::configuration::{ProcessFinalState, RunningVal};
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
@@ -245,7 +246,7 @@ pub struct RunnableProcess {
 
     // "dumpable" state, as manipulated via the prctl operations PR_SET_DUMPABLE
     // and PR_GET_DUMPABLE.
-    dumpable: Cell<u32>,
+    dumpable: Cell<SuidDump>,
 
     native_pid: Pid,
 
@@ -1083,7 +1084,7 @@ impl Process {
                         memory_manager: Box::new(RefCell::new(memory_manager)),
                         itimer_real,
                         strace_logging,
-                        dumpable: Cell::new(cshadow::SUID_DUMP_USER),
+                        dumpable: Cell::new(SuidDump::SUID_DUMP_USER),
                         native_pid,
                         unsafe_borrow_mut: RefCell::new(None),
                         unsafe_borrows: RefCell::new(Vec::new()),
@@ -1134,14 +1135,14 @@ impl Process {
 
     /// Get process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
     /// `PR_GET_DUMPABLE`.
-    pub fn dumpable(&self) -> u32 {
+    pub fn dumpable(&self) -> SuidDump {
         self.as_runnable().unwrap().dumpable.get()
     }
 
     /// Set process's "dumpable" state, as manipulated by the prctl operations `PR_SET_DUMPABLE` and
     /// `PR_GET_DUMPABLE`.
-    pub fn set_dumpable(&self, val: u32) {
-        assert!(val == cshadow::SUID_DUMP_DISABLE || val == cshadow::SUID_DUMP_USER);
+    pub fn set_dumpable(&self, val: SuidDump) {
+        assert!(val == SuidDump::SUID_DUMP_DISABLE || val == SuidDump::SUID_DUMP_USER);
         self.as_runnable().unwrap().dumpable.set(val)
     }
 
@@ -1916,7 +1917,7 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::host::syscall_types::ForeignArrayPtr;
+    use crate::host::syscall::types::ForeignArrayPtr;
     use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
 

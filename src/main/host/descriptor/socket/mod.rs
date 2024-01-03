@@ -8,14 +8,14 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use unix::UnixSocket;
 
 use crate::cshadow as c;
+use crate::host::descriptor::listener::{StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::{
-    FileMode, FileSignals, FileState, FileStatus, OpenFile, StateListenHandle, StateListenerFilter,
-    SyscallResult,
+    FileMode, FileSignals, FileState, FileStatus, OpenFile, SyscallResult,
 };
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::IoVec;
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;

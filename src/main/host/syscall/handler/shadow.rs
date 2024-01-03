@@ -4,7 +4,7 @@ use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::case_insensitive_eq;
 
 impl SyscallHandler {

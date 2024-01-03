@@ -42,6 +42,7 @@ pub mod utility;
 pub mod core;
 pub mod host;
 pub mod network;
+pub mod shadow;
 
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).

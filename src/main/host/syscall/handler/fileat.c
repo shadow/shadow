@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/fileat.h"
+#include "main/host/syscall/handler/fileat.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -18,7 +18,6 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
-#include "main/host/syscall/kernel_types.h"
 #include "main/host/syscall/protected.h"
 
 ///////////////////////////////////////////////////////////

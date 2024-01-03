@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/uio.h"
+#include "main/host/syscall/handler/uio.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -15,9 +15,9 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
+#include "main/host/syscall/handler/unistd.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall/unistd.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

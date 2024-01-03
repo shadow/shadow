@@ -9,7 +9,7 @@ use shadow_shim_helper_rs::util::time::TimeParts;
 use crate::core::worker::Worker;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::process::Process;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

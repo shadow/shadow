@@ -3,7 +3,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ linux_api::posix_types::kernel_pid_t,

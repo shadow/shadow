@@ -16,7 +16,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/host/syscall/kernel_types.h"
 
 /* Mask of all O file flags that we don't pass to the native fd, but instead

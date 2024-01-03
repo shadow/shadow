@@ -3,7 +3,7 @@
  * See LICENSE for licensing information
  */
 
-#include "main/host/syscall/select.h"
+#include "main/host/syscall/handler/select.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -12,9 +12,9 @@
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/host/process.h"
-#include "main/host/syscall/poll.h"
+#include "main/host/syscall/handler/poll.h"
 #include "main/host/syscall/protected.h"
-#include "main/host/syscall_condition.h"
+#include "main/host/syscall/syscall_condition.h"
 
 ///////////////////////////////////////////////////////////
 // Helpers

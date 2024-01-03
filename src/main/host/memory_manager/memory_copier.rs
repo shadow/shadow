@@ -7,7 +7,7 @@ use shadow_pod::Pod;
 
 use crate::core::worker::Worker;
 use crate::host::memory_manager::page_size;
-use crate::host::syscall_types::ForeignArrayPtr;
+use crate::host::syscall::types::ForeignArrayPtr;
 
 /// A utility for copying data to and from a process's memory.
 #[derive(Debug, Clone)]

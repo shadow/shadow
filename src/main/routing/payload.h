@@ -10,7 +10,6 @@
 #include <glib.h>
 
 #include "main/bindings/c/bindings-opaque.h"
-#include "main/host/syscall_types.h"
 
 typedef struct _Payload Payload;
 

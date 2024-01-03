@@ -12,16 +12,13 @@ use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
-use crate::core::support::configuration::Flatten;
-use crate::core::support::configuration::{
-    parse_string_as_args, ConfigOptions, EnvName, HostOptions, LogInfoFlag, LogLevel, ProcessArgs,
-    ProcessOptions, QDiscMode,
+use crate::core::configuration::{
+    parse_string_as_args, ConfigOptions, EnvName, Flatten, HostOptions, LogInfoFlag, LogLevel,
+    ProcessArgs, ProcessFinalState, ProcessOptions, QDiscMode,
 };
-use crate::core::support::units::{self, Unit};
 use crate::network::graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
+use crate::utility::units::{self, Unit};
 use crate::utility::{tilde_expansion, verify_plugin_path};
-
-use super::support::configuration::ProcessFinalState;
 
 /// The simulation configuration after processing the configuration options and network graph.
 pub struct SimConfig {

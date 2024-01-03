@@ -15,8 +15,8 @@ use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, FileStatu
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
-use crate::host::syscall_types::ForeignArrayPtr;
-use crate::host::syscall_types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::ForeignArrayPtr;
+use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 

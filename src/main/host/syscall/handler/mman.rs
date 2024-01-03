@@ -11,7 +11,7 @@ use crate::cshadow as c;
 use crate::host::descriptor::CompatFile;
 use crate::host::memory_manager::AllocdMem;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
-use crate::host::syscall_types::SyscallError;
+use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void)]

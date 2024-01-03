@@ -20,12 +20,12 @@ use vasi_sync::scchannel::SelfContainedChannelError;
 
 use super::context::ThreadContext;
 use super::host::Host;
-use super::syscall_condition::SysCallCondition;
+use super::syscall::condition::SysCallCondition;
 use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall::handler::SyscallHandler;
-use crate::host::syscall_types::{ForeignArrayPtr, SyscallReturn};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallReturn};
 use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginPathError};
 
 /// The ManagedThread's state after having been allowed to execute some code.

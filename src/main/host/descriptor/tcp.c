@@ -21,7 +21,7 @@
 
 #include "lib/logger/logger.h"
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
-#include "main/core/support/definitions.h"
+#include "main/core/definitions.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
