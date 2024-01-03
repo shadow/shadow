@@ -7,7 +7,7 @@ use crate::host::host::Host;
 
 std::thread_local! {
     /// The host that belongs to this thread.
-    static THREAD_HOST: RefCell<Option<Box<Host>>> = RefCell::new(None);
+    static THREAD_HOST: RefCell<Option<Box<Host>>> = const { RefCell::new(None) };
 }
 
 /// A host scheduler.
