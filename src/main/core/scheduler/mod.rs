@@ -5,7 +5,7 @@ pub use thread_per_core::ThreadPerCoreSched;
 pub use thread_per_host::ThreadPerHostSched;
 
 mod logical_processor;
-pub mod pools;
+mod pools;
 mod thread_per_core;
 mod thread_per_host;
 
