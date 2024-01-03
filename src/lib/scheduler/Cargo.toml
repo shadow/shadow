@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+atomic_refcell = "0.1"
+crossbeam = "0.8.3"
+libc = "0.2"
+linux-api = { path = "../linux-api" }
+nix = { version = "0.27.1", features = ["process", "sched"] }
+
+[dev-dependencies]
+rand = "0.8.5"

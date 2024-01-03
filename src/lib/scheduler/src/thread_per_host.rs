@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 use std::thread::LocalKey;
 
-use super::CORE_AFFINITY;
-use crate::core::scheduler::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
+use crate::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
+use crate::CORE_AFFINITY;
 
 pub trait Host: Debug + Send + 'static {}
 impl<T> Host for T where T: Debug + Send + 'static {}
@@ -55,12 +55,12 @@ impl<HostType: Host> ThreadPerHostSched<HostType> {
         Self { pool, host_storage }
     }
 
-    /// See [`crate::core::scheduler::Scheduler::parallelism`].
+    /// See [`crate::Scheduler::parallelism`].
     pub fn parallelism(&self) -> usize {
         self.pool.num_processors()
     }
 
-    /// See [`crate::core::scheduler::Scheduler::scope`].
+    /// See [`crate::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
         f: impl for<'a> FnOnce(SchedulerScope<'a, 'scope, HostType>) + 'scope,
@@ -76,7 +76,7 @@ impl<HostType: Host> ThreadPerHostSched<HostType> {
         });
     }
 
-    /// See [`crate::core::scheduler::Scheduler::join`].
+    /// See [`crate::Scheduler::join`].
     pub fn join(mut self) {
         let hosts: Vec<Mutex<Option<HostType>>> = (0..self.pool.num_threads())
             .map(|_| Mutex::new(None))

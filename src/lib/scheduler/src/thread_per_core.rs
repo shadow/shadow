@@ -2,8 +2,8 @@ use std::fmt::Debug;
 
 use crossbeam::queue::ArrayQueue;
 
-use super::CORE_AFFINITY;
-use crate::core::scheduler::pools::unbounded::{TaskRunner, UnboundedThreadPool};
+use crate::pools::unbounded::{TaskRunner, UnboundedThreadPool};
+use crate::CORE_AFFINITY;
 
 pub trait Host: Debug + Send {}
 impl<T> Host for T where T: Debug + Send {}
@@ -69,12 +69,12 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
         }
     }
 
-    /// See [`crate::core::scheduler::Scheduler::parallelism`].
+    /// See [`crate::Scheduler::parallelism`].
     pub fn parallelism(&self) -> usize {
         self.num_threads
     }
 
-    /// See [`crate::core::scheduler::Scheduler::scope`].
+    /// See [`crate::Scheduler::scope`].
     pub fn scope<'scope>(
         &'scope mut self,
         f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope, HostType>) + 'scope,
@@ -108,7 +108,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
         });
     }
 
-    /// See [`crate::core::scheduler::Scheduler::join`].
+    /// See [`crate::Scheduler::join`].
     pub fn join(self) {
         self.pool.join();
     }

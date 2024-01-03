@@ -1293,6 +1293,14 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
+dependencies = [
+ "atomic_refcell",
+ "crossbeam",
+ "libc",
+ "linux-api",
+ "nix 0.27.1",
+ "rand",
+]
 
 [[package]]
 name = "schemars"
@@ -1445,6 +1453,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "regex",
+ "scheduler",
  "schemars",
  "serde",
  "serde_json",
