@@ -16,6 +16,7 @@ members = [
     "lib/log-c2rust",
     "lib/logger",
     "lib/pod",
+    "lib/scheduler",
     "lib/shadow-build-common",
     "lib/shadow-build-info",
     "lib/shadow-shim-helper-rs",
