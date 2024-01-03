@@ -1297,7 +1297,6 @@ dependencies = [
  "atomic_refcell",
  "crossbeam",
  "libc",
- "linux-api",
  "nix 0.27.1",
  "rand",
 ]

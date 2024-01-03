@@ -7,7 +7,6 @@ edition = "2021"
 atomic_refcell = "0.1"
 crossbeam = "0.8.3"
 libc = "0.2"
-linux-api = { path = "../linux-api" }
 nix = { version = "0.27.1", features = ["process", "sched"] }
 
 [dev-dependencies]
