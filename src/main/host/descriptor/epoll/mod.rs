@@ -283,10 +283,10 @@ impl Epoll {
             return;
         };
 
-        // Check what state we need to listen for this entry.
+        // Check what state and what signals we need to listen for this entry.
         // We always listen for closed so we know when to stop monitoring the entry.
         let listen_state = entry.get_listener_state().union(FileState::CLOSED);
-        let listen_signals = FileSignals::empty();
+        let listen_signals = entry.get_listener_signals();
         let filter = StateListenerFilter::Always;
 
         // Set up a callback so we get informed when the file changes.
@@ -295,11 +295,11 @@ impl Epoll {
             listen_state,
             listen_signals,
             filter,
-            move |state, changed, _signals, cb_queue| {
+            move |state, changed, signals, cb_queue| {
                 if let Some(epoll) = weak_self.upgrade() {
                     epoll
                         .borrow_mut()
-                        .notify_entry(&key, state, changed, cb_queue);
+                        .notify_entry(&key, state, changed, signals, cb_queue);
                 }
             },
         );
@@ -312,11 +312,12 @@ impl Epoll {
         key: &Key,
         state: FileState,
         changed: FileState,
+        signals: FileSignals,
         cb_queue: &mut CallbackQueue,
     ) {
         // Notify entry of file state change if we're still monitoring it.
         match self.monitoring.get_mut(&key.clone()) {
-            Some(entry) => entry.notify(state, changed),
+            Some(entry) => entry.notify(state, changed, signals),
             None => return,
         };
 

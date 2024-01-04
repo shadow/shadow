@@ -21,6 +21,10 @@ name = "test_epoll"
 path = "epoll/test_epoll.rs"
 
 [[bin]]
+name = "test_epoll_edge"
+path = "epoll/test_epoll_edge.rs"
+
+[[bin]]
 name = "test_exit"
 path = "exit/test_exit.rs"
 

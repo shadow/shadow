@@ -118,7 +118,7 @@ impl EventFd {
             self.counter = 0;
         }
 
-        self.refresh_state(cb_queue);
+        self.refresh_state(FileSignals::empty(), cb_queue);
 
         Ok(NUM_BYTES.try_into().unwrap())
     }
@@ -175,7 +175,12 @@ impl EventFd {
         }
 
         self.counter += value;
-        self.refresh_state(cb_queue);
+        let signals = if self.counter > 0 {
+            FileSignals::READ_BUFFER_GREW
+        } else {
+            FileSignals::empty()
+        };
+        self.refresh_state(signals, cb_queue);
 
         Ok(NUM_BYTES.try_into().unwrap())
     }
@@ -216,7 +221,7 @@ impl EventFd {
         self.state
     }
 
-    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_state(&mut self, signals: FileSignals, cb_queue: &mut CallbackQueue) {
         if self.state.contains(FileState::CLOSED) {
             return;
         }
@@ -231,7 +236,7 @@ impl EventFd {
         self.update_state(
             FileState::READABLE | FileState::WRITABLE,
             readable_writable,
-            FileSignals::empty(),
+            signals,
             cb_queue,
         );
     }

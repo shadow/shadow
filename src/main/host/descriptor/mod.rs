@@ -146,7 +146,8 @@ bitflags::bitflags! {
     #[derive(Default, Copy, Clone, Debug)]
     #[repr(transparent)]
     pub struct FileSignals: u32 {
-        // TODO: this will be useful for supporting edge-triggered epoll "buffer changed" signals
+        /// The read buffer grew.
+        const READ_BUFFER_GREW = 1 << 0;
     }
 }
 
