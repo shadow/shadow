@@ -20,6 +20,8 @@
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
+gsize _legacysocket_getOutputBufferSpaceIncludingTCP(LegacySocket* socket);
+
 static LegacySocket* _legacysocket_fromLegacyFile(LegacyFile* descriptor) {
     utility_debugAssert(legacyfile_getType(descriptor) == DT_TCPSOCKET);
     return (LegacySocket*)descriptor;
@@ -176,7 +178,19 @@ void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* pac
 /* functions implemented by socket */
 
 Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
-    return legacysocket_removeFromOutputBuffer(socket, host);
+    Packet* packet = legacysocket_removeFromOutputBuffer(socket, host);
+
+    /* if packet was NULL, then the buffer shouldn't have changed so we can skip the check */
+    if (packet != NULL) {
+        /* we are writable if we now have space */
+        gsize space = _legacysocket_getOutputBufferSpaceIncludingTCP(socket);
+        gboolean is_active = legacyfile_getStatus((LegacyFile*)socket) & STATUS_FILE_ACTIVE;
+        if (space > 0 && is_active) {
+            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, TRUE, 0);
+        }
+    }
+
+    return packet;
 }
 
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket) {
@@ -365,11 +379,6 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, P
             tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
     }
 
-    /* we just added a packet, so we are readable */
-    if(socket->inputBufferLength > 0) {
-        legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, TRUE, 0);
-    }
-
     return TRUE;
 }
 
@@ -394,11 +403,6 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* hos
             CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
             tracker_updateSocketInputBuffer(
                 tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
-        }
-
-        /* we are not readable if we are now empty */
-        if(socket->inputBufferLength <= 0) {
-            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_READABLE, FALSE, 0);
         }
     }
 
@@ -448,11 +452,6 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, InetSocket* inetSo
             tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
     }
 
-    /* we just added a packet, we are no longer writable if full */
-    if(_legacysocket_getOutputBufferSpaceIncludingTCP(socket) <= 0) {
-        legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, FALSE, 0);
-    }
-
     /* tell the interface to include us when sending out to the network */
     in_addr_t ip = packet_getSourceIP(packet);
     socket_wants_to_send_with_global_cb_queue(host, inetSocket, ip);
@@ -483,13 +482,6 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* ho
             CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
             tracker_updateSocketOutputBuffer(
                 tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
-        }
-
-        /* we are writable if we now have space */
-        gsize space = _legacysocket_getOutputBufferSpaceIncludingTCP(socket);
-        gboolean is_active = legacyfile_getStatus((LegacyFile*)socket) & STATUS_FILE_ACTIVE;
-        if (space > 0 && is_active) {
-            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, TRUE, 0);
         }
     }
 
