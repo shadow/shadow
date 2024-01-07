@@ -8,7 +8,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::shared_buf::{
-    BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
+    BufferHandle, BufferSignals, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::{FileMode, FileSignals, FileState, FileStatus};
 use crate::host::memory_manager::MemoryManager;
@@ -277,31 +277,45 @@ impl Pipe {
         }
 
         // buffer state changes that we want to receive events for
-        let mut monitoring = BufferState::empty();
+        let mut monitoring_state = BufferState::empty();
 
         // if the file is open for reading, watch for the buffer to become readable or have no
         // writers
         if pipe.mode.contains(FileMode::READ) {
-            monitoring.insert(BufferState::READABLE);
-            monitoring.insert(BufferState::NO_WRITERS);
+            monitoring_state.insert(BufferState::READABLE);
+            monitoring_state.insert(BufferState::NO_WRITERS);
         }
 
         // if the file is open for writing, watch for the buffer to become writable or have no
         // readers
         if pipe.mode.contains(FileMode::WRITE) {
-            monitoring.insert(BufferState::WRITABLE);
-            monitoring.insert(BufferState::NO_READERS);
+            monitoring_state.insert(BufferState::WRITABLE);
+            monitoring_state.insert(BufferState::NO_READERS);
         }
 
+        // TODO: We have to monitor all of the buffer's signals that we might want to pass to the
+        // pipe file's listeners, but this adds extra overhead when the file doesn't have any
+        // listeners that are listening for some of these signals. For example if there's a noisy
+        // signal `BufferSignals::FOO` that we want to forward to file listeners as
+        // `FileSignals::FOO`, we must always subscribe to `BufferSignals::FOO` signals even if the
+        // pipe doesn't have any file listeners subscribed to `FileSignals::FOO`. We don't know if
+        // there are currently file listeners subscribed to this file signal, so we must always emit
+        // them. This means we might receive a lot of notifications for `BufferSignals::Foo` that we
+        // ultimitely throw away since no file listener wants them. It would be great if there was a
+        // nice way to optimize this somehow so that we only listen for `BufferSignals::FOO` if we
+        // have a listener for `FileSignals::FOO`.
+        let monitoring_signals = BufferSignals::empty();
+
         let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
-            monitoring,
-            move |buffer_state, cb_queue| {
+            monitoring_state,
+            monitoring_signals,
+            move |buffer_state, buffer_signals, cb_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
                     let mut pipe = pipe.borrow_mut();
 
                     // update the pipe file's state to align with the buffer's current state
-                    pipe.align_state_to_buffer(buffer_state, cb_queue);
+                    pipe.align_state_to_buffer(buffer_state, buffer_signals, cb_queue);
                 }
             },
         );
@@ -310,7 +324,7 @@ impl Pipe {
 
         // update the pipe file's initial state to align with the buffer's current state
         let buffer_state = pipe.buffer.as_ref().unwrap().borrow().state();
-        pipe.align_state_to_buffer(buffer_state, cb_queue);
+        pipe.align_state_to_buffer(buffer_state, BufferSignals::empty(), cb_queue);
     }
 
     pub fn add_listener(
@@ -341,8 +355,14 @@ impl Pipe {
 
     /// Align the pipe's state to the buffer state. For example if the buffer is both `READABLE` and
     /// `WRITABLE`, and the pipe is only open in `READ` mode, the pipe's `READABLE` state will be
-    /// set and the `WRITABLE` state will be unchanged.
-    fn align_state_to_buffer(&mut self, buffer_state: BufferState, cb_queue: &mut CallbackQueue) {
+    /// set and the `WRITABLE` state will be unchanged. This method may also pass through signals
+    /// from the buffer to any of the file's listeners.
+    fn align_state_to_buffer(
+        &mut self,
+        buffer_state: BufferState,
+        _buffer_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut mask = FileState::empty();
         let mut file_state = FileState::empty();
 

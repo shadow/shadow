@@ -12,7 +12,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::shared_buf::{
-    BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
+    BufferHandle, BufferSignals, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
@@ -131,9 +131,13 @@ impl UnixSocket {
         self.protocol_state.close(&mut self.common, cb_queue)
     }
 
-    fn refresh_file_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &mut self,
+        received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         self.protocol_state
-            .refresh_file_state(&mut self.common, cb_queue)
+            .refresh_file_state(&mut self.common, received_signals, cb_queue)
     }
 
     pub fn bind(
@@ -443,9 +447,12 @@ impl ProtocolState {
                 let weak = Weak::clone(socket);
                 let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
                     BufferState::READABLE,
-                    move |_, cb_queue| {
+                    BufferSignals::empty(),
+                    move |_buffer_state, buffer_signals, cb_queue| {
                         if let Some(socket) = weak.upgrade() {
-                            socket.borrow_mut().refresh_file_state(cb_queue);
+                            socket
+                                .borrow_mut()
+                                .refresh_file_state(buffer_signals, cb_queue);
                         }
                     },
                 );
@@ -490,20 +497,43 @@ impl ProtocolState {
         }
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         match self {
             Self::ConnOrientedInitial(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
             }
             Self::ConnOrientedListening(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
             }
             Self::ConnOrientedConnected(x) => {
-                x.as_ref().unwrap().refresh_file_state(common, cb_queue)
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
             }
-            Self::ConnOrientedClosed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
-            Self::ConnLessInitial(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
-            Self::ConnLessClosed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+            Self::ConnOrientedClosed(x) => {
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
+            }
+            Self::ConnLessInitial(x) => {
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
+            }
+            Self::ConnLessClosed(x) => {
+                x.as_ref()
+                    .unwrap()
+                    .refresh_file_state(common, received_signals, cb_queue)
+            }
         }
     }
 
@@ -846,7 +876,12 @@ where
 {
     fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
     fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue);
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    );
 
     fn close(
         self,
@@ -984,7 +1019,12 @@ impl Protocol for ConnOrientedInitial {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         common.update_state(
             /* mask= */ FileState::all(),
             FileState::ACTIVE,
@@ -999,7 +1039,7 @@ impl Protocol for ConnOrientedInitial {
         cb_queue: &mut CallbackQueue,
     ) -> (ProtocolState, Result<(), SyscallError>) {
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
         (new_state.into(), common.close(cb_queue))
     }
 
@@ -1085,7 +1125,7 @@ impl Protocol for ConnOrientedInitial {
         };
 
         // refresh the socket's file state
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1150,9 +1190,12 @@ impl Protocol for ConnOrientedInitial {
         let weak = Arc::downgrade(socket);
         let send_buffer_handle = send_buffer.borrow_mut().add_listener(
             BufferState::WRITABLE | BufferState::NO_READERS,
-            move |_, cb_queue| {
+            BufferSignals::empty(),
+            move |_buffer_state, buffer_signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    socket
+                        .borrow_mut()
+                        .refresh_file_state(buffer_signals, cb_queue);
                 }
             },
         );
@@ -1163,9 +1206,12 @@ impl Protocol for ConnOrientedInitial {
         let weak = Arc::downgrade(socket);
         let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, cb_queue| {
+            BufferSignals::empty(),
+            move |_buffer_state, buffer_signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    socket
+                        .borrow_mut()
+                        .refresh_file_state(buffer_signals, cb_queue);
                 }
             },
         );
@@ -1183,7 +1229,7 @@ impl Protocol for ConnOrientedInitial {
             _send_buffer_handle: send_buffer_handle,
         };
 
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1207,9 +1253,12 @@ impl Protocol for ConnOrientedInitial {
             let weak = Arc::downgrade(socket);
             send_buffer_handle = send_buffer.borrow_mut().add_listener(
                 BufferState::WRITABLE | BufferState::NO_READERS,
-                move |_, cb_queue| {
+                BufferSignals::empty(),
+                move |_buffer_state, buffer_signals, cb_queue| {
                     if let Some(socket) = weak.upgrade() {
-                        socket.borrow_mut().refresh_file_state(cb_queue);
+                        socket
+                            .borrow_mut()
+                            .refresh_file_state(buffer_signals, cb_queue);
                     }
                 },
             );
@@ -1221,9 +1270,12 @@ impl Protocol for ConnOrientedInitial {
         let weak = Arc::downgrade(socket);
         let recv_buffer_handle = common.recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, cb_queue| {
+            BufferSignals::empty(),
+            move |_buffer_state, buffer_signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    socket
+                        .borrow_mut()
+                        .refresh_file_state(buffer_signals, cb_queue);
                 }
             },
         );
@@ -1241,7 +1293,7 @@ impl Protocol for ConnOrientedInitial {
             _send_buffer_handle: send_buffer_handle,
         };
 
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1265,7 +1317,12 @@ impl Protocol for ConnOrientedListening {
         Ok(Some(self.bound_addr))
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut new_state = FileState::ACTIVE;
 
         // socket is readable if the queue is not empty
@@ -1300,7 +1357,7 @@ impl Protocol for ConnOrientedListening {
         }
 
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
         (new_state.into(), common.close(cb_queue))
     }
 
@@ -1313,7 +1370,7 @@ impl Protocol for ConnOrientedListening {
         self.queue_limit = backlog_to_queue_size(backlog);
 
         // refresh the socket's file state
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (self.into(), Ok(()))
     }
@@ -1339,7 +1396,7 @@ impl Protocol for ConnOrientedListening {
         };
 
         // refresh the socket's file state
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         Ok(OpenFile::new(File::Socket(Socket::Unix(child_socket))))
     }
@@ -1371,9 +1428,12 @@ impl Protocol for ConnOrientedListening {
         let weak = Arc::downgrade(&child_socket);
         let send_buffer_handle = child_send_buffer.borrow_mut().add_listener(
             BufferState::WRITABLE | BufferState::NO_READERS,
-            move |_, cb_queue| {
+            BufferSignals::empty(),
+            move |_buffer_state, buffer_signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    socket
+                        .borrow_mut()
+                        .refresh_file_state(buffer_signals, cb_queue);
                 }
             },
         );
@@ -1384,9 +1444,12 @@ impl Protocol for ConnOrientedListening {
         let weak = Arc::downgrade(&child_socket);
         let recv_buffer_handle = child_recv_buffer.borrow_mut().add_listener(
             BufferState::READABLE | BufferState::NO_WRITERS,
-            move |_, cb_queue| {
+            BufferSignals::empty(),
+            move |_buffer_state, buffer_signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    socket
+                        .borrow_mut()
+                        .refresh_file_state(buffer_signals, cb_queue);
                 }
             },
         );
@@ -1412,7 +1475,9 @@ impl Protocol for ConnOrientedListening {
         let weak = Arc::downgrade(&child_socket);
         cb_queue.add(move |cb_queue| {
             if let Some(child_socket) = weak.upgrade() {
-                child_socket.borrow_mut().refresh_file_state(cb_queue);
+                child_socket
+                    .borrow_mut()
+                    .refresh_file_state(BufferSignals::empty(), cb_queue);
             }
         });
 
@@ -1420,7 +1485,7 @@ impl Protocol for ConnOrientedListening {
         self.queue.push_back(child_socket);
 
         // refresh the server socket's file state
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         // return a reference to the enqueued child socket
         Ok(self.queue.back().unwrap())
@@ -1436,7 +1501,12 @@ impl Protocol for ConnOrientedConnected {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut new_state = FileState::ACTIVE;
 
         {
@@ -1481,7 +1551,7 @@ impl Protocol for ConnOrientedConnected {
             .remove_writer(self.writer_handle, cb_queue);
 
         let new_state = ConnOrientedClosed {};
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
         (new_state.into(), common.close(cb_queue))
     }
 
@@ -1501,7 +1571,7 @@ impl Protocol for ConnOrientedConnected {
         let recv_socket = common.resolve_destination(Some(&self.peer), args.addr)?;
         let rv = common.sendmsg(socket, args.iovs, args.flags, &recv_socket, mem, cb_queue)?;
 
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         Ok(rv.try_into().unwrap())
     }
@@ -1532,7 +1602,7 @@ impl Protocol for ConnOrientedConnected {
             });
         }
 
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         Ok(RecvmsgReturn {
             return_val: rv.try_into().unwrap(),
@@ -1549,7 +1619,7 @@ impl Protocol for ConnOrientedConnected {
         cb_queue: &mut CallbackQueue,
     ) {
         common.sent_len = common.sent_len.checked_sub(num).unwrap();
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
     }
 
     fn ioctl(
@@ -1581,7 +1651,12 @@ impl Protocol for ConnOrientedClosed {
         Err(Errno::EBADFD.into())
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         common.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
@@ -1621,7 +1696,12 @@ impl Protocol for ConnLessInitial {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut new_state = FileState::ACTIVE;
 
         {
@@ -1661,7 +1741,7 @@ impl Protocol for ConnLessInitial {
         }
 
         let new_state = ConnLessClosed {};
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
         (new_state.into(), common.close(cb_queue))
     }
 
@@ -1713,7 +1793,7 @@ impl Protocol for ConnLessInitial {
             ),
         }
 
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         Ok(rv.try_into().unwrap())
     }
@@ -1746,7 +1826,7 @@ impl Protocol for ConnLessInitial {
                 .inform_bytes_read(byte_data.num_bytes, cb_queue);
         });
 
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         Ok(RecvmsgReturn {
             return_val: rv.try_into().unwrap(),
@@ -1763,7 +1843,7 @@ impl Protocol for ConnLessInitial {
         cb_queue: &mut CallbackQueue,
     ) {
         common.sent_len = common.sent_len.checked_sub(num).unwrap();
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, BufferSignals::empty(), cb_queue);
     }
 
     fn ioctl(
@@ -1800,7 +1880,7 @@ impl Protocol for ConnLessInitial {
             ..self
         };
 
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1822,7 +1902,7 @@ impl Protocol for ConnLessInitial {
             ..self
         };
 
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, BufferSignals::empty(), cb_queue);
 
         (new_state.into(), Ok(()))
     }
@@ -1837,7 +1917,12 @@ impl Protocol for ConnLessClosed {
         Ok(None)
     }
 
-    fn refresh_file_state(&self, common: &mut UnixSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut UnixSocketCommon,
+        _received_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         common.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
