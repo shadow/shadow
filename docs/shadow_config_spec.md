@@ -287,7 +287,7 @@ Type: String
 The path to the file.
 
 If the path begins with `~/`, it will be considered relative to the current
-user's home directory.
+user's home directory. No other shell expansion is performed on the path.
 
 #### `network.graph.file.compression`
 
@@ -676,12 +676,18 @@ Or as an array of strings:
 args: ['--user-agent', 'Mozilla/5.0 (compatible; ...)', 'http://myserver:8080']
 ```
 
+Shell expansion (which includes `~/` expansion) is not performed on either
+format. In the command-line format, the string is parsed as an argument vector
+following typical shell quotation parsing rules.
+
 #### `hosts.<hostname>.processes[*].environment`
 
 Default: ""  
 Type: Object
 
 Environment variables passed when executing this process.
+
+Shell expansion (which includes `~/` expansion) is not performed on any fields.
 
 Examples:
 
@@ -735,7 +741,7 @@ script).
 Type: String
 
 If the path begins with `~/`, it will be considered relative to the current
-user's home directory.
+user's home directory. No other shell expansion is performed on the path.
 
 Bare file basenames like `sleep` will be located using Shadow's `PATH`
 environment variable (e.g. to `/usr/bin/sleep`).

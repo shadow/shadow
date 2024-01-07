@@ -14,6 +14,9 @@ overridden with shadow's `--stop-time` option, and
 overridden with `--log-level`. See `shadow --help` for other command-line
 options.
 
+The configuration file does not perform any shell expansion, other than home
+directory `~/` expansion on some specific options.
+
 ## Quantities with Units
 
 Some options such as
