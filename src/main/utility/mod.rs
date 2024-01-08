@@ -18,7 +18,6 @@ pub mod shm_cleanup;
 pub mod sockaddr;
 pub mod status_bar;
 pub mod stream_len;
-pub mod synchronization;
 pub mod syscall;
 pub mod units;
 

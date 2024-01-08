@@ -4,7 +4,7 @@ pub mod cpu;
 pub mod logger;
 pub mod manager;
 pub mod resource_usage;
-pub mod scheduler;
+pub mod runahead;
 pub mod sim_config;
 pub mod sim_stats;
 pub mod work;

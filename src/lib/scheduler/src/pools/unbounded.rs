@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::utility::synchronization::count_down_latch::{self, build_count_down_latch};
-use crate::utility::synchronization::simple_latch;
+use crate::sync::count_down_latch::{self, build_count_down_latch};
+use crate::sync::simple_latch;
 
 // If making substantial changes to this scheduler, you should verify the compilation error message
 // for each test at the end of this file to make sure that they correctly cause the expected

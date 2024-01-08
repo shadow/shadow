@@ -55,6 +55,8 @@ impl ThreadUnparkerUnassigned {
         )
     }
 
+    // we don't currently use this function, but I don't see a reason to delete it
+    #[allow(dead_code)]
     /// Get a new [`ThreadParker`]. The `ThreadParker` must only be used from the thread which we
     /// will later assign ourselves to using `assign()`. This is useful if you want to pass a
     /// `ThreadParker` to a new thread before you have a handle to that thread.

@@ -9,11 +9,9 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 
-use crate::core::scheduler::logical_processor::LogicalProcessors;
-use crate::utility::synchronization::count_down_latch::{
-    build_count_down_latch, LatchCounter, LatchWaiter,
-};
-use crate::utility::synchronization::thread_parking::{ThreadUnparker, ThreadUnparkerUnassigned};
+use crate::logical_processor::LogicalProcessors;
+use crate::sync::count_down_latch::{build_count_down_latch, LatchCounter, LatchWaiter};
+use crate::sync::thread_parking::{ThreadUnparker, ThreadUnparkerUnassigned};
 
 // If making substantial changes to this scheduler, you should verify the compilation error message
 // for each test at the end of this file to make sure that they correctly cause the expected

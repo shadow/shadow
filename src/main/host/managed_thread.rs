@@ -9,6 +9,7 @@ use std::sync::{atomic, Arc};
 use linux_api::sched::CloneFlags;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
+use scheduler;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
@@ -21,7 +22,6 @@ use vasi_sync::scchannel::SelfContainedChannelError;
 use super::context::ThreadContext;
 use super::host::Host;
 use super::syscall::condition::SysCallCondition;
-use crate::core::scheduler;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall::handler::SyscallHandler;

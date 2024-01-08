@@ -16,7 +16,7 @@ use shadow_shim_helper_rs::HostId;
 
 use super::work::event_queue::EventQueue;
 use crate::core::controller::ShadowStatusBarState;
-use crate::core::scheduler::runahead::Runahead;
+use crate::core::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::sim_stats::{LocalSimStats, SharedSimStats};
 use crate::core::work::event::Event;

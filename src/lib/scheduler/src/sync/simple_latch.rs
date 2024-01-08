@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use linux_api::errno::Errno;
+use nix::errno::Errno;
 
 /// A simple reusable latch. Multiple waiters can wait for the latch to open. After opening the
 /// latch with [`open()`](Self::open), you must not open the latch again until all waiters have
@@ -126,10 +126,6 @@ impl LatchWaiter {
 
         self.gen = self.gen.wrapping_add(1);
     }
-
-    pub fn enable_spinning(&mut self, value: bool) {
-        self.spin_yield = value;
-    }
 }
 
 // Perform a futex operation using libc. Miri only understands futex syscalls made through the
@@ -161,7 +157,7 @@ pub fn libc_futex(
     } else {
         let errno = unsafe { *libc::__errno_location() };
         debug_assert_eq!(rv, -1);
-        Err(Errno::try_from(errno).unwrap())
+        Err(Errno::from_i32(errno))
     }
 }
 

@@ -1,17 +1,14 @@
-pub mod runahead;
-
 // re-export schedulers
 pub use thread_per_core::ThreadPerCoreSched;
 pub use thread_per_host::ThreadPerHostSched;
 
 mod logical_processor;
-pub mod pools;
+mod pools;
+mod sync;
 mod thread_per_core;
 mod thread_per_host;
 
 use std::cell::RefCell;
-
-use crate::host::host::Host;
 
 // any scheduler implementation can read/write the thread-local directly, but external modules can
 // only read it using `core_affinity()`
@@ -26,14 +23,18 @@ pub fn core_affinity() -> Option<u32> {
     CORE_AFFINITY.with(|x| *x.borrow())
 }
 
+// the enum supports hosts that satisfy the trait bounds of each scheduler variant
+pub trait Host: thread_per_core::Host + thread_per_host::Host {}
+impl<T> Host for T where T: thread_per_core::Host + thread_per_host::Host {}
+
 /// A wrapper for different host schedulers. It would have been nice to make this a trait, but would
 /// require support for GATs.
-pub enum Scheduler {
-    ThreadPerHost(thread_per_host::ThreadPerHostSched),
-    ThreadPerCore(thread_per_core::ThreadPerCoreSched<Box<Host>>),
+pub enum Scheduler<HostType: Host> {
+    ThreadPerHost(thread_per_host::ThreadPerHostSched<HostType>),
+    ThreadPerCore(thread_per_core::ThreadPerCoreSched<HostType>),
 }
 
-impl Scheduler {
+impl<HostType: Host> Scheduler<HostType> {
     /// The maximum number of threads that will ever be run in parallel.
     pub fn parallelism(&self) -> usize {
         match self {
@@ -46,7 +47,7 @@ impl Scheduler {
     /// scope until the task has completed.
     pub fn scope<'scope>(
         &'scope mut self,
-        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope>) + 'scope,
+        f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope, HostType>) + 'scope,
     ) {
         match self {
             Self::ThreadPerHost(sched) => sched.scope(move |s| f(SchedulerScope::ThreadPerHost(s))),
@@ -63,12 +64,12 @@ impl Scheduler {
     }
 }
 
-pub enum SchedulerScope<'sched, 'pool, 'scope> {
-    ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope>),
-    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, Box<Host>>),
+pub enum SchedulerScope<'sched, 'pool, 'scope, HostType: Host> {
+    ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope, HostType>),
+    ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, HostType>),
 }
 
-impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
+impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
     /// Run the closure on all threads. The closure is given an index of the currently running
     /// thread.
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
@@ -84,7 +85,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
     /// The closure must iterate over the provided `HostIter` to completion (until `next()` returns
     /// `None`), otherwise this may panic. The host iterator is not a real [`std::iter::Iterator`],
     /// but rather a fake iterator that behaves like a streaming iterator.
-    pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter) + Send + Sync + 'scope) {
+    pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter<HostType>) + Send + Sync + 'scope) {
         match self {
             Self::ThreadPerHost(scope) => scope.run_with_hosts(move |idx, iter| {
                 let mut iter = HostIter::ThreadPerHost(iter);
@@ -114,7 +115,7 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
-        f: impl Fn(usize, &mut HostIter, &T) + Send + Sync + 'scope,
+        f: impl Fn(usize, &mut HostIter<HostType>, &T) + Send + Sync + 'scope,
     ) where
         T: Sync,
     {
@@ -132,33 +133,20 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 }
 
 /// Supports iterating over all hosts assigned to this thread.
-pub enum HostIter<'a, 'b> {
-    ThreadPerHost(&'a mut thread_per_host::HostIter),
-    ThreadPerCore(&'a mut thread_per_core::HostIter<'b, Box<Host>>),
+pub enum HostIter<'a, 'b, HostType: Host> {
+    ThreadPerHost(&'a mut thread_per_host::HostIter<HostType>),
+    ThreadPerCore(&'a mut thread_per_core::HostIter<'b, HostType>),
 }
 
-impl<'a, 'b> HostIter<'a, 'b> {
+impl<'a, 'b, HostType: Host> HostIter<'a, 'b, HostType> {
     /// For each [`Host`], calls `f` with each `Host`. The `Host` must be returned by the closure.
     pub fn for_each<F>(&mut self, f: F)
     where
-        F: FnMut(Box<Host>) -> Box<Host>,
+        F: FnMut(HostType) -> HostType,
     {
         match self {
             Self::ThreadPerHost(x) => x.for_each(f),
             Self::ThreadPerCore(x) => x.for_each(f),
         }
-    }
-}
-
-mod export {
-    use super::*;
-
-    /// Get the core affinity of the current thread, as set by the active scheduler. Returns `-1` if
-    /// the affinity is not set.
-    #[no_mangle]
-    pub extern "C-unwind" fn scheduler_getAffinity() -> i32 {
-        core_affinity()
-            .map(|x| i32::try_from(x).unwrap())
-            .unwrap_or(-1)
     }
 }

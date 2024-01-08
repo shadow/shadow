@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
@@ -11,6 +12,7 @@ use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -22,8 +24,7 @@ use crate::core::configuration::{self, ConfigOptions, Flatten};
 use crate::core::controller::{Controller, ShadowStatusBarState, SimController};
 use crate::core::cpu;
 use crate::core::resource_usage;
-use crate::core::scheduler::runahead::Runahead;
-use crate::core::scheduler::{HostIter, Scheduler, ThreadPerCoreSched, ThreadPerHostSched};
+use crate::core::runahead::Runahead;
 use crate::core::sim_config::{Bandwidth, HostInfo};
 use crate::core::sim_stats;
 use crate::core::worker;
@@ -324,7 +325,15 @@ impl<'a> Manager<'a> {
         {
             let mut scheduler = match self.config.experimental.scheduler.unwrap() {
                 configuration::Scheduler::ThreadPerHost => {
-                    Scheduler::ThreadPerHost(ThreadPerHostSched::new(&cpus, hosts))
+                    std::thread_local! {
+                        /// A thread-local required by the thread-per-host scheduler.
+                        static SCHED_HOST_STORAGE: RefCell<Option<Box<Host>>> = const { RefCell::new(None) };
+                    }
+                    Scheduler::ThreadPerHost(ThreadPerHostSched::new(
+                        &cpus,
+                        &SCHED_HOST_STORAGE,
+                        hosts,
+                    ))
                 }
                 configuration::Scheduler::ThreadPerCore => {
                     Scheduler::ThreadPerCore(ThreadPerCoreSched::new(
@@ -800,7 +809,7 @@ pub struct ManagerConfig {
 }
 
 /// Helper function to initialize the global [`Host`] before running the closure.
-fn for_each_host(host_iter: &mut HostIter, mut f: impl FnMut(&Host)) {
+fn for_each_host(host_iter: &mut HostIter<Box<Host>>, mut f: impl FnMut(&Host)) {
     host_iter.for_each(|host| {
         worker::Worker::set_active_host(host);
         worker::Worker::with_active_host(|host| {

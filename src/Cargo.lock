@@ -1291,6 +1291,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "scheduler"
+version = "0.1.0"
+dependencies = [
+ "atomic_refcell",
+ "crossbeam",
+ "libc",
+ "nix 0.27.1",
+ "rand",
+]
+
+[[package]]
 name = "schemars"
 version = "0.8.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1441,6 +1452,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "regex",
+ "scheduler",
  "schemars",
  "serde",
  "serde_json",

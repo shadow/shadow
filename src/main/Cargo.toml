@@ -27,6 +27,7 @@ linux-api = { path = "../lib/linux-api", features = ["std"] }
 log = { version = "0.4", features = ["release_max_level_debug"] }
 log-c2rust = { path = "../lib/log-c2rust" }
 logger = { path = "../lib/logger" }
+scheduler = { path = "../lib/scheduler" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
 lzma-rs = "0.3"
 memoffset = "0.9.0"
