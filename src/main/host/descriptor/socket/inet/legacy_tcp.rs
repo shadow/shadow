@@ -1116,6 +1116,10 @@ impl LegacyTcpSocket {
         memory_manager: &MemoryManager,
     ) -> Result<(), SyscallError> {
         match (level, optname) {
+            (libc::SOL_IP, libc::IP_BIND_ADDRESS_NO_PORT) => {
+                // TODO: implement this, snowflake uses it
+                log::trace!("setsockopt IP_BIND_ADDRESS_NO_PORT not yet implemented");
+            }
             (libc::SOL_TCP, libc::TCP_NODELAY) => {
                 // Shadow doesn't support nagle's algorithm, so Shadow always behaves as if
                 // TCP_NODELAY is enabled. Some programs will fail if `setsockopt(fd, SOL_TCP,
