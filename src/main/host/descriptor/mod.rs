@@ -109,7 +109,7 @@ impl FileMode {
 bitflags::bitflags! {
     #[derive(Default, Copy, Clone, Debug)]
     #[repr(transparent)]
-    pub struct FileState: libc::c_int {
+    pub struct FileState: u16 {
         // remove this when the last reference to `FileState_NONE` has been removed from the C code
         #[deprecated(note = "use `FileState::empty()`")]
         const NONE = 0;
