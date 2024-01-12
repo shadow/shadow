@@ -1352,6 +1352,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
 
         // takes ownership of `inetSocket`, so we don't need to free it
         gboolean success = legacysocket_addToOutputBuffer(&(tcp->super), inetSocket, host, packet);
+        /* we update `STATUS_FILE_WRITABLE` below */
 
         tcp->send.packetsSent++;
         tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
@@ -1379,6 +1380,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         } else if (header->sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
             gboolean fitInBuffer = legacysocket_addToInputBuffer(&(tcp->super), host, packet);
+
+            /* we just added a packet, so we are readable */
+            if (fitInBuffer && legacysocket_getInputBufferLength(&(tcp->super)) > 0) {
+                legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE, 0);
+            }
 
             if(fitInBuffer) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
@@ -2589,6 +2595,7 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
         offset += bytesCopied;
 
         Packet* packet = legacysocket_removeFromInputBuffer((LegacySocket*)tcp, host);
+        /* we update `STATUS_FILE_READABLE` below */
 
         if(bytesCopied < packetLength) {
             /* we were only able to read part of this packet */
@@ -2614,11 +2621,11 @@ gssize tcp_receiveUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer,
         /* all of our ordered user data has been read */
         if((tcp->unorderedInputLength == 0) && (tcp->error & TCPE_RECEIVE_EOF)) {
             /* there is no more unordered data either, and we need to signal EOF */
-            if(totalCopied > 0) {
-                /* we just received bytes, so we can't EOF until the next call.
-                 * make sure we stay readable so we DO actually EOF the socket */
-                legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE, 0);
-            } else {
+
+            /* i think once we signal (or want to signal) EOF, the socket should always be readable */
+            legacyfile_adjustStatus(&(tcp->super.super), STATUS_FILE_READABLE, TRUE, 0);
+
+            if(totalCopied == 0) {
                 /* OK, no more data and nothing just received. */
                 if(tcp->state == TCPS_CLOSED) {
                     return -ENOTCONN;

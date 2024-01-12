@@ -4,6 +4,7 @@ use nix::errno::Errno;
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
 
+use test_utils::socket_utils::{socket_init_helper, SocketInitMethod};
 use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
 
 #[derive(Debug)]
@@ -84,6 +85,60 @@ fn test_threads_edge() -> anyhow::Result<()> {
         ensure_ord!(results[1].epoll_res, ==, Ok(1));
         ensure_ord!(results[1].duration, <, timeout);
         ensure_ord!(results[1].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+
+        Ok(())
+    })
+}
+
+fn test_write_then_partial_read() -> anyhow::Result<()> {
+    // TODO: In the future we should also test other types of files.
+    let (fd_client, fd_server) = socket_init_helper(
+        SocketInitMethod::Inet,
+        libc::SOCK_STREAM,
+        libc::SOCK_NONBLOCK,
+        /* bind_client = */ false,
+    );
+    let epollfd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epollfd, fd_client, fd_server], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            fd_server,
+            Some(&mut event),
+        )?;
+
+        let timeout = Duration::from_millis(100);
+
+        let thread = std::thread::spawn(move || {
+            vec![
+                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+                // The second one is supposed to timeout.
+                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+            ]
+        });
+
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 3);
+
+        // Make the read-end readable.
+        unistd::write(fd_client, &[0, 0])?;
+
+        // Wait and read some, but not all, from the buffer.
+        std::thread::sleep(timeout / 3);
+        unistd::read(fd_server, &mut [0])?;
+
+        let results = thread.join().unwrap();
+
+        // The first wait should have received the event
+        ensure_ord!(results[0].epoll_res, ==, Ok(1));
+        ensure_ord!(results[0].duration, <, timeout);
+        ensure_ord!(results[0].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+
+        // The second wait should have timed out with no events received.
+        ensure_ord!(results[1].epoll_res, ==, Ok(0));
+        ensure_ord!(results[1].duration, >=, timeout);
 
         Ok(())
     })
@@ -339,6 +394,11 @@ fn main() -> anyhow::Result<()> {
     let all_envs = set![TestEnvironment::Libc, TestEnvironment::Shadow];
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![
         ShadowTest::new("threads-edge", test_threads_edge, all_envs.clone()),
+        ShadowTest::new(
+            "write-then-partial-read",
+            test_write_then_partial_read,
+            all_envs.clone(),
+        ),
         ShadowTest::new("threads-level", test_threads_level, all_envs.clone()),
         // in Linux these two tests have a race condition and don't always pass
         ShadowTest::new(
