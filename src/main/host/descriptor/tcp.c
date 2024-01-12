@@ -1873,7 +1873,7 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
             }
         }
 
-        Status s = legacyfile_getStatus((LegacyFile*)tcp);
+        FileState s = legacyfile_getStatus((LegacyFile*)tcp);
         gboolean waitingUserRead = (s & FileState_READABLE) ? TRUE : FALSE;
 
         if((isNextPacket && !waitingUserRead) || (packetFits)) {

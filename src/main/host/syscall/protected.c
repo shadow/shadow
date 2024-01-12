@@ -19,7 +19,7 @@
 
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType) {
     if (descriptor) {
-        Status status = legacyfile_getStatus(descriptor);
+        FileState status = legacyfile_getStatus(descriptor);
 
         if (status & FileState_CLOSED) {
             // A file that is referenced in the descriptor table should never

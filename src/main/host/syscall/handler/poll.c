@@ -16,7 +16,6 @@
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
-#include "main/host/status.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/syscall_condition.h"
 
@@ -34,7 +33,7 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
     // Some logic depends on the file type. USE DT_NONE for non-legacy files
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
     LegacyFileType dType = ldesc ? legacyfile_getType(ldesc) : DT_NONE;
-    Status dstat =
+    FileState dstat =
         ldesc ? legacyfile_getStatus(ldesc) : openfile_getStatus(descriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {

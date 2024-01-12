@@ -3,8 +3,8 @@ use std::ops::DerefMut;
 
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
-use crate::cshadow as c;
 use crate::host::descriptor::listener::StateEventSource;
+use crate::host::descriptor::FileState;
 use crate::utility::callback_queue::CallbackQueue;
 
 /// An event source stored by a `LegacyFile`.
@@ -72,8 +72,8 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn notify_listeners_with_global_cb_queue(
         event_source: *const RootedRefCell_StateEventSource,
-        status: c::Status,
-        changed: c::Status,
+        status: FileState,
+        changed: FileState,
         signals: FileSignals,
     ) {
         let event_source = unsafe { event_source.as_ref() }.unwrap();

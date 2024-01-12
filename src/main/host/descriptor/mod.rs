@@ -779,7 +779,7 @@ mod export {
 
     /// Get the state of the `OpenFile` object.
     #[no_mangle]
-    pub extern "C-unwind" fn openfile_getStatus(file: *const OpenFile) -> c::Status {
+    pub extern "C-unwind" fn openfile_getStatus(file: *const OpenFile) -> FileState {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };
@@ -867,7 +867,7 @@ mod export {
 
     /// Get the state of the `File` object.
     #[no_mangle]
-    pub extern "C-unwind" fn file_getStatus(file: *const File) -> c::Status {
+    pub extern "C-unwind" fn file_getStatus(file: *const File) -> FileState {
         assert!(!file.is_null());
 
         let file = unsafe { &*file };

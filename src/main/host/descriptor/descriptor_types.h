@@ -25,7 +25,6 @@ typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
 typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
 
 #include "main/core/definitions.h"
-#include "main/host/status.h"
 #include "main/utility/utility.h"
 
 /*
@@ -42,7 +41,7 @@ struct _LegacyFileFunctionTable {
 struct _LegacyFile {
     LegacyFileFunctionTable* funcTable;
     LegacyFileType type;
-    Status status;
+    FileState status;
     RootedRefCell_StateEventSource* event_source;
     int refCountStrong;
     int refCountWeak;

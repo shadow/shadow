@@ -10,7 +10,6 @@
 #include "main/host/descriptor/descriptor_types.h"
 #include "main/host/futex.h"
 #include "main/host/process.h"
-#include "main/host/status.h"
 
 /* The type of the object that we use to trigger the condition. */
 typedef enum _TriggerType TriggerType;
@@ -38,7 +37,7 @@ typedef struct _Trigger Trigger;
 struct _Trigger {
     TriggerType type;
     TriggerObject object;
-    Status status;
+    FileState status;
 };
 
 /* This is an opaque structure holding the state needed to resume a thread

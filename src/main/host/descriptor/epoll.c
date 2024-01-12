@@ -358,7 +358,7 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
     watch->flags = 0;
 
     /* check shadow descriptor status */
-    Status status;
+    FileState status;
     if (watch->watchType == EWT_LEGACY_FILE) {
         status = legacyfile_getStatus(watch->watchObject.as_legacy_file);
     } else if (watch->watchType == EWT_GENERIC_FILE) {
@@ -496,7 +496,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
              * should never be a closed file, but Shadow's TCP sockets do close
              * themselves even if there are still file handles (see
              * `_tcp_endOfFileSignalled`), so we need to check this. */
-            Status status;
+            FileState status;
             if (watchType == EWT_LEGACY_FILE) {
                 status = legacyfile_getStatus(watchObject.as_legacy_file);
             } else if (watchType == EWT_GENERIC_FILE) {

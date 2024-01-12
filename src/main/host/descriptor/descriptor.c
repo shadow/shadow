@@ -165,7 +165,7 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 }
 
 #ifdef DEBUG
-static gchar* _legacyfile_statusToString(Status ds) {
+static gchar* _legacyfile_statusToString(FileState ds) {
     GString* string = g_string_new(NULL);
     if (ds & FileState_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
@@ -187,12 +187,12 @@ static gchar* _legacyfile_statusToString(Status ds) {
 }
 #endif
 
-static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldStatus,
+static void _legacyfile_handleStatusChange(LegacyFile* descriptor, FileState oldStatus,
                                            FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
-    Status statusesChanged = descriptor->status ^ oldStatus;
+    FileState statusesChanged = descriptor->status ^ oldStatus;
 
     if (!statusesChanged && !signals) {
         return;
@@ -201,7 +201,7 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
 #ifdef DEBUG
     gchar* before = _legacyfile_statusToString(oldStatus);
     gchar* after = _legacyfile_statusToString(descriptor->status);
-    trace("Status changed on desc %p, from %s to %s", descriptor, before, after);
+    trace("FileState changed on desc %p, from %s to %s", descriptor, before, after);
     g_free(before);
     g_free(after);
 #endif
@@ -210,11 +210,11 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
         descriptor->event_source, descriptor->status, statusesChanged, signals);
 }
 
-void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits,
+void legacyfile_adjustStatus(LegacyFile* descriptor, FileState status, gboolean doSetBits,
                              FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
-    Status oldStatus = descriptor->status;
+    FileState oldStatus = descriptor->status;
 
     /* adjust our status as requested */
     if (doSetBits) {
@@ -229,7 +229,7 @@ void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doS
     _legacyfile_handleStatusChange(descriptor, oldStatus, signals);
 }
 
-Status legacyfile_getStatus(LegacyFile* descriptor) {
+FileState legacyfile_getStatus(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->status;
 }

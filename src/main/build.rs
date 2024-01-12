@@ -149,7 +149,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/descriptor/tcp_cong.h")
         .header("host/descriptor/tcp_cong_reno.h")
         .header("host/futex.h")
-        .header("host/status.h")
         .header("host/status_listener.h")
         .header("host/syscall/handler/fcntl.h")
         .header("host/syscall/handler/file.h")

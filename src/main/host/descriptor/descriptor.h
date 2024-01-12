@@ -61,11 +61,11 @@ void legacyfile_removeFlags(LegacyFile* descriptor, gint flags);
  * listener will trigger notifications via callback functions if the listener is
  * configured to monitor a bit that flipped.
  */
-void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits,
+void legacyfile_adjustStatus(LegacyFile* descriptor, FileState status, gboolean doSetBits,
                              FileSignals signals);
 
 /* Gets the current status of the descriptor. */
-Status legacyfile_getStatus(LegacyFile* descriptor);
+FileState legacyfile_getStatus(LegacyFile* descriptor);
 
 /* Adds a listener that will get notified via descriptorlistener_onStatusChanged
  * on status transitions (bit flips).

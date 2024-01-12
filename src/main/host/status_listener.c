@@ -15,7 +15,7 @@
 
 struct _StatusListener {
     /* The descriptor status bits we want to monitor for transitions. */
-    Status monitoring;
+    FileState monitoring;
     /* A filter that specifies when we should trigger a callback. */
     StatusListenerFilter filter;
 
@@ -103,8 +103,8 @@ void statuslistener_unref(StatusListener* listener) {
 /* Return TRUE if a transition (bit flip) occurred on any status bits that we
  * are monitoring.
  */
-static bool _statuslistener_shouldNotify(StatusListener* listener, Status currentStatus,
-                                         Status transitions) {
+static bool _statuslistener_shouldNotify(StatusListener* listener, FileState currentStatus,
+                                         FileState transitions) {
     MAGIC_ASSERT(listener);
 
     bool flipped = listener->monitoring & transitions;
@@ -133,8 +133,8 @@ static void _statuslistener_invokeNotifyFunc(StatusListener* listener) {
     }
 }
 
-void statuslistener_onStatusChanged(StatusListener* listener, Status currentStatus,
-                                    Status transitions) {
+void statuslistener_onStatusChanged(StatusListener* listener, FileState currentStatus,
+                                    FileState transitions) {
     MAGIC_ASSERT(listener);
 
     if (_statuslistener_shouldNotify(listener, currentStatus, transitions)) {
@@ -142,7 +142,7 @@ void statuslistener_onStatusChanged(StatusListener* listener, Status currentStat
     }
 }
 
-void statuslistener_setMonitorStatus(StatusListener* listener, Status status,
+void statuslistener_setMonitorStatus(StatusListener* listener, FileState status,
                                      StatusListenerFilter filter) {
     MAGIC_ASSERT(listener);
     listener->monitoring = status;
