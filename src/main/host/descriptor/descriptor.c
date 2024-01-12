@@ -143,13 +143,13 @@ void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     MAGIC_ASSERT(descriptor->funcTable);
 
     // if it's already closed, exit early
-    if ((legacyfile_getStatus(descriptor) & STATUS_FILE_CLOSED) != 0) {
+    if ((legacyfile_getStatus(descriptor) & FileState_CLOSED) != 0) {
         warning("Attempting to close an already-closed descriptor");
         return;
     }
 
     trace("Descriptor %p calling vtable close now", descriptor);
-    legacyfile_adjustStatus(descriptor, STATUS_FILE_CLOSED, TRUE, 0);
+    legacyfile_adjustStatus(descriptor, FileState_CLOSED, TRUE, 0);
 
     descriptor->funcTable->close(descriptor, host);
 }
@@ -167,16 +167,16 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 #ifdef DEBUG
 static gchar* _legacyfile_statusToString(Status ds) {
     GString* string = g_string_new(NULL);
-    if (ds & STATUS_FILE_ACTIVE) {
+    if (ds & FileState_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
     }
-    if (ds & STATUS_FILE_READABLE) {
+    if (ds & FileState_READABLE) {
         g_string_append_printf(string, "READABLE|");
     }
-    if (ds & STATUS_FILE_WRITABLE) {
+    if (ds & FileState_WRITABLE) {
         g_string_append_printf(string, "WRITEABLE|");
     }
-    if (ds & STATUS_FILE_CLOSED) {
+    if (ds & FileState_CLOSED) {
         g_string_append_printf(string, "CLOSED|");
     }
     if(string->len == 0) {

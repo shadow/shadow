@@ -152,7 +152,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
             }
         }
 
-        statuslistener_setMonitorStatus(cond->triggerListener, STATUS_NONE, SLF_NEVER);
+        statuslistener_setMonitorStatus(cond->triggerListener, FileState_NONE, SLF_NEVER);
     }
 
     if (cond->triggerListener) {

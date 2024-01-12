@@ -38,7 +38,7 @@ impl Trigger {
         Self(c::Trigger {
             type_: c::_TriggerType_TRIGGER_FILE,
             object: c::TriggerObject { as_file: file_ptr },
-            status: status.into(),
+            status,
         })
     }
 
@@ -48,7 +48,7 @@ impl Trigger {
             object: c::TriggerObject {
                 as_pointer: core::ptr::null_mut(),
             },
-            status: c::_Status_STATUS_CHILD_EVENT,
+            status: FileState::CHILD_EVENT,
         })
     }
 }

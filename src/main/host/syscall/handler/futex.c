@@ -114,7 +114,7 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
     trace("Futex blocking for wakeup %s timeout",
           timeoutSimTime != SIMTIME_INVALID ? "with" : "without");
     Trigger trigger =
-        (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = STATUS_FUTEX_WAKEUP};
+        (Trigger){.type = TRIGGER_FUTEX, .object = futex, .status = FileState_FUTEX_WAKEUP};
     SysCallCondition* cond = syscallcondition_new(trigger);
     if (timeoutSimTime != SIMTIME_INVALID) {
         CEmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)

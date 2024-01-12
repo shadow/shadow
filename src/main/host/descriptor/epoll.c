@@ -291,7 +291,7 @@ void epoll_clearWatchListeners(Epoll* epoll) {
         EpollWatch* watch = next_item->data;
         MAGIC_ASSERT(watch);
 
-        statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
+        statuslistener_setMonitorStatus(watch->listener, FileState_NONE, SLF_NEVER);
 
         if (watch->watchType == EWT_LEGACY_FILE) {
             legacyfile_removeListener(watch->watchObject.as_legacy_file, watch->listener);
@@ -335,7 +335,7 @@ Epoll* epoll_new() {
     epoll->ready = g_hash_table_new_full(_epollkey_hash, _epollkey_equal, g_free, (GDestroyNotify)_epollwatch_unref);
 
     /* the epoll descriptor itself is always able to be epolled */
-    legacyfile_adjustStatus(&(epoll->super), STATUS_FILE_ACTIVE, TRUE, 0);
+    legacyfile_adjustStatus(&(epoll->super), FileState_ACTIVE, TRUE, 0);
 
     worker_count_allocation(Epoll);
 
@@ -365,10 +365,10 @@ static void _epollwatch_updateStatus(EpollWatch* watch) {
         status = file_getStatus(watch->watchObject.as_file);
     }
 
-    watch->flags |= (status & STATUS_FILE_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
-    watch->flags |= (status & STATUS_FILE_READABLE) ? EWF_READABLE : EWF_NONE;
-    watch->flags |= (status & STATUS_FILE_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
-    watch->flags |= (status & STATUS_FILE_CLOSED) ? EWF_CLOSED : EWF_NONE;
+    watch->flags |= (status & FileState_ACTIVE) ? EWF_ACTIVE : EWF_NONE;
+    watch->flags |= (status & FileState_READABLE) ? EWF_READABLE : EWF_NONE;
+    watch->flags |= (status & FileState_WRITABLE) ? EWF_WRITEABLE : EWF_NONE;
+    watch->flags |= (status & FileState_CLOSED) ? EWF_CLOSED : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLIN) ? EWF_WAITINGREAD : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLOUT) ? EWF_WAITINGWRITE : EWF_NONE;
     watch->flags |= (watch->event.events & EPOLLET) ? EWF_EDGETRIGGER : EWF_NONE;
@@ -502,7 +502,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
             } else if (watchType == EWT_GENERIC_FILE) {
                 status = file_getStatus(watchObject.as_file);
             }
-            if (status & STATUS_FILE_CLOSED) {
+            if (status & FileState_CLOSED) {
                 warning("Attempted to add a closed file to epoll %p", epoll);
                 rv = -EBADF;
                 break;
@@ -525,10 +525,11 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
              * all statuses, because epoll will filter what it needs.
              * TODO: lean more heavily on statuslistener and simplify epoll.
              */
-            statuslistener_setMonitorStatus(watch->listener,
-                                            STATUS_FILE_ACTIVE | STATUS_FILE_CLOSED |
-                                                STATUS_FILE_READABLE | STATUS_FILE_WRITABLE,
-                                            SLF_ALWAYS);
+            statuslistener_setMonitorStatus(
+                watch->listener,
+                FileState_ACTIVE | FileState_CLOSED | FileState_READABLE | FileState_WRITABLE,
+                SLF_ALWAYS);
+
             if (watch->watchType == EWT_LEGACY_FILE) {
                 legacyfile_addListener(watch->watchObject.as_legacy_file, watch->listener);
             } else if (watch->watchType == EWT_GENERIC_FILE) {
@@ -574,7 +575,7 @@ gint epoll_control(Epoll* epoll, gint operation, int fd, const Descriptor* descr
             watch->flags &= ~EWF_WATCHING;
 
             /* its deleted, so stop listening for updates */
-            statuslistener_setMonitorStatus(watch->listener, STATUS_NONE, SLF_NEVER);
+            statuslistener_setMonitorStatus(watch->listener, FileState_NONE, SLF_NEVER);
             if (watch->watchType == EWT_LEGACY_FILE) {
                 legacyfile_removeListener(watch->watchObject.as_legacy_file, watch->listener);
             } else if (watch->watchType == EWT_GENERIC_FILE) {
@@ -728,7 +729,7 @@ gint epoll_getEvents(Epoll* epoll, struct epoll_event* eventArray, gint eventArr
     /* if we consumed all the events that we had to report,
      * then our parent descriptor can no longer read child epolls */
     legacyfile_adjustStatus(
-        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
+        &(epoll->super), FileState_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
 
     return 0;
 }
@@ -770,5 +771,5 @@ static void _epoll_fileStatusChanged(Epoll* epoll, const EpollKey* key) {
 
     /* check the status on the parent epoll fd and adjust as needed */
     legacyfile_adjustStatus(
-        &(epoll->super), STATUS_FILE_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
+        &(epoll->super), FileState_READABLE, epoll_getNumReadyEvents(epoll) ? TRUE : FALSE, 0);
 }

@@ -108,36 +108,27 @@ impl FileMode {
 
 bitflags::bitflags! {
     #[derive(Default, Copy, Clone, Debug)]
+    #[repr(transparent)]
     pub struct FileState: libc::c_int {
+        // remove this when the last reference to `FileState_NONE` has been removed from the C code
+        #[deprecated(note = "use `FileState::empty()`")]
+        const NONE = 0;
         /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
         /// state. (This is a legacy C state and should be considered deprecated.)
-        const ACTIVE = c::_Status_STATUS_FILE_ACTIVE;
+        const ACTIVE = 1 << 0;
         /// Can be read, i.e. there is data waiting for user.
-        const READABLE = c::_Status_STATUS_FILE_READABLE;
+        const READABLE = 1 << 1;
         /// Can be written, i.e. there is available buffer space.
-        const WRITABLE = c::_Status_STATUS_FILE_WRITABLE;
+        const WRITABLE = 1 << 2;
         /// User already called close.
-        const CLOSED = c::_Status_STATUS_FILE_CLOSED;
+        const CLOSED = 1 << 3;
         /// A wakeup operation occurred on a futex.
-        const FUTEX_WAKEUP = c::_Status_STATUS_FUTEX_WAKEUP;
+        const FUTEX_WAKEUP = 1 << 4;
         /// A child process had an event reportable via e.g. waitpid.
-        const CHILD_EVENT = c::_Status_STATUS_CHILD_EVENT;
+        const CHILD_EVENT = 1 << 5;
         /// A listening socket is allowing connections. Only applicable to connection-oriented unix
         /// sockets.
-        const SOCKET_ALLOWING_CONNECT = c::_Status_STATUS_SOCKET_ALLOWING_CONNECT;
-    }
-}
-
-impl From<c::Status> for FileState {
-    fn from(status: c::Status) -> Self {
-        // if any unexpected bits were present, then it's an error
-        Self::from_bits(status).unwrap()
-    }
-}
-
-impl From<FileState> for c::Status {
-    fn from(state: FileState) -> Self {
-        state.bits()
+        const SOCKET_ALLOWING_CONNECT = 1 << 6;
     }
 }
 
@@ -793,7 +784,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.inner_file().borrow().state().into()
+        file.inner_file().borrow().state()
     }
 
     /// Add a status listener to the `OpenFile` object. This will increment the status listener's
@@ -881,7 +872,7 @@ mod export {
 
         let file = unsafe { &*file };
 
-        file.borrow().state().into()
+        file.borrow().state()
     }
 
     /// Add a status listener to the `File` object. This will increment the status listener's ref
@@ -957,7 +948,7 @@ mod tests {
                     object: c::TriggerObject {
                         as_pointer: std::ptr::null_mut(),
                     },
-                    status: 2,
+                    status: FileState::CLOSED,
                 })),
                 restartable: true,
             })),
@@ -983,7 +974,7 @@ mod tests {
             object: c::TriggerObject {
                 as_pointer: std::ptr::null_mut(),
             },
-            status: 2,
+            status: FileState::CLOSED,
         }));
         for val in vec![
             SyscallReturn::Done(SyscallReturnDone {

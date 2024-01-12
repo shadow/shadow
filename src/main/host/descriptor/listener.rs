@@ -77,7 +77,7 @@ impl LegacyListenerHelper {
 
         let handle =
             event_source.add_listener(move |(state, changed, _signals), _cb_queue| unsafe {
-                c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state.into(), changed.into())
+                c::statuslistener_onStatusChanged(ptr_wrapper.ptr(), state, changed)
             });
 
         // use a usize as the key so we don't accidentally deref the pointer

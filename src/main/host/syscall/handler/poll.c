@@ -47,15 +47,15 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
         }
     } else {
         // Figure out which events to report
-        if ((dstat & STATUS_FILE_CLOSED) && !(dstat & STATUS_FILE_ACTIVE)) {
+        if ((dstat & FileState_CLOSED) && !(dstat & FileState_ACTIVE)) {
             pfd->revents |= POLLNVAL;
         }
-        if ((pfd->events & POLLIN) && (dstat & STATUS_FILE_ACTIVE) &&
-            (dstat & STATUS_FILE_READABLE)) {
+        if ((pfd->events & POLLIN) && (dstat & FileState_ACTIVE) &&
+            (dstat & FileState_READABLE)) {
             pfd->revents |= POLLIN;
         }
-        if ((pfd->events & POLLOUT) && (dstat & STATUS_FILE_ACTIVE) &&
-            (dstat & STATUS_FILE_WRITABLE)) {
+        if ((pfd->events & POLLOUT) && (dstat & FileState_ACTIVE) &&
+            (dstat & FileState_WRITABLE)) {
             pfd->revents |= POLLOUT;
         }
     }
@@ -151,7 +151,7 @@ SyscallReturn _syscallhandler_pollHelper(SyscallHandler* sys, struct pollfd* fds
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyFile*)rustsyscallhandler_getEpoll(sys),
-                                        .status = STATUS_FILE_READABLE};
+                                        .status = FileState_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, worker_getCurrentEmulatedTime() +

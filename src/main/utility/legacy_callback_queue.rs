@@ -86,7 +86,7 @@ mod export {
 
                 worker::Worker::with_active_host(|host| {
                     let mut event_source = event_source.borrow_mut(host.root());
-                    event_source.notify_listeners(status.into(), changed.into(), signals, cb_queue)
+                    event_source.notify_listeners(status, changed, signals, cb_queue)
                 })
                 .unwrap();
             });
