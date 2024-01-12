@@ -72,7 +72,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn notify_listeners_with_global_cb_queue(
         event_source: *const RootedRefCell_StateEventSource,
-        status: FileState,
+        state: FileState,
         changed: FileState,
         signals: FileSignals,
     ) {
@@ -86,7 +86,7 @@ mod export {
 
                 worker::Worker::with_active_host(|host| {
                     let mut event_source = event_source.borrow_mut(host.root());
-                    event_source.notify_listeners(status, changed, signals, cb_queue)
+                    event_source.notify_listeners(state, changed, signals, cb_queue)
                 })
                 .unwrap();
             });

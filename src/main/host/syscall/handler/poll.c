@@ -150,7 +150,7 @@ SyscallReturn _syscallhandler_pollHelper(SyscallHandler* sys, struct pollfd* fds
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyFile*)rustsyscallhandler_getEpoll(sys),
-                                        .status = FileState_READABLE};
+                                        .state = FileState_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, worker_getCurrentEmulatedTime() +

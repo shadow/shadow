@@ -948,7 +948,7 @@ mod tests {
                     object: c::TriggerObject {
                         as_pointer: std::ptr::null_mut(),
                     },
-                    status: FileState::CLOSED,
+                    state: FileState::CLOSED,
                 })),
                 restartable: true,
             })),
@@ -974,7 +974,7 @@ mod tests {
             object: c::TriggerObject {
                 as_pointer: std::ptr::null_mut(),
             },
-            status: FileState::CLOSED,
+            state: FileState::CLOSED,
         }));
         for val in vec![
             SyscallReturn::Done(SyscallReturnDone {

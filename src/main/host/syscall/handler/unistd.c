@@ -95,7 +95,7 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
 
         /* We need to block until the descriptor is ready to read. */
         Trigger trigger =
-            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = FileState_READABLE};
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .state = FileState_READABLE};
         return syscallreturn_makeBlocked(
             syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }
@@ -176,7 +176,7 @@ SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedFo
 
         /* We need to block until the descriptor is ready to write. */
         Trigger trigger =
-            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .status = FileState_WRITABLE};
+            (Trigger){.type = TRIGGER_DESCRIPTOR, .object = desc, .state = FileState_WRITABLE};
         return syscallreturn_makeBlocked(
             syscallcondition_new(trigger), legacyfile_supportsSaRestart(desc));
     }

@@ -22,7 +22,7 @@ enum _TriggerType {
     TRIGGER_CHILD,
 };
 
-/* Pointer to the object whose status we monitor for changes */
+/* Pointer to the object whose state we monitor for changes */
 typedef union _TriggerObject TriggerObject;
 union _TriggerObject {
     void* as_pointer;
@@ -32,12 +32,12 @@ union _TriggerObject {
 };
 
 /* The spec of the condition that will cause us to unblock a process/thread waiting for the object
- * to reach a status. */
+ * to reach a state. */
 typedef struct _Trigger Trigger;
 struct _Trigger {
     TriggerType type;
     TriggerObject object;
-    FileState status;
+    FileState state;
 };
 
 /* This is an opaque structure holding the state needed to resume a thread
@@ -47,7 +47,7 @@ typedef struct _SysCallCondition SysCallCondition;
 
 /* Create a new object that will cause a signal to be delivered to
  * a waiting process and thread, conditional upon the given trigger object
- * reaching the given status.
+ * reaching the given state.
  * The condition starts with a reference count of 1. */
 SysCallCondition* syscallcondition_new(Trigger trigger);
 
@@ -76,7 +76,7 @@ void syscallcondition_unref(SysCallCondition* cond);
 
 /* Activate the condition by registering the process and thread that will
  * be notified via host_continue() when the condition occurs. After
- * this call, the condition object will begin listening on the status of
+ * this call, the condition object will begin listening on the state of
  * the timeout and descriptor given in new(). */
 void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, const Process* proc,
                                    const Thread* thread);

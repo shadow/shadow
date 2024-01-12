@@ -378,7 +378,7 @@ impl SyscallHandler {
 
         log::trace!("No events are ready on epoll {epfd} and we need to block");
 
-        // Block on epoll status; an epoll descriptor is readable when it has events.
+        // Block on epoll state; an epoll descriptor is readable when it has events.
         let mut rv = SyscallError::new_blocked_on_file(
             File::Epoll(Arc::clone(epoll)),
             FileState::READABLE,
