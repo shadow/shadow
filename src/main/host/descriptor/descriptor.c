@@ -166,6 +166,7 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 
 #ifdef DEBUG
 static gchar* _legacyfile_statusToString(FileState ds) {
+    // TODO: this should just use the rust debug or display implementation for FileState
     GString* string = g_string_new(NULL);
     if (ds & FileState_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
@@ -179,7 +180,16 @@ static gchar* _legacyfile_statusToString(FileState ds) {
     if (ds & FileState_CLOSED) {
         g_string_append_printf(string, "CLOSED|");
     }
-    if(string->len == 0) {
+    if (ds & FileState_FUTEX_WAKEUP) {
+        g_string_append_printf(string, "FUTEX_WAKEUP|");
+    }
+    if (ds & FileState_CHILD_EVENT) {
+        g_string_append_printf(string, "CHILD_EVENT|");
+    }
+    if (ds & FileState_SOCKET_ALLOWING_CONNECT) {
+        g_string_append_printf(string, "SOCKET_ALLOWING_CONNECT|");
+    }
+    if (string->len == 0) {
         g_string_append_printf(string, "NONE|");
     }
     g_string_truncate(string, string->len-1);
