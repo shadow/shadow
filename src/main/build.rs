@@ -59,7 +59,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/descriptor/descriptor_types.h".into(),
             "main/host/descriptor/tcp.h".into(),
             "main/host/descriptor/epoll.h".into(),
-            "main/host/futex_table.h".into(),
+            "main/host/futex.h".into(),
             "main/host/network/network_interface.h".into(),
             "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
@@ -197,7 +197,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("main_.*")
         .allowlist_function("tracker_.*")
         .allowlist_function("futex_.*")
-        .allowlist_function("futextable_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
         .allowlist_function("runConfigHandlers")
@@ -361,7 +360,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/descriptor/tcp_cong_reno.c",
         "host/process.c",
         "host/futex.c",
-        "host/futex_table.c",
         "host/syscall/handler/fcntl.c",
         "host/syscall/handler/file.c",
         "host/syscall/handler/fileat.c",
