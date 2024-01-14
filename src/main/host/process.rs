@@ -331,16 +331,13 @@ impl RunnableProcess {
                 .unwrap();
 
             // Wake the corresponding futex.
-            let mut futexes = host.futextable_borrow_mut();
-            let futex = unsafe {
-                cshadow::futextable_get(
-                    &mut *futexes,
-                    self.common
-                        .physical_address(clear_child_tid_pvp.cast::<()>()),
-                )
-            };
-            if !futex.is_null() {
-                unsafe { cshadow::futex_wake(futex, 1) };
+            let futexes = host.futextable_borrow();
+            let addr = self
+                .common
+                .physical_address(clear_child_tid_pvp.cast::<()>());
+
+            if let Some(futex) = futexes.get(addr) {
+                futex.wake(1);
             }
         }
 

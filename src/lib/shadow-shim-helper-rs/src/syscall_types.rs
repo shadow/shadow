@@ -182,7 +182,7 @@ impl<T> std::fmt::Pointer for ForeignPtr<T> {
 }
 
 /// Represents a pointer to a *physical* address in plugin memory.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(C)]
 pub struct ManagedPhysicalMemoryAddr {
     val: usize,

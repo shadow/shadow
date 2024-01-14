@@ -38,6 +38,7 @@ use crate::core::worker::Worker;
 use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::inet::InetSocket;
+use crate::host::futex_table::FutexTable;
 use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, PcapOptions};
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
@@ -134,7 +135,7 @@ pub struct Host {
     tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
 
     // map address to futex objects
-    futex_table: RefCell<SyncSendPointer<cshadow::FutexTable>>,
+    futex_table: RefCell<FutexTable>,
 
     #[cfg(feature = "perf_timers")]
     execution_timer: RefCell<PerfTimer>,
@@ -318,7 +319,7 @@ impl Host {
             relay_inet_in: Arc::new(relay_inet_in),
             relay_loopback: Arc::new(relay_loopback),
             tracker: RefCell::new(None),
-            futex_table: RefCell::new(unsafe { SyncSendPointer::new(cshadow::futextable_new()) }),
+            futex_table: RefCell::new(FutexTable::new()),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -639,9 +640,13 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn futextable_borrow_mut(&self) -> impl DerefMut<Target = cshadow::FutexTable> + '_ {
-        let futex_table_ref = self.futex_table.borrow_mut();
-        RefMut::map(futex_table_ref, |r| unsafe { &mut *r.ptr() })
+    pub fn futextable_borrow(&self) -> impl Deref<Target = FutexTable> + '_ {
+        self.futex_table.borrow()
+    }
+
+    #[track_caller]
+    pub fn futextable_borrow_mut(&self) -> impl DerefMut<Target = FutexTable> + '_ {
+        self.futex_table.borrow_mut()
     }
 
     #[allow(non_snake_case)]
@@ -1018,10 +1023,6 @@ impl Drop for Host {
             unsafe { cshadow::tracker_free(tracker.ptr()) };
         };
 
-        let futex_table = self.futex_table.borrow_mut().ptr();
-        debug_assert!(!futex_table.is_null());
-        unsafe { cshadow::futextable_unref(futex_table) };
-
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
         // guarantee about the order in which fields are dropped)
@@ -1242,9 +1243,7 @@ mod export {
     /// and is invalidated when the Host is no longer accessible to the current
     /// thread, or something else accesses its FutexTable.
     #[no_mangle]
-    pub unsafe extern "C-unwind" fn host_getFutexTable(
-        hostrc: *const Host,
-    ) -> *mut cshadow::FutexTable {
+    pub unsafe extern "C-unwind" fn host_getFutexTable(hostrc: *const Host) -> *mut FutexTable {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         &mut *hostrc.futextable_borrow_mut()
     }

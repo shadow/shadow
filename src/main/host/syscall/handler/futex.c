@@ -14,7 +14,6 @@
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/host/futex.h"
-#include "main/host/futex_table.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/syscall_condition.h"
 #include "main/utility/utility.h"
@@ -68,6 +67,10 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
     FutexTable* ftable = host_getFutexTable(rustsyscallhandler_getHost(sys));
     Futex* futex = futextable_get(ftable, futexPPtr);
 
+    if (futex != NULL) {
+        futex_ref(futex);
+    }
+
     if (rustsyscallhandler_wasBlocked(sys)) {
         utility_debugAssert(futex != NULL);
         int result = 0;
@@ -91,10 +94,11 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
         // Dynamically clean up the futex if needed
         if (futex_getListenerCount(futex) == 0) {
             trace("Dynamically freed a futex object for futex addr %p", (void*)futexPPtr.val);
-            bool success = futextable_remove(ftable, futex);
+            bool success = futextable_remove(ftable, futexPPtr);
             utility_debugAssert(success);
         }
 
+        futex_unref(futex);
         return syscallreturn_makeDoneI64(result);
     }
 
@@ -118,6 +122,8 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
                                                 : timeoutSimTime;
         syscallcondition_setTimeout(cond, timeoutEmulatedTime);
     }
+
+    futex_unref(futex);
     return syscallreturn_makeBlocked(cond, true);
 }
 

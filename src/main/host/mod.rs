@@ -1,6 +1,7 @@
 pub mod context;
 pub mod cpu;
 pub mod descriptor;
+pub mod futex_table;
 #[allow(clippy::module_inception)]
 pub mod host;
 pub mod managed_thread;
