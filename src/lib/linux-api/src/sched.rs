@@ -46,6 +46,39 @@ pub use bindings::linux_clone_args;
 #[allow(non_camel_case_types)]
 pub type clone_args = linux_clone_args;
 
+#[allow(clippy::derivable_impls)]
+impl Default for clone_args {
+    fn default() -> Self {
+        Self {
+            flags: Default::default(),
+            pidfd: Default::default(),
+            child_tid: Default::default(),
+            parent_tid: Default::default(),
+            exit_signal: Default::default(),
+            stack: Default::default(),
+            stack_size: Default::default(),
+            tls: Default::default(),
+            set_tid: Default::default(),
+            set_tid_size: Default::default(),
+            cgroup: Default::default(),
+        }
+    }
+}
+
+impl clone_args {
+    #[inline]
+    pub fn with_flags(mut self, flags: CloneFlags) -> Self {
+        self.flags = flags.bits();
+        self
+    }
+
+    #[inline]
+    pub fn with_exit_signal(mut self, exit_signal: Option<Signal>) -> Self {
+        self.exit_signal = u64::try_from(Signal::as_raw(exit_signal)).unwrap();
+        self
+    }
+}
+
 unsafe impl shadow_pod::Pod for clone_args {}
 
 /// The "dumpable" state, as manipulated via the prctl operations `PR_SET_DUMPABLE` and
