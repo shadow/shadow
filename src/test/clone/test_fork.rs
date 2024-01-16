@@ -1190,6 +1190,67 @@ assert handler_counter == 1, "Handler should have run, but appears not to have""
     })
 }
 
+fn test_clone_clear_sighand(set_clear_sighand: bool) -> anyhow::Result<()> {
+    // Use a subprocess since we manipulate signal handler.
+    run_test_in_subprocess(|| {
+        let flags = if set_clear_sighand {
+            CloneFlags::CLONE_CLEAR_SIGHAND
+        } else {
+            CloneFlags::empty()
+        };
+
+        extern "C" fn sig_handler(_signo: c_int, _info: *mut siginfo_t, _ctx: *mut c_void) {}
+
+        // Configure SIGALRM to somethign other than default.
+        let signal = nix::sys::signal::Signal::SIGALRM;
+        let parent_action = SigAction::new(
+            SigHandler::SigAction(sig_handler),
+            SaFlags::SA_SIGINFO,
+            SigSet::empty(),
+        );
+        unsafe { nix::sys::signal::sigaction(signal, &parent_action) }.unwrap();
+
+        let clone_res = unsafe {
+            // CLONE_CLEAR_SIGHAND isn't supported by `clone`; we need to use `clone3`.
+            linux_api::sched::clone3(
+                &linux_api::sched::clone_args::default()
+                    .with_flags(flags)
+                    .with_exit_signal(Some(Signal::SIGCHLD)),
+            )
+        }
+        .unwrap();
+        let child_pid = match clone_res {
+            CloneResult::CallerIsChild => {
+                // Ensure we exit with non-zero exit code on panic.
+                std::panic::set_hook(Box::new(|info| {
+                    eprintln!("panic: {info:?}");
+                    unsafe { libc::exit(1) };
+                }));
+
+                let default_action =
+                    SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
+                let prev_action =
+                    unsafe { nix::sys::signal::sigaction(signal, &default_action) }.unwrap();
+
+                let expected_prev_action = if set_clear_sighand {
+                    &default_action
+                } else {
+                    &parent_action
+                };
+                assert_eq!(prev_action.handler(), expected_prev_action.handler());
+                unsafe { libc::exit(0) };
+            }
+            CloneResult::CallerIsParent(pid) => pid,
+        };
+
+        let child_pid = nix::unistd::Pid::from_raw(child_pid.as_raw_nonzero().get());
+        assert_eq!(
+            nix::sys::wait::waitpid(Some(child_pid), None).unwrap(),
+            nix::sys::wait::WaitStatus::Exited(child_pid, 0)
+        );
+    })
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // FIXME: take as a command-line arg
     let python_path = Path::new("/usr/bin/python3");
@@ -1823,6 +1884,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
         all_envs.clone(),
     ));
+
+    for value in [true, false] {
+        tests.push(ShadowTest::new(
+            &format!("test_handles_CLONE_CLEAR_SIGHAND={value}"),
+            move || test_clone_clear_sighand(value),
+            // TODO: https://github.com/shadow/shadow/issues/3266
+            libc_only.clone(),
+        ));
+    }
 
     // It'd be good to test signal config across exec, but this is tricky since
     // python re-initializes it at startup. We might have to write specialized
