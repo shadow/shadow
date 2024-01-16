@@ -131,6 +131,15 @@ pub unsafe fn clone_raw(
     .map_err(Errno::from)
 }
 
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone3_raw(args: *const clone_args, size: usize) -> Result<core::ffi::c_long, Errno> {
+    unsafe { linux_syscall::syscall!(linux_syscall::SYS_clone3, args, size,) }
+        .try_i64()
+        .map_err(Errno::from)
+}
+
 pub enum CloneResult {
     CallerIsChild,
     // Caller is the parent; child has the given pid
@@ -158,6 +167,19 @@ pub unsafe fn clone(
         )
     }
     .map(|res| match res.cmp(&0) {
+        core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
+        core::cmp::Ordering::Greater => {
+            CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())
+        }
+        core::cmp::Ordering::Less => unreachable!(),
+    })
+}
+
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone3(args: &clone_args) -> Result<CloneResult, Errno> {
+    unsafe { clone3_raw(args, core::mem::size_of::<clone_args>()) }.map(|res| match res.cmp(&0) {
         core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
         core::cmp::Ordering::Greater => {
             CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())
