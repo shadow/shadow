@@ -310,6 +310,15 @@ fn test_exit_signal_normal_exit(exit_signal: nix::sys::signal::Signal) -> anyhow
         .unwrap();
         let child_pid = match clone_res {
             CloneResult::CallerIsChild => {
+                // Give parent time to get into its sleep.
+                match rustix::thread::nanosleep(&rustix::fs::Timespec {
+                    tv_sec: 1,
+                    tv_nsec: 0,
+                }) {
+                    rustix::thread::NanosleepRelativeResult::Ok => (),
+                    other => panic!("Unexpected nanosleep result: {other:?}"),
+                }
+                // Exit, causing the exit signal to be sent.
                 unsafe { libc::exit(CHILD_EXIT_STATUS) };
             }
             CloneResult::CallerIsParent(child_pid) => child_pid,
@@ -371,6 +380,15 @@ fn test_exit_signal_with_fatal_signal(exit_signal: nix::sys::signal::Signal) -> 
         .unwrap();
         let child_pid = match clone_res {
             CloneResult::CallerIsChild => {
+                // Give parent time to get into its sleep.
+                match rustix::thread::nanosleep(&rustix::fs::Timespec {
+                    tv_sec: 1,
+                    tv_nsec: 0,
+                }) {
+                    rustix::thread::NanosleepRelativeResult::Ok => (),
+                    other => panic!("Unexpected nanosleep result: {other:?}"),
+                }
+                // Exit, causing the exit signal to be sent.
                 unsafe { libc::kill(libc::getpid(), libc::SIGKILL) };
                 unreachable!()
             }
