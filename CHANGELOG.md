@@ -10,11 +10,12 @@ MAJOR changes (breaking):
 
 MINOR changes (backwards-compatible):
 
-*
+* Added support for the `CLONE_CLEAR_SIGHAND` flag for the `clone3` syscall.
 
 PATCH changes (bugfixes):
 
-*
+* On fork and fork-like invocations of `clone`, signal handlers are now correctly copied
+from the parent instead of reset to default (unless `CLONE_CLEAR_SIGHAND` is used).
 
 Full changelog since v3.1.0:
 

@@ -1889,8 +1889,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         tests.push(ShadowTest::new(
             &format!("test_handles_CLONE_CLEAR_SIGHAND={value}"),
             move || test_clone_clear_sighand(value),
-            // TODO: https://github.com/shadow/shadow/issues/3266
-            libc_only.clone(),
+            all_envs.clone(),
         ));
     }
 
