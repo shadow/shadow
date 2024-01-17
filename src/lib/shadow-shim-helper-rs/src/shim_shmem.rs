@@ -232,6 +232,14 @@ impl ProcessShmemProtected {
 
     /// # Safety
     ///
+    /// Only valid if pointers in `src` sigactions are valid in `self`'s address
+    /// space (e.g. `src` is a parent that just forked this process).
+    pub unsafe fn clone_signal_actions(&mut self, src: &Self) {
+        self.signal_actions = src.signal_actions
+    }
+
+    /// # Safety
+    ///
     /// Function pointers in `shd_kernel_sigaction::u` are valid only
     /// from corresponding managed process, and may be libc::SIG_DFL or
     /// libc::SIG_IGN.

@@ -46,6 +46,39 @@ pub use bindings::linux_clone_args;
 #[allow(non_camel_case_types)]
 pub type clone_args = linux_clone_args;
 
+#[allow(clippy::derivable_impls)]
+impl Default for clone_args {
+    fn default() -> Self {
+        Self {
+            flags: Default::default(),
+            pidfd: Default::default(),
+            child_tid: Default::default(),
+            parent_tid: Default::default(),
+            exit_signal: Default::default(),
+            stack: Default::default(),
+            stack_size: Default::default(),
+            tls: Default::default(),
+            set_tid: Default::default(),
+            set_tid_size: Default::default(),
+            cgroup: Default::default(),
+        }
+    }
+}
+
+impl clone_args {
+    #[inline]
+    pub fn with_flags(mut self, flags: CloneFlags) -> Self {
+        self.flags = flags.bits();
+        self
+    }
+
+    #[inline]
+    pub fn with_exit_signal(mut self, exit_signal: Option<Signal>) -> Self {
+        self.exit_signal = u64::try_from(Signal::as_raw(exit_signal)).unwrap();
+        self
+    }
+}
+
 unsafe impl shadow_pod::Pod for clone_args {}
 
 /// The "dumpable" state, as manipulated via the prctl operations `PR_SET_DUMPABLE` and
@@ -131,6 +164,15 @@ pub unsafe fn clone_raw(
     .map_err(Errno::from)
 }
 
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone3_raw(args: *const clone_args, size: usize) -> Result<core::ffi::c_long, Errno> {
+    unsafe { linux_syscall::syscall!(linux_syscall::SYS_clone3, args, size,) }
+        .try_i64()
+        .map_err(Errno::from)
+}
+
 pub enum CloneResult {
     CallerIsChild,
     // Caller is the parent; child has the given pid
@@ -158,6 +200,19 @@ pub unsafe fn clone(
         )
     }
     .map(|res| match res.cmp(&0) {
+        core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
+        core::cmp::Ordering::Greater => {
+            CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())
+        }
+        core::cmp::Ordering::Less => unreachable!(),
+    })
+}
+
+/// # Safety
+///
+/// Too many requirements to list here. See `clone(2)`.
+pub unsafe fn clone3(args: &clone_args) -> Result<CloneResult, Errno> {
+    unsafe { clone3_raw(args, core::mem::size_of::<clone_args>()) }.map(|res| match res.cmp(&0) {
         core::cmp::Ordering::Equal => CloneResult::CallerIsChild,
         core::cmp::Ordering::Greater => {
             CloneResult::CallerIsParent(Pid::from_raw(res.try_into().unwrap()).unwrap())

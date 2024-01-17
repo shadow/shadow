@@ -172,6 +172,19 @@ impl SyscallHandler {
         let do_child_cleartid = flags.contains(CloneFlags::CLONE_CHILD_CLEARTID);
         handled_flags.insert(CloneFlags::CLONE_CHILD_CLEARTID);
 
+        let do_copy_sighandlers = if flags.contains(CloneFlags::CLONE_CLEAR_SIGHAND) {
+            // clone(2): Specifying this flag together with CLONE_SIGHAND is
+            // nonsensical and disallowed.
+            if flags.contains(CloneFlags::CLONE_SIGHAND) {
+                return Err(Errno::EINVAL.into());
+            }
+            false
+        } else {
+            // We only need to copy if they're not shared.
+            !flags.contains(CloneFlags::CLONE_SIGHAND)
+        };
+        handled_flags.insert(CloneFlags::CLONE_CLEAR_SIGHAND);
+
         if flags.contains(CloneFlags::CLONE_PARENT) {
             // Handled in `new_forked_process` when creating a new process.
             // No-op when not creating a new process.
@@ -259,6 +272,18 @@ impl SyscallHandler {
             let childrc = child_process.thread_borrow(child_tid).unwrap();
             let child = childrc.borrow(ctx.objs.host.root());
             child.set_tid_address(ctid);
+        }
+
+        if do_copy_sighandlers {
+            let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow_mut().unwrap();
+
+            let parent_shmem = ctx.objs.process.shmem();
+            let parent_shmem_prot = parent_shmem.protected.borrow(&shmem_lock.root);
+
+            let child_shmem = child_process_borrow.as_ref().unwrap().shmem();
+            let mut child_shmem_prot = child_shmem.protected.borrow_mut(&shmem_lock.root);
+            // Safety: pointers in the parent are valid in the child.
+            unsafe { child_shmem_prot.clone_signal_actions(&parent_shmem_prot) };
         }
 
         drop(child_process_borrow);
