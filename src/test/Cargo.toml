@@ -13,6 +13,14 @@ name = "test_clone"
 path = "clone/test_clone.rs"
 
 [[bin]]
+name = "test_capget"
+path = "capabilities/test_capget.rs"
+
+[[bin]]
+name = "test_capset"
+path = "capabilities/test_capset.rs"
+
+[[bin]]
 name = "test_fork"
 path = "clone/test_fork.rs"
 

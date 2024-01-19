@@ -7,5 +7,5 @@ hosts:
   node1:
     network_node_id: 0
     processes:
-    - path: ./test-capset
-      start_time: 1
+    - path: ../../target/debug/test_capset
+      args: --shadow-passing
