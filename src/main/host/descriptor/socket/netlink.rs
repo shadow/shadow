@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use linux_api::rtnetlink::{RTM_GETADDR, RTM_GETLINK};
+use linux_api::rtnetlink::{RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR, RTM_GETADDR, RTM_GETLINK};
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
 use neli::consts::rtnl::{
     Arphrd, Ifa, IfaF, IfaFFlags, Iff, IffFlags, Ifla, RtAddrFamily, RtScope, Rtm,
@@ -558,13 +558,13 @@ impl InitialState {
         self.bound_addr = Some(*addr);
 
         // According to netlink(7), if the groups is non-zero, it means that the socket wants to
-        // listen to some groups. Since we don't support broadcasting to groups yet, we will emit
-        // the error here.
-        if addr.groups() != 0 {
+        // listen to some groups. If it includes unsupported groups, we will emit the error here.
+        if (addr.groups() & !(RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR)) != 0 {
             log::warn!(
-                "Attempted to bind netlink socket to an address with non-zero groups {}",
+                "Attempted to bind netlink socket to an address with unsupported groups {}",
                 addr.groups()
             );
+            return Err(Errno::EINVAL.into());
         }
 
         Ok(0.into())
