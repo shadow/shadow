@@ -25,9 +25,12 @@ const END_HELP_TEXT: &str = "\
     example: '1024 B', '1024 bytes', '1 KiB', '1 kibibyte', etc) and are \
     case-sensitive.";
 
+// clap requires a 'static str for the version
+static VERSION: Lazy<String> = Lazy::new(crate::shadow::version);
+
 #[derive(Debug, Clone, Parser)]
 #[clap(name = "Shadow", about = START_HELP_TEXT, after_help = END_HELP_TEXT)]
-#[clap(version = std::option_env!("SHADOW_VERSION").unwrap_or(std::env!("CARGO_PKG_VERSION")))]
+#[clap(version = VERSION.as_str())]
 #[clap(next_display_order = None)]
 // clap only shows the possible values for bool options (unless we add support for the other
 // non-bool options in the future), which isn't very helpful

@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::ffi::{CStr, OsStr};
+use std::fmt::Write;
 use std::io::IsTerminal;
 use std::os::unix::ffi::OsStrExt;
 use std::thread;
@@ -230,14 +231,18 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn write_build_info(mut w: impl std::io::Write) -> std::io::Result<()> {
-    let git_info = if let (Some(commit), Some(date)) = (GIT_COMMIT_INFO, GIT_DATE) {
-        format!(" — {commit} {date}")
-    } else {
-        "".to_string()
-    };
+pub fn version() -> String {
+    let mut s = env!("CARGO_PKG_VERSION").to_string();
 
-    writeln!(w, "Shadow {}{}", env!("CARGO_PKG_VERSION"), git_info)?;
+    if let (Some(commit), Some(date)) = (GIT_COMMIT_INFO, GIT_DATE) {
+        write!(s, " — {commit} {date}").unwrap();
+    }
+
+    s
+}
+
+fn write_build_info(mut w: impl std::io::Write) -> std::io::Result<()> {
+    writeln!(w, "Shadow {}", version())?;
     writeln!(
         w,
         "GLib {}.{}.{}",
