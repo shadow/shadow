@@ -586,12 +586,14 @@ impl SyscallHandler {
                     .unwrap_or(false);
 
                 if !has_already_warned {
-                    // `insert()` returns `false` if the syscall num was already in the set
-                    assert!(WARNED_SET
+                    // `insert()` returns `false` if the syscall num was already in the set.
+                    // This can happen if another thread added the syscall after we released
+                    // the read-lock, above, and took the write lock, below.
+                    WARNED_SET
                         .write()
                         .unwrap()
                         .get_or_insert_with(HashSet::new)
-                        .insert(syscall));
+                        .insert(syscall);
                 }
 
                 let level = if has_already_warned {
