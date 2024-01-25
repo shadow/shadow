@@ -8,7 +8,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
-use crate::host::descriptor::CompatFile;
+use crate::host::descriptor::{CompatFile, FileState};
 use crate::host::memory_manager::AllocdMem;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
 use crate::host::syscall::types::SyscallError;
@@ -188,7 +188,7 @@ impl SyscallHandler {
 
             assert!(!file.is_null());
 
-            if unsafe { c::legacyfile_getStatus(file) } & c::_Status_STATUS_FILE_CLOSED != 0 {
+            if unsafe { c::legacyfile_getStatus(file) }.contains(FileState::CLOSED) {
                 // A file that is referenced in the descriptor table should never be a closed file.
                 // File handles (fds) are handles to open files, so if we have a file handle to a
                 // closed file, then there's an error somewhere in Shadow. Shadow's TCP sockets do

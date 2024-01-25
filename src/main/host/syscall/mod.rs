@@ -32,13 +32,13 @@ impl From<Trigger> for c::Trigger {
 }
 
 impl Trigger {
-    pub fn from_file(file: File, status: FileState) -> Self {
+    pub fn from_file(file: File, state: FileState) -> Self {
         let file_ptr = Box::into_raw(Box::new(file));
 
         Self(c::Trigger {
             type_: c::_TriggerType_TRIGGER_FILE,
             object: c::TriggerObject { as_file: file_ptr },
-            status: status.into(),
+            state,
         })
     }
 
@@ -48,7 +48,7 @@ impl Trigger {
             object: c::TriggerObject {
                 as_pointer: core::ptr::null_mut(),
             },
-            status: c::_Status_STATUS_CHILD_EVENT,
+            state: FileState::CHILD_EVENT,
         })
     }
 }

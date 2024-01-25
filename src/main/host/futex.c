@@ -101,7 +101,7 @@ unsigned int futex_wake(Futex* futex, unsigned int numWakeups) {
                 (bool)GPOINTER_TO_UINT(g_hash_table_lookup(futex->listeners, listener));
             if (!did_wakeup) {
                 // Tell the status listener to unblock the thread waiting on the futex
-                statuslistener_onStatusChanged(listener, STATUS_FUTEX_WAKEUP, STATUS_FUTEX_WAKEUP);
+                statuslistener_onStatusChanged(listener, FileState_FUTEX_WAKEUP, FileState_FUTEX_WAKEUP);
 
                 // Track that we did a wakeup on this listener without destroying the listener
                 g_hash_table_steal(futex->listeners, listener);

@@ -10,7 +10,6 @@
 typedef struct _StatusListener StatusListener;
 
 #include "main/bindings/c/bindings-opaque.h"
-#include "main/host/status.h"
 
 /* Indicates when the listener should trigger a callback, i.e.,
  * when the status bits that we are monitoring flip from off to on,
@@ -48,13 +47,13 @@ void statuslistener_unref(StatusListener* listener);
  * If this listener is monitoring (via setMonitorStatus) any of the status bits
  * that just transitioned, then this function will trigger a notification
  * via the callback supplied to the new func.*/
-void statuslistener_onStatusChanged(StatusListener* listener, Status currentStatus,
-                                    Status transitions);
+void statuslistener_onStatusChanged(StatusListener* listener, FileState currentStatus,
+                                    FileState transitions);
 
 /* Set the status bits that we should monitor for transitions (flips),
  * and a filter that specifies which flips should cause the callback
  * to be invoked. */
-void statuslistener_setMonitorStatus(StatusListener* listener, Status status,
+void statuslistener_setMonitorStatus(StatusListener* listener, FileState status,
                                      StatusListenerFilter filter);
 
 /* Used for sorting status listeners in GLib code. Returns -1 if the listener in

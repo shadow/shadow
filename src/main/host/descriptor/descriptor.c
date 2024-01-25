@@ -143,13 +143,13 @@ void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     MAGIC_ASSERT(descriptor->funcTable);
 
     // if it's already closed, exit early
-    if ((legacyfile_getStatus(descriptor) & STATUS_FILE_CLOSED) != 0) {
+    if ((legacyfile_getStatus(descriptor) & FileState_CLOSED) != 0) {
         warning("Attempting to close an already-closed descriptor");
         return;
     }
 
     trace("Descriptor %p calling vtable close now", descriptor);
-    legacyfile_adjustStatus(descriptor, STATUS_FILE_CLOSED, TRUE, 0);
+    legacyfile_adjustStatus(descriptor, FileState_CLOSED, TRUE, 0);
 
     descriptor->funcTable->close(descriptor, host);
 }
@@ -165,21 +165,31 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 }
 
 #ifdef DEBUG
-static gchar* _legacyfile_statusToString(Status ds) {
+static gchar* _legacyfile_statusToString(FileState ds) {
+    // TODO: this should just use the rust debug or display implementation for FileState
     GString* string = g_string_new(NULL);
-    if (ds & STATUS_FILE_ACTIVE) {
+    if (ds & FileState_ACTIVE) {
         g_string_append_printf(string, "ACTIVE|");
     }
-    if (ds & STATUS_FILE_READABLE) {
+    if (ds & FileState_READABLE) {
         g_string_append_printf(string, "READABLE|");
     }
-    if (ds & STATUS_FILE_WRITABLE) {
+    if (ds & FileState_WRITABLE) {
         g_string_append_printf(string, "WRITEABLE|");
     }
-    if (ds & STATUS_FILE_CLOSED) {
+    if (ds & FileState_CLOSED) {
         g_string_append_printf(string, "CLOSED|");
     }
-    if(string->len == 0) {
+    if (ds & FileState_FUTEX_WAKEUP) {
+        g_string_append_printf(string, "FUTEX_WAKEUP|");
+    }
+    if (ds & FileState_CHILD_EVENT) {
+        g_string_append_printf(string, "CHILD_EVENT|");
+    }
+    if (ds & FileState_SOCKET_ALLOWING_CONNECT) {
+        g_string_append_printf(string, "SOCKET_ALLOWING_CONNECT|");
+    }
+    if (string->len == 0) {
         g_string_append_printf(string, "NONE|");
     }
     g_string_truncate(string, string->len-1);
@@ -187,12 +197,12 @@ static gchar* _legacyfile_statusToString(Status ds) {
 }
 #endif
 
-static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldStatus,
+static void _legacyfile_handleStatusChange(LegacyFile* descriptor, FileState oldStatus,
                                            FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
     /* Identify which bits changed, if any. */
-    Status statusesChanged = descriptor->status ^ oldStatus;
+    FileState statusesChanged = descriptor->status ^ oldStatus;
 
     if (!statusesChanged && !signals) {
         return;
@@ -201,7 +211,7 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
 #ifdef DEBUG
     gchar* before = _legacyfile_statusToString(oldStatus);
     gchar* after = _legacyfile_statusToString(descriptor->status);
-    trace("Status changed on desc %p, from %s to %s", descriptor, before, after);
+    trace("FileState changed on desc %p, from %s to %s", descriptor, before, after);
     g_free(before);
     g_free(after);
 #endif
@@ -210,11 +220,11 @@ static void _legacyfile_handleStatusChange(LegacyFile* descriptor, Status oldSta
         descriptor->event_source, descriptor->status, statusesChanged, signals);
 }
 
-void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doSetBits,
+void legacyfile_adjustStatus(LegacyFile* descriptor, FileState status, gboolean doSetBits,
                              FileSignals signals) {
     MAGIC_ASSERT(descriptor);
 
-    Status oldStatus = descriptor->status;
+    FileState oldStatus = descriptor->status;
 
     /* adjust our status as requested */
     if (doSetBits) {
@@ -229,7 +239,7 @@ void legacyfile_adjustStatus(LegacyFile* descriptor, Status status, gboolean doS
     _legacyfile_handleStatusChange(descriptor, oldStatus, signals);
 }
 
-Status legacyfile_getStatus(LegacyFile* descriptor) {
+FileState legacyfile_getStatus(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->status;
 }

@@ -1283,7 +1283,7 @@ impl LegacyTcpSocket {
     }
 
     pub fn state(&self) -> FileState {
-        unsafe { c::legacyfile_getStatus(self.as_legacy_file()) }.into()
+        unsafe { c::legacyfile_getStatus(self.as_legacy_file()) }
     }
 }
 

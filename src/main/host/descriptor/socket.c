@@ -184,9 +184,9 @@ Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
     if (packet != NULL) {
         /* we are writable if we now have space */
         gsize space = _legacysocket_getOutputBufferSpaceIncludingTCP(socket);
-        gboolean is_active = legacyfile_getStatus((LegacyFile*)socket) & STATUS_FILE_ACTIVE;
+        gboolean is_active = legacyfile_getStatus((LegacyFile*)socket) & FileState_ACTIVE;
         if (space > 0 && is_active) {
-            legacyfile_adjustStatus((LegacyFile*)socket, STATUS_FILE_WRITABLE, TRUE, 0);
+            legacyfile_adjustStatus((LegacyFile*)socket, FileState_WRITABLE, TRUE, 0);
         }
     }
 

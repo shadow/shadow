@@ -1,6 +1,7 @@
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;
+use crate::host::descriptor::FileState;
 use crate::utility::HostTreePointer;
 
 use super::host::Host;
@@ -96,12 +97,7 @@ impl StatusListener {
     /// If this listener is monitoring (via setMonitorStatus) any of the status bits
     /// that just transitioned, then this function will trigger a notification
     /// via the callback supplied to the new func.
-    pub fn handle_status_change(
-        &self,
-        host: &Host,
-        current: cshadow::Status,
-        transitions: cshadow::Status,
-    ) {
+    pub fn handle_status_change(&self, host: &Host, current: FileState, transitions: FileState) {
         unsafe {
             cshadow::statuslistener_onStatusChanged(
                 self.ptr.ptr_with_host(host),
@@ -117,7 +113,7 @@ impl StatusListener {
     pub fn set_monitor_status(
         &self,
         host: &Host,
-        status: cshadow::Status,
+        status: FileState,
         filter: cshadow::StatusListenerFilter,
     ) {
         unsafe {

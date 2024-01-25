@@ -16,7 +16,6 @@
 #include "main/host/descriptor/epoll.h"
 #include "main/host/descriptor/regular_file.h"
 #include "main/host/process.h"
-#include "main/host/status.h"
 #include "main/host/syscall/protected.h"
 #include "main/host/syscall/syscall_condition.h"
 
@@ -34,7 +33,7 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
     // Some logic depends on the file type. USE DT_NONE for non-legacy files
     // TODO: when converted to rust, we'll need to match the RegularFile type instead
     LegacyFileType dType = ldesc ? legacyfile_getType(ldesc) : DT_NONE;
-    Status dstat =
+    FileState dstat =
         ldesc ? legacyfile_getStatus(ldesc) : openfile_getStatus(descriptor_borrowOpenFile(cdesc));
 
     if (dType == DT_FILE) {
@@ -47,15 +46,15 @@ static void _syscallhandler_getPollEventsHelper(const Descriptor* cdesc, struct 
         }
     } else {
         // Figure out which events to report
-        if ((dstat & STATUS_FILE_CLOSED) && !(dstat & STATUS_FILE_ACTIVE)) {
+        if ((dstat & FileState_CLOSED) && !(dstat & FileState_ACTIVE)) {
             pfd->revents |= POLLNVAL;
         }
-        if ((pfd->events & POLLIN) && (dstat & STATUS_FILE_ACTIVE) &&
-            (dstat & STATUS_FILE_READABLE)) {
+        if ((pfd->events & POLLIN) && (dstat & FileState_ACTIVE) &&
+            (dstat & FileState_READABLE)) {
             pfd->revents |= POLLIN;
         }
-        if ((pfd->events & POLLOUT) && (dstat & STATUS_FILE_ACTIVE) &&
-            (dstat & STATUS_FILE_WRITABLE)) {
+        if ((pfd->events & POLLOUT) && (dstat & FileState_ACTIVE) &&
+            (dstat & FileState_WRITABLE)) {
             pfd->revents |= POLLOUT;
         }
     }
@@ -151,7 +150,7 @@ SyscallReturn _syscallhandler_pollHelper(SyscallHandler* sys, struct pollfd* fds
             // Block on epoll, which is readable when any fds have events
             Trigger trigger = (Trigger){.type = TRIGGER_DESCRIPTOR,
                                         .object = (LegacyFile*)rustsyscallhandler_getEpoll(sys),
-                                        .status = STATUS_FILE_READABLE};
+                                        .state = FileState_READABLE};
             SysCallCondition* cond = syscallcondition_new(trigger);
             if (timeout && (timeout->tv_sec > 0 || timeout->tv_nsec > 0)) {
                 syscallcondition_setTimeout(cond, worker_getCurrentEmulatedTime() +

@@ -152,7 +152,7 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
             }
         }
 
-        statuslistener_setMonitorStatus(cond->triggerListener, STATUS_NONE, SLF_NEVER);
+        statuslistener_setMonitorStatus(cond->triggerListener, FileState_NONE, SLF_NEVER);
     }
 
     if (cond->triggerListener) {
@@ -290,13 +290,13 @@ static bool _syscallcondition_statusIsValid(SysCallCondition* cond) {
 
     switch (cond->trigger.type) {
         case TRIGGER_DESCRIPTOR: {
-            if (legacyfile_getStatus(cond->trigger.object.as_legacy_file) & cond->trigger.status) {
+            if (legacyfile_getStatus(cond->trigger.object.as_legacy_file) & cond->trigger.state) {
                 return true;
             }
             break;
         }
         case TRIGGER_FILE: {
-            if (file_getStatus(cond->trigger.object.as_file) & cond->trigger.status) {
+            if (file_getStatus(cond->trigger.object.as_file) & cond->trigger.state) {
                 return true;
             }
             break;
@@ -479,7 +479,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
             case TRIGGER_DESCRIPTOR: {
                 /* Monitor the requested status when it transitions from off to on. */
                 statuslistener_setMonitorStatus(
-                    cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
+                    cond->triggerListener, cond->trigger.state, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
                 legacyfile_addListener(cond->trigger.object.as_legacy_file, cond->triggerListener);
@@ -488,7 +488,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
             case TRIGGER_FILE: {
                 /* Monitor the requested status when it transitions from off to on. */
                 statuslistener_setMonitorStatus(
-                    cond->triggerListener, cond->trigger.status, SLF_OFF_TO_ON);
+                    cond->triggerListener, cond->trigger.state, SLF_OFF_TO_ON);
 
                 /* Attach the listener to the descriptor. */
                 file_addListener(cond->trigger.object.as_file, cond->triggerListener);
@@ -497,7 +497,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
             case TRIGGER_FUTEX: {
                 /* Monitor the requested status an every status change. */
                 statuslistener_setMonitorStatus(
-                    cond->triggerListener, cond->trigger.status, SLF_ALWAYS);
+                    cond->triggerListener, cond->trigger.state, SLF_ALWAYS);
 
                 /* Attach the listener to the descriptor. */
                 futex_addListener(cond->trigger.object.as_futex, cond->triggerListener);
@@ -506,7 +506,7 @@ void syscallcondition_waitNonblock(SysCallCondition* cond, const Host* host, con
             case TRIGGER_CHILD: {
                 /* Monitor the requested status an every status change. */
                 statuslistener_setMonitorStatus(
-                    cond->triggerListener, cond->trigger.status, SLF_ALWAYS);
+                    cond->triggerListener, cond->trigger.state, SLF_ALWAYS);
 
                 /* Attach the listener to current process. */
                 process_addChildEventListener(host, proc, cond->triggerListener);

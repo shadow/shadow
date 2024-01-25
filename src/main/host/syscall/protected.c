@@ -19,9 +19,9 @@
 
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType) {
     if (descriptor) {
-        Status status = legacyfile_getStatus(descriptor);
+        FileState status = legacyfile_getStatus(descriptor);
 
-        if (status & STATUS_FILE_CLOSED) {
+        if (status & FileState_CLOSED) {
             // A file that is referenced in the descriptor table should never
             // be a closed file. File handles (fds) are handles to open files,
             // so if we have a file handle to a closed file, then there's an
