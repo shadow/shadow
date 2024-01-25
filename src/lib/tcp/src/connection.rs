@@ -120,7 +120,7 @@ impl<I: Instant> Connection<I> {
         &mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> Result<(), PushPacketError> {
+    ) -> Result<u32, PushPacketError> {
         if self.is_reset {
             panic!(
                 "The connection has already been reset, so why are we being given more packets?"
@@ -138,7 +138,7 @@ impl<I: Instant> Connection<I> {
             let Some(recv_window) = recv_window else {
                 // we haven't received a SYN yet, so we'll trust the RST
                 self.is_reset = true;
-                return Ok(());
+                return Ok(0);
             };
 
             // RFC 9293 3.10.7.4.:
@@ -151,7 +151,7 @@ impl<I: Instant> Connection<I> {
                 // > manner prescribed below according to the connection state.
 
                 self.is_reset = true;
-                return Ok(());
+                return Ok(0);
             }
 
             if recv_window.contains(seq) {
@@ -172,14 +172,14 @@ impl<I: Instant> Connection<I> {
                 // send another RST packet based on the ACK value we send.
 
                 self.need_to_ack = true;
-                return Ok(());
+                return Ok(0);
             }
 
             // RFC 9293 3.10.7.4.:
             // > If the RST bit is set and the sequence number is outside the current receive
             // > window, silently drop the segment.
 
-            return Ok(());
+            return Ok(0);
         }
 
         // process the first SYN packet
@@ -211,20 +211,20 @@ impl<I: Instant> Connection<I> {
             // must drop the packet and send an ACK
 
             self.need_to_ack = true;
-            return Ok(());
+            return Ok(0);
         };
 
         let Some(recv) = self.recv.as_mut() else {
             // we received a non-SYN packet before the first SYN packet
             self.send_rst();
-            return Ok(());
+            return Ok(0);
         };
 
         // if we've been told to send a RST when we receive new payload data, and we did receive new
         // payload data
         if self.send_rst_if_recv_payload && !payload.is_empty() {
             self.send_rst();
-            return Ok(());
+            return Ok(0);
         }
 
         // if we've previously received a FIN packet, and now we've received a payload/SYN/FIN
@@ -233,9 +233,10 @@ impl<I: Instant> Connection<I> {
             && (!payload.is_empty() || header.flags.intersects(TcpFlags::SYN | TcpFlags::FIN))
         {
             self.send_rst();
-            return Ok(());
+            return Ok(0);
         }
 
+        let mut pushed_len = 0;
         // the receive buffer's initial next sequence number; useful so we can check if we need to
         // acknowledge or not
         let initial_seq = recv.buffer.next_seq();
@@ -249,7 +250,7 @@ impl<I: Instant> Connection<I> {
                     // should send an RST and move to the "closed" state.
 
                     self.send_rst();
-                    return Ok(());
+                    return Ok(0);
                 }
 
                 recv.buffer.add_syn();
@@ -270,6 +271,7 @@ impl<I: Instant> Connection<I> {
 
             if let Some(payload_seq) = payload_seq {
                 if payload_seq == recv.buffer.next_seq() {
+                    pushed_len += payload.len();
                     for chunk in payload.0 {
                         recv.buffer.add(chunk);
                     }
@@ -320,7 +322,7 @@ impl<I: Instant> Connection<I> {
             }
         }
 
-        Ok(())
+        Ok(pushed_len)
     }
 
     pub fn pop_packet(&mut self, now: I) -> Result<(TcpHeader, Payload), PopPacketError> {

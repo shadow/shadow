@@ -205,11 +205,14 @@ where
         (self.into(), Err(RecvError::InvalidState))
     }
 
+    /// Returns the number of bytes added to the TCP state's receive buffer. This may be
+    /// smaller (ex: duplicate packet) or larger (ex: there is a non-empty reassembly queue)
+    /// than the packet payload length.
     fn push_packet(
         self,
         _header: &TcpHeader,
         _payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         (self.into(), Err(PushPacketError::InvalidState))
     }
 
@@ -301,7 +304,7 @@ impl<X: Dependencies> TcpState<X> {
         &mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> Result<(), PushPacketError> {
+    ) -> Result<u32, PushPacketError> {
         self.with_state(|state| state.push_packet(header, payload))
     }
 

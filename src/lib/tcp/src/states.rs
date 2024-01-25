@@ -600,7 +600,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // In Linux there is conceptually the syn queue and the accept queue. When the application
         // calls `listen()`, it passes a `backlog` argument. The question is: does this backlog
         // apply to the syn queue, accept queue, or both? Some references[1] and the listen(2)[2]
@@ -636,7 +636,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
 
         // if either queue is full, drop all SYN packets
         if header.flags.contains(TcpFlags::SYN) && (accept_queue_full || syn_queue_full) {
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
         let conn_addrs = RemoteLocalPair::new(header.src(), header.dst());
@@ -649,7 +649,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
                 && header.flags.contains(TcpFlags::ACK)
                 && accept_queue_full
             {
-                return (self.into(), Ok(()));
+                return (self.into(), Ok(0));
             }
 
             // forward the packet to the child state
@@ -667,13 +667,13 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
         if !header.flags.contains(TcpFlags::SYN) {
             // it's either for an old child that no longer exists, or is for the listener and
             // doesn't have the SYN flag for some reason
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
         // we received a SYN packet, so register a new child in the "syn-received" state
         self.register_child(header, payload);
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(0))
     }
 
     fn pop_packet(
@@ -817,16 +817,17 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -835,24 +836,24 @@ impl<X: Dependencies> TcpStateTrait<X> for SynSentState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received SYN and ACK (active open), move to the "established" state
         if self.connection.received_syn() && self.connection.syn_was_acked() {
             let new_state = EstablishedState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
         // if received SYN and no ACK (simultaneous open), move to the "syn-received" state
         if self.connection.received_syn() {
             let new_state = SynReceivedState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
         // TODO: unsure what to do otherwise; just dropping the packet
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -975,18 +976,19 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // waiting for the ACK for our SYN
 
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -995,16 +997,16 @@ impl<X: Dependencies> TcpStateTrait<X> for SynReceivedState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received ACK, move to the "established" state
         if self.connection.syn_was_acked() {
             let new_state = EstablishedState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1115,16 +1117,17 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1133,16 +1136,16 @@ impl<X: Dependencies> TcpStateTrait<X> for EstablishedState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received FIN, move to the "close-wait" state
         if self.connection.received_fin() {
             let new_state = CloseWaitState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1245,16 +1248,17 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1263,28 +1267,28 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitOneState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received FIN and ACK, move to the "time-wait" state
         if self.connection.received_fin() && self.connection.fin_was_acked() {
             let new_state = TimeWaitState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
         // if received FIN, move to the "closing" state
         if self.connection.received_fin() {
             let new_state = ClosingState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
         // if received ACK, move to the "fin-wait-two" state
         if self.connection.fin_was_acked() {
             let new_state = FinWaitTwoState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1387,16 +1391,17 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1405,16 +1410,16 @@ impl<X: Dependencies> TcpStateTrait<X> for FinWaitTwoState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received FIN, move to the "time-wait" state
         if self.connection.received_fin() {
             let new_state = TimeWaitState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1524,16 +1529,17 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1542,18 +1548,18 @@ impl<X: Dependencies> TcpStateTrait<X> for ClosingState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received ACK, move to the "time-wait" state
         if self.connection.fin_was_acked() {
             let new_state = TimeWaitState::new(self.common, self.connection);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
         // drop all other packets
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1680,17 +1686,18 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
         // TODO: send RST for all packets?
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1699,10 +1706,10 @@ impl<X: Dependencies> TcpStateTrait<X> for TimeWaitState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1830,16 +1837,17 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1848,10 +1856,10 @@ impl<X: Dependencies> TcpStateTrait<X> for CloseWaitState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -1963,16 +1971,17 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
         mut self,
         header: &TcpHeader,
         payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // make sure that the packet src/dst addresses are valid for this connection
         if !self.connection.packet_addrs_match(header) {
             // must drop the packet
-            return (self.into(), Ok(()));
+            return (self.into(), Ok(0));
         }
 
-        if let Err(e) = self.connection.push_packet(header, payload) {
-            return (self.into(), Err(e));
-        }
+        let pushed_len = match self.connection.push_packet(header, payload) {
+            Ok(v) => v,
+            Err(e) => return (self.into(), Err(e)),
+        };
 
         // if the connection was reset
         if self.connection.is_reset() {
@@ -1981,7 +1990,7 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
             }
 
             let new_state = connection_was_reset(self.common, self.connection);
-            return (new_state, Ok(()));
+            return (new_state, Ok(pushed_len));
         }
 
         // if received ACK, move to the "closed" state
@@ -1989,10 +1998,10 @@ impl<X: Dependencies> TcpStateTrait<X> for LastAckState<X> {
             let recv_buffer = self.connection.into_recv_buffer();
             let new_state =
                 ClosedState::new(self.common, recv_buffer, /* was_connected= */ true);
-            return (new_state.into(), Ok(()));
+            return (new_state.into(), Ok(pushed_len));
         }
 
-        (self.into(), Ok(()))
+        (self.into(), Ok(pushed_len))
     }
 
     fn pop_packet(
@@ -2108,9 +2117,9 @@ impl<X: Dependencies> TcpStateTrait<X> for RstState<X> {
         self,
         _header: &TcpHeader,
         _payload: Payload,
-    ) -> (TcpStateEnum<X>, Result<(), PushPacketError>) {
+    ) -> (TcpStateEnum<X>, Result<u32, PushPacketError>) {
         // do nothing; drop all packets received in this state
-        (self.into(), Ok(()))
+        (self.into(), Ok(0))
     }
 
     fn pop_packet(

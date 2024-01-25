@@ -9,7 +9,7 @@ pub struct SharedBuf {
     state: BufferState,
     num_readers: u16,
     num_writers: u16,
-    event_source: EventSource<(BufferState, BufferState)>,
+    event_source: EventSource<(BufferState, BufferState, BufferSignals)>,
 }
 
 impl SharedBuf {
@@ -41,7 +41,7 @@ impl SharedBuf {
     /// [`remove_reader()`](Self::remove_reader).
     pub fn add_reader(&mut self, cb_queue: &mut CallbackQueue) -> ReaderHandle {
         self.num_readers += 1;
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::empty(), cb_queue);
         ReaderHandle {}
     }
 
@@ -49,7 +49,7 @@ impl SharedBuf {
         self.num_readers -= 1;
         // don't run the handle's drop impl
         std::mem::forget(handle);
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::empty(), cb_queue);
     }
 
     pub fn num_readers(&self) -> u16 {
@@ -60,7 +60,7 @@ impl SharedBuf {
     /// [`remove_writer()`](Self::remove_writer).
     pub fn add_writer(&mut self, cb_queue: &mut CallbackQueue) -> WriterHandle {
         self.num_writers += 1;
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::empty(), cb_queue);
         WriterHandle {}
     }
 
@@ -68,7 +68,7 @@ impl SharedBuf {
         self.num_writers -= 1;
         // don't run the handle's drop impl
         std::mem::forget(handle);
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::empty(), cb_queue);
     }
 
     pub fn num_writers(&self) -> u16 {
@@ -86,7 +86,7 @@ impl SharedBuf {
             }
             None => (0, 0),
         };
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::empty(), cb_queue);
 
         Ok((num_copied, num_removed_from_buf))
     }
@@ -109,7 +109,12 @@ impl SharedBuf {
             .queue
             .push_stream(bytes.take(self.space_available().try_into().unwrap()))?;
 
-        self.refresh_state(cb_queue);
+        let signals = if written > 0 {
+            BufferSignals::BUFFER_GREW
+        } else {
+            BufferSignals::empty()
+        };
+        self.refresh_state(signals, cb_queue);
 
         Ok(written)
     }
@@ -131,26 +136,30 @@ impl SharedBuf {
 
         self.queue.push_packet(bytes.by_ref(), len)?;
 
-        self.refresh_state(cb_queue);
+        self.refresh_state(BufferSignals::BUFFER_GREW, cb_queue);
 
         Ok(())
     }
 
     pub fn add_listener(
         &mut self,
-        monitoring: BufferState,
-        notify_fn: impl Fn(BufferState, &mut CallbackQueue) + Send + Sync + 'static,
+        monitoring_state: BufferState,
+        monitoring_signals: BufferSignals,
+        notify_fn: impl Fn(BufferState, BufferSignals, &mut CallbackQueue) + Send + Sync + 'static,
     ) -> BufferHandle {
         self.event_source
-            .add_listener(move |(state, changed), cb_queue| {
+            .add_listener(move |(state, changed, signals), cb_queue| {
                 // true if any of the bits we're monitoring have changed
-                let flipped = monitoring.intersects(changed);
+                let flipped = monitoring_state.intersects(changed);
 
-                if !flipped {
+                // filter the signals to only the ones we're monitoring
+                let signals = signals.intersection(monitoring_signals);
+
+                if !flipped && signals.is_empty() {
                     return;
                 }
 
-                (notify_fn)(state, cb_queue)
+                (notify_fn)(state, signals, cb_queue)
             })
     }
 
@@ -158,7 +167,7 @@ impl SharedBuf {
         self.state
     }
 
-    fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_state(&mut self, signals: BufferSignals, cb_queue: &mut CallbackQueue) {
         let state_mask = BufferState::READABLE
             | BufferState::WRITABLE
             | BufferState::NO_READERS
@@ -171,29 +180,40 @@ impl SharedBuf {
         new_state.set(BufferState::NO_READERS, self.num_readers() == 0);
         new_state.set(BufferState::NO_WRITERS, self.num_writers() == 0);
 
-        self.copy_state(state_mask, new_state, cb_queue);
+        self.update_state(state_mask, new_state, signals, cb_queue);
     }
 
-    fn copy_state(&mut self, mask: BufferState, state: BufferState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: BufferState,
+        state: BufferState,
+        signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: BufferState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: BufferState,
+        signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
         self.event_source
-            .notify_listeners((self.state, states_changed), cb_queue);
+            .notify_listeners((self.state, states_changed, signals), cb_queue);
     }
 }
 
@@ -230,7 +250,15 @@ bitflags::bitflags! {
     }
 }
 
-pub type BufferHandle = Handle<(BufferState, BufferState)>;
+bitflags::bitflags! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct BufferSignals: u8 {
+        /// The buffer grew.
+        const BUFFER_GREW = 1 << 0;
+    }
+}
+
+pub type BufferHandle = Handle<(BufferState, BufferState, BufferSignals)>;
 
 /// A handle that signifies that the owner is acting as a reader for the buffer. The handle must be
 /// returned to the buffer later with [`SharedBuf::remove_reader()`].

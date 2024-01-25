@@ -8,7 +8,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::shared_buf::{
-    BufferHandle, BufferState, ReaderHandle, SharedBuf, WriterHandle,
+    BufferHandle, BufferSignals, BufferState, ReaderHandle, SharedBuf, WriterHandle,
 };
 use crate::host::descriptor::{FileMode, FileSignals, FileState, FileStatus};
 use crate::host::memory_manager::MemoryManager;
@@ -277,31 +277,32 @@ impl Pipe {
         }
 
         // buffer state changes that we want to receive events for
-        let mut monitoring = BufferState::empty();
+        let mut monitoring_state = BufferState::empty();
 
         // if the file is open for reading, watch for the buffer to become readable or have no
         // writers
         if pipe.mode.contains(FileMode::READ) {
-            monitoring.insert(BufferState::READABLE);
-            monitoring.insert(BufferState::NO_WRITERS);
+            monitoring_state.insert(BufferState::READABLE);
+            monitoring_state.insert(BufferState::NO_WRITERS);
         }
 
         // if the file is open for writing, watch for the buffer to become writable or have no
         // readers
         if pipe.mode.contains(FileMode::WRITE) {
-            monitoring.insert(BufferState::WRITABLE);
-            monitoring.insert(BufferState::NO_READERS);
+            monitoring_state.insert(BufferState::WRITABLE);
+            monitoring_state.insert(BufferState::NO_READERS);
         }
 
         let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
-            monitoring,
-            move |buffer_state, cb_queue| {
+            monitoring_state,
+            BufferSignals::BUFFER_GREW,
+            move |buffer_state, buffer_signals, cb_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
                     let mut pipe = pipe.borrow_mut();
 
                     // update the pipe file's state to align with the buffer's current state
-                    pipe.align_state_to_buffer(buffer_state, cb_queue);
+                    pipe.align_state_to_buffer(buffer_state, buffer_signals, cb_queue);
                 }
             },
         );
@@ -310,7 +311,7 @@ impl Pipe {
 
         // update the pipe file's initial state to align with the buffer's current state
         let buffer_state = pipe.buffer.as_ref().unwrap().borrow().state();
-        pipe.align_state_to_buffer(buffer_state, cb_queue);
+        pipe.align_state_to_buffer(buffer_state, BufferSignals::empty(), cb_queue);
     }
 
     pub fn add_listener(
@@ -342,9 +343,15 @@ impl Pipe {
     /// Align the pipe's state to the buffer state. For example if the buffer is both `READABLE` and
     /// `WRITABLE`, and the pipe is only open in `READ` mode, the pipe's `READABLE` state will be
     /// set and the `WRITABLE` state will be unchanged.
-    fn align_state_to_buffer(&mut self, buffer_state: BufferState, cb_queue: &mut CallbackQueue) {
+    fn align_state_to_buffer(
+        &mut self,
+        buffer_state: BufferState,
+        buffer_signals: BufferSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut mask = FileState::empty();
         let mut file_state = FileState::empty();
+        let mut file_signals = FileSignals::empty();
 
         // if the pipe is already closed, do nothing
         if self.state.contains(FileState::CLOSED) {
@@ -358,6 +365,9 @@ impl Pipe {
             if buffer_state.intersects(BufferState::READABLE | BufferState::NO_WRITERS) {
                 file_state.insert(FileState::READABLE);
             }
+            if buffer_signals.intersects(BufferSignals::BUFFER_GREW) {
+                file_signals.insert(FileSignals::READ_BUFFER_GREW);
+            }
         }
 
         // only update the writable state if the file is open for writing
@@ -370,7 +380,7 @@ impl Pipe {
         }
 
         // update the file's state
-        self.update_state(mask, file_state, FileSignals::empty(), cb_queue);
+        self.update_state(mask, file_state, file_signals, cb_queue);
     }
 
     fn update_state(

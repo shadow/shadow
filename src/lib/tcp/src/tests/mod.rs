@@ -446,9 +446,11 @@ impl TcpSocket {
         self.emit_file_state(file_state);
     }
 
-    pub fn push_in_packet(&mut self, header: &TcpHeader, payload: Payload) {
+    pub fn push_in_packet(&mut self, header: &TcpHeader, payload: Payload) -> usize {
         self.with_tcp_state(|s| s.push_packet(header, payload))
-            .unwrap();
+            .unwrap()
+            .try_into()
+            .unwrap()
     }
 
     pub fn close(&mut self) -> Result<(), Errno> {
@@ -778,7 +780,8 @@ fn test_timer() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Payload::default());
+    let pushed_len = tcp.borrow_mut().push_in_packet(&header, Payload::default());
+    assert_eq!(pushed_len, 0);
     assert_eq!(s(&tcp).as_listen().unwrap().children.len(), 1);
 
     // the new child state set a timer event at 60 seconds to close if still in the "syn-received"
@@ -866,7 +869,8 @@ fn establish_helper(scheduler: &Scheduler, host: &mut Host) -> Rc<RefCell<TcpSoc
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut().push_in_packet(&header, Payload::default());
+    let pushed_len = tcp.borrow_mut().push_in_packet(&header, Payload::default());
+    assert_eq!(pushed_len, 0);
     assert!(s(&tcp).as_established().is_some());
 
     // read the ACK

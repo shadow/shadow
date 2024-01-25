@@ -1,0 +1,11 @@
+general:
+  stop_time: 10
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: ../../target/debug/test_epoll_edge
+      args: --shadow-passing

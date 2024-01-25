@@ -1,7 +1,7 @@
 use linux_api::epoll::EpollEvents;
 
 use crate::host::descriptor::listener::StateListenHandle;
-use crate::host::descriptor::FileState;
+use crate::host::descriptor::{FileSignals, FileState};
 
 /// Used to track the status of a file we are monitoring for events. Any complicated logic for
 /// deciding when a file has events that epoll should report should be specified in this object's
@@ -64,15 +64,31 @@ impl Entry {
         self.priority
     }
 
-    pub fn notify(&mut self, new_state: FileState, changed: FileState) {
+    pub fn notify(&mut self, new_state: FileState, changed: FileState, signals: FileSignals) {
         log::trace!(
-            "Notify old state {:?}, new state {:?}, changed {:?}",
+            "Notify old state {:?}, new state {:?}, changed {:?}, signals {:?}",
             self.state,
             new_state,
-            changed
+            changed,
+            signals,
         );
         self.state = new_state;
         self.collected.remove(changed);
+
+        // If the file is written again, let the epoll waiter collect the events again.
+        if signals.contains(FileSignals::READ_BUFFER_GREW) {
+            // We only subscribe to `READ_BUFFER_GREW` signals for edge-triggered entries.
+            debug_assert!(self.interest.intersects(EpollEvents::EPOLLET));
+
+            // Ignore the `READ_BUFFER_GREW` if the file isn't READABLE.
+            if new_state.contains(FileState::READABLE) {
+                self.collected.remove(FileState::READABLE);
+            } else {
+                // If this occurs, we probably want to fix whatever file is broadcasting `READ_BUFFER_GREW`
+                // when not readable.
+                warn_once_then_debug!("Epoll received READ_BUFFER_GREW but state is not READABLE");
+            }
+        }
     }
 
     pub fn get_listener_state(&self) -> FileState {
@@ -83,6 +99,16 @@ impl Entry {
 
         // Return the file state changes that we want to be notified about.
         Self::state_from_events(self.interest).union(FileState::CLOSED)
+    }
+
+    pub fn get_listener_signals(&self) -> FileSignals {
+        let mut signals = FileSignals::empty();
+
+        if self.interest.intersects(EpollEvents::EPOLLET) {
+            signals.insert(FileSignals::READ_BUFFER_GREW);
+        }
+
+        signals
     }
 
     pub fn set_listener_handle(&mut self, handle: Option<StateListenHandle>) {
@@ -205,11 +231,16 @@ mod tests {
 
     /// Checks that an entry starting in state `init` is only ready after `change` turns on when
     /// waiting for `interest`.
-    fn poll_on_state(init: FileState, interest: EpollEvents, change_on: FileState) {
+    fn poll_on_state(
+        init: FileState,
+        interest: EpollEvents,
+        change_on: FileState,
+        signals: FileSignals,
+    ) {
         let mut entry = Entry::new(interest, DATA, init);
         assert!(!entry.has_ready_events());
 
-        entry.notify(init.union(change_on), change_on);
+        entry.notify(init.union(change_on), change_on, signals);
         assert!(entry.has_ready_events());
 
         let (ev, data) = entry.collect_ready_events().unwrap();
@@ -220,46 +251,84 @@ mod tests {
     #[test]
     fn poll_on_r() {
         let on = FileState::READABLE;
-        poll_on_state(FileState::empty(), EpollEvents::EPOLLIN, on);
+        poll_on_state(
+            FileState::empty(),
+            EpollEvents::EPOLLIN,
+            on,
+            FileSignals::empty(),
+        );
         poll_on_state(
             FileState::empty(),
             EpollEvents::EPOLLIN | EpollEvents::EPOLLOUT,
             on,
+            FileSignals::empty(),
         );
-        poll_on_state(FileState::WRITABLE, EpollEvents::EPOLLIN, on);
+        poll_on_state(
+            FileState::WRITABLE,
+            EpollEvents::EPOLLIN,
+            on,
+            FileSignals::empty(),
+        );
     }
 
     #[test]
     fn poll_on_w() {
         let on = FileState::WRITABLE;
-        poll_on_state(FileState::empty(), EpollEvents::EPOLLOUT, on);
+        poll_on_state(
+            FileState::empty(),
+            EpollEvents::EPOLLOUT,
+            on,
+            FileSignals::empty(),
+        );
         poll_on_state(
             FileState::empty(),
             EpollEvents::EPOLLIN | EpollEvents::EPOLLOUT,
             on,
+            FileSignals::empty(),
         );
-        poll_on_state(FileState::READABLE, EpollEvents::EPOLLOUT, on);
+        poll_on_state(
+            FileState::READABLE,
+            EpollEvents::EPOLLOUT,
+            on,
+            FileSignals::empty(),
+        );
     }
 
     #[test]
     fn poll_on_rw() {
         let on = FileState::READABLE | FileState::WRITABLE;
-        poll_on_state(FileState::empty(), EpollEvents::EPOLLIN, on);
-        poll_on_state(FileState::empty(), EpollEvents::EPOLLOUT, on);
+        poll_on_state(
+            FileState::empty(),
+            EpollEvents::EPOLLIN,
+            on,
+            FileSignals::empty(),
+        );
+        poll_on_state(
+            FileState::empty(),
+            EpollEvents::EPOLLOUT,
+            on,
+            FileSignals::empty(),
+        );
         poll_on_state(
             FileState::empty(),
             EpollEvents::EPOLLIN | EpollEvents::EPOLLOUT,
             on,
+            FileSignals::empty(),
         );
     }
 
     /// Checks that an entry starting in state `init` is only not ready after `change` turns off
     /// when waiting for `interest`.
-    fn poll_off_state(init: FileState, interest: EpollEvents, change_off: FileState) {
+    fn poll_off_state(
+        init: FileState,
+        interest: EpollEvents,
+        change_off: FileState,
+        signals: FileSignals,
+    ) {
         let mut entry = Entry::new(interest, DATA, init);
         assert!(entry.has_ready_events());
 
-        entry.notify(init.difference(change_off), change_off);
+        entry.notify(init.difference(change_off), change_off, signals);
         assert!(!entry.has_ready_events());
         assert!(entry.collect_ready_events().is_none());
     }
@@ -268,24 +337,39 @@ mod tests {
     fn poll_off_r() {
         let interest = EpollEvents::EPOLLIN;
         let off = FileState::READABLE;
-        poll_off_state(off, interest, off);
-        poll_off_state(FileState::WRITABLE | off, interest, off);
+        poll_off_state(off, interest, off, FileSignals::empty());
+        poll_off_state(
+            FileState::WRITABLE | off,
+            interest,
+            off,
+            FileSignals::empty(),
+        );
     }
 
     #[test]
     fn poll_off_w() {
         let interest = EpollEvents::EPOLLOUT;
         let off = FileState::WRITABLE;
-        poll_off_state(off, interest, off);
-        poll_off_state(FileState::READABLE | off, interest, off);
+        poll_off_state(off, interest, off, FileSignals::empty());
+        poll_off_state(
+            FileState::READABLE | off,
+            interest,
+            off,
+            FileSignals::empty(),
+        );
     }
 
     #[test]
     fn poll_off_rw() {
         let off = FileState::READABLE | FileState::WRITABLE;
-        poll_off_state(off, EpollEvents::EPOLLIN, off);
-        poll_off_state(off, EpollEvents::EPOLLOUT, off);
-        poll_off_state(off, EpollEvents::EPOLLIN | EpollEvents::EPOLLOUT, off);
+        poll_off_state(off, EpollEvents::EPOLLIN, off, FileSignals::empty());
+        poll_off_state(off, EpollEvents::EPOLLOUT, off, FileSignals::empty());
+        poll_off_state(
+            off,
+            EpollEvents::EPOLLIN | EpollEvents::EPOLLOUT,
+            off,
+            FileSignals::empty(),
+        );
     }
 
     #[test]
@@ -294,7 +378,11 @@ mod tests {
         let mut entry = Entry::new(in_lt, DATA, FileState::empty());
         assert!(!entry.has_ready_events());
 
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(entry.has_ready_events());
 
         for _ in 0..3 {
@@ -305,9 +393,17 @@ mod tests {
             assert!(entry.has_ready_events());
         }
 
-        entry.notify(FileState::empty(), FileState::READABLE);
+        entry.notify(
+            FileState::empty(),
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(!entry.has_ready_events());
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(entry.has_ready_events());
 
         for _ in 0..3 {
@@ -325,7 +421,11 @@ mod tests {
         let mut entry = Entry::new(in_et, DATA, FileState::empty());
         assert!(!entry.has_ready_events());
 
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
 
         assert!(entry.has_ready_events());
         assert_eq!(
@@ -338,15 +438,48 @@ mod tests {
         assert_eq!(entry.collect_ready_events(), None);
 
         // Nothing changed, so still no events.
-        entry.notify(FileState::READABLE, FileState::empty());
+        entry.notify(
+            FileState::READABLE,
+            FileState::empty(),
+            FileSignals::empty(),
+        );
+        assert!(!entry.has_ready_events());
+
+        // Nothing changes, but this time we signal that the buffer is written more.
+        entry.notify(
+            FileState::READABLE,
+            FileState::empty(),
+            FileSignals::READ_BUFFER_GREW,
+        );
+        assert!(entry.has_ready_events());
+        assert_eq!(
+            entry.collect_ready_events(),
+            Some((EpollEvents::EPOLLIN, DATA))
+        );
+
+        // When the file is not readable but we receives `READ_BUFFER_GREW`, there should be no
+        // ready events.
+        entry.notify(
+            FileState::empty(),
+            FileState::empty(),
+            FileSignals::READ_BUFFER_GREW,
+        );
         assert!(!entry.has_ready_events());
 
         // State turns off.
-        entry.notify(FileState::empty(), FileState::READABLE);
+        entry.notify(
+            FileState::empty(),
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(!entry.has_ready_events());
 
         // State turns on again.
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(entry.has_ready_events());
         assert_eq!(
             entry.collect_ready_events(),
@@ -362,7 +495,11 @@ mod tests {
         let mut entry = Entry::new(in_os, DATA, FileState::empty());
         assert!(!entry.has_ready_events());
 
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
 
         assert!(entry.has_ready_events());
         assert_eq!(
@@ -373,11 +510,23 @@ mod tests {
         // Should never report that event again until we reset.
         assert!(!entry.has_ready_events());
         assert_eq!(entry.collect_ready_events(), None);
-        entry.notify(FileState::READABLE, FileState::empty());
+        entry.notify(
+            FileState::READABLE,
+            FileState::empty(),
+            FileSignals::empty(),
+        );
         assert!(!entry.has_ready_events());
-        entry.notify(FileState::empty(), FileState::READABLE);
+        entry.notify(
+            FileState::empty(),
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(!entry.has_ready_events());
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
         assert!(!entry.has_ready_events());
 
         entry.modify(in_os, DATA, FileState::READABLE);
@@ -388,8 +537,16 @@ mod tests {
             Some((EpollEvents::EPOLLIN, DATA))
         );
 
-        entry.notify(FileState::empty(), FileState::READABLE);
-        entry.notify(FileState::READABLE, FileState::READABLE);
+        entry.notify(
+            FileState::empty(),
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
+        entry.notify(
+            FileState::READABLE,
+            FileState::READABLE,
+            FileSignals::empty(),
+        );
 
         assert!(!entry.has_ready_events());
         assert_eq!(entry.collect_ready_events(), None);

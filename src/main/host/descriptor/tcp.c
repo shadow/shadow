@@ -1383,7 +1383,11 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
 
             /* we just added a packet, so we are readable */
             if (fitInBuffer && legacysocket_getInputBufferLength(&(tcp->super)) > 0) {
-                legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE, 0);
+                FileSignals signals = 0;
+                if (packet_getPayloadSize(packet) > 0) {
+                    signals |= FileSignals_READ_BUFFER_GREW;
+                }
+                legacyfile_adjustStatus((LegacyFile*)tcp, STATUS_FILE_READABLE, TRUE, signals);
             }
 
             if(fitInBuffer) {

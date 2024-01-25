@@ -104,11 +104,19 @@ impl TcpSocket {
         self.has_open_file = val;
     }
 
-    /// Update the current tcp state. The tcp state should only ever be updated through this method.
     fn with_tcp_state<T>(
         &mut self,
         cb_queue: &mut CallbackQueue,
         f: impl FnOnce(&mut tcp::TcpState<TcpDeps>) -> T,
+    ) -> T {
+        self.with_tcp_state_and_signal(cb_queue, |state| (f(state), FileSignals::empty()))
+    }
+
+    /// Update the current tcp state. The tcp state should only ever be updated through this method.
+    fn with_tcp_state_and_signal<T>(
+        &mut self,
+        cb_queue: &mut CallbackQueue,
+        f: impl FnOnce(&mut tcp::TcpState<TcpDeps>) -> (T, FileSignals),
     ) -> T {
         let rv = f(&mut self.tcp_state);
 
@@ -171,7 +179,7 @@ impl TcpSocket {
         self.update_state(
             FileState::READABLE | FileState::WRITABLE,
             read_write_flags,
-            FileSignals::empty(),
+            rv.1,
             cb_queue,
         );
 
@@ -183,7 +191,7 @@ impl TcpSocket {
             // has closed (with `close()`), not that the tcp state has closed
         }
 
-        rv
+        rv.0
     }
 
     pub fn push_in_packet(
@@ -212,8 +220,15 @@ impl TcpSocket {
         assert_eq!(num_bytes_copied, packet.payload_size());
         let payload = tcp::Payload(vec![payload.freeze()]);
 
-        self.with_tcp_state(cb_queue, |s| s.push_packet(&header, payload))
-            .unwrap();
+        self.with_tcp_state_and_signal(cb_queue, |s| {
+            let pushed_len = s.push_packet(&header, payload).unwrap();
+            let signals = if pushed_len > 0 {
+                FileSignals::READ_BUFFER_GREW
+            } else {
+                FileSignals::empty()
+            };
+            ((), signals)
+        });
 
         packet.add_status(PacketStatus::RcvSocketBuffered);
     }

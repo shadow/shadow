@@ -45,8 +45,11 @@ fn test_send_recv() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
+    let message = b"world";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     // recv on the socket
     let mut recv_buf = vec![0; 5];
@@ -115,8 +118,11 @@ fn test_ack_with_empty_usable_send_window() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
+    let message = b"world";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     // check the packet sent by the socket
     let (header, payload) = scheduler.pop_packet().unwrap();
@@ -203,8 +209,11 @@ fn test_coalesce_recv() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+    let message = b"hello";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     let header = TcpHeader {
         ip: Ipv4Header {
@@ -222,8 +231,11 @@ fn test_coalesce_recv() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"world"[..]).into());
+    let message = b"world";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     // recv on the socket
     let mut recv_buf = vec![0; 10];
@@ -261,8 +273,11 @@ fn test_close_with_non_empty_recv_buffer() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+    let message = b"hello";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     // check that our payload packet was acknowledged
     let (header, _) = scheduler.pop_packet().unwrap();
@@ -309,8 +324,11 @@ fn test_recv_after_shutdown_both() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+    let message = b"hello";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    assert_eq!(pushed_len, message.len());
 
     tcp.borrow_mut().shutdown(Shutdown::Both).unwrap();
     assert!(s(&tcp).as_fin_wait_one().is_some());
@@ -407,8 +425,12 @@ fn test_incoming_payload_after_close() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+    let message = b"hello";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    // no data is pushed because the socket is already closed
+    assert_eq!(pushed_len, 0);
 
     assert!(s(&tcp).as_closed().is_some());
 
@@ -461,8 +483,12 @@ fn test_incoming_payload_after_shutdown_read() {
         timestamp: None,
         timestamp_echo: None,
     };
-    tcp.borrow_mut()
-        .push_in_packet(&header, Bytes::from(&b"hello"[..]).into());
+    let message = b"hello";
+    let pushed_len = tcp
+        .borrow_mut()
+        .push_in_packet(&header, Bytes::from(&message[..]).into());
+    // no data is pushed because the socket is already shutdown on read
+    assert_eq!(pushed_len, 0);
 
     assert!(s(&tcp).as_closed().is_some());
 
