@@ -63,7 +63,7 @@ vasi-sync = { path = "../lib/vasi-sync" }
 # `c_variadic` is stabilized, or if we decide to enable it anyway.
 # https://github.com/rust-lang/rust/issues/44930
 vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
-which = "5.0.0"
+which = "6.0.0"
 bytemuck = "1.14.0"
 
 [features]
