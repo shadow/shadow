@@ -1,3 +1,5 @@
+//! A thread-per-host host scheduler.
+
 // unsafe code should be isolated to the thread pool
 #![forbid(unsafe_code)]
 
