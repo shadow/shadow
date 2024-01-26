@@ -1,3 +1,6 @@
+// unsafe code should be isolated to the thread pool
+#![forbid(unsafe_code)]
+
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::sync::Mutex;

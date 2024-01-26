@@ -1,8 +1,5 @@
-/*
-* The Shadow Simulator
-* Copyright (c) 2010-2011, Rob Jansen
-* See LICENSE for licensing information
-*/
+#![forbid(unsafe_code)]
+
 use crossbeam::queue::ArrayQueue;
 
 /// A set of `n` logical processors.
