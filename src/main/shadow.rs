@@ -1,3 +1,7 @@
+//! The main entrypoint to Shadow.
+//!
+//! This is called from a small C wrapper for build complexity reasons.
+
 use std::borrow::Borrow;
 use std::ffi::{CStr, OsStr};
 use std::fmt::Write;

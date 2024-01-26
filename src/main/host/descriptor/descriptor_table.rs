@@ -11,7 +11,8 @@ use crate::utility::ObjectCounter;
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;
 
-/// Map of file handles to file descriptors. Typically owned by a Process.
+/// Map of file handles to file descriptors. Typically owned by a
+/// [`Thread`][crate::host::thread::Thread].
 #[derive(Clone)]
 pub struct DescriptorTable {
     descriptors: HashMap<DescriptorHandle, Descriptor>,
@@ -143,8 +144,8 @@ impl DescriptorTable {
     }
 
     /// Register a descriptor and return its fd handle. Equivalent to
-    /// `register_descriptor_with_min_fd(desc, 0)`. If the descriptor could not be added, the
-    /// descriptor is returned in the `Err`.
+    /// [`register_descriptor_with_min_fd(desc, 0)`][Self::register_descriptor_with_min_fd]. If the
+    /// descriptor could not be added, the descriptor is returned in the `Err`.
     pub fn register_descriptor(
         &mut self,
         desc: Descriptor,

@@ -1,3 +1,6 @@
+//! A buffer for files that need to share a buffer with other files. Example use-cases are pipes and
+//! unix sockets. This buffer supports notifying files when readers or writers are added or removed.
+
 use linux_api::errno::Errno;
 
 use crate::utility::byte_queue::ByteQueue;
@@ -253,7 +256,7 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     #[derive(Default, Copy, Clone, Debug)]
     pub struct BufferSignals: u8 {
-        /// The buffer grew.
+        /// The buffer now has additional data available to read.
         const BUFFER_GREW = 1 << 0;
     }
 }
@@ -297,7 +300,7 @@ impl Drop for WriterHandle {
         // panic in debug builds since the backtrace will be helpful for debugging
         debug_panic!(
             "Dropping WriterHandle without returning it to SharedBuf. \
-                      This likely indicates a bug in Shadow."
+             This likely indicates a bug in Shadow."
         );
     }
 }

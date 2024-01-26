@@ -1,3 +1,5 @@
+//! Compatibility wrappers for C-style event listeners.
+
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow;

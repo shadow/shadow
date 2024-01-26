@@ -1,3 +1,8 @@
+//! The network simulation.
+//!
+//! This contains code that simulates the Internet and upstream routers. It does not contain any
+//! emulation of Linux networking behaviour, which exists in the [`crate::host`] module.
+
 use std::net::Ipv4Addr;
 
 use crate::network::packet::PacketRc;

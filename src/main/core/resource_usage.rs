@@ -1,3 +1,5 @@
+//! Utilities for getting system resource usage.
+
 use std::fs::File;
 use std::io::{Read, Seek};
 

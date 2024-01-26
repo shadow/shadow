@@ -1,3 +1,5 @@
+//! An emulated Linux process.
+
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};

@@ -1,3 +1,5 @@
+//! An emulated Linux system.
+
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsString};

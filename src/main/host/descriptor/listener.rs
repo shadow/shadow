@@ -1,3 +1,5 @@
+//! Types for emitting and subscribing to [`File`](crate::host::descriptor::File) events.
+
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileSignals, FileState};

@@ -1,3 +1,7 @@
+//! A thread of a managed process.
+//!
+//! This contains the code where the simulator can create or communicate with a managed process.
+
 use std::cell::{Cell, RefCell};
 use std::ffi::{CStr, CString};
 use std::io::Write;
