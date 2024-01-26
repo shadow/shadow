@@ -21,20 +21,6 @@ pub mod cshadow {
     include!(concat!(env!("OUT_DIR"), "/cshadow.rs"));
 }
 
-// shadow re-exports this definition from /usr/include/linux/tcp.h
-// TODO: Provide this via the linux-api crate instead.
-unsafe impl shadow_pod::Pod for crate::cshadow::tcp_info {}
-
-// check that the size and alignment of `CompatUntypedForeignPtr` and `ForeignPtr<()>` are the same`
-static_assertions::assert_eq_size!(
-    cshadow::CompatUntypedForeignPtr,
-    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
-);
-static_assertions::assert_eq_align!(
-    cshadow::CompatUntypedForeignPtr,
-    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
-);
-
 // modules with macros must be included before other modules
 #[macro_use]
 pub mod utility;
@@ -49,3 +35,17 @@ pub mod shadow;
 // https://github.com/rust-lang/cargo/issues/9391
 extern crate shadow_shmem;
 extern crate shadow_tsc;
+
+// shadow re-exports this definition from /usr/include/linux/tcp.h
+// TODO: Provide this via the linux-api crate instead.
+unsafe impl shadow_pod::Pod for crate::cshadow::tcp_info {}
+
+// check that the size and alignment of `CompatUntypedForeignPtr` and `ForeignPtr<()>` are the same`
+static_assertions::assert_eq_size!(
+    cshadow::CompatUntypedForeignPtr,
+    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
+);
+static_assertions::assert_eq_align!(
+    cshadow::CompatUntypedForeignPtr,
+    shadow_shim_helper_rs::syscall_types::UntypedForeignPtr,
+);
