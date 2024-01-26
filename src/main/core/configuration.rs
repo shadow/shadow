@@ -649,7 +649,7 @@ pub struct ProcessOptions {
     pub shutdown_time: Option<units::Time<units::TimePrefix>>,
 
     /// The signal that will be sent to the process at `shutdown_time`
-    #[serde(default = "default_shutdown_signal")]
+    #[serde(default = "default_sigterm")]
     pub shutdown_signal: Signal,
 
     /// The expected final state of the process. Shadow will report an error
@@ -1300,8 +1300,8 @@ fn default_args_empty() -> ProcessArgs {
     ProcessArgs::Str("".to_string())
 }
 
-/// Helper function for serde default `shutdown_signal`.
-fn default_shutdown_signal() -> Signal {
+/// Helper function for serde default `Signal(Signal::SIGTERM)` values.
+fn default_sigterm() -> Signal {
     Signal(nix::sys::signal::Signal::SIGTERM)
 }
 
