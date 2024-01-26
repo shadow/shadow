@@ -1,3 +1,7 @@
+//! Code for processing parsed Shadow configurations. This involves loading and verifying network
+//! graphs, converting options to types/formats that are easier to use in Shadow, verifying that
+//! paths exist, etc.
+
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{OsStr, OsString};

@@ -1,3 +1,8 @@
+//! A thread-per-host host scheduler.
+
+// unsafe code should be isolated to the thread pool
+#![forbid(unsafe_code)]
+
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::sync::Mutex;
@@ -105,24 +110,24 @@ pub struct SchedulerScope<'pool, 'scope, HostType: Host> {
 }
 
 impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
-    /// See [`crate::core::scheduler::SchedulerScope::run`].
+    /// See [`crate::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             (f)(task_context.thread_idx)
         });
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
+    /// See [`crate::SchedulerScope::run_with_hosts`].
     pub fn run_with_hosts(self, f: impl Fn(usize, &mut HostIter<HostType>) + Send + Sync + 'scope) {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             self.host_storage.with(|host| {
@@ -137,7 +142,7 @@ impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
         });
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_data`].
+    /// See [`crate::SchedulerScope::run_with_data`].
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
@@ -148,7 +153,7 @@ impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             let this_elem = &data[task_context.processor_idx];
@@ -173,7 +178,7 @@ pub struct HostIter<HostType: Host> {
 }
 
 impl<HostType: Host> HostIter<HostType> {
-    /// See [`crate::core::scheduler::HostIter::for_each`].
+    /// See [`crate::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
         F: FnMut(HostType) -> HostType,

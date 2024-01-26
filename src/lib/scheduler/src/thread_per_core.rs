@@ -1,3 +1,8 @@
+//! A thread-per-core host scheduler.
+
+// unsafe code should be isolated to the thread pool
+#![forbid(unsafe_code)]
+
 use std::fmt::Debug;
 
 use crossbeam::queue::ArrayQueue;
@@ -42,7 +47,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
                     nix::sched::sched_setaffinity(nix::unistd::Pid::from_raw(0), &cpus).unwrap();
 
                     // update the thread-local core affinity
-                    CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                    CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
                 }
             });
         });
@@ -126,12 +131,12 @@ where
 }
 
 impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
-    /// See [`crate::core::scheduler::SchedulerScope::run`].
+    /// See [`crate::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(f);
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
+    /// See [`crate::SchedulerScope::run_with_hosts`].
     pub fn run_with_hosts(
         self,
         f: impl Fn(usize, &mut HostIter<'_, HostType>) + Send + Sync + 'scope,
@@ -149,7 +154,7 @@ impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope
         *self.hosts_need_swap = true;
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_data`].
+    /// See [`crate::SchedulerScope::run_with_data`].
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
@@ -186,7 +191,7 @@ pub struct HostIter<'a, HostType: Host> {
 }
 
 impl<'a, HostType: Host> HostIter<'a, HostType> {
-    /// See [`crate::core::scheduler::HostIter::for_each`].
+    /// See [`crate::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
         F: FnMut(HostType) -> HostType,

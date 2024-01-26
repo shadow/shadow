@@ -1,3 +1,5 @@
+//! Linux file descriptors and file descriptions (equivalent to Linux `struct file`s).
+
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -84,8 +86,8 @@ impl FileMode {
         }
     }
 
-    /// Returns a tuple of the `FileMode` and any remaining flags, or an empty `Err` if
-    /// the flags aren't valid (for example specifying both `O_RDWR` and `O_WRONLY`).
+    /// Returns a tuple of the [`FileMode`] and any remaining flags, or an empty `Err` if the flags
+    /// aren't valid (for example specifying both `O_RDWR` and `O_WRONLY`).
     #[allow(clippy::result_unit_err)]
     pub fn from_o_flags(flags: OFlag) -> Result<(Self, OFlag), ()> {
         // apply the access mode mask (the O_PATH flag is not contained within the access
@@ -107,6 +109,9 @@ impl FileMode {
 }
 
 bitflags::bitflags! {
+    /// Flags representing the state of a file. Listeners can subscribe to state changes using
+    /// [`FileRefMut::add_listener`] (or similar methods on [`SocketRefMut`][socket::SocketRefMut],
+    /// [`Pipe`][pipe::Pipe], etc).
     #[derive(Default, Copy, Clone, Debug)]
     #[repr(transparent)]
     pub struct FileState: u16 {
@@ -114,7 +119,9 @@ bitflags::bitflags! {
         #[deprecated(note = "use `FileState::empty()`")]
         const NONE = 0;
         /// Has been initialized and it is now OK to unblock any plugin waiting on a particular
-        /// state. (This is a legacy C state and should be considered deprecated.)
+        /// state.
+        ///
+        /// This is a legacy C state and is deprecated.
         const ACTIVE = 1 << 0;
         /// Can be read, i.e. there is data waiting for user.
         const READABLE = 1 << 1;
@@ -137,7 +144,7 @@ bitflags::bitflags! {
     #[derive(Default, Copy, Clone, Debug)]
     #[repr(transparent)]
     pub struct FileSignals: u32 {
-        /// The read buffer grew.
+        /// The read buffer now has additional data available to read.
         const READ_BUFFER_GREW = 1 << 0;
     }
 }
@@ -228,6 +235,7 @@ impl std::fmt::Debug for File {
     }
 }
 
+/// Wraps an immutably borrowed [`File`]. Created from [`File::borrow`] or [`File::try_borrow`].
 pub enum FileRef<'a> {
     Pipe(atomic_refcell::AtomicRef<'a, pipe::Pipe>),
     EventFd(atomic_refcell::AtomicRef<'a, eventfd::EventFd>),
@@ -236,6 +244,8 @@ pub enum FileRef<'a> {
     Epoll(atomic_refcell::AtomicRef<'a, epoll::Epoll>),
 }
 
+/// Wraps a mutably borrowed [`File`]. Created from [`File::borrow_mut`] or
+/// [`File::try_borrow_mut`].
 pub enum FileRefMut<'a> {
     Pipe(atomic_refcell::AtomicRefMut<'a, pipe::Pipe>),
     EventFd(atomic_refcell::AtomicRefMut<'a, eventfd::EventFd>),
@@ -348,12 +358,12 @@ impl std::fmt::Debug for FileRefMut<'_> {
 }
 
 /// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-/// to a `File`. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
+/// to a [`File`]. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
 /// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
-/// (the file's status will not become `FileStatus::CLOSED`), but the underlying file may close
+/// (the file's status will not become [`FileState::CLOSED`]), but the underlying file may close
 /// itself in extenuating circumstances (for example if the file has an internal error).
 ///
-/// **Safety:** If an `OpenFile` for a specific file already exists, it is an error to create a new
+/// **Warning:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 /// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
 /// should probably only ever be created for a newly created file object. Otherwise for existing
 /// file objects, it won't be clear if there are already-existing `OpenFile` objects for that file.
@@ -586,9 +596,10 @@ impl Drop for CountedLegacyFileRef {
     }
 }
 
-/// Used to track how many descriptors are open for a `LegacyFile`. When the `close()` method is
-/// called, the legacy file's `legacyfile_close()` will only be called if this is the last
-/// descriptor for that legacy file. This is similar to an `OpenFile` object.
+/// Used to track how many descriptors are open for a [`LegacyFile`][c::LegacyFile]. When the
+/// `close()` method is called, the legacy file's `legacyfile_close()` will only be called if this
+/// is the last descriptor for that legacy file. This is similar to an [`OpenFile`] object, but for
+/// C files.
 #[derive(Clone, Debug)]
 pub struct LegacyFileCounter {
     file: Option<CountedLegacyFileRef>,
@@ -632,6 +643,7 @@ impl std::ops::Drop for LegacyFileCounter {
     }
 }
 
+/// A compatibility wrapper around an [`OpenFile`] or [`LegacyFileCounter`].
 #[derive(Clone, Debug)]
 pub enum CompatFile {
     New(OpenFile),

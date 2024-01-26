@@ -1,26 +1,121 @@
-// re-export schedulers
-pub use thread_per_core::ThreadPerCoreSched;
-pub use thread_per_host::ThreadPerHostSched;
+//! Scheduler for Shadow discrete-event simulations.
+//!
+//! In Shadow, each host has a queue of events it must process, and within a given scheduling round
+//! the host can process these events independently of all other hosts. This means that Shadow can
+//! process each host in parallel.
+//!
+//! For a given list of hosts, the scheduler must tell each host to run and process its events. This
+//! must occur in parallel with minimal overhead. With a typical thread pool you might create a new
+//! task for each host and run all of the tasks on the thread pool, but this is too slow for Shadow
+//! and results in a huge runtime performance loss (simulation run time increases by over 10x). Most
+//! thread pools also don't have a method of specifying which task (and therefore which host) runs
+//! on which CPU core, which is an important performance optimization on NUMA architectures.
+//!
+//! The scheduler in this library uses a thread pool optimized for running the same task across all
+//! threads. This means that the scheduler takes a single function/closure and runs it on each
+//! thread simultaneously (and sometimes repeatedly) until all of the hosts have been processed. The
+//! implementation details depend on which scheduler is in use ( [`ThreadPerCoreSched`] or
+//! [`ThreadPerHostSched`]), but all schedulers share a common interface so that they can easily be
+//! switched out.
+//!
+//! The [`Scheduler`] provides a simple wrapper to make it easier to support both schedulers, which
+//! is useful if you want to choose one at runtime. The schedulers use a "[scoped
+//! threads][std::thread::scope]" design to simplify the calling code. This helps the calling code
+//! share data with the scheduler without requiring the caller to use locking or "unsafe" to do so.
+//!
+//! ```
+//! # use scheduler::thread_per_core::ThreadPerCoreSched;
+//! # use std::sync::atomic::{AtomicU32, Ordering};
+//! # #[derive(Debug)]
+//! # struct Host(u16);
+//! # impl Host {
+//! #     pub fn new(id: u16) -> Self { Self(id) }
+//! #     pub fn id(&self) -> u16 { self.0 }
+//! #     pub fn run_events(&mut self) {}
+//! # }
+//! // a simulation with three hosts
+//! let hosts = [Host::new(0), Host::new(1), Host::new(2)];
+//!
+//! // a scheduler with two threads (no cpu pinning) and three hosts
+//! let mut sched: ThreadPerCoreSched<Host> =
+//!     ThreadPerCoreSched::new(&[None, None], hosts, false);
+//!
+//! // the counter is owned by this main thread with a non-static lifetime, but
+//! // because of the "scoped threads" design it can be accessed by the task in
+//! // the scheduler's threads
+//! let counter = AtomicU32::new(0);
+//!
+//! // run one round of the scheduler
+//! sched.scope(|s| {
+//!     s.run_with_hosts(|thread_idx, hosts| {
+//!         hosts.for_each(|mut host| {
+//!             println!("Running host {} on thread {thread_idx}", host.id());
+//!             host.run_events();
+//!             counter.fetch_add(1, Ordering::Relaxed);
+//!             host
+//!         });
+//!     });
+//!
+//!     // we can do other processing here in the main thread while we wait for the
+//!     // above task to finish running
+//!     println!("Waiting for the task to finish on all threads");
+//! });
+//!
+//! println!("Finished processing the hosts");
+//!
+//! // the `counter.fetch_add(1)` was run once for each host
+//! assert_eq!(counter.load(Ordering::Relaxed), 3);
+//!
+//! // we're done with the scheduler, so join all of its threads
+//! sched.join();
+//! ```
+//!
+//! The [`ThreadPerCoreSched`] scheduler is generally much faster and should be preferred over the
+//! [`ThreadPerHostSched`] scheduler. If no one finds a situation where the `ThreadPerHostSched` is
+//! faster, then it should probably be removed sometime in the future.
+//!
+//! It's probably good to [`box`][Box] the host since the schedulers move the host frequently, and it's
+//! faster to move a pointer than the entire host object.
+//!
+//! Unsafe code should only be written in the thread pools. The schedulers themselves should be
+//! written in only safe code using the safe interfaces provided by the thread pools. If new
+//! features are needed in the scheduler, it's recommended to try to add them to the scheduler
+//! itself and not modify any of the thread pools. The thread pools are complicated and have
+//! delicate lifetime [sub-typing/variance][variance] handling, which is easy to break and would
+//! enable the user of the scheduler to invoke undefined behaviour.
+//!
+//! [variance]: https://doc.rust-lang.org/nomicon/subtyping.html
+//!
+//! If the scheduler uses CPU pinning, the task can get the CPU its pinned to using
+//! [`core_affinity`].
+
+// https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
+#![deny(unsafe_op_in_unsafe_fn)]
+
+pub mod thread_per_core;
+pub mod thread_per_host;
 
 mod logical_processor;
 mod pools;
 mod sync;
-mod thread_per_core;
-mod thread_per_host;
 
-use std::cell::RefCell;
+use std::cell::Cell;
+
+#[cfg(doc)]
+use {thread_per_core::ThreadPerCoreSched, thread_per_host::ThreadPerHostSched};
 
 // any scheduler implementation can read/write the thread-local directly, but external modules can
 // only read it using `core_affinity()`
 
 std::thread_local! {
     /// The core affinity of the current thread, as set by the active scheduler.
-    static CORE_AFFINITY: RefCell<Option<u32>> = const { RefCell::new(None) };
+    static CORE_AFFINITY: Cell<Option<u32>> = const { Cell::new(None) };
 }
 
-/// Get the core affinity of the current thread, as set by the active scheduler.
+/// Get the core affinity of the current thread, as set by the active scheduler. Will be `None` if
+/// the scheduler is not using CPU pinning, or if called from a thread not owned by the scheduler.
 pub fn core_affinity() -> Option<u32> {
-    CORE_AFFINITY.with(|x| *x.borrow())
+    CORE_AFFINITY.with(|x| x.get())
 }
 
 // the enum supports hosts that satisfy the trait bounds of each scheduler variant
@@ -35,7 +130,8 @@ pub enum Scheduler<HostType: Host> {
 }
 
 impl<HostType: Host> Scheduler<HostType> {
-    /// The maximum number of threads that will ever be run in parallel.
+    /// The maximum number of threads that will ever be run in parallel. The number of threads
+    /// created by the scheduler may be higher.
     pub fn parallelism(&self) -> usize {
         match self {
             Self::ThreadPerHost(sched) => sched.parallelism(),
@@ -43,8 +139,8 @@ impl<HostType: Host> Scheduler<HostType> {
         }
     }
 
-    /// A scope for any task run on the scheduler. The current thread will block at the end of the
-    /// scope until the task has completed.
+    /// Create a scope for any task run on the scheduler. The current thread will block at the end
+    /// of the scope until the task has completed.
     pub fn scope<'scope>(
         &'scope mut self,
         f: impl for<'a, 'b> FnOnce(SchedulerScope<'a, 'b, 'scope, HostType>) + 'scope,
@@ -64,6 +160,7 @@ impl<HostType: Host> Scheduler<HostType> {
     }
 }
 
+/// A scope for any task run on the scheduler.
 pub enum SchedulerScope<'sched, 'pool, 'scope, HostType: Host> {
     ThreadPerHost(thread_per_host::SchedulerScope<'pool, 'scope, HostType>),
     ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, HostType>),

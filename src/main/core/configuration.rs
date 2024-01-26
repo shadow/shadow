@@ -1,3 +1,16 @@
+//! Shadow's configuration and cli parsing code using [serde] and [clap]. This contains all of
+//! Shadow's configuration options, some of which are also exposed as CLI options.
+//!
+//! Shadow uses [schemars] to get the option description (its doc comment) and default value so that
+//! it can be shown in the CLI help text.
+//!
+//! This code should be careful about validating or interpreting values. It should be focused on
+//! parsing and checking that the format is correct, and not validating the values. For example for
+//! options that take paths, this code should not verify that the path actually exists or perform
+//! any path canonicalization. That should be left to other code outside of this module. This is so
+//! that the configuration parsing does not become environment-dependent. If a configuration file
+//! parses on one system, it should parse successfully on other systems as well.
+
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
@@ -635,8 +648,7 @@ pub struct ProcessOptions {
     #[serde(default = "default_args_empty")]
     pub args: ProcessArgs,
 
-    /// Environment variables passed when executing this process. Multiple variables can be
-    /// specified by using a semicolon separator (ex: `ENV_A=1;ENV_B=2`)
+    /// Environment variables passed when executing this process
     #[serde(default)]
     pub environment: BTreeMap<EnvName, String>,
 
@@ -649,7 +661,7 @@ pub struct ProcessOptions {
     pub shutdown_time: Option<units::Time<units::TimePrefix>>,
 
     /// The signal that will be sent to the process at `shutdown_time`
-    #[serde(default = "default_shutdown_signal")]
+    #[serde(default = "default_sigterm")]
     pub shutdown_signal: Signal,
 
     /// The expected final state of the process. Shadow will report an error
@@ -1300,8 +1312,8 @@ fn default_args_empty() -> ProcessArgs {
     ProcessArgs::Str("".to_string())
 }
 
-/// Helper function for serde default `shutdown_signal`.
-fn default_shutdown_signal() -> Signal {
+/// Helper function for serde default `Signal(Signal::SIGTERM)` values.
+fn default_sigterm() -> Signal {
     Signal(nix::sys::signal::Signal::SIGTERM)
 }
 

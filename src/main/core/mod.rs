@@ -1,3 +1,5 @@
+//! The core infrastructure needed to configure and run the simulator.
+
 pub mod configuration;
 pub mod controller;
 pub mod cpu;

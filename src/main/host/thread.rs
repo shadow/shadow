@@ -1,3 +1,5 @@
+//! An emulated Linux thread.
+
 use std::cell::{Cell, RefCell};
 use std::ops::{Deref, DerefMut};
 

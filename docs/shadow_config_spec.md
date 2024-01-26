@@ -76,6 +76,7 @@ hosts:
 - [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
+- [`experimental.log_errors_to_tty`](#experimentallog_errors_to_tty)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler`](#experimentalscheduler)
@@ -97,7 +98,6 @@ hosts:
 - [`experimental.use_sched_fifo`](#experimentaluse_sched_fifo)
 - [`experimental.use_syscall_counters`](#experimentaluse_syscall_counters)
 - [`experimental.use_worker_spinning`](#experimentaluse_worker_spinning)
-- [`experimental.log_errors_to_stderr`](#experimentallog_errors_to_stderr)
 - [`host_option_defaults`](#host_option_defaults)
 - [`host_option_defaults.log_level`](#host_option_defaultslog_level)
 - [`host_option_defaults.pcap_capture_size`](#host_option_defaultspcap_capture_size)
@@ -287,7 +287,7 @@ Type: String
 The path to the file.
 
 If the path begins with `~/`, it will be considered relative to the current
-user's home directory.
+user's home directory. No other shell expansion is performed on the path.
 
 #### `network.graph.file.compression`
 
@@ -676,12 +676,18 @@ Or as an array of strings:
 args: ['--user-agent', 'Mozilla/5.0 (compatible; ...)', 'http://myserver:8080']
 ```
 
+Shell expansion (which includes `~/` expansion) is not performed on either
+format. In the command-line format, the string is parsed as an argument vector
+following typical shell quotation parsing rules.
+
 #### `hosts.<hostname>.processes[*].environment`
 
 Default: ""  
 Type: Object
 
 Environment variables passed when executing this process.
+
+Shell expansion (which includes `~/` expansion) is not performed on any fields.
 
 Examples:
 
@@ -735,7 +741,7 @@ script).
 Type: String
 
 If the path begins with `~/`, it will be considered relative to the current
-user's home directory.
+user's home directory. No other shell expansion is performed on the path.
 
 Bare file basenames like `sleep` will be located using Shadow's `PATH`
 environment variable (e.g. to `/usr/bin/sleep`).

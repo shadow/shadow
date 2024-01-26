@@ -1,3 +1,5 @@
+//! Miscellaneous utilities that are used by Shadow.
+
 // defines macros, so must be included first
 #[macro_use]
 pub mod enum_passthrough;

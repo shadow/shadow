@@ -1,3 +1,5 @@
+//! An emulated Linux system.
+
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsString};
@@ -1031,11 +1033,7 @@ impl Drop for Host {
 }
 
 mod export {
-    use std::{
-        ops::{Deref, DerefMut},
-        os::raw::c_char,
-        time::Duration,
-    };
+    use std::{ops::DerefMut, os::raw::c_char, time::Duration};
 
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
@@ -1294,18 +1292,6 @@ mod export {
             };
         }
         std::ptr::null_mut()
-    }
-
-    /// Returns host-specific state that's kept in memory shared with the shim(s).
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn host_getSharedMem(
-        hostrc: *const Host,
-    ) -> *const shim_shmem::export::ShimShmemHost {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        // SAFETY: The requirements documented on `shim_shmem`, that we don't move
-        // `shim_shmem` or otherwise invalidate the lock, are upheld since we aren't
-        // exposing a mutable pointer.
-        unsafe { hostrc.shim_shmem.get().as_ref().unwrap().deref() }
     }
 
     /// Returns the lock, or panics if the lock isn't held by Shadow.

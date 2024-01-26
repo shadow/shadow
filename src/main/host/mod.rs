@@ -1,3 +1,9 @@
+//! Process management and emulation of Linux behaviour.
+//!
+//! This module contains the code responsible for starting the managed processes in a way that
+//! allows Shadow to intercept their syscalls. It also contains the emulation of Linux hosts,
+//! threads, processes, syscalls, files, network interfaces, etc.
+
 pub mod context;
 pub mod cpu;
 pub mod descriptor;
