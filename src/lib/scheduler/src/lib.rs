@@ -1,15 +1,12 @@
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
 
-// re-export schedulers
-pub use thread_per_core::ThreadPerCoreSched;
-pub use thread_per_host::ThreadPerHostSched;
+pub mod thread_per_core;
+pub mod thread_per_host;
 
 mod logical_processor;
 mod pools;
 mod sync;
-mod thread_per_core;
-mod thread_per_host;
 
 use std::cell::Cell;
 

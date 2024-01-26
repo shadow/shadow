@@ -126,12 +126,12 @@ where
 }
 
 impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
-    /// See [`crate::core::scheduler::SchedulerScope::run`].
+    /// See [`crate::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
         self.runner.run(f);
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_hosts`].
+    /// See [`crate::SchedulerScope::run_with_hosts`].
     pub fn run_with_hosts(
         self,
         f: impl Fn(usize, &mut HostIter<'_, HostType>) + Send + Sync + 'scope,
@@ -149,7 +149,7 @@ impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope
         *self.hosts_need_swap = true;
     }
 
-    /// See [`crate::core::scheduler::SchedulerScope::run_with_data`].
+    /// See [`crate::SchedulerScope::run_with_data`].
     pub fn run_with_data<T>(
         self,
         data: &'scope [T],
@@ -186,7 +186,7 @@ pub struct HostIter<'a, HostType: Host> {
 }
 
 impl<'a, HostType: Host> HostIter<'a, HostType> {
-    /// See [`crate::core::scheduler::HostIter::for_each`].
+    /// See [`crate::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where
         F: FnMut(HostType) -> HostType,
