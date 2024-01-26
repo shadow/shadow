@@ -8,6 +8,12 @@ cargo install mdbook
 firefox build/guide/index.html
 ```
 
+## Building the rust docs
+
+```bash
+(cd src && cargo doc --workspace --exclude shadow-tests)
+```
+
 ## Generating compiler command database
 
 Many tools benefit from a [compiler command
