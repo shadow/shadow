@@ -2077,21 +2077,9 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_getHostId(proc: *const Process) -> HostId {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        proc.host_id()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C-unwind" fn process_getName(proc: *const Process) -> *const c_char {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.common().name.as_ptr()
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_getPluginName(proc: *const Process) -> *const c_char {
-        let proc = unsafe { proc.as_ref().unwrap() };
-        proc.common().plugin_name.as_ptr()
     }
 
     /// Safety:
