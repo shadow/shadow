@@ -125,3 +125,17 @@ When choosing which one to use:
     creating a temp file, in a test that isn't specifically trying to test that
     functionality) it usually makes sense to use whatever interface is most
     idiomatic and convenient.
+
+## `deny(unsafe_op_in_unsafe_fn)`
+
+All crates should use `#![deny(unsafe_op_in_unsafe_fn)]`. When adding a new
+crate, remember to add this to the `lib.rs` or `main.rs`.
+
+[https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md]
+
+> No longer treat the body of an unsafe fn as being an unsafe block. To avoid a
+> breaking change, this is a warning now and may become an error in a future
+> edition.
+
+This helps make it clearer where "unsafe" code is being used and can make
+reviewing code easier.
