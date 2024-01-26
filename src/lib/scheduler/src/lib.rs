@@ -11,19 +11,19 @@ mod sync;
 mod thread_per_core;
 mod thread_per_host;
 
-use std::cell::RefCell;
+use std::cell::Cell;
 
 // any scheduler implementation can read/write the thread-local directly, but external modules can
 // only read it using `core_affinity()`
 
 std::thread_local! {
     /// The core affinity of the current thread, as set by the active scheduler.
-    static CORE_AFFINITY: RefCell<Option<u32>> = const { RefCell::new(None) };
+    static CORE_AFFINITY: Cell<Option<u32>> = const { Cell::new(None) };
 }
 
 /// Get the core affinity of the current thread, as set by the active scheduler.
 pub fn core_affinity() -> Option<u32> {
-    CORE_AFFINITY.with(|x| *x.borrow())
+    CORE_AFFINITY.with(|x| x.get())
 }
 
 // the enum supports hosts that satisfy the trait bounds of each scheduler variant

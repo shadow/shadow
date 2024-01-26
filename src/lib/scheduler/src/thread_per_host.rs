@@ -110,7 +110,7 @@ impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             (f)(task_context.thread_idx)
@@ -122,7 +122,7 @@ impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             self.host_storage.with(|host| {
@@ -148,7 +148,7 @@ impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
         self.runner.run(move |task_context| {
             // update the thread-local core affinity
             if let Some(cpu_id) = task_context.cpu_id {
-                CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
             }
 
             let this_elem = &data[task_context.processor_idx];

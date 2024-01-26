@@ -42,7 +42,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
                     nix::sched::sched_setaffinity(nix::unistd::Pid::from_raw(0), &cpus).unwrap();
 
                     // update the thread-local core affinity
-                    CORE_AFFINITY.with(|x| *x.borrow_mut() = Some(cpu_id));
+                    CORE_AFFINITY.with(|x| x.set(Some(cpu_id)));
                 }
             });
         });
