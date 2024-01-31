@@ -7,13 +7,13 @@ use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 use linux_api::ldt::linux_user_desc;
 use linux_api::posix_types::Pid;
-use linux_api::sched::CloneFlags;
+use linux_api::sched::{clone_args, CloneFlags};
 use linux_api::signal::tgkill;
 use rustix::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
 use rustix::fs::{OFlags, SeekFrom};
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
 use rustix::time::Timespec;
-use test_utils::TestEnvironment as TestEnv;
+use test_utils::{result_assert_eq, TestEnvironment as TestEnv};
 use test_utils::{set, ShadowTest};
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scchannel::SelfContainedChannel;
@@ -101,6 +101,43 @@ fn test_clone_minimal() -> Result<(), Box<dyn Error>> {
     THREAD_DONE_CHANNEL.receive().unwrap();
     // Wait until thread has exited before deallocating its stack.
     wait_for_thread_exit(child);
+    Ok(())
+}
+
+fn test_bad_flags() -> Result<(), Box<dyn Error>> {
+    let mut tls = make_empty_tls();
+    let stack = ThreadStack::new(CLONE_TEST_STACK_NBYTES);
+    // Same flags as `test_clone_minimal`, except we've added
+    // CLONE_CLEAR_SIGHAND, which is incompatible with CLONE_SIGHAND.
+    //
+    // In https://github.com/shadow/shadow/issues/3290 this particular invalid
+    // flag combination would result in a crash due to failing to safely clean
+    // up on the error path.
+    let flags = CloneFlags::CLONE_VM
+        | CloneFlags::CLONE_FS
+        | CloneFlags::CLONE_FILES
+        | CloneFlags::CLONE_SIGHAND
+        | CloneFlags::CLONE_CLEAR_SIGHAND
+        | CloneFlags::CLONE_THREAD
+        | CloneFlags::CLONE_SYSVSEM
+        | CloneFlags::CLONE_SETTLS;
+    result_assert_eq(
+        unsafe {
+            // We have to use clone3 here to be able to pass CLONE_CLEAR_SIGHAND
+            linux_api::sched::clone3_raw(
+                &clone_args {
+                    stack: stack.top() as u64,
+                    stack_size: CLONE_TEST_STACK_NBYTES as u64,
+                    tls: &mut tls as *mut _ as u64,
+                    ..Default::default()
+                }
+                .with_flags(flags),
+                std::mem::size_of::<clone_args>(),
+            )
+        },
+        Err(linux_api::errno::Errno::EINVAL),
+        "Expected EINVAL",
+    )?;
     Ok(())
 }
 
@@ -372,6 +409,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut tests: Vec<test_utils::ShadowTest<(), Box<dyn Error>>> = vec![
         ShadowTest::new("minimal", test_clone_minimal, all_envs.clone()),
+        ShadowTest::new("bad_flags", test_bad_flags, all_envs.clone()),
         ShadowTest::new("clear_tid", test_clone_clear_tid, all_envs.clone()),
         ShadowTest::new(
             "clone_files_set_description_offset",
