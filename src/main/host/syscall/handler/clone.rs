@@ -334,7 +334,7 @@ impl SyscallHandler {
 
     #[log_syscall(
         /* rv */kernel_pid_t,
-        /* args*/*const std::ffi::c_void,
+        /* args*/*const linux_api::sched::clone_args,
         /* args_size*/usize)]
     pub fn clone3(
         ctx: &mut SyscallContext,
