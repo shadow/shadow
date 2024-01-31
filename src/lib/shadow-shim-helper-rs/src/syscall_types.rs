@@ -425,6 +425,12 @@ impl std::fmt::Debug for SysCallReg {
 
 // implement conversions from `SysCallReg`
 
+impl From<SysCallReg> for linux_api::sched::CloneFlags {
+    fn from(value: SysCallReg) -> Self {
+        Self::from_bits_retain(value.into())
+    }
+}
+
 impl From<SysCallReg> for linux_api::fcntl::OFlag {
     fn from(reg: SysCallReg) -> Self {
         Self::from_bits_retain(reg.into())

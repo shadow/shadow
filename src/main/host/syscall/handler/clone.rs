@@ -298,7 +298,7 @@ impl SyscallHandler {
     // See "C library/kernel differences" in clone(2).
     #[log_syscall(
         /* rv */kernel_pid_t,
-        /* flags */i32,
+        /* flags */CloneFlags,
         /* child_stack */*const std::ffi::c_void,
         /* ptid */*const kernel_pid_t,
         /* ctid */*const kernel_pid_t,

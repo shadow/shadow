@@ -209,6 +209,7 @@ safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
 // nix still uses an old bitflags version which isn't supported by `bitflags_impl`
+simple_debug_impl!(linux_api::sched::CloneFlags);
 simple_debug_impl!(linux_api::time::ITimerId);
 simple_debug_impl!(linux_api::time::ClockId);
 simple_debug_impl!(nix::sys::stat::Mode);
