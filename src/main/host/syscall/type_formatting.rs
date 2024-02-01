@@ -199,6 +199,7 @@ deref_pointer_impl!(u8, u16, u32, u64, usize);
 deref_pointer_impl!(linux_api::time::timespec);
 deref_pointer_impl!(linux_api::time::kernel_timespec);
 deref_pointer_impl!(linux_api::time::kernel_old_timeval);
+deref_pointer_impl!(linux_api::sched::clone_args);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
@@ -209,6 +210,7 @@ safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
 // nix still uses an old bitflags version which isn't supported by `bitflags_impl`
+simple_debug_impl!(linux_api::sched::CloneFlags);
 simple_debug_impl!(linux_api::time::ITimerId);
 simple_debug_impl!(linux_api::time::ClockId);
 simple_debug_impl!(nix::sys::stat::Mode);

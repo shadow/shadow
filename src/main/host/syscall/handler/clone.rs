@@ -3,7 +3,7 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;
 use linux_api::signal::Signal;
 use log::{debug, trace, warn};
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -115,6 +115,9 @@ impl SyscallHandler {
                 .clone();
             RootedRc::new(root, RootedRefCell::new(root, table))
         };
+        let desc_table = ExplicitDropper::new(desc_table, |desc_table| {
+            desc_table.explicit_drop(ctx.objs.host.root())
+        });
         handled_flags.insert(CloneFlags::CLONE_FILES);
 
         if flags.contains(CloneFlags::CLONE_SETTLS) {
@@ -216,32 +219,39 @@ impl SyscallHandler {
         let child_thread = Thread::wrap_mthread(
             ctx.objs.host,
             child_mthread,
-            desc_table,
+            desc_table.into_value(),
             child_pid,
             child_tid,
         )?;
 
-        let childrc = RootedRc::new(
-            ctx.objs.host.root(),
-            RootedRefCell::new(ctx.objs.host.root(), child_thread),
+        let childrc = ExplicitDropper::new(
+            RootedRc::new(
+                ctx.objs.host.root(),
+                RootedRefCell::new(ctx.objs.host.root(), child_thread),
+            ),
+            |childrc| childrc.explicit_drop(ctx.objs.host.root()),
         );
 
         let child_process_rc;
         let child_process_borrow;
         let child_process;
         if flags.contains(CloneFlags::CLONE_THREAD) {
-            child_process_rc = None;
             child_process_borrow = None;
             child_process = ctx.objs.process;
-            ctx.objs.process.add_thread(ctx.objs.host, childrc);
+            ctx.objs
+                .process
+                .add_thread(ctx.objs.host, childrc.into_value());
         } else {
             let process = ctx
                 .objs
                 .process
                 .borrow_as_runnable()
                 .unwrap()
-                .new_forked_process(ctx.objs.host, flags, exit_signal, childrc);
-            child_process_rc = Some(process.clone(ctx.objs.host.root()));
+                .new_forked_process(ctx.objs.host, flags, exit_signal, childrc.into_value());
+            child_process_rc = Some(ExplicitDropper::new(
+                process.clone(ctx.objs.host.root()),
+                |x| x.explicit_drop(ctx.objs.host.root()),
+            ));
             child_process_borrow = Some(
                 child_process_rc
                     .as_ref()
@@ -286,11 +296,6 @@ impl SyscallHandler {
             unsafe { child_shmem_prot.clone_signal_actions(&parent_shmem_prot) };
         }
 
-        drop(child_process_borrow);
-        if let Some(c) = child_process_rc {
-            c.explicit_drop(ctx.objs.host.root())
-        }
-
         Ok(kernel_pid_t::from(child_tid))
     }
 
@@ -298,7 +303,7 @@ impl SyscallHandler {
     // See "C library/kernel differences" in clone(2).
     #[log_syscall(
         /* rv */kernel_pid_t,
-        /* flags */i32,
+        /* flags */CloneFlags,
         /* child_stack */*const std::ffi::c_void,
         /* ptid */*const kernel_pid_t,
         /* ctid */*const kernel_pid_t,
@@ -334,7 +339,7 @@ impl SyscallHandler {
 
     #[log_syscall(
         /* rv */kernel_pid_t,
-        /* args*/*const std::ffi::c_void,
+        /* args*/*const linux_api::sched::clone_args,
         /* args_size*/usize)]
     pub fn clone3(
         ctx: &mut SyscallContext,
