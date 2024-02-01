@@ -18,7 +18,7 @@ use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::cell::RootedCell;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -479,6 +479,7 @@ impl Host {
             trace!("{pid:?} doesn't exist");
             return;
         };
+        let processrc = ExplicitDropper::new(processrc, |p| p.explicit_drop(&self.root));
         let died;
         let is_orphan;
         {
@@ -495,7 +496,6 @@ impl Host {
                 is_orphan = false;
             }
         };
-        RootedRc::explicit_drop(processrc, &self.root);
 
         if !died {
             return;
@@ -791,17 +791,14 @@ impl Host {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, processrc) in processes.into_iter() {
-            {
-                Worker::set_active_process(&processrc);
-                let process = processrc.borrow(self.root());
-                process.stop(self);
-                Worker::clear_active_process();
-                // Reparent to Shadow/INIT, since the original parent is or is
-                // about to be dead.
-                process.set_parent_id(ProcessId::INIT);
-            }
-
-            processrc.explicit_drop(self.root());
+            let processrc = ExplicitDropper::new(processrc, |p| p.explicit_drop(self.root()));
+            Worker::set_active_process(&processrc);
+            let process = processrc.borrow(self.root());
+            process.stop(self);
+            Worker::clear_active_process();
+            // Reparent to Shadow/INIT, since the original parent is or is
+            // about to be dead.
+            process.set_parent_id(ProcessId::INIT);
         }
         trace!("done freeing application for host '{}'", self.name());
     }

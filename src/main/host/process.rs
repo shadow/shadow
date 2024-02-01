@@ -24,6 +24,7 @@ use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
+use shadow_shim_helper_rs::explicit_drop::ExplicitDropper;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -317,6 +318,9 @@ impl RunnableProcess {
 
     /// Call after a thread has exited. Removes the thread and does corresponding cleanup and notifications.
     fn reap_thread(&self, host: &Host, threadrc: RootedRc<RootedRefCell<Thread>>) {
+        let threadrc = ExplicitDropper::new(threadrc, |t| {
+            t.explicit_drop_recursive(host.root(), host);
+        });
         let thread = threadrc.borrow(host.root());
 
         assert!(!thread.is_running());
@@ -342,9 +346,6 @@ impl RunnableProcess {
                 futex.wake(1);
             }
         }
-
-        drop(thread);
-        threadrc.explicit_drop_recursive(host.root(), host);
     }
 
     /// This cleans up memory references left over from legacy C code; usually
@@ -1180,6 +1181,9 @@ impl Process {
             // borrowed reference to the thread list while running the thread.
             thread.clone(host.root())
         };
+        let threadrc = ExplicitDropper::new(threadrc, |t| {
+            t.explicit_drop_recursive(host.root(), host);
+        });
         let thread = threadrc.borrow(host.root());
 
         Worker::set_active_thread(&threadrc);
@@ -1199,8 +1203,6 @@ impl Process {
 
         let ctx = ProcessContext::new(host, self);
         let res = thread.resume(&ctx);
-        drop(thread);
-        threadrc.explicit_drop_recursive(host.root(), host);
 
         #[cfg(feature = "perf_timers")]
         {
