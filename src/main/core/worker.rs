@@ -7,7 +7,6 @@ use atomic_refcell::{AtomicRef, AtomicRefCell};
 use once_cell::sync::Lazy;
 use rand::Rng;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -206,7 +205,9 @@ impl Worker {
     pub fn clear_active_process() {
         Worker::with(|w| {
             let old = w.active_process.borrow_mut().take().unwrap();
-            old.explicit_drop(w.active_host.borrow().as_ref().unwrap().root());
+            let host = w.active_host.borrow();
+            let host = host.as_ref().unwrap();
+            old.explicit_drop_recursive(host.root(), host);
         })
         .unwrap();
     }

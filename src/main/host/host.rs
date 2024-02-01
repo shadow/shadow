@@ -18,7 +18,7 @@ use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
+use shadow_shim_helper_rs::explicit_drop::ExplicitDropper;
 use shadow_shim_helper_rs::rootedcell::cell::RootedCell;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -479,7 +479,9 @@ impl Host {
             trace!("{pid:?} doesn't exist");
             return;
         };
-        let processrc = ExplicitDropper::new(processrc, |p| p.explicit_drop(&self.root));
+        let processrc = ExplicitDropper::new(processrc, |p| {
+            p.explicit_drop_recursive(&self.root, self);
+        });
         let died;
         let is_orphan;
         {
@@ -538,7 +540,7 @@ impl Host {
         for pid in orphaned_zombie_pids {
             trace!("Dropping orphan zombie process {pid:?}");
             let processrc = processes.remove(&pid).unwrap();
-            RootedRc::explicit_drop(processrc, &self.root)
+            RootedRc::explicit_drop_recursive(processrc, &self.root, self);
         }
     }
 
@@ -791,7 +793,9 @@ impl Host {
         trace!("start freeing applications for host '{}'", self.name());
         let processes = std::mem::take(&mut *self.processes.borrow_mut());
         for (_id, processrc) in processes.into_iter() {
-            let processrc = ExplicitDropper::new(processrc, |p| p.explicit_drop(self.root()));
+            let processrc = ExplicitDropper::new(processrc, |p| {
+                p.explicit_drop_recursive(self.root(), self);
+            });
             Worker::set_active_process(&processrc);
             let process = processrc.borrow(self.root());
             process.stop(self);

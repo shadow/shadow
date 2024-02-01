@@ -24,7 +24,7 @@ use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
 use nix::unistd::Pid;
-use shadow_shim_helper_rs::explicit_drop::ExplicitDropper;
+use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -686,6 +686,18 @@ impl RunnableProcess {
     }
 }
 
+impl ExplicitDrop for RunnableProcess {
+    type ExplicitDropParam = Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop(mut self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+        let threads = std::mem::take(self.threads.get_mut());
+        for thread in threads.into_values() {
+            thread.explicit_drop_recursive(host.root(), host);
+        }
+    }
+}
+
 /// A process that has exited.
 pub struct ZombieProcess {
     common: Common,
@@ -841,6 +853,18 @@ impl ProcessState {
         match self {
             ProcessState::Runnable(_) => None,
             ProcessState::Zombie(z) => Some(z),
+        }
+    }
+}
+
+impl ExplicitDrop for ProcessState {
+    type ExplicitDropParam = Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop(self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+        match self {
+            ProcessState::Runnable(r) => r.explicit_drop(host),
+            ProcessState::Zombie(_) => (),
         }
     }
 }
@@ -1705,8 +1729,21 @@ impl Process {
 
 impl Drop for Process {
     fn drop(&mut self) {
-        // Should only be dropped in the zombie state.
-        debug_assert!(self.as_zombie().is_some());
+        // Should have been explicitly dropped.
+        debug_assert!(self.state.borrow().is_none());
+    }
+}
+
+impl ExplicitDrop for Process {
+    type ExplicitDropParam = Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop(mut self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+        // Should normally only be dropped in the zombie state.
+        debug_assert!(self.as_zombie().is_some() || std::thread::panicking());
+
+        let state = self.state.get_mut().take().unwrap();
+        state.explicit_drop(host);
     }
 }
 

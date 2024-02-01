@@ -126,7 +126,7 @@ impl Thread {
             // Descriptor table is unshared
             let desc_table_rc = self.desc_table.take().unwrap();
             let mut desc_table = DescriptorTable::clone(&desc_table_rc.borrow(host.root()));
-            desc_table_rc.explicit_drop(host.root());
+            desc_table_rc.explicit_drop_recursive(host.root(), host);
 
             // Any descriptors with CLOEXEC are closed.
             let to_close: Vec<DescriptorHandle> = desc_table
