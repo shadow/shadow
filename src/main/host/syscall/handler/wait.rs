@@ -6,7 +6,6 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::resource::rusage;
 use linux_api::signal::{siginfo_t, Signal};
 use linux_api::wait::{WaitFlags, WaitId};
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -185,7 +184,7 @@ impl SyscallHandler {
                 .host
                 .process_remove(matching_child_zombie_pid)
                 .unwrap();
-            zombie_process.explicit_drop(ctx.objs.host.root());
+            zombie_process.explicit_drop_recursive(ctx.objs.host.root(), ctx.objs.host);
         }
 
         Ok(matching_child_zombie_pid.into())

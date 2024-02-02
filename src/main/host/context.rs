@@ -34,8 +34,6 @@
 
 use std::ops::Deref;
 
-use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
-
 use super::managed_thread::ManagedThread;
 use super::process::ProcessId;
 use super::thread::ThreadId;
@@ -146,10 +144,10 @@ impl<'a> ThreadContextObjs<'a> {
                 let mut ctx = ThreadContext::new(self.host, &process, &thread);
                 f(&mut ctx)
             };
-            threadrc.explicit_drop(self.host.root());
+            threadrc.explicit_drop_recursive(self.host.root(), self.host);
             res
         };
-        processrc.explicit_drop(self.host.root());
+        processrc.explicit_drop_recursive(self.host.root(), self.host);
         res
     }
 }
