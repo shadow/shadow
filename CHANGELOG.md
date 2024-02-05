@@ -16,6 +16,7 @@ PATCH changes (bugfixes):
 
 * On fork and fork-like invocations of `clone`, signal handlers are now correctly copied
 from the parent instead of reset to default (unless `CLONE_CLEAR_SIGHAND` is used).
+* Fix exponential slowdown after repeated usage of the `wait4` syscall.
 
 Full changelog since v3.1.0:
 
