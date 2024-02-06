@@ -122,18 +122,21 @@ static void _syscallcondition_cleanupListeners(SysCallCondition* cond) {
         cond->timeout = NULL;
     }
 
-    if (cond->trigger.object.as_pointer && cond->triggerListener) {
+    if (cond->triggerListener) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
+                utility_alwaysAssert(cond->trigger.object.as_pointer);
                 legacyfile_removeListener(
                     cond->trigger.object.as_legacy_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FILE: {
+                utility_alwaysAssert(cond->trigger.object.as_pointer);
                 file_removeListener(cond->trigger.object.as_file, cond->triggerListener);
                 break;
             }
             case TRIGGER_FUTEX: {
+                utility_alwaysAssert(cond->trigger.object.as_pointer);
                 futex_removeListener(cond->trigger.object.as_futex, cond->triggerListener);
                 break;
             }
