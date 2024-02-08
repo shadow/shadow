@@ -493,7 +493,7 @@ impl Worker {
     pub fn resolve_name_to_ip(name: &std::ffi::CStr) -> Option<std::net::Ipv4Addr> {
         Worker::with_dns(|dns| {
             let addr = unsafe {
-                cshadow::dns_resolveNameToAddress(dns as *const _ as *mut _, name.as_ptr())
+                cshadow::dns_resolveNameToAddress(std::ptr::from_ref(dns) as *mut _, name.as_ptr())
             };
             if addr.is_null() {
                 return None;
@@ -663,7 +663,7 @@ mod export {
 
     #[no_mangle]
     pub extern "C-unwind" fn worker_getDNS() -> *mut cshadow::DNS {
-        Worker::with_dns(|dns| dns as *const cshadow::DNS).cast_mut()
+        Worker::with_dns(std::ptr::from_ref).cast_mut()
     }
 
     /// Addresses must be provided in network byte order.
@@ -705,7 +705,7 @@ mod export {
     /// SAFETY: The returned pointer must not be accessed after this worker thread has exited.
     #[no_mangle]
     pub unsafe extern "C-unwind" fn worker_getChildPidWatcher() -> *const ChildPidWatcher {
-        Worker::with(|w| w.shared.child_pid_watcher() as *const _).unwrap()
+        Worker::with(|w| std::ptr::from_ref(w.shared.child_pid_watcher())).unwrap()
     }
 
     /// Implementation for counting allocated objects. Do not use this function directly.
@@ -773,7 +773,7 @@ mod export {
     /// invalidated the next time the worker switches hosts.
     #[no_mangle]
     pub extern "C-unwind" fn worker_getCurrentHost() -> *const Host {
-        Worker::with_active_host(|h| h as *const _).unwrap()
+        Worker::with_active_host(std::ptr::from_ref).unwrap()
     }
 
     /// Returns a pointer to the current running process. The returned pointer is
@@ -782,14 +782,14 @@ mod export {
     pub extern "C-unwind" fn worker_getCurrentProcess() -> *const Process {
         // We can't use `with_active_process` here since that returns the &Process instead
         // of the enclosing &Process.
-        Worker::with_active_process(|process| process as *const _).unwrap()
+        Worker::with_active_process(std::ptr::from_ref).unwrap()
     }
 
     /// Returns a pointer to the current running thread. The returned pointer is
     /// invalidated the next time the worker switches threads.
     #[no_mangle]
     pub extern "C-unwind" fn worker_getCurrentThread() -> *const Thread {
-        Worker::with_active_thread(|thread| thread as *const _).unwrap()
+        Worker::with_active_thread(std::ptr::from_ref).unwrap()
     }
 
     /// Maximum time that the current event may run ahead to. Must only be called if we hold the

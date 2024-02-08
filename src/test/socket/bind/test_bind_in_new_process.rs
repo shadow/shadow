@@ -19,7 +19,7 @@ fn main() {
     let rv = unsafe {
         libc::bind(
             fd,
-            &addr as *const _ as *const libc::sockaddr,
+            std::ptr::from_ref(&addr) as *const libc::sockaddr,
             std::mem::size_of_val(&addr) as u32,
         )
     };

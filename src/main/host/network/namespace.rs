@@ -126,7 +126,7 @@ impl NetworkNamespace {
     pub fn cleanup(&self, dns: &cshadow::DNS) {
         assert!(!self.has_run_cleanup.get());
 
-        let dns = dns as *const cshadow::DNS;
+        let dns = std::ptr::from_ref(dns);
         // deregistering localhost is a no-op, so we skip it
         unsafe {
             cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr());

@@ -915,8 +915,8 @@ fn compare_sockname_peername(
         let rv = unsafe {
             libc::getsockname(
                 fd_sockname,
-                &mut sockname_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
-                &mut sockname_len as *mut libc::socklen_t,
+                std::ptr::from_mut(&mut sockname_addr) as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut sockname_len),
             )
         };
         assert_eq!(rv, 0);
@@ -936,8 +936,8 @@ fn compare_sockname_peername(
         let rv = unsafe {
             libc::getpeername(
                 fd_peername,
-                &mut peername_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
-                &mut peername_len as *mut libc::socklen_t,
+                std::ptr::from_mut(&mut peername_addr) as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut peername_len),
             )
         };
         assert_eq!(rv, 0);

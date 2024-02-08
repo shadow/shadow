@@ -141,8 +141,7 @@ pub fn libc_futex(
 ) -> Result<core::ffi::c_int, Errno> {
     let uaddr: *mut u32 = uaddr.as_ptr();
     let utime: *const libc::timespec = utime
-        // TODO: in rust 1.76 use `core::ptr::from_ref`
-        .map(|x| x as *const _)
+        .map(std::ptr::from_ref)
         .unwrap_or(core::ptr::null_mut());
     let uaddr2: *mut u32 = uaddr2
         .map(AtomicU32::as_ptr)

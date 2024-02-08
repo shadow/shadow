@@ -680,7 +680,8 @@ impl SyscallHandler {
 
     /// Run a legacy C syscall handler.
     fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
-        let rv: SyscallResult = unsafe { syscall(ctx.handler, ctx.args as *const _) }.into();
+        let rv: SyscallResult =
+            unsafe { syscall(ctx.handler, std::ptr::from_ref(ctx.args)) }.into();
 
         // we need to flush pointers here so that the syscall formatter can reliably borrow process
         // memory without an incompatible borrow
@@ -872,7 +873,7 @@ mod export {
         let sys = unsafe { sys.as_ref() }.unwrap();
         Worker::with_active_host(|h| {
             assert_eq!(h.id(), sys.host_id);
-            h as *const _
+            std::ptr::from_ref(h)
         })
         .unwrap()
     }
@@ -887,7 +888,7 @@ mod export {
         let sys = unsafe { sys.as_ref() }.unwrap();
         Worker::with_active_process(|p| {
             assert_eq!(p.id(), sys.process_id);
-            p as *const _
+            std::ptr::from_ref(p)
         })
         .unwrap()
     }
@@ -902,7 +903,7 @@ mod export {
         let sys = unsafe { sys.as_ref() }.unwrap();
         Worker::with_active_thread(|t| {
             assert_eq!(t.id(), sys.thread_id);
-            t as *const _
+            std::ptr::from_ref(t)
         })
         .unwrap()
     }

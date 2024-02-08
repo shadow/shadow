@@ -409,7 +409,7 @@ fn set_sched_fifo() -> anyhow::Result<()> {
     param.sched_priority = 1;
 
     let rv = nix::errno::Errno::result(unsafe {
-        libc::sched_setscheduler(0, libc::SCHED_FIFO, &param as *const _)
+        libc::sched_setscheduler(0, libc::SCHED_FIFO, std::ptr::from_ref(&param))
     })
     .context("Could not set kernel SCHED_FIFO")?;
 

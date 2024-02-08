@@ -234,11 +234,11 @@ fn test_return_values(
         let request_ptr = request
             .value
             .as_ref()
-            .map_or(std::ptr::null(), |v| v as *const libc::timespec);
+            .map_or(std::ptr::null(), std::ptr::from_ref);
         let remain_ptr = remain
             .value
             .as_mut()
-            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
 
         unsafe {
             (

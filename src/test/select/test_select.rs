@@ -60,7 +60,7 @@ fn test_pipe() -> Result<(), String> {
         let mut ready = unsafe {
             libc::select(
                 pfd_read + 1,
-                &mut readfds as *mut libc::fd_set,
+                std::ptr::from_mut(&mut readfds),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 &mut libc::timeval {
@@ -94,7 +94,7 @@ fn test_pipe() -> Result<(), String> {
         ready = unsafe {
             libc::select(
                 pfd_read + 1,
-                &mut readfds as *mut libc::fd_set,
+                std::ptr::from_mut(&mut readfds),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 &mut libc::timeval {
@@ -140,7 +140,7 @@ fn test_regular_file() -> Result<(), String> {
         let ready = unsafe {
             libc::select(
                 fd + 1,
-                &mut readfds as *mut libc::fd_set,
+                std::ptr::from_mut(&mut readfds),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 &mut libc::timeval {
@@ -189,7 +189,7 @@ fn test_regular_file() -> Result<(), String> {
         let ready = unsafe {
             libc::select(
                 fd + 1,
-                &mut readfds as *mut libc::fd_set,
+                std::ptr::from_mut(&mut readfds),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 &mut libc::timeval {
@@ -282,17 +282,17 @@ fn test_select_args_common(
         let readfds_ptr = if readfds_null {
             std::ptr::null_mut()
         } else {
-            &mut readfds as *mut libc::fd_set
+            std::ptr::from_mut(&mut readfds)
         };
         let writefds_ptr = if writefds_null {
             std::ptr::null_mut()
         } else {
-            &mut writefds as *mut libc::fd_set
+            std::ptr::from_mut(&mut writefds)
         };
         let exceptfds_ptr = if exceptfds_null {
             std::ptr::null_mut()
         } else {
-            &mut exceptfds as *mut libc::fd_set
+            std::ptr::from_mut(&mut exceptfds)
         };
 
         // Our expected errno

@@ -128,7 +128,7 @@ fn test_bad_flags() -> Result<(), Box<dyn Error>> {
                 &clone_args {
                     stack: stack.top() as u64,
                     stack_size: CLONE_TEST_STACK_NBYTES as u64,
-                    tls: &mut tls as *mut _ as u64,
+                    tls: std::ptr::from_mut(&mut tls) as u64,
                     ..Default::default()
                 }
                 .with_flags(flags),
@@ -375,7 +375,7 @@ fn test_parent(use_clone_parent_flag: bool) -> Result<(), Box<dyn Error>> {
             thread_fn,
             stack.top(),
             flags.bits().try_into().unwrap(),
-            &ppid_channel as *const _ as *mut core::ffi::c_void,
+            std::ptr::from_ref(&ppid_channel) as *mut core::ffi::c_void,
             core::ptr::null_mut::<i32>(),
             &mut tls,
             child_tid.as_ptr(),

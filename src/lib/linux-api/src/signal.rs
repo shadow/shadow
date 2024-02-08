@@ -435,7 +435,7 @@ impl siginfo_t {
     ///
     /// See [`siginfo_t`] `Invariants`.
     pub unsafe fn wrap_ref_assume_initd(si: &linux_siginfo_t) -> &Self {
-        unsafe { &*(si as *const _ as *const Self) }
+        unsafe { &*(core::ptr::from_ref(si) as *const Self) }
     }
 
     /// Analogous to `bytemuck::TransparentWrapper::wrap_mut`, but `unsafe`.
@@ -444,7 +444,7 @@ impl siginfo_t {
     ///
     /// See [`siginfo_t`] `Invariants`.
     pub unsafe fn wrap_mut_assume_initd(si: &mut linux_siginfo_t) -> &mut Self {
-        unsafe { &mut *(si as *mut _ as *mut Self) }
+        unsafe { &mut *(core::ptr::from_mut(si) as *mut Self) }
     }
 
     /// # Safety
@@ -1108,11 +1108,11 @@ impl sigaction {
     }
 
     pub fn wrap_ref(si: &linux_sigaction) -> &Self {
-        unsafe { &*(si as *const _ as *const Self) }
+        unsafe { &*(core::ptr::from_ref(si) as *const Self) }
     }
 
     pub fn wrap_mut(si: &mut linux_sigaction) -> &mut Self {
-        unsafe { &mut *(si as *mut _ as *mut Self) }
+        unsafe { &mut *(core::ptr::from_mut(si) as *mut Self) }
     }
 
     /// # Safety
@@ -1315,7 +1315,7 @@ pub unsafe fn rt_sigaction(
             signal.as_i32(),
             new_action,
             old_action
-                .map(|o| o as *mut _)
+                .map(core::ptr::from_mut)
                 .unwrap_or(core::ptr::null_mut()),
             core::mem::size_of::<sigset_t>(),
         )
@@ -1368,7 +1368,7 @@ pub fn rt_sigprocmask(
             how.into(),
             sigset_in,
             sigset_out
-                .map(|s| s as *mut _)
+                .map(core::ptr::from_mut)
                 .unwrap_or(core::ptr::null_mut()),
             core::mem::size_of::<sigset_t>(),
         )
@@ -1509,10 +1509,10 @@ pub unsafe fn sigaltstack(
     unsafe {
         sigaltstack_raw(
             new_stack
-                .map(|p| p as *const _)
+                .map(core::ptr::from_ref)
                 .unwrap_or(core::ptr::null()),
             old_stack
-                .map(|p| p as *mut _)
+                .map(core::ptr::from_mut)
                 .unwrap_or(core::ptr::null_mut()),
         )
     }

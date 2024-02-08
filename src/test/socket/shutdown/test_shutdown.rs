@@ -228,7 +228,7 @@ fn setup_stream_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int,
         let rv = unsafe {
             libc::getsockname(
                 fd_listener,
-                &mut addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut addr) as *mut libc::sockaddr,
                 &mut addr_len,
             )
         };
@@ -242,7 +242,7 @@ fn setup_stream_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int,
         let rv = unsafe {
             libc::connect(
                 fd_client,
-                &addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&addr) as u32,
             )
         };
@@ -283,7 +283,7 @@ fn setup_dgram_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int, 
         let rv = unsafe {
             libc::bind(
                 fd_server,
-                &addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&addr) as u32,
             )
         };
@@ -297,7 +297,7 @@ fn setup_dgram_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int, 
         let rv = unsafe {
             libc::getsockname(
                 fd_server,
-                &mut addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut addr) as *mut libc::sockaddr,
                 &mut addr_len,
             )
         };
@@ -311,7 +311,7 @@ fn setup_dgram_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int, 
         let rv = unsafe {
             libc::connect(
                 fd_client,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&server_addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&server_addr) as u32,
             )
         };
@@ -325,7 +325,7 @@ fn setup_dgram_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int, 
         let rv = unsafe {
             libc::getsockname(
                 fd_client,
-                &mut addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut addr) as *mut libc::sockaddr,
                 &mut addr_len,
             )
         };
@@ -339,7 +339,7 @@ fn setup_dgram_sockets(domain: libc::c_int, flag: libc::c_int) -> (libc::c_int, 
         let rv = unsafe {
             libc::connect(
                 fd_server,
-                &client_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&client_addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&client_addr) as u32,
             )
         };

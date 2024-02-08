@@ -676,7 +676,7 @@ mod export {
         Worker::with_active_host(|host| {
             let process = host.process_borrow(thread.process_id).unwrap();
             let p: &Process = &process.borrow(host.root());
-            p as *const _
+            std::ptr::from_ref(p)
         })
         .unwrap()
     }
@@ -686,7 +686,7 @@ mod export {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {
             assert_eq!(host.id(), thread.host_id());
-            host as *const _
+            std::ptr::from_ref(host)
         })
         .unwrap()
     }
@@ -761,7 +761,7 @@ mod export {
 
         Worker::with_active_host(
             |host| match thread.descriptor_table_borrow(host).get(handle) {
-                Some(d) => d as *const Descriptor,
+                Some(d) => std::ptr::from_ref(d),
                 None => std::ptr::null(),
             },
         )

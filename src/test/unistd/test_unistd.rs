@@ -142,13 +142,8 @@ fn test_getpid_kill() {
         sa_mask: unsafe { std::mem::zeroed() },
         sa_restorer: None,
     };
-    let rv = unsafe {
-        libc::sigaction(
-            libc::SIGUSR1,
-            &x as *const libc::sigaction,
-            std::ptr::null_mut(),
-        )
-    };
+    let rv =
+        unsafe { libc::sigaction(libc::SIGUSR1, std::ptr::from_ref(&x), std::ptr::null_mut()) };
     assert_eq!(rv, 0);
 
     let rv = unsafe { libc::kill(pid as libc::pid_t, libc::SIGUSR1) };

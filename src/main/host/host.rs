@@ -1256,7 +1256,7 @@ mod export {
         let host = unsafe { host.as_ref().unwrap() };
         let virtual_pid = ProcessId::try_from(virtual_pid).unwrap();
         host.process_borrow(virtual_pid)
-            .map(|x| &*x.borrow(host.root()) as *const _)
+            .map(|x| std::ptr::from_ref(&*x.borrow(host.root())))
             .unwrap_or(std::ptr::null_mut())
     }
 
@@ -1289,7 +1289,7 @@ mod export {
                 // explicitly here to ensure a compilation error if the type is
                 // changed again to one that would allow mutable references.
                 let thread = thread.borrow(host.root());
-                return &*thread as *const _;
+                return std::ptr::from_ref(&*thread);
             };
         }
         std::ptr::null_mut()

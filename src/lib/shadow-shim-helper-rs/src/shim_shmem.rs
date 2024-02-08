@@ -444,7 +444,7 @@ pub mod export {
     ) -> *mut ShimShmemHostLock {
         let host = unsafe { host.as_ref().unwrap() };
         let mut guard = host.protected().lock();
-        let lock = &mut *guard as *mut _;
+        let lock = std::ptr::from_mut(&mut *guard);
         guard.disconnect();
         lock
     }

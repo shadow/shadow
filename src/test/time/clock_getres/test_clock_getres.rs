@@ -100,7 +100,7 @@ fn test_clock_getres(
         let resolution_ptr = resolution
             .value
             .as_mut()
-            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
         unsafe {
             (
                 libc::clock_getres(clockid.value, resolution_ptr),
@@ -127,7 +127,7 @@ fn test_syscall_clock_getres(
         let resolution_ptr = resolution
             .value
             .as_mut()
-            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
         unsafe {
             (
                 libc::syscall(libc::SYS_clock_getres, clockid.value, resolution_ptr),

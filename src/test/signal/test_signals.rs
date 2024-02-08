@@ -24,11 +24,11 @@ const SS_AUTODISARM: libc::c_int = 1 << 31;
 
 fn sigaltstack(new: Option<&libc::stack_t>, old: Option<&mut libc::stack_t>) -> Result<(), Errno> {
     let new = match new {
-        Some(r) => r as *const libc::stack_t,
+        Some(r) => std::ptr::from_ref(r),
         None => std::ptr::null(),
     };
     let old = match old {
-        Some(r) => r as *mut libc::stack_t,
+        Some(r) => std::ptr::from_mut(r),
         None => std::ptr::null_mut(),
     };
     Errno::result(unsafe { libc::sigaltstack(new, old) })?;
@@ -717,7 +717,7 @@ extern "C" fn sigaltstack_action(
     // stack the handler is running on. Using assembly to get `rsp` directly
     // might be a little nicer, but is currently unstable in Rust.
     let stack_var = 0u64;
-    let rsp = &stack_var as *const u64 as usize;
+    let rsp = std::ptr::from_ref(&stack_var) as usize;
 
     let mut altstack = libc::stack_t {
         ss_sp: std::ptr::null_mut(),
@@ -776,10 +776,10 @@ fn test_sigaltstack_configured_but_unused() -> Result<(), Box<dyn Error>> {
     // Configure an altstack.
     const STACK_SZ: usize = 1 << 20;
     let mut stack_space = Box::new([0u8; STACK_SZ]);
-    let stack_range =
-        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
+    let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
-        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_sp: std::ptr::from_mut(&mut stack_space[0]) as *mut libc::c_void,
         ss_flags: 0,
         ss_size: STACK_SZ,
     };
@@ -814,10 +814,10 @@ fn test_sigaltstack_used() -> Result<(), Box<dyn Error>> {
     // Configure an altstack.
     const STACK_SZ: usize = 1 << 20;
     let mut stack_space = Box::new([0u8; STACK_SZ]);
-    let stack_range =
-        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
+    let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
-        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_sp: std::ptr::from_mut(&mut stack_space[0]) as *mut libc::c_void,
         ss_flags: 0,
         ss_size: STACK_SZ,
     };
@@ -853,10 +853,10 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     // Configure an altstack.
     const STACK_SZ: usize = 1 << 20;
     let mut stack_space = Box::new([0u8; STACK_SZ]);
-    let stack_range =
-        (&stack_space[0] as *const u8 as usize)..(&stack_space[0] as *const u8 as usize + STACK_SZ);
+    let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
+    let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
-        ss_sp: &mut stack_space[0] as *mut u8 as *mut libc::c_void,
+        ss_sp: std::ptr::from_mut(&mut stack_space[0]) as *mut libc::c_void,
         ss_flags: SS_AUTODISARM,
         ss_size: STACK_SZ,
     };
@@ -907,7 +907,7 @@ extern "C" fn change_rax_from_null_to_global_static(
 
     let ctx = voidctx as *mut libc::ucontext_t;
     let ctx = unsafe { ctx.as_mut().unwrap() };
-    ctx.uc_mcontext.gregs[libc::REG_RAX as usize] = &GLOBAL_STATIC as *const u32 as i64;
+    ctx.uc_mcontext.gregs[libc::REG_RAX as usize] = std::ptr::from_ref(&GLOBAL_STATIC) as i64;
 }
 
 fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
@@ -944,7 +944,7 @@ fn test_synchronous_sigsegv() -> Result<(), Box<dyn Error>> {
     unsafe {
         asm!("mov {val:e}, [rax]", val = out(reg) val, inout("rax") addr);
     }
-    assert_eq!(addr, &GLOBAL_STATIC as *const _ as u64);
+    assert_eq!(addr, std::ptr::from_ref(&GLOBAL_STATIC) as u64);
     assert_eq!(val, GLOBAL_STATIC);
 
     // Restore default action to avoid surprising behavior in the case of an

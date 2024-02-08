@@ -130,7 +130,7 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize>
             return Err(rustix::io::Errno::AGAIN);
         }
         let condvar = hashmap
-            .entry(futex_word as *const _ as usize)
+            .entry(std::ptr::from_ref(futex_word) as usize)
             .or_insert(Arc::new(Condvar::new()))
             .clone();
         // We could get a spurious wakeup here, but that's ok.
@@ -150,7 +150,7 @@ pub fn futex_wake_one(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     #[cfg(loom)]
     {
         let hashmap = FUTEXES.lock().unwrap();
-        let Some(condvar) = hashmap.get(&(futex_word as *const _ as usize)) else {
+        let Some(condvar) = hashmap.get(&(std::ptr::from_ref(futex_word) as usize)) else {
             return Ok(());
         };
         condvar.notify_one();
@@ -177,7 +177,7 @@ pub fn futex_wake_all(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     #[cfg(loom)]
     {
         let hashmap = FUTEXES.lock().unwrap();
-        let Some(condvar) = hashmap.get(&(futex_word as *const _ as usize)) else {
+        let Some(condvar) = hashmap.get(&(std::ptr::from_ref(futex_word) as usize)) else {
             return Ok(());
         };
         condvar.notify_all();

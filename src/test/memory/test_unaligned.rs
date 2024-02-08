@@ -24,13 +24,13 @@ fn test_unaligned_read() -> Result<(), Box<dyn Error>> {
 
     let src = unsafe {
         std::slice::from_raw_parts(
-            &t as *const libc::timespec as *const u8,
+            std::ptr::from_ref(&t) as *const u8,
             std::mem::size_of::<libc::timeval>(),
         )
     };
     let unaligned_t = unsafe {
         std::slice::from_raw_parts_mut(
-            (&mut buf as *mut libc::timespec as *mut u8).add(1),
+            (std::ptr::from_mut(&mut buf) as *mut u8).add(1),
             std::mem::size_of::<libc::timeval>(),
         )
     };
