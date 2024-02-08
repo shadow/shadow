@@ -619,7 +619,7 @@ mod export {
 
         let socket = unsafe { socket.as_ref() }.unwrap();
 
-        let mut s = std::collections::hash_map::DefaultHasher::new();
+        let mut s = std::hash::DefaultHasher::new();
         socket.hash(&mut s);
         s.finish()
     }

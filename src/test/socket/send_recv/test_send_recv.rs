@@ -1150,8 +1150,8 @@ fn test_nonblocking_stream(
         assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
         simple_recvfrom_helper(sys_method, fd_peer, &mut [0u8; 10], &[libc::EAGAIN], false)?;
 
-        let mut send_hash = std::collections::hash_map::DefaultHasher::new();
-        let mut recv_hash = std::collections::hash_map::DefaultHasher::new();
+        let mut send_hash = std::hash::DefaultHasher::new();
+        let mut recv_hash = std::hash::DefaultHasher::new();
 
         let mut send_rng = rand::rngs::SmallRng::seed_from_u64(0);
 
