@@ -786,7 +786,7 @@ mod export {
     pub extern "C-unwind" fn openfile_drop(file: *const OpenFile) {
         assert!(!file.is_null());
 
-        drop(unsafe { Box::from_raw(file as *mut OpenFile) });
+        drop(unsafe { Box::from_raw(file.cast_mut()) });
     }
 
     /// Get the state of the `OpenFile` object.
@@ -865,7 +865,7 @@ mod export {
     pub extern "C-unwind" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
-        drop(unsafe { Box::from_raw(file as *mut File) });
+        drop(unsafe { Box::from_raw(file.cast_mut()) });
     }
 
     /// Increment the ref count of the `File` object. The returned pointer will not be the same as

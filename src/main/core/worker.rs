@@ -493,7 +493,7 @@ impl Worker {
     pub fn resolve_name_to_ip(name: &std::ffi::CStr) -> Option<std::net::Ipv4Addr> {
         Worker::with_dns(|dns| {
             let addr = unsafe {
-                cshadow::dns_resolveNameToAddress(std::ptr::from_ref(dns) as *mut _, name.as_ptr())
+                cshadow::dns_resolveNameToAddress(std::ptr::from_ref(dns).cast_mut(), name.as_ptr())
             };
             if addr.is_null() {
                 return None;

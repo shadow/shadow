@@ -319,7 +319,7 @@ fn test_make_joinable() -> Result<(), String> {
 extern "C" fn thread_mutex_lock(data: *mut libc::c_void) -> *mut libc::c_void {
     let mut rv = ThreadRetVal::Success;
 
-    let ms = data as *mut _ as *mut MuxSum;
+    let ms = data as *mut MuxSum;
 
     if ms.is_null() {
         rv = ThreadRetVal::NullThreadArg;
@@ -406,7 +406,7 @@ extern "C" fn thread_mutex_trylock(mx: *mut libc::c_void) -> *mut libc::c_void {
     }
 
     /* Track the number of threads that pass the lock. Should be < NUM_THREADS */
-    let muxes = mx as *mut _ as *mut MuxTry;
+    let muxes = mx as *mut MuxTry;
 
     /* Attempt to lock the mutex */
     if unsafe { libc::pthread_mutex_trylock((*muxes).mux1_ptr()) } == 0 {

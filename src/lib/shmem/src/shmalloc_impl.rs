@@ -218,7 +218,7 @@ struct Chunk {
 
 impl Chunk {
     fn get_mut_data_start(&mut self) -> *mut u8 {
-        self.get_data_start() as *mut u8
+        self.get_data_start().cast_mut()
     }
 
     fn get_data_start(&self) -> *const u8 {
@@ -338,7 +338,7 @@ impl Block {
         let x = self.get_ref();
         let nelems = x.len();
         let x_ptr: *const T = x.as_ptr();
-        unsafe { core::slice::from_raw_parts_mut(x_ptr as *mut T, nelems) }
+        unsafe { core::slice::from_raw_parts_mut(x_ptr.cast_mut(), nelems) }
     }
 }
 
