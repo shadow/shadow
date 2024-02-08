@@ -113,7 +113,7 @@ fn test_clock_gettime(
         let ts_ptr = ts
             .value
             .as_mut()
-            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
         unsafe {
             (
                 libc::clock_gettime(clockid.value, ts_ptr),
@@ -140,7 +140,7 @@ fn test_syscall_clock_gettime(
         let ts_ptr = ts
             .value
             .as_mut()
-            .map_or(std::ptr::null_mut(), |v| v as *mut libc::timespec);
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
         unsafe {
             (
                 libc::syscall(libc::SYS_clock_gettime, clockid.value, ts_ptr),

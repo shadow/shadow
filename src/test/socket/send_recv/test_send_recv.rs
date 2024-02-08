@@ -1150,8 +1150,8 @@ fn test_nonblocking_stream(
         assert!(!test_utils::is_readable(fd_peer, 0).unwrap());
         simple_recvfrom_helper(sys_method, fd_peer, &mut [0u8; 10], &[libc::EAGAIN], false)?;
 
-        let mut send_hash = std::collections::hash_map::DefaultHasher::new();
-        let mut recv_hash = std::collections::hash_map::DefaultHasher::new();
+        let mut send_hash = std::hash::DefaultHasher::new();
+        let mut recv_hash = std::hash::DefaultHasher::new();
 
         let mut send_rng = rand::rngs::SmallRng::seed_from_u64(0);
 
@@ -1560,8 +1560,8 @@ fn test_recv_addr(
         unsafe {
             libc::getsockname(
                 fd_client,
-                &mut client_addr as *mut _ as *mut _,
-                &mut client_addr_len as *mut _ as *mut _,
+                std::ptr::from_mut(&mut client_addr) as *mut _,
+                std::ptr::from_mut(&mut client_addr_len) as *mut _,
             )
         },
         0
@@ -2065,7 +2065,7 @@ fn test_bound_to_inaddr_any(
         // bind on the autobind address
         {
             let server_addr_len = std::mem::size_of_val(&server_addr) as libc::socklen_t;
-            let server_addr = &mut server_addr as *mut _ as *mut libc::sockaddr;
+            let server_addr = std::ptr::from_mut(&mut server_addr) as *mut libc::sockaddr;
 
             let rv = unsafe { libc::bind(fd, server_addr, server_addr_len) };
             assert_eq!(rv, 0);
@@ -2074,7 +2074,7 @@ fn test_bound_to_inaddr_any(
         // get the assigned address
         {
             let mut server_addr_len = std::mem::size_of_val(&server_addr) as libc::socklen_t;
-            let server_addr = &mut server_addr as *mut _ as *mut libc::sockaddr;
+            let server_addr = std::ptr::from_mut(&mut server_addr) as *mut libc::sockaddr;
 
             let rv = unsafe { libc::getsockname(fd, server_addr, &mut server_addr_len) };
             assert_eq!(rv, 0);

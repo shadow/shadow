@@ -104,7 +104,9 @@ impl SockaddrStorage {
         assert_eq_size!(libc::sockaddr_in, nix::sys::socket::SockaddrIn);
         assert_eq_align!(libc::sockaddr_in, nix::sys::socket::SockaddrIn);
 
-        Some(unsafe { &*(&self.addr.inet as *const _ as *const nix::sys::socket::SockaddrIn) })
+        Some(unsafe {
+            &*(std::ptr::from_ref(&self.addr.inet) as *const nix::sys::socket::SockaddrIn)
+        })
     }
 
     /// Get a new `SockaddrStorage` with a copy of the ipv4 socket address.
@@ -132,7 +134,9 @@ impl SockaddrStorage {
         assert_eq_size!(libc::sockaddr_in6, nix::sys::socket::SockaddrIn6);
         assert_eq_align!(libc::sockaddr_in6, nix::sys::socket::SockaddrIn6);
 
-        Some(unsafe { &*(&self.addr.inet6 as *const _ as *const nix::sys::socket::SockaddrIn6) })
+        Some(unsafe {
+            &*(std::ptr::from_ref(&self.addr.inet6) as *const nix::sys::socket::SockaddrIn6)
+        })
     }
 
     /// Get a new `SockaddrStorage` with a copy of the ipv6 socket address.
@@ -520,7 +524,7 @@ mod tests {
             s_addr: libc::INADDR_LOOPBACK.to_be(),
         };
 
-        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr) as *const MaybeUninit<u8>;
         let len = std::mem::size_of_val(&addr).try_into().unwrap();
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
@@ -540,7 +544,7 @@ mod tests {
         addr.sun_path = [1; 108];
         addr.sun_path[..4].copy_from_slice(&[1, 2, 3, 0]);
 
-        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr) as *const MaybeUninit<u8>;
         let len = std::mem::size_of_val(&addr).try_into().unwrap();
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
@@ -561,7 +565,7 @@ mod tests {
             s_addr: libc::INADDR_LOOPBACK.to_be(),
         };
 
-        let ptr = &addr_in as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr_in) as *const MaybeUninit<u8>;
         let len = std::mem::size_of_val(&addr_in).try_into().unwrap();
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
@@ -600,7 +604,7 @@ mod tests {
         addr.sun_path = [1; 108];
         addr.sun_path[..pathname.len()].copy_from_slice(&pathname);
 
-        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr) as *const MaybeUninit<u8>;
         let len_useful_info = memoffset::offset_of!(libc::sockaddr_un, sun_path) + pathname.len();
         let len_useful_info = len_useful_info.try_into().unwrap();
         let len_struct = std::mem::size_of_val(&addr).try_into().unwrap();
@@ -662,7 +666,7 @@ mod tests {
         addr.sun_path[0] = 0;
         addr.sun_path[1..][..name.len()].copy_from_slice(u8_to_i8_slice(&name));
 
-        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr) as *const MaybeUninit<u8>;
 
         // the correct sockaddr length for this abstract unix socket address
         let len_real = memoffset::offset_of!(libc::sockaddr_un, sun_path) + 1 + name.len();
@@ -724,7 +728,7 @@ mod tests {
         addr.sun_family = libc::AF_UNIX as u16;
         addr.sun_path = [1; 108];
 
-        let ptr = &addr as *const _ as *const MaybeUninit<u8>;
+        let ptr = std::ptr::from_ref(&addr) as *const MaybeUninit<u8>;
 
         // the correct sockaddr length for this unnamed unix socket address
         let len_real = memoffset::offset_of!(libc::sockaddr_un, sun_path);

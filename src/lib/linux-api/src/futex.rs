@@ -75,8 +75,7 @@ pub fn futex(
     val3: u32,
 ) -> Result<core::ffi::c_int, Errno> {
     let utime = utime
-        // TODO: in rust 1.76 use `core::ptr::from_ref`
-        .map(|x| x as *const _)
+        .map(core::ptr::from_ref)
         .unwrap_or(core::ptr::null_mut());
     let uaddr2 = uaddr2
         .map(AtomicU32::as_ptr)

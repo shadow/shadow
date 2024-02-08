@@ -221,7 +221,7 @@ fn build_host(
 
     // hostname hash is used as part of the host's seed
     let hostname_hash = {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut hasher = std::hash::DefaultHasher::new();
         hostname.hash(&mut hasher);
         hasher.finish()
     };

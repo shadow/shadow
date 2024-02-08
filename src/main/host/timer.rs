@@ -108,9 +108,7 @@ impl Timer {
         host: &Host,
         expire_id: u64,
     ) {
-        let internal = if let Some(internal) = Weak::upgrade(internal_weak) {
-            internal
-        } else {
+        let Some(internal) = Weak::upgrade(internal_weak) else {
             trace!("Expired Timer no longer exists.");
             return;
         };

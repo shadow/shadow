@@ -529,7 +529,7 @@ fn test_two_sockets_same_port(sock_type: libc::c_int, flags: libc::c_int) -> Res
             let rv = unsafe {
                 libc::getsockname(
                     fd_client,
-                    &mut client_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+                    std::ptr::from_mut(&mut client_addr) as *mut libc::sockaddr,
                     &mut client_addr_len,
                 )
             };
@@ -543,7 +543,7 @@ fn test_two_sockets_same_port(sock_type: libc::c_int, flags: libc::c_int) -> Res
             let rv = Errno::result(unsafe {
                 libc::bind(
                     fd_other,
-                    &client_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                    std::ptr::from_ref(&client_addr) as *const libc::sockaddr,
                     client_addr_len,
                 )
             });
@@ -584,7 +584,7 @@ fn test_interface(
         let rv = unsafe {
             libc::bind(
                 fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&server_addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&server_addr) as u32,
             )
         };
@@ -597,8 +597,8 @@ fn test_interface(
         let rv = unsafe {
             libc::getsockname(
                 fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
+                std::ptr::from_mut(&mut server_addr) as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut server_addr_size),
             )
         };
         assert_eq!(rv, 0);
@@ -662,7 +662,7 @@ fn test_double_connect(
         let rv = unsafe {
             libc::bind(
                 fd_server,
-                &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                std::ptr::from_ref(&server_addr) as *const libc::sockaddr,
                 std::mem::size_of_val(&server_addr) as u32,
             )
         };
@@ -675,8 +675,8 @@ fn test_double_connect(
         let rv = unsafe {
             libc::getsockname(
                 fd_server,
-                &mut server_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
-                &mut server_addr_size as *mut libc::socklen_t,
+                std::ptr::from_mut(&mut server_addr) as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut server_addr_size),
             )
         };
         assert_eq!(rv, 0);

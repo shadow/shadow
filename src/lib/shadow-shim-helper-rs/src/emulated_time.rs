@@ -190,14 +190,10 @@ pub mod export {
         lhs: CEmulatedTime,
         rhs: CSimulationTime,
     ) -> CEmulatedTime {
-        let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
-            e
-        } else {
+        let Some(lhs) = EmulatedTime::from_c_emutime(lhs) else {
             return EmulatedTime::to_c_emutime(None);
         };
-        let rhs = if let Some(e) = SimulationTime::from_c_simtime(rhs) {
-            e
-        } else {
+        let Some(rhs) = SimulationTime::from_c_simtime(rhs) else {
             return EmulatedTime::to_c_emutime(None);
         };
         let sum = lhs.checked_add(rhs);
@@ -209,14 +205,10 @@ pub mod export {
         lhs: CEmulatedTime,
         rhs: CEmulatedTime,
     ) -> CSimulationTime {
-        let lhs = if let Some(e) = EmulatedTime::from_c_emutime(lhs) {
-            e
-        } else {
+        let Some(lhs) = EmulatedTime::from_c_emutime(lhs) else {
             return EmulatedTime::to_c_emutime(None);
         };
-        let rhs = if let Some(e) = EmulatedTime::from_c_emutime(rhs) {
-            e
-        } else {
+        let Some(rhs) = EmulatedTime::from_c_emutime(rhs) else {
             return EmulatedTime::to_c_emutime(None);
         };
         let diff = lhs.checked_duration_since(&rhs);

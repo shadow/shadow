@@ -2130,7 +2130,7 @@ mod export {
         proc: *const Process,
     ) -> *const ShimShmemProcess {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.as_runnable().unwrap().shim_shared_mem_block.deref() as *const _
+        std::ptr::from_ref(proc.as_runnable().unwrap().shim_shared_mem_block.deref())
     }
 
     #[no_mangle]

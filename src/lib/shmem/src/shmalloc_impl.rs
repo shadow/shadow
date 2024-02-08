@@ -218,11 +218,11 @@ struct Chunk {
 
 impl Chunk {
     fn get_mut_data_start(&mut self) -> *mut u8 {
-        self.get_data_start() as *mut u8
+        self.get_data_start().cast_mut()
     }
 
     fn get_data_start(&self) -> *const u8 {
-        let p = self as *const Self as *const u8;
+        let p = core::ptr::from_ref(self) as *const u8;
         unsafe { p.add(core::mem::size_of::<Self>()) }
     }
 }
@@ -317,7 +317,7 @@ impl Block {
 
         let data_offset = self.data_offset;
         let alloc_nbytes = self.alloc_nbytes;
-        let block = self as *const Block as *const u8;
+        let block = core::ptr::from_ref(self) as *const u8;
         assert!(!block.is_null());
 
         let data_begin = unsafe { block.add(data_offset as usize) };
@@ -338,7 +338,7 @@ impl Block {
         let x = self.get_ref();
         let nelems = x.len();
         let x_ptr: *const T = x.as_ptr();
-        unsafe { core::slice::from_raw_parts_mut(x_ptr as *mut T, nelems) }
+        unsafe { core::slice::from_raw_parts_mut(x_ptr.cast_mut(), nelems) }
     }
 }
 
@@ -467,7 +467,7 @@ impl FreelistAllocator {
         alloc_nbytes: usize,
         alloc_alignment: usize,
     ) -> *mut Block {
-        let chunk_start = chunk as *mut Chunk as *mut u8;
+        let chunk_start = core::ptr::from_mut(chunk) as *mut u8;
         let chunk_end = unsafe { chunk_start.add(chunk.chunk_nbytes) };
 
         let data_start = unsafe { chunk.get_mut_data_start().add(chunk.data_cur as usize) };

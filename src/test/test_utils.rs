@@ -104,7 +104,7 @@ pub trait AsPtr<T> {
 impl<T> AsPtr<T> for Option<T> {
     fn as_ptr(&self) -> *const T {
         match self {
-            Some(ref v) => v as *const T,
+            Some(ref v) => std::ptr::from_ref(v),
             None => std::ptr::null(),
         }
     }
@@ -460,7 +460,14 @@ impl From<libc::itimerval> for ITimer {
 // Neither `libc` nor `nix` wrap `getitimer`.
 pub fn getitimer(which: i32) -> nix::Result<ITimer> {
     let mut old_value: libc::itimerval = unsafe { std::mem::zeroed() };
-    if unsafe { libc::syscall(libc::SYS_getitimer, which, &mut old_value as *mut _) } == -1 {
+    if unsafe {
+        libc::syscall(
+            libc::SYS_getitimer,
+            which,
+            std::ptr::from_mut(&mut old_value),
+        )
+    } == -1
+    {
         return Err(nix::errno::Errno::last());
     }
     Ok(old_value.into())

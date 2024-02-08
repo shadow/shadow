@@ -48,11 +48,7 @@ impl SimulationTime {
     }
 
     pub fn to_c_simtime(val: Option<Self>) -> CSimulationTime {
-        if let Some(val) = val {
-            val.0
-        } else {
-            SIMTIME_INVALID
-        }
+        val.map_or(SIMTIME_INVALID, |val| val.0)
     }
 
     /// Convert a [`Duration`] to a [`SimulationTime`]. This function exists as a `const`
@@ -538,14 +534,10 @@ pub mod export {
         val: CSimulationTime,
         out: *mut libc::timeval,
     ) -> bool {
-        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
-            s
-        } else {
+        let Some(simtime) = SimulationTime::from_c_simtime(val) else {
             return false;
         };
-        let tv: libc::timeval = if let Ok(tv) = libc::timeval::try_from(simtime) {
-            tv
-        } else {
+        let Ok(tv) = libc::timeval::try_from(simtime) else {
             return false;
         };
         unsafe { std::ptr::write(notnull_mut(out), tv) };
@@ -561,14 +553,10 @@ pub mod export {
         val: CSimulationTime,
         out: *mut libc::timespec,
     ) -> bool {
-        let simtime: SimulationTime = if let Some(s) = SimulationTime::from_c_simtime(val) {
-            s
-        } else {
+        let Some(simtime) = SimulationTime::from_c_simtime(val) else {
             return false;
         };
-        let ts: libc::timespec = if let Ok(ts) = libc::timespec::try_from(simtime) {
-            ts
-        } else {
+        let Ok(ts) = libc::timespec::try_from(simtime) else {
             return false;
         };
         unsafe { std::ptr::write(out, ts) };

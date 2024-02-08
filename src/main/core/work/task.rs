@@ -52,7 +52,6 @@ impl PartialEq for TaskRef {
     fn eq(&self, other: &Self) -> bool {
         self.magic.debug_check();
         other.magic.debug_check();
-        #[allow(clippy::vtable_address_comparisons)]
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 }

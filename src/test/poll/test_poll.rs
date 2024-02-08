@@ -58,7 +58,7 @@ fn test_pipe() -> Result<(), String> {
         };
 
         /* First make sure there's nothing there */
-        let mut ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
+        let mut ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         match ready.cmp(&0) {
             Ordering::Less => {
                 return Err("error: poll failed".to_string());
@@ -79,7 +79,7 @@ fn test_pipe() -> Result<(), String> {
         read_poll.fd = pfd_read;
         read_poll.events = libc::POLLIN;
         read_poll.revents = 0;
-        ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
+        ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         if ready != 1 {
             return Err(format!("error: poll returned {} instead of 1", ready));
         }
@@ -106,7 +106,7 @@ fn test_regular_file() -> Result<(), String> {
             events: libc::POLLIN,
             revents: 0,
         };
-        let ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
+        let ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         match ready.cmp(&0) {
             Ordering::Less => {
                 return Err("error: poll on empty file failed".to_string());
@@ -143,7 +143,7 @@ fn test_regular_file() -> Result<(), String> {
             events: libc::POLLIN,
             revents: 0,
         };
-        let ready = unsafe { libc::poll(&mut read_poll as *mut libc::pollfd, 1, 100) };
+        let ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         if ready != 1 {
             return Err(format!("error: poll returned {} instead of 1", ready));
         }
@@ -199,7 +199,7 @@ fn test_poll_args_common(
         let pfd_ptr = if pfd_null {
             std::ptr::null_mut()
         } else {
-            &mut pfd as *mut _
+            std::ptr::from_mut(&mut pfd)
         };
 
         // Our expected errno

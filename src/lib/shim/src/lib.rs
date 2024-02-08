@@ -587,7 +587,7 @@ pub mod export {
     /// The returned pointer must not outlive the current thread.
     #[no_mangle]
     pub unsafe extern "C-unwind" fn shim_thisThreadEventIPC() -> *const IPCData {
-        tls_ipc::with(|ipc| ipc as *const _)
+        tls_ipc::with(core::ptr::from_ref)
     }
 
     /// This thread's IPC channel. Panics if it hasn't been initialized yet.
@@ -598,7 +598,7 @@ pub mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn shim_threadSharedMem(
     ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
-        tls_thread_shmem::with(|thread| thread as *const _)
+        tls_thread_shmem::with(core::ptr::from_ref)
     }
 
     #[no_mangle]
@@ -627,7 +627,7 @@ pub mod export {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
-            rv as *const _
+            core::ptr::from_ref(rv)
         })
         .unwrap_or(core::ptr::null())
     }
@@ -641,7 +641,7 @@ pub mod export {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
-            rv as *const _
+            core::ptr::from_ref(rv)
         })
         .unwrap_or(core::ptr::null())
     }
@@ -653,7 +653,7 @@ pub mod export {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the
             // underlying data.
-            process as *const _
+            core::ptr::from_ref(process)
         })
     }
 

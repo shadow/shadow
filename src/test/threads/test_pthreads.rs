@@ -71,7 +71,7 @@ impl MuxSum {
     /// Get a raw mutable pointer to the inner pthread_mutex_t
     #[inline(always)]
     pub fn mux_ptr(&mut self) -> *mut libc::pthread_mutex_t {
-        &mut self.mux as *mut _
+        std::ptr::from_mut(&mut self.mux)
     }
 }
 
@@ -110,19 +110,19 @@ impl MuxTry {
     /// Returns a mutable pointer to first inner pthread_mutex_t
     #[inline(always)]
     pub fn mux1_ptr(&mut self) -> *mut libc::pthread_mutex_t {
-        &mut self.mux1 as *mut _
+        std::ptr::from_mut(&mut self.mux1)
     }
 
     /// Returns a mutable pointer to second inner pthread_mutex_t
     #[inline(always)]
     pub fn mux2_ptr(&mut self) -> *mut libc::pthread_mutex_t {
-        &mut self.mux2 as *mut _
+        std::ptr::from_mut(&mut self.mux2)
     }
 
     /// Returns a mutable pointer to second inner pthread_mutex_t
     #[inline(always)]
     pub fn cond_ptr(&mut self) -> *mut libc::pthread_cond_t {
-        &mut self.cond as *mut _
+        std::ptr::from_mut(&mut self.cond)
     }
 }
 
@@ -153,7 +153,7 @@ impl Attr {
     /// Returns a mutable pointer to the inner pthread_attr_t
     #[inline(always)]
     pub fn ptr(&mut self) -> *mut libc::pthread_attr_t {
-        &mut self.attr as *mut _
+        std::ptr::from_mut(&mut self.attr)
     }
 }
 
@@ -261,7 +261,7 @@ fn test_make_detached() -> Result<(), String> {
             &mut thread,
             attr.ptr(),
             make_detached,
-            &mut thread_counter as *mut _ as *mut libc::c_void,
+            std::ptr::from_mut(&mut thread_counter) as *mut libc::c_void,
         )
     };
     if rv != 0 {
@@ -301,7 +301,12 @@ fn test_make_joinable() -> Result<(), String> {
 
     /* try to join the threads, checking return value */
     for thread in threads.iter_mut() {
-        unsafe { libc::pthread_join(*thread, &mut rv as *mut _ as *mut *mut libc::c_void) };
+        unsafe {
+            libc::pthread_join(
+                *thread,
+                std::ptr::from_mut(&mut rv) as *mut *mut libc::c_void,
+            )
+        };
         if rv != 1 {
             return Err("pthread_join did not return one".into());
         }
@@ -314,7 +319,7 @@ fn test_make_joinable() -> Result<(), String> {
 extern "C" fn thread_mutex_lock(data: *mut libc::c_void) -> *mut libc::c_void {
     let mut rv = ThreadRetVal::Success;
 
-    let ms = data as *mut _ as *mut MuxSum;
+    let ms = data as *mut MuxSum;
 
     if ms.is_null() {
         rv = ThreadRetVal::NullThreadArg;
@@ -355,7 +360,7 @@ fn test_mutex_lock() -> Result<(), String> {
                 thread,
                 std::ptr::null_mut(),
                 thread_mutex_lock,
-                &mut ms as *mut _ as *mut libc::c_void,
+                std::ptr::from_mut(&mut ms) as *mut libc::c_void,
             )
         };
         if error < 0 {
@@ -367,7 +372,13 @@ fn test_mutex_lock() -> Result<(), String> {
 
     /* join threads, check their exit values */
     for thread in threads.iter_mut() {
-        if unsafe { libc::pthread_join(*thread, &mut rv as *mut _ as *mut *mut libc::c_void) } < 0 {
+        if unsafe {
+            libc::pthread_join(
+                *thread,
+                std::ptr::from_mut(&mut rv) as *mut *mut libc::c_void,
+            )
+        } < 0
+        {
             return Err("pthread_join failed!".into());
         }
         check_pthread_error(ThreadRetVal::try_from(rv as u32)?)?;
@@ -395,7 +406,7 @@ extern "C" fn thread_mutex_trylock(mx: *mut libc::c_void) -> *mut libc::c_void {
     }
 
     /* Track the number of threads that pass the lock. Should be < NUM_THREADS */
-    let muxes = mx as *mut _ as *mut MuxTry;
+    let muxes = mx as *mut MuxTry;
 
     /* Attempt to lock the mutex */
     if unsafe { libc::pthread_mutex_trylock((*muxes).mux1_ptr()) } == 0 {
@@ -452,7 +463,7 @@ fn test_mutex_trylock() -> Result<(), String> {
                 thread,
                 null_ptr,
                 thread_mutex_trylock,
-                &mut muxes as *mut _ as *mut libc::c_void,
+                std::ptr::from_mut(&mut muxes) as *mut libc::c_void,
             )
         };
         if error < 0 {
@@ -464,7 +475,13 @@ fn test_mutex_trylock() -> Result<(), String> {
 
     /* join threads, check their exit values */
     for thread in threads.iter_mut() {
-        if unsafe { libc::pthread_join(*thread, &mut rv as *mut _ as *mut *mut libc::c_void) } < 0 {
+        if unsafe {
+            libc::pthread_join(
+                *thread,
+                std::ptr::from_mut(&mut rv) as *mut *mut libc::c_void,
+            )
+        } < 0
+        {
             return Err("pthread_join failed".into());
         }
 

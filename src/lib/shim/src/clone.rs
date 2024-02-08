@@ -11,8 +11,8 @@ use crate::tls_allow_native_syscalls;
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
 /// https://github.com/rust-lang/rust/issues/106655
 fn sigcontext_offset_of(base: &sigcontext, field: &u64) -> usize {
-    let base = base as *const _ as usize;
-    let field = field as *const _ as usize;
+    let base = core::ptr::from_ref(base) as usize;
+    let field = core::ptr::from_ref(field) as usize;
     field - base
 }
 
@@ -98,7 +98,7 @@ unsafe extern "C-unwind" fn set_context(ctx: &sigcontext) -> ! {
 
             // Ret to ctx's `rip`
             "ret",
-            in("rax") ctx as *const _,
+            in("rax") core::ptr::from_ref(ctx),
             options(noreturn)
         )
     };

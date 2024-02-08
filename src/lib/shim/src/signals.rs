@@ -247,7 +247,7 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
             action,
             ctx: ucontext
                 .as_mut()
-                .map(|c| *c as *mut ucontext)
+                .map(|c| core::ptr::from_mut(*c))
                 .unwrap_or(core::ptr::null_mut()),
         }));
         assert!(prev.is_none());

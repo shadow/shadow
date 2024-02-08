@@ -40,18 +40,18 @@ impl SockAddr {
     /// Get the pointer to the sockaddr struct.
     pub fn as_ptr(&self) -> *const libc::sockaddr {
         match self {
-            Self::Generic(ref x) => x as *const _ as *const _,
-            Self::Inet(ref x) => x as *const _ as *const _,
-            Self::Unix(ref x) => x as *const _ as *const _,
+            Self::Generic(ref x) => std::ptr::from_ref(x) as *const _,
+            Self::Inet(ref x) => std::ptr::from_ref(x) as *const _,
+            Self::Unix(ref x) => std::ptr::from_ref(x) as *const _,
         }
     }
 
     /// Get the mutable pointer to the sockaddr struct.
     pub fn as_mut_ptr(&mut self) -> *mut libc::sockaddr {
         match self {
-            Self::Generic(ref mut x) => x as *mut _ as *mut _,
-            Self::Inet(ref mut x) => x as *mut _ as *mut _,
-            Self::Unix(ref mut x) => x as *mut _ as *mut _,
+            Self::Generic(ref mut x) => std::ptr::from_mut(x) as *mut _,
+            Self::Inet(ref mut x) => std::ptr::from_mut(x) as *mut _,
+            Self::Unix(ref mut x) => std::ptr::from_mut(x) as *mut _,
         }
     }
 
@@ -226,8 +226,8 @@ pub fn stream_connect_helper(
     }
 
     let addr_ptr = match addr {
-        SockAddr::Inet(ref x) => x as *const libc::sockaddr_in as *const libc::sockaddr,
-        SockAddr::Unix(ref x) => x as *const libc::sockaddr_un as *const libc::sockaddr,
+        SockAddr::Inet(ref x) => std::ptr::from_ref(x) as *const libc::sockaddr,
+        SockAddr::Unix(ref x) => std::ptr::from_ref(x) as *const libc::sockaddr,
         _ => unimplemented!(),
     };
 
@@ -254,8 +254,8 @@ pub fn stream_connect_helper(
 /// A helper function to connect the client socket to the server address.
 pub fn dgram_connect_helper(fd_client: libc::c_int, addr: SockAddr, addr_len: libc::socklen_t) {
     let addr_ptr = match addr {
-        SockAddr::Inet(ref x) => x as *const libc::sockaddr_in as *const libc::sockaddr,
-        SockAddr::Unix(ref x) => x as *const libc::sockaddr_un as *const libc::sockaddr,
+        SockAddr::Inet(ref x) => std::ptr::from_ref(x) as *const libc::sockaddr,
+        SockAddr::Unix(ref x) => std::ptr::from_ref(x) as *const libc::sockaddr,
         _ => unimplemented!(),
     };
 
@@ -292,8 +292,8 @@ pub fn autobind_helper(fd: libc::c_int, domain: libc::c_int) -> (SockAddr, libc:
     };
 
     let server_addr_ptr = match server_addr {
-        SockAddr::Inet(ref mut x) => x as *mut libc::sockaddr_in as *mut libc::sockaddr,
-        SockAddr::Unix(ref mut x) => x as *mut libc::sockaddr_un as *mut libc::sockaddr,
+        SockAddr::Inet(ref mut x) => std::ptr::from_mut(x) as *mut libc::sockaddr,
+        SockAddr::Unix(ref mut x) => std::ptr::from_mut(x) as *mut libc::sockaddr,
         _ => unimplemented!(),
     };
 
@@ -313,7 +313,13 @@ pub fn autobind_helper(fd: libc::c_int, domain: libc::c_int) -> (SockAddr, libc:
     // get the assigned address
     {
         let max_len = server_addr_len;
-        let rv = unsafe { libc::getsockname(fd, server_addr_ptr, &mut server_addr_len as *mut _) };
+        let rv = unsafe {
+            libc::getsockname(
+                fd,
+                server_addr_ptr,
+                std::ptr::from_mut(&mut server_addr_len),
+            )
+        };
         assert_eq!(rv, 0);
         assert!(server_addr_len <= max_len);
     }
@@ -333,7 +339,7 @@ pub fn connect_to_peername(fd_client: libc::c_int, fd_peer: libc::c_int) -> libc
         let rv = unsafe {
             libc::getsockname(
                 fd_peer,
-                &mut addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+                std::ptr::from_mut(&mut addr) as *mut libc::sockaddr,
                 &mut addr_len,
             )
         };
@@ -344,7 +350,7 @@ pub fn connect_to_peername(fd_client: libc::c_int, fd_peer: libc::c_int) -> libc
     unsafe {
         libc::connect(
             fd_client,
-            &addr as *const libc::sockaddr_storage as *const libc::sockaddr,
+            std::ptr::from_ref(&addr) as *const libc::sockaddr,
             addr_len,
         )
     }
