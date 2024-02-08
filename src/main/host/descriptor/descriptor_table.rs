@@ -134,13 +134,15 @@ impl DescriptorTable {
         // *using* `self.available_indices` instead.
         self.available_indices.remove(&index.val());
 
-        if let Some(prev) = self.descriptors.insert(index, descriptor) {
+        let prev = self.descriptors.insert(index, descriptor);
+
+        if prev.is_some() {
             trace!("Overwriting index {}", index);
-            Some(prev)
         } else {
             trace!("Setting to unused index {}", index);
-            None
         }
+
+        prev
     }
 
     /// Register a descriptor and return its fd handle. Equivalent to
