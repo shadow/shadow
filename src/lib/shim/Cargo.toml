@@ -30,7 +30,7 @@ static_assertions = "1.1.0"
 va_list = { version = "0.1.4", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.10.1"
+env_logger = "0.11.1"
 test-log = "0.2.14"
 
 [build-dependencies]
