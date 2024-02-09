@@ -18,7 +18,7 @@ bitflags = "2.4"
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513
 bytes = { git = "https://github.com/shadow/bytes", rev = "c48bd4439e7e043300521925524ecdcce7ff6bcc" }
-clap = { version = "4.4.12", features = ["derive", "wrap_help"] }
+clap = { version = "4.5.0", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.3"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
