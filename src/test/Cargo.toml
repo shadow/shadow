@@ -153,6 +153,10 @@ name = "test_exit_after_signal_sched"
 path = "regression/test_exit_after_signal_sched.rs"
 
 [[bin]]
+name = "test_netlink_send_limit"
+path = "netlink/test_send_limit.rs"
+
+[[bin]]
 name = "test_dup"
 path = "dup/test_dup.rs"
 
@@ -213,6 +217,7 @@ anyhow = { version = "1.0.78", features = ["backtrace"] }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features  = ["std"] }
+neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version="0.8.5", features=["small_rng"] }
 rustix = { version = "0.38.28", default-features=false, features=["fs", "mm", "pipe", "time", "thread"]}

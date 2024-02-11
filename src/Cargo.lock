@@ -1572,6 +1572,7 @@ dependencies = [
  "formatting-nostd",
  "libc",
  "linux-api",
+ "neli",
  "nix 0.26.4",
  "once_cell",
  "rand",

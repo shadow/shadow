@@ -9,5 +9,5 @@ hosts:
   node:
     network_node_id: 0
     processes:
-    - path: ./test-send-limit
-      start_time: 1s
+    - path: ../../target/debug/test_netlink_send_limit
+      args: --shadow-passing
