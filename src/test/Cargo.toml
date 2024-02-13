@@ -97,6 +97,10 @@ name = "test_ioctl"
 path = "socket/ioctl/test_ioctl.rs"
 
 [[bin]]
+name = "test_netlink_bind"
+path = "netlink/socket/bind/test_bind.rs"
+
+[[bin]]
 name = "test_random"
 path = "random/test_random.rs"
 

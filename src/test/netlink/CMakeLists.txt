@@ -1,3 +1,5 @@
+add_subdirectory(socket)
+
 add_linux_tests(
     BASENAME netlink-ip-addr
     COMMAND ip addr
