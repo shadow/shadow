@@ -542,6 +542,10 @@ impl InitialState {
         if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
+        // if the bound address is null
+        if addr.is_none() {
+            return Err(Errno::EFAULT.into());
+        }
 
         // get the netlink address
         let Some(addr) = addr.and_then(|x| x.as_netlink()) else {
