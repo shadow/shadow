@@ -1,4 +1,12 @@
+use std::io::Cursor;
 use std::time::Duration;
+
+use neli::consts::nl::{NlmF, NlmFFlags};
+use neli::consts::rtnl::{IfaFFlags, RtAddrFamily, RtScope, Rtm};
+use neli::nl::{NlPayload, Nlmsghdr};
+use neli::rtnl::Ifaddrmsg;
+use neli::types::RtBuffer;
+use neli::ToBytes;
 
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
@@ -313,6 +321,82 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
     })
 }
 
+fn test_netlink_multi_write() -> anyhow::Result<()> {
+    let fd = unsafe {
+        libc::socket(
+            libc::AF_NETLINK,
+            libc::SOCK_RAW | libc::SOCK_NONBLOCK,
+            libc::NETLINK_ROUTE,
+        )
+    };
+    let epollfd = epoll::epoll_create()?;
+
+    let buffer = {
+        let ifaddrmsg = Ifaddrmsg {
+            ifa_family: RtAddrFamily::Unspecified,
+            ifa_prefixlen: 0,
+            ifa_flags: IfaFFlags::empty(),
+            ifa_scope: RtScope::Universe.into(),
+            ifa_index: 0,
+            rtattrs: RtBuffer::new(),
+        };
+        let nlmsg = {
+            let len = None;
+            let nl_type = Rtm::Getaddr;
+            let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
+            let seq = Some(0xfe182ab9); // Random number
+            let pid = None;
+            let payload = NlPayload::Payload(ifaddrmsg);
+            Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
+        };
+
+        let mut buffer = Cursor::new(Vec::new());
+        nlmsg.to_bytes(&mut buffer).unwrap();
+        buffer.into_inner()
+    };
+
+    test_utils::run_and_close_fds(&[epollfd, fd], || {
+        let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
+        epoll::epoll_ctl(epollfd, epoll::EpollOp::EpollCtlAdd, fd, Some(&mut event))?;
+
+        let timeout = Duration::from_millis(100);
+
+        let thread = std::thread::spawn(move || {
+            vec![
+                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+                // The last one is supposed to timeout.
+                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+            ]
+        });
+
+        // Wait for readers to block.
+        std::thread::sleep(timeout / 3);
+
+        // Make the read-end readable.
+        unistd::write(fd, buffer.as_slice())?;
+
+        // Wait again and make the read-end readable again.
+        std::thread::sleep(timeout / 3);
+        unistd::write(fd, buffer.as_slice())?;
+
+        let results = thread.join().unwrap();
+
+        // The first two waits should have received the event
+        for res in &results[..2] {
+            ensure_ord!(res.epoll_res, ==, Ok(1));
+            ensure_ord!(res.duration, <, timeout);
+            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        }
+
+        // The last wait should have timed out with no events received.
+        ensure_ord!(results[2].epoll_res, ==, Ok(0));
+        ensure_ord!(results[2].duration, >=, timeout);
+
+        Ok(())
+    })
+}
+
 fn socket_init(
     init_method: SocketInitMethod,
     sock_type: libc::c_int,
@@ -474,6 +558,12 @@ fn main() -> anyhow::Result<()> {
     tests.push(ShadowTest::new(
         "eventfd-multi-write",
         test_eventfd_multi_write,
+        all_envs.clone(),
+    ));
+    // add the test only for netlink sockets, since it is a one-end socket
+    tests.push(ShadowTest::new(
+        "netlink-multi-write",
+        test_netlink_multi_write,
         all_envs.clone(),
     ));
 

@@ -95,7 +95,9 @@ impl NetlinkSocket {
                 common,
                 protocol_state,
             };
-            CallbackQueue::queue_and_run(|cb_queue| socket.refresh_file_state(cb_queue));
+            CallbackQueue::queue_and_run(|cb_queue| {
+                socket.refresh_file_state(FileSignals::empty(), cb_queue)
+            });
 
             AtomicRefCell::new(socket)
         })
@@ -144,9 +146,9 @@ impl NetlinkSocket {
         self.protocol_state.close(&mut self.common, cb_queue)
     }
 
-    fn refresh_file_state(&mut self, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(&mut self, signals: FileSignals, cb_queue: &mut CallbackQueue) {
         self.protocol_state
-            .refresh_file_state(&mut self.common, cb_queue)
+            .refresh_file_state(&mut self.common, signals, cb_queue)
     }
 
     pub fn shutdown(
@@ -333,7 +335,7 @@ impl NetlinkSocket {
 
     pub fn add_listener(
         &mut self,
-        monitoring: FileState,
+        monitoring_state: FileState,
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
@@ -341,9 +343,12 @@ impl NetlinkSocket {
             + Sync
             + 'static,
     ) -> StateListenHandle {
-        self.common
-            .event_source
-            .add_listener(monitoring, monitoring_signals, filter, notify_fn)
+        self.common.event_source.add_listener(
+            monitoring_state,
+            monitoring_signals,
+            filter,
+            notify_fn,
+        )
     }
 
     pub fn add_legacy_listener(&mut self, ptr: HostTreePointer<c::StatusListener>) {
@@ -401,9 +406,15 @@ impl ProtocolState {
         let buffer_handle = common.buffer.borrow_mut().add_listener(
             BufferState::READABLE,
             BufferSignals::BUFFER_GREW,
-            move |_, _, cb_queue| {
+            move |_, signals, cb_queue| {
                 if let Some(socket) = weak.upgrade() {
-                    socket.borrow_mut().refresh_file_state(cb_queue);
+                    let signals = if signals.contains(BufferSignals::BUFFER_GREW) {
+                        FileSignals::READ_BUFFER_GREW
+                    } else {
+                        FileSignals::empty()
+                    };
+
+                    socket.borrow_mut().refresh_file_state(signals, cb_queue);
                 }
             },
         );
@@ -422,10 +433,21 @@ impl ProtocolState {
         }
     }
 
-    fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut NetlinkSocketCommon,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         match self {
-            Self::Initial(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
-            Self::Closed(x) => x.as_ref().unwrap().refresh_file_state(common, cb_queue),
+            Self::Initial(x) => x
+                .as_ref()
+                .unwrap()
+                .refresh_file_state(common, signals, cb_queue),
+            Self::Closed(x) => x
+                .as_ref()
+                .unwrap()
+                .refresh_file_state(common, signals, cb_queue),
         }
     }
 
@@ -502,7 +524,12 @@ impl InitialState {
         Ok(self.bound_addr)
     }
 
-    fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
+    fn refresh_file_state(
+        &self,
+        common: &mut NetlinkSocketCommon,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let mut new_state = FileState::ACTIVE;
 
         {
@@ -512,7 +539,12 @@ impl InitialState {
             new_state.set(FileState::WRITABLE, common.sent_len < common.send_limit);
         }
 
-        common.copy_state(/* mask= */ FileState::all(), new_state, cb_queue);
+        common.update_state(
+            /* mask= */ FileState::all(),
+            new_state,
+            signals,
+            cb_queue,
+        );
     }
 
     fn close(
@@ -527,7 +559,7 @@ impl InitialState {
             .remove_reader(self.reader_handle, cb_queue);
 
         let new_state = ClosedState {};
-        new_state.refresh_file_state(common, cb_queue);
+        new_state.refresh_file_state(common, FileSignals::empty(), cb_queue);
         (new_state.into(), Ok(()))
     }
 
@@ -608,7 +640,7 @@ impl InitialState {
 
         let rv = common.sendmsg(socket, args.iovs, args.flags, mem, cb_queue)?;
 
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, FileSignals::empty(), cb_queue);
 
         Ok(rv.try_into().unwrap())
     }
@@ -633,7 +665,7 @@ impl InitialState {
         let mut packet_buffer = Vec::new();
         let (_rv, _num_removed_from_buf) =
             common.recvmsg(socket, &mut packet_buffer, flags, mem, cb_queue)?;
-        self.refresh_file_state(common, cb_queue);
+        self.refresh_file_state(common, FileSignals::empty(), cb_queue);
 
         let mut writer = IoVecWriter::new(args.iovs, mem);
 
@@ -918,10 +950,16 @@ impl ClosedState {
         Ok(None)
     }
 
-    fn refresh_file_state(&self, common: &mut NetlinkSocketCommon, cb_queue: &mut CallbackQueue) {
-        common.copy_state(
+    fn refresh_file_state(
+        &self,
+        common: &mut NetlinkSocketCommon,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
+        common.update_state(
             /* mask= */ FileState::all(),
             FileState::CLOSED,
+            signals,
             cb_queue,
         );
     }
@@ -1149,30 +1187,37 @@ impl NetlinkSocketCommon {
         Ok(result?)
     }
 
-    fn copy_state(&mut self, mask: FileState, state: FileState, cb_queue: &mut CallbackQueue) {
+    fn update_state(
+        &mut self,
+        mask: FileState,
+        state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let old_state = self.state;
 
         // remove the masked flags, then copy the masked flags
         self.state.remove(mask);
         self.state.insert(state & mask);
 
-        self.handle_state_change(old_state, cb_queue);
+        self.handle_state_change(old_state, signals, cb_queue);
     }
 
-    fn handle_state_change(&mut self, old_state: FileState, cb_queue: &mut CallbackQueue) {
+    fn handle_state_change(
+        &mut self,
+        old_state: FileState,
+        signals: FileSignals,
+        cb_queue: &mut CallbackQueue,
+    ) {
         let states_changed = self.state ^ old_state;
 
         // if nothing changed
-        if states_changed.is_empty() {
+        if states_changed.is_empty() && signals.is_empty() {
             return;
         }
 
-        self.event_source.notify_listeners(
-            self.state,
-            states_changed,
-            FileSignals::empty(),
-            cb_queue,
-        );
+        self.event_source
+            .notify_listeners(self.state, states_changed, signals, cb_queue);
     }
 }
 
