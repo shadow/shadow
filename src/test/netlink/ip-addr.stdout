@@ -1,0 +1,6 @@
+1: lo: <LOOPBACK,UP> mtu 1500 qlen 1000
+    link/loopback 
+    inet 127.0.0.1/8 brd 127.255.255.255 scope host lo
+2: eth0: <BROADCAST,MULTICAST,UP> mtu 1500 qlen 1000
+    link/ether 
+    inet 11.0.0.1/24 brd 11.0.0.255 scope global eth0

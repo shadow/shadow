@@ -9,6 +9,7 @@ use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::inet::InetSocket;
+use crate::host::descriptor::socket::netlink::{NetlinkFamily, NetlinkSocket, NetlinkSocketType};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, FileStatus, OpenFile};
@@ -100,6 +101,23 @@ impl SyscallHandler {
                 }
                 _ => return Err(Errno::ESOCKTNOSUPPORT.into()),
             },
+            libc::AF_NETLINK => {
+                let socket_type = match NetlinkSocketType::try_from(socket_type) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return Err(Errno::EPROTONOSUPPORT.into());
+                    }
+                };
+                let family = match NetlinkFamily::try_from(protocol) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return Err(Errno::EPROTONOSUPPORT.into());
+                    }
+                };
+                Socket::Netlink(NetlinkSocket::new(file_flags, socket_type, family))
+            }
             _ => return Err(Errno::EAFNOSUPPORT.into()),
         };
 

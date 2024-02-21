@@ -358,6 +358,8 @@ impl SyscallHandler {
             SyscallNum::NR_accept4 => handle!(accept4),
             SyscallNum::NR_bind => handle!(bind),
             SyscallNum::NR_brk => handle!(brk),
+            SyscallNum::NR_capget => handle!(capget),
+            SyscallNum::NR_capset => handle!(capset),
             SyscallNum::NR_clock_getres => handle!(clock_getres),
             SyscallNum::NR_clock_nanosleep => handle!(clock_nanosleep),
             SyscallNum::NR_clone => handle!(clone),

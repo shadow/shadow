@@ -13,6 +13,14 @@ name = "test_clone"
 path = "clone/test_clone.rs"
 
 [[bin]]
+name = "test_capget"
+path = "capabilities/test_capget.rs"
+
+[[bin]]
+name = "test_capset"
+path = "capabilities/test_capset.rs"
+
+[[bin]]
 name = "test_fork"
 path = "clone/test_fork.rs"
 
@@ -89,6 +97,10 @@ name = "test_ioctl"
 path = "socket/ioctl/test_ioctl.rs"
 
 [[bin]]
+name = "test_netlink_bind"
+path = "netlink/socket/bind/test_bind.rs"
+
+[[bin]]
 name = "test_random"
 path = "random/test_random.rs"
 
@@ -143,6 +155,10 @@ path = "regression/test_signal_resched.rs"
 [[bin]]
 name = "test_exit_after_signal_sched"
 path = "regression/test_exit_after_signal_sched.rs"
+
+[[bin]]
+name = "test_netlink_send_limit"
+path = "netlink/test_send_limit.rs"
 
 [[bin]]
 name = "test_dup"
@@ -205,6 +221,7 @@ anyhow = { version = "1.0.78", features = ["backtrace"] }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features  = ["std"] }
+neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version="0.8.5", features=["small_rng"] }
 rustix = { version = "0.38.28", default-features=false, features=["fs", "mm", "pipe", "time", "thread"]}

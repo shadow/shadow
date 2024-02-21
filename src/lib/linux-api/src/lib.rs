@@ -51,6 +51,7 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod capability;
 pub mod epoll;
 pub mod errno;
 pub mod exit;
@@ -66,6 +67,7 @@ pub mod posix_types;
 pub mod prctl;
 pub mod resource;
 pub mod rseq;
+pub mod rtnetlink;
 pub mod sched;
 pub mod signal;
 pub mod syscall;

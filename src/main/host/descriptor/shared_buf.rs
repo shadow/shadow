@@ -78,6 +78,16 @@ impl SharedBuf {
         self.num_writers
     }
 
+    pub fn peek<W: std::io::Write>(&self, bytes: W) -> Result<(usize, usize), std::io::Error> {
+        let (num_copied, num_removed_from_buf) = match self.queue.peek(bytes)? {
+            Some((num_copied, num_removed_from_buf, _chunk_type)) => {
+                (num_copied, num_removed_from_buf)
+            }
+            None => (0, 0),
+        };
+        Ok((num_copied, num_removed_from_buf))
+    }
+
     pub fn read<W: std::io::Write>(
         &mut self,
         bytes: W,
