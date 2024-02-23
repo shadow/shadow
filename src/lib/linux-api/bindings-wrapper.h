@@ -10,6 +10,7 @@
 #include <linux/in.h>
 #include <linux/limits.h>
 #include <linux/mman.h>
+#include <linux/netlink.h>
 #include <linux/prctl.h>
 #include <linux/resource.h>
 #include <linux/rseq.h>

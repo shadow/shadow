@@ -62,6 +62,7 @@ pub mod ioctls;
 pub mod ldt;
 pub mod limits;
 pub mod mman;
+pub mod netlink;
 pub mod poll;
 pub mod posix_types;
 pub mod prctl;
