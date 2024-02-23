@@ -22,7 +22,7 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
                   /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int)]
     pub fn socket(
         ctx: &mut SyscallContext,
@@ -861,7 +861,7 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
                   /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int, /* sv */ [std::ffi::c_int; 2])]
     pub fn socketpair(
         ctx: &mut SyscallContext,

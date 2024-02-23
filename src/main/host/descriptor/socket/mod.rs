@@ -231,7 +231,7 @@ impl SocketRef<'_> {
     }
 
     enum_passthrough!(self, (), Unix, Inet, Netlink;
-        pub fn address_family(&self) -> nix::sys::socket::AddressFamily
+        pub fn address_family(&self) -> linux_api::socket::AddressFamily
     );
 }
 
@@ -308,7 +308,7 @@ impl SocketRefMut<'_> {
     }
 
     enum_passthrough!(self, (), Unix, Inet, Netlink;
-        pub fn address_family(&self) -> nix::sys::socket::AddressFamily
+        pub fn address_family(&self) -> linux_api::socket::AddressFamily
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager, cb_queue), Unix, Inet, Netlink;

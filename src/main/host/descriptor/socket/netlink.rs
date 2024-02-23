@@ -138,8 +138,8 @@ impl NetlinkSocket {
         Err(Errno::ENOSYS.into())
     }
 
-    pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        nix::sys::socket::AddressFamily::Netlink
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_NETLINK
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {

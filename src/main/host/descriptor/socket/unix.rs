@@ -114,8 +114,8 @@ impl UnixSocket {
         ))
     }
 
-    pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        nix::sys::socket::AddressFamily::Unix
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_UNIX
     }
 
     fn recv_buffer(&self) -> &Arc<AtomicRefCell<SharedBuf>> {

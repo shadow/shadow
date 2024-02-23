@@ -196,10 +196,10 @@ simple_display_impl!(u8, u16, u32, u64, usize);
 
 deref_pointer_impl!(i8, i16, i32, i64, isize);
 deref_pointer_impl!(u8, u16, u32, u64, usize);
+deref_pointer_impl!(linux_api::sched::clone_args);
 deref_pointer_impl!(linux_api::time::timespec);
 deref_pointer_impl!(linux_api::time::kernel_timespec);
 deref_pointer_impl!(linux_api::time::kernel_old_timeval);
-deref_pointer_impl!(linux_api::sched::clone_args);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
@@ -215,10 +215,10 @@ simple_debug_impl!(linux_api::time::ITimerId);
 simple_debug_impl!(linux_api::time::ClockId);
 simple_debug_impl!(nix::sys::stat::Mode);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
-simple_debug_impl!(nix::sys::socket::AddressFamily);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 
 simple_display_impl!(linux_api::prctl::PrctlOp);
+simple_display_impl!(linux_api::socket::AddressFamily);
 
 bitflags_impl!(linux_api::fcntl::OFlag);
 bitflags_impl!(linux_api::mman::ProtFlags);

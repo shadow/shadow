@@ -220,8 +220,8 @@ impl LegacyTcpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        nix::sys::socket::AddressFamily::Inet
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_INET
     }
 
     pub fn close(&mut self, _cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {

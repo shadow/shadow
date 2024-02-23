@@ -5,7 +5,7 @@ use atomic_refcell::AtomicRefCell;
 use bytes::BytesMut;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
+use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -318,8 +318,8 @@ impl TcpSocket {
         // connection is successfully established.
     }
 
-    pub fn address_family(&self) -> AddressFamily {
-        AddressFamily::Inet
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_INET
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
