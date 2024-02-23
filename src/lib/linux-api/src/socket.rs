@@ -1,3 +1,5 @@
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+
 use crate::{bindings, const_conversions};
 
 #[allow(non_camel_case_types)]
@@ -157,4 +159,15 @@ impl From<sa_family_t> for AddressFamily {
     fn from(val: sa_family_t) -> Self {
         Self::new(val)
     }
+}
+
+// it's very unlikely that another shutdown option will be added to linux, so it's fine to use an
+// enum here
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(u32)]
+#[allow(non_camel_case_types)]
+pub enum Shutdown {
+    SHUT_RD = bindings::LINUX_sock_shutdown_cmd_SHUT_RD,
+    SHUT_WR = bindings::LINUX_sock_shutdown_cmd_SHUT_WR,
+    SHUT_RDWR = bindings::LINUX_sock_shutdown_cmd_SHUT_RDWR,
 }

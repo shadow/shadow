@@ -106,3 +106,11 @@
 #define AF_SMC 43
 #define AF_XDP 44
 #define AF_MCTP 45
+
+// socket shutdown commands aren't exposed in kernel headers.
+// copied from kernel source linux/net.h
+enum sock_shutdown_cmd {
+    SHUT_RD,
+    SHUT_WR,
+    SHUT_RDWR,
+};

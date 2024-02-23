@@ -5827,3 +5827,7 @@ fn bindgen_test_layout_pollfd() {
         )
     );
 }
+pub const LINUX_sock_shutdown_cmd_SHUT_RD: linux_sock_shutdown_cmd = 0;
+pub const LINUX_sock_shutdown_cmd_SHUT_WR: linux_sock_shutdown_cmd = 1;
+pub const LINUX_sock_shutdown_cmd_SHUT_RDWR: linux_sock_shutdown_cmd = 2;
+pub type linux_sock_shutdown_cmd = ::core::ffi::c_uint;
