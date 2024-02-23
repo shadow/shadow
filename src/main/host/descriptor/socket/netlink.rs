@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
+use linux_api::netlink::nlmsghdr;
 use linux_api::rtnetlink::{RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR, RTM_GETADDR, RTM_GETLINK};
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
 use neli::consts::rtnl::{
@@ -673,13 +674,13 @@ impl InitialState {
         let src_addr = SockaddrStorage::from_netlink(&NetlinkAddr::new(0, 0));
 
         let buffer = (|| {
-            // TODO: Replace 16 with the size of nlmsghdr
-            if packet_buffer.len() < 16 {
+            if packet_buffer.len() < std::mem::size_of::<nlmsghdr>() {
                 log::warn!("The processed packet is too short");
                 return self.handle_error(&packet_buffer[..]);
             }
-            // TODO: Replace 4..6 with `memoffset::span_of!` of the `nlmsg_type` field
-            let nlmsg_type = u16::from_le_bytes((&packet_buffer[4..6]).try_into().unwrap());
+
+            let nlmsg_type = &packet_buffer[memoffset::span_of!(nlmsghdr, nlmsg_type)];
+            let nlmsg_type = u16::from_le_bytes(nlmsg_type.try_into().unwrap());
 
             match nlmsg_type {
                 RTM_GETLINK => self.handle_ifinfomsg(common, &packet_buffer[..]),
@@ -725,8 +726,7 @@ impl InitialState {
 
     fn handle_error(&self, bytes: &[u8]) -> Vec<u8> {
         // If we can't get the pid, set it to zero
-        // TODO: Replace 8..12 with `memoffset::span_of!` of the `nlmsg_seq` field
-        let nlmsg_seq = match bytes.get(8..12) {
+        let nlmsg_seq = match bytes.get(memoffset::span_of!(nlmsghdr, nlmsg_seq)) {
             Some(x) => u32::from_le_bytes(x.try_into().unwrap()),
             None => 0,
         };
