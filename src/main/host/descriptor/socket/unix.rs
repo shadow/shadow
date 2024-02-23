@@ -6,7 +6,8 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::sys::socket::{MsgFlags, Shutdown};
+use linux_api::socket::Shutdown;
+use nix::sys::socket::MsgFlags;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;

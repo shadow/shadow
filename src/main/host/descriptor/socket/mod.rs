@@ -3,8 +3,8 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
 use linux_api::ioctls::IoctlRequest;
+use linux_api::socket::Shutdown;
 use netlink::NetlinkSocket;
-use nix::sys::socket::Shutdown;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use unix::UnixSocket;
 

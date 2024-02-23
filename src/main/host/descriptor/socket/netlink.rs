@@ -7,6 +7,7 @@ use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use linux_api::netlink::nlmsghdr;
 use linux_api::rtnetlink::{RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR, RTM_GETADDR, RTM_GETLINK};
+use linux_api::socket::Shutdown;
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
 use neli::consts::rtnl::{
     Arphrd, Ifa, IfaF, IfaFFlags, Iff, IffFlags, Ifla, RtAddrFamily, RtScope, Rtm,
@@ -15,7 +16,7 @@ use neli::nl::{NlPayload, Nlmsghdr};
 use neli::rtnl::{Ifaddrmsg, Ifinfomsg, Rtattr};
 use neli::types::{Buffer, RtBuffer};
 use neli::{FromBytes, ToBytes};
-use nix::sys::socket::{MsgFlags, NetlinkAddr, Shutdown};
+use nix::sys::socket::{MsgFlags, NetlinkAddr};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
