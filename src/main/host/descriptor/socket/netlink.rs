@@ -680,7 +680,7 @@ impl InitialState {
             }
 
             let nlmsg_type = &packet_buffer[memoffset::span_of!(nlmsghdr, nlmsg_type)];
-            let nlmsg_type = u16::from_le_bytes(nlmsg_type.try_into().unwrap());
+            let nlmsg_type = u16::from_ne_bytes(nlmsg_type.try_into().unwrap());
 
             match nlmsg_type {
                 RTM_GETLINK => self.handle_ifinfomsg(common, &packet_buffer[..]),
@@ -727,7 +727,7 @@ impl InitialState {
     fn handle_error(&self, bytes: &[u8]) -> Vec<u8> {
         // If we can't get the pid, set it to zero
         let nlmsg_seq = match bytes.get(memoffset::span_of!(nlmsghdr, nlmsg_seq)) {
-            Some(x) => u32::from_le_bytes(x.try_into().unwrap()),
+            Some(x) => u32::from_ne_bytes(x.try_into().unwrap()),
             None => 0,
         };
 
