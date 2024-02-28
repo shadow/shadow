@@ -588,6 +588,72 @@ pub const LINUX_MAP_HUGE_512MB: u32 = 1946157056;
 pub const LINUX_MAP_HUGE_1GB: u32 = 2013265920;
 pub const LINUX_MAP_HUGE_2GB: u32 = 2080374784;
 pub const LINUX_MAP_HUGE_16GB: u32 = 2281701376;
+pub const LINUX_NETLINK_ROUTE: u32 = 0;
+pub const LINUX_NETLINK_UNUSED: u32 = 1;
+pub const LINUX_NETLINK_USERSOCK: u32 = 2;
+pub const LINUX_NETLINK_FIREWALL: u32 = 3;
+pub const LINUX_NETLINK_SOCK_DIAG: u32 = 4;
+pub const LINUX_NETLINK_NFLOG: u32 = 5;
+pub const LINUX_NETLINK_XFRM: u32 = 6;
+pub const LINUX_NETLINK_SELINUX: u32 = 7;
+pub const LINUX_NETLINK_ISCSI: u32 = 8;
+pub const LINUX_NETLINK_AUDIT: u32 = 9;
+pub const LINUX_NETLINK_FIB_LOOKUP: u32 = 10;
+pub const LINUX_NETLINK_CONNECTOR: u32 = 11;
+pub const LINUX_NETLINK_NETFILTER: u32 = 12;
+pub const LINUX_NETLINK_IP6_FW: u32 = 13;
+pub const LINUX_NETLINK_DNRTMSG: u32 = 14;
+pub const LINUX_NETLINK_KOBJECT_UEVENT: u32 = 15;
+pub const LINUX_NETLINK_GENERIC: u32 = 16;
+pub const LINUX_NETLINK_SCSITRANSPORT: u32 = 18;
+pub const LINUX_NETLINK_ECRYPTFS: u32 = 19;
+pub const LINUX_NETLINK_RDMA: u32 = 20;
+pub const LINUX_NETLINK_CRYPTO: u32 = 21;
+pub const LINUX_NETLINK_SMC: u32 = 22;
+pub const LINUX_NETLINK_INET_DIAG: u32 = 4;
+pub const LINUX_MAX_LINKS: u32 = 32;
+pub const LINUX_NLM_F_REQUEST: u32 = 1;
+pub const LINUX_NLM_F_MULTI: u32 = 2;
+pub const LINUX_NLM_F_ACK: u32 = 4;
+pub const LINUX_NLM_F_ECHO: u32 = 8;
+pub const LINUX_NLM_F_DUMP_INTR: u32 = 16;
+pub const LINUX_NLM_F_DUMP_FILTERED: u32 = 32;
+pub const LINUX_NLM_F_ROOT: u32 = 256;
+pub const LINUX_NLM_F_MATCH: u32 = 512;
+pub const LINUX_NLM_F_ATOMIC: u32 = 1024;
+pub const LINUX_NLM_F_DUMP: u32 = 768;
+pub const LINUX_NLM_F_REPLACE: u32 = 256;
+pub const LINUX_NLM_F_EXCL: u32 = 512;
+pub const LINUX_NLM_F_CREATE: u32 = 1024;
+pub const LINUX_NLM_F_APPEND: u32 = 2048;
+pub const LINUX_NLM_F_NONREC: u32 = 256;
+pub const LINUX_NLM_F_BULK: u32 = 512;
+pub const LINUX_NLM_F_CAPPED: u32 = 256;
+pub const LINUX_NLM_F_ACK_TLVS: u32 = 512;
+pub const LINUX_NLMSG_ALIGNTO: u32 = 4;
+pub const LINUX_NLMSG_NOOP: u32 = 1;
+pub const LINUX_NLMSG_ERROR: u32 = 2;
+pub const LINUX_NLMSG_DONE: u32 = 3;
+pub const LINUX_NLMSG_OVERRUN: u32 = 4;
+pub const LINUX_NLMSG_MIN_TYPE: u32 = 16;
+pub const LINUX_NETLINK_ADD_MEMBERSHIP: u32 = 1;
+pub const LINUX_NETLINK_DROP_MEMBERSHIP: u32 = 2;
+pub const LINUX_NETLINK_PKTINFO: u32 = 3;
+pub const LINUX_NETLINK_BROADCAST_ERROR: u32 = 4;
+pub const LINUX_NETLINK_NO_ENOBUFS: u32 = 5;
+pub const LINUX_NETLINK_RX_RING: u32 = 6;
+pub const LINUX_NETLINK_TX_RING: u32 = 7;
+pub const LINUX_NETLINK_LISTEN_ALL_NSID: u32 = 8;
+pub const LINUX_NETLINK_LIST_MEMBERSHIPS: u32 = 9;
+pub const LINUX_NETLINK_CAP_ACK: u32 = 10;
+pub const LINUX_NETLINK_EXT_ACK: u32 = 11;
+pub const LINUX_NETLINK_GET_STRICT_CHK: u32 = 12;
+pub const LINUX_NL_MMAP_MSG_ALIGNMENT: u32 = 4;
+pub const LINUX_NET_MAJOR: u32 = 36;
+pub const LINUX_NLA_F_NESTED: u32 = 32768;
+pub const LINUX_NLA_F_NET_BYTEORDER: u32 = 16384;
+pub const LINUX_NLA_TYPE_MASK: i32 = -49153;
+pub const LINUX_NLA_ALIGNTO: u32 = 4;
 pub const LINUX_PR_SET_PDEATHSIG: u32 = 1;
 pub const LINUX_PR_GET_PDEATHSIG: u32 = 2;
 pub const LINUX_PR_GET_DUMPABLE: u32 = 3;
@@ -787,72 +853,6 @@ pub const LINUX_RLIMIT_RTPRIO: u32 = 14;
 pub const LINUX_RLIMIT_RTTIME: u32 = 15;
 pub const LINUX_RLIM_NLIMITS: u32 = 16;
 pub const LINUX_RLIM_INFINITY: i32 = -1;
-pub const LINUX_NETLINK_ROUTE: u32 = 0;
-pub const LINUX_NETLINK_UNUSED: u32 = 1;
-pub const LINUX_NETLINK_USERSOCK: u32 = 2;
-pub const LINUX_NETLINK_FIREWALL: u32 = 3;
-pub const LINUX_NETLINK_SOCK_DIAG: u32 = 4;
-pub const LINUX_NETLINK_NFLOG: u32 = 5;
-pub const LINUX_NETLINK_XFRM: u32 = 6;
-pub const LINUX_NETLINK_SELINUX: u32 = 7;
-pub const LINUX_NETLINK_ISCSI: u32 = 8;
-pub const LINUX_NETLINK_AUDIT: u32 = 9;
-pub const LINUX_NETLINK_FIB_LOOKUP: u32 = 10;
-pub const LINUX_NETLINK_CONNECTOR: u32 = 11;
-pub const LINUX_NETLINK_NETFILTER: u32 = 12;
-pub const LINUX_NETLINK_IP6_FW: u32 = 13;
-pub const LINUX_NETLINK_DNRTMSG: u32 = 14;
-pub const LINUX_NETLINK_KOBJECT_UEVENT: u32 = 15;
-pub const LINUX_NETLINK_GENERIC: u32 = 16;
-pub const LINUX_NETLINK_SCSITRANSPORT: u32 = 18;
-pub const LINUX_NETLINK_ECRYPTFS: u32 = 19;
-pub const LINUX_NETLINK_RDMA: u32 = 20;
-pub const LINUX_NETLINK_CRYPTO: u32 = 21;
-pub const LINUX_NETLINK_SMC: u32 = 22;
-pub const LINUX_NETLINK_INET_DIAG: u32 = 4;
-pub const LINUX_MAX_LINKS: u32 = 32;
-pub const LINUX_NLM_F_REQUEST: u32 = 1;
-pub const LINUX_NLM_F_MULTI: u32 = 2;
-pub const LINUX_NLM_F_ACK: u32 = 4;
-pub const LINUX_NLM_F_ECHO: u32 = 8;
-pub const LINUX_NLM_F_DUMP_INTR: u32 = 16;
-pub const LINUX_NLM_F_DUMP_FILTERED: u32 = 32;
-pub const LINUX_NLM_F_ROOT: u32 = 256;
-pub const LINUX_NLM_F_MATCH: u32 = 512;
-pub const LINUX_NLM_F_ATOMIC: u32 = 1024;
-pub const LINUX_NLM_F_DUMP: u32 = 768;
-pub const LINUX_NLM_F_REPLACE: u32 = 256;
-pub const LINUX_NLM_F_EXCL: u32 = 512;
-pub const LINUX_NLM_F_CREATE: u32 = 1024;
-pub const LINUX_NLM_F_APPEND: u32 = 2048;
-pub const LINUX_NLM_F_NONREC: u32 = 256;
-pub const LINUX_NLM_F_BULK: u32 = 512;
-pub const LINUX_NLM_F_CAPPED: u32 = 256;
-pub const LINUX_NLM_F_ACK_TLVS: u32 = 512;
-pub const LINUX_NLMSG_ALIGNTO: u32 = 4;
-pub const LINUX_NLMSG_NOOP: u32 = 1;
-pub const LINUX_NLMSG_ERROR: u32 = 2;
-pub const LINUX_NLMSG_DONE: u32 = 3;
-pub const LINUX_NLMSG_OVERRUN: u32 = 4;
-pub const LINUX_NLMSG_MIN_TYPE: u32 = 16;
-pub const LINUX_NETLINK_ADD_MEMBERSHIP: u32 = 1;
-pub const LINUX_NETLINK_DROP_MEMBERSHIP: u32 = 2;
-pub const LINUX_NETLINK_PKTINFO: u32 = 3;
-pub const LINUX_NETLINK_BROADCAST_ERROR: u32 = 4;
-pub const LINUX_NETLINK_NO_ENOBUFS: u32 = 5;
-pub const LINUX_NETLINK_RX_RING: u32 = 6;
-pub const LINUX_NETLINK_TX_RING: u32 = 7;
-pub const LINUX_NETLINK_LISTEN_ALL_NSID: u32 = 8;
-pub const LINUX_NETLINK_LIST_MEMBERSHIPS: u32 = 9;
-pub const LINUX_NETLINK_CAP_ACK: u32 = 10;
-pub const LINUX_NETLINK_EXT_ACK: u32 = 11;
-pub const LINUX_NETLINK_GET_STRICT_CHK: u32 = 12;
-pub const LINUX_NL_MMAP_MSG_ALIGNMENT: u32 = 4;
-pub const LINUX_NET_MAJOR: u32 = 36;
-pub const LINUX_NLA_F_NESTED: u32 = 32768;
-pub const LINUX_NLA_F_NET_BYTEORDER: u32 = 16384;
-pub const LINUX_NLA_TYPE_MASK: i32 = -49153;
-pub const LINUX_NLA_ALIGNTO: u32 = 4;
 pub const LINUX_MACVLAN_FLAG_NOPROMISC: u32 = 1;
 pub const LINUX_MACVLAN_FLAG_NODST: u32 = 2;
 pub const LINUX_IPVLAN_F_PRIVATE: u32 = 1;
@@ -1775,6 +1775,54 @@ pub const LINUX_EPOLLET: u32 = 2147483648;
 pub const LINUX_SUID_DUMP_DISABLE: u32 = 0;
 pub const LINUX_SUID_DUMP_USER: u32 = 1;
 pub const LINUX_SUID_DUMP_ROOT: u32 = 2;
+pub const LINUX_AF_UNSPEC: u32 = 0;
+pub const LINUX_AF_UNIX: u32 = 1;
+pub const LINUX_AF_LOCAL: u32 = 1;
+pub const LINUX_AF_INET: u32 = 2;
+pub const LINUX_AF_AX25: u32 = 3;
+pub const LINUX_AF_IPX: u32 = 4;
+pub const LINUX_AF_APPLETALK: u32 = 5;
+pub const LINUX_AF_NETROM: u32 = 6;
+pub const LINUX_AF_BRIDGE: u32 = 7;
+pub const LINUX_AF_ATMPVC: u32 = 8;
+pub const LINUX_AF_X25: u32 = 9;
+pub const LINUX_AF_INET6: u32 = 10;
+pub const LINUX_AF_ROSE: u32 = 11;
+pub const LINUX_AF_DECnet: u32 = 12;
+pub const LINUX_AF_NETBEUI: u32 = 13;
+pub const LINUX_AF_SECURITY: u32 = 14;
+pub const LINUX_AF_KEY: u32 = 15;
+pub const LINUX_AF_NETLINK: u32 = 16;
+pub const LINUX_AF_ROUTE: u32 = 16;
+pub const LINUX_AF_PACKET: u32 = 17;
+pub const LINUX_AF_ASH: u32 = 18;
+pub const LINUX_AF_ECONET: u32 = 19;
+pub const LINUX_AF_ATMSVC: u32 = 20;
+pub const LINUX_AF_RDS: u32 = 21;
+pub const LINUX_AF_SNA: u32 = 22;
+pub const LINUX_AF_IRDA: u32 = 23;
+pub const LINUX_AF_PPPOX: u32 = 24;
+pub const LINUX_AF_WANPIPE: u32 = 25;
+pub const LINUX_AF_LLC: u32 = 26;
+pub const LINUX_AF_IB: u32 = 27;
+pub const LINUX_AF_MPLS: u32 = 28;
+pub const LINUX_AF_CAN: u32 = 29;
+pub const LINUX_AF_TIPC: u32 = 30;
+pub const LINUX_AF_BLUETOOTH: u32 = 31;
+pub const LINUX_AF_IUCV: u32 = 32;
+pub const LINUX_AF_RXRPC: u32 = 33;
+pub const LINUX_AF_ISDN: u32 = 34;
+pub const LINUX_AF_PHONET: u32 = 35;
+pub const LINUX_AF_IEEE802154: u32 = 36;
+pub const LINUX_AF_CAIF: u32 = 37;
+pub const LINUX_AF_ALG: u32 = 38;
+pub const LINUX_AF_NFC: u32 = 39;
+pub const LINUX_AF_VSOCK: u32 = 40;
+pub const LINUX_AF_KCM: u32 = 41;
+pub const LINUX_AF_QIPCRTR: u32 = 42;
+pub const LINUX_AF_SMC: u32 = 43;
+pub const LINUX_AF_XDP: u32 = 44;
+pub const LINUX_AF_MCTP: u32 = 45;
 pub type linux___u16 = ::core::ffi::c_ushort;
 pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___u64 = ::core::ffi::c_ulonglong;
@@ -2272,6 +2320,84 @@ fn bindgen_test_layout_sockaddr_in() {
         )
     );
 }
+#[doc = " struct linux_nlmsghdr - fixed format metadata header of Netlink messages\n @nlmsg_len:   Length of message including header\n @nlmsg_type:  Message content type\n @nlmsg_flags: Additional flags\n @nlmsg_seq:   Sequence number\n @nlmsg_pid:   Sending process port ID"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_nlmsghdr {
+    pub nlmsg_len: linux___u32,
+    pub nlmsg_type: linux___u16,
+    pub nlmsg_flags: linux___u16,
+    pub nlmsg_seq: linux___u32,
+    pub nlmsg_pid: linux___u32,
+}
+#[test]
+fn bindgen_test_layout_nlmsghdr() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_nlmsghdr> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_nlmsghdr>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_nlmsghdr))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_nlmsghdr>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_nlmsghdr))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nlmsg_len) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_nlmsghdr),
+            "::",
+            stringify!(nlmsg_len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nlmsg_type) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_nlmsghdr),
+            "::",
+            stringify!(nlmsg_type)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nlmsg_flags) as usize - ptr as usize },
+        6usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_nlmsghdr),
+            "::",
+            stringify!(nlmsg_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nlmsg_seq) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_nlmsghdr),
+            "::",
+            stringify!(nlmsg_seq)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).nlmsg_pid) as usize - ptr as usize },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_nlmsghdr),
+            "::",
+            stringify!(nlmsg_pid)
+        )
+    );
+}
+pub const LINUX_NETLINK_UNCONNECTED: linux__bindgen_ty_2 = 0;
+pub const LINUX_NETLINK_CONNECTED: linux__bindgen_ty_2 = 1;
+pub type linux__bindgen_ty_2 = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux___kernel_timespec {
@@ -2861,9 +2987,6 @@ fn bindgen_test_layout_rseq() {
         )
     );
 }
-pub const LINUX_NETLINK_UNCONNECTED: linux__bindgen_ty_2 = 0;
-pub const LINUX_NETLINK_CONNECTED: linux__bindgen_ty_2 = 1;
-pub type linux__bindgen_ty_2 = ::core::ffi::c_uint;
 pub const LINUX_IFLA_UNSPEC: linux__bindgen_ty_3 = 0;
 pub const LINUX_IFLA_ADDRESS: linux__bindgen_ty_3 = 1;
 pub const LINUX_IFLA_BROADCAST: linux__bindgen_ty_3 = 2;
@@ -5704,3 +5827,7 @@ fn bindgen_test_layout_pollfd() {
         )
     );
 }
+pub const LINUX_sock_shutdown_cmd_SHUT_RD: linux_sock_shutdown_cmd = 0;
+pub const LINUX_sock_shutdown_cmd_SHUT_WR: linux_sock_shutdown_cmd = 1;
+pub const LINUX_sock_shutdown_cmd_SHUT_RDWR: linux_sock_shutdown_cmd = 2;
+pub type linux_sock_shutdown_cmd = ::core::ffi::c_uint;

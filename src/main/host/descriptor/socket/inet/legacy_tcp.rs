@@ -5,7 +5,8 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::sys::socket::{MsgFlags, Shutdown, SockaddrIn};
+use linux_api::socket::Shutdown;
+use nix::sys::socket::{MsgFlags, SockaddrIn};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -220,8 +221,8 @@ impl LegacyTcpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn address_family(&self) -> nix::sys::socket::AddressFamily {
-        nix::sys::socket::AddressFamily::Inet
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_INET
     }
 
     pub fn close(&mut self, _cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
@@ -945,9 +946,9 @@ impl LegacyTcpSocket {
         _cb_queue: &mut CallbackQueue,
     ) -> Result<(), SyscallError> {
         let how = match how {
-            Shutdown::Read => libc::SHUT_RD,
-            Shutdown::Write => libc::SHUT_WR,
-            Shutdown::Both => libc::SHUT_RDWR,
+            Shutdown::SHUT_RD => libc::SHUT_RD,
+            Shutdown::SHUT_WR => libc::SHUT_WR,
+            Shutdown::SHUT_RDWR => libc::SHUT_RDWR,
         };
 
         let errcode = Worker::with_active_host(|host| unsafe {

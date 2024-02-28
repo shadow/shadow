@@ -3,8 +3,8 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
 use linux_api::ioctls::IoctlRequest;
+use linux_api::socket::Shutdown;
 use netlink::NetlinkSocket;
-use nix::sys::socket::Shutdown;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use unix::UnixSocket;
 
@@ -231,7 +231,7 @@ impl SocketRef<'_> {
     }
 
     enum_passthrough!(self, (), Unix, Inet, Netlink;
-        pub fn address_family(&self) -> nix::sys::socket::AddressFamily
+        pub fn address_family(&self) -> linux_api::socket::AddressFamily
     );
 }
 
@@ -308,7 +308,7 @@ impl SocketRefMut<'_> {
     }
 
     enum_passthrough!(self, (), Unix, Inet, Netlink;
-        pub fn address_family(&self) -> nix::sys::socket::AddressFamily
+        pub fn address_family(&self) -> linux_api::socket::AddressFamily
     );
 
     enum_passthrough!(self, (level, optname, optval_ptr, optlen, memory_manager, cb_queue), Unix, Inet, Netlink;

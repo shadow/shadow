@@ -7,7 +7,8 @@ use atomic_refcell::AtomicRefCell;
 use bytes::{Bytes, BytesMut};
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
+use linux_api::socket::Shutdown;
+use nix::sys::socket::{MsgFlags, SockaddrIn};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -221,8 +222,8 @@ impl UdpSocket {
         Ok(Some(self.peer_addr.ok_or(Errno::ENOTCONN)?.into()))
     }
 
-    pub fn address_family(&self) -> AddressFamily {
-        AddressFamily::Inet
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_INET
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
@@ -773,12 +774,12 @@ impl UdpSocket {
             return Err(Errno::ENOTCONN.into());
         }
 
-        if how == Shutdown::Write || how == Shutdown::Both {
+        if how == Shutdown::SHUT_WR || how == Shutdown::SHUT_RDWR {
             // writing has been shut down
             self.shutdown_status.insert(ShutdownFlags::WRITE)
         }
 
-        if how == Shutdown::Read || how == Shutdown::Both {
+        if how == Shutdown::SHUT_RD || how == Shutdown::SHUT_RDWR {
             // reading has been shut down
             self.shutdown_status.insert(ShutdownFlags::READ)
         }

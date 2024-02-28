@@ -444,10 +444,10 @@ impl TryFrom<SysCallReg> for nix::sys::eventfd::EfdFlags {
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::socket::AddressFamily {
+impl TryFrom<SysCallReg> for linux_api::socket::AddressFamily {
     type Error = ();
     fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
-        Self::from_i32(reg.into()).ok_or(())
+        Ok(u16::try_from(reg).or(Err(()))?.into())
     }
 }
 

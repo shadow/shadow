@@ -3,7 +3,7 @@ use std::borrow::BorrowMut;
 use std::ffi::CStr;
 use std::mem::MaybeUninit;
 
-use nix::sys::socket::AddressFamily;
+use linux_api::socket::AddressFamily;
 use nix::sys::socket::SockaddrLike;
 use static_assertions::{assert_eq_align, assert_eq_size};
 
@@ -78,16 +78,15 @@ impl SockaddrStorage {
     }
 
     /// Get the socket protocol family. Will return `None` if the socket address length is too
-    /// short, or if the family value does not correspond to a valid/known family.
+    /// short.
     pub fn family(&self) -> Option<AddressFamily> {
         if (self.len as usize) < memoffset::span_of!(libc::sockaddr_storage, ss_family).end {
             return None;
         }
 
         // SAFETY: we don't know what bytes of the address have initialized/uninitialized memory,
-        // but we should be guarenteed the the `ss_family` field is initialized for any socket type.
-        let family = unsafe { self.addr.storage }.ss_family;
-        AddressFamily::from_i32(family.into())
+        // but we should be guarenteed that the `ss_family` field is initialized for any socket type.
+        Some(AddressFamily::from(unsafe { self.addr.storage }.ss_family))
     }
 
     /// If the socket address represents a valid ipv4 socket address (correct family and length),
@@ -96,7 +95,7 @@ impl SockaddrStorage {
         if (self.len as usize) < std::mem::size_of::<libc::sockaddr_in>() {
             return None;
         }
-        if self.family() != Some(AddressFamily::Inet) {
+        if self.family() != Some(AddressFamily::AF_INET) {
             return None;
         }
 
@@ -126,7 +125,7 @@ impl SockaddrStorage {
         if (self.len as usize) < std::mem::size_of::<libc::sockaddr_in6>() {
             return None;
         }
-        if self.family() != Some(AddressFamily::Inet6) {
+        if self.family() != Some(AddressFamily::AF_INET6) {
             return None;
         }
 
@@ -153,7 +152,7 @@ impl SockaddrStorage {
     /// If the socket address represents a valid unix socket address (correct family and length),
     /// returns the unix socket address.
     pub fn as_unix(&self) -> Option<SockaddrUnix<&libc::sockaddr_un>> {
-        if self.family() != Some(AddressFamily::Unix) {
+        if self.family() != Some(AddressFamily::AF_UNIX) {
             return None;
         }
 
@@ -173,7 +172,7 @@ impl SockaddrStorage {
         if (self.len as usize) < std::mem::size_of::<libc::sockaddr_nl>() {
             return None;
         }
-        if self.family() != Some(AddressFamily::Netlink) {
+        if self.family() != Some(AddressFamily::AF_NETLINK) {
             return None;
         }
 
@@ -568,7 +567,7 @@ mod tests {
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
 
-        assert_eq!(addr.family(), Some(AddressFamily::Inet));
+        assert_eq!(addr.family(), Some(AddressFamily::AF_INET));
         assert!(addr.as_inet().is_some());
         assert!(addr.as_inet6().is_none());
         assert!(addr.as_unix().is_none());
@@ -589,7 +588,7 @@ mod tests {
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
 
-        assert_eq!(addr.family(), Some(AddressFamily::Unix));
+        assert_eq!(addr.family(), Some(AddressFamily::AF_UNIX));
         assert!(addr.as_unix().is_some());
         assert!(addr.as_inet().is_none());
         assert!(addr.as_inet6().is_none());
@@ -610,7 +609,7 @@ mod tests {
 
         let addr = unsafe { SockaddrStorage::from_ptr(ptr, len) }.unwrap();
 
-        assert_eq!(addr.family(), Some(AddressFamily::Netlink));
+        assert_eq!(addr.family(), Some(AddressFamily::AF_NETLINK));
         assert!(addr.as_netlink().is_some());
         assert!(addr.as_inet().is_none());
         assert!(addr.as_inet6().is_none());

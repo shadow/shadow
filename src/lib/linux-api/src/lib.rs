@@ -62,6 +62,7 @@ pub mod ioctls;
 pub mod ldt;
 pub mod limits;
 pub mod mman;
+pub mod netlink;
 pub mod poll;
 pub mod posix_types;
 pub mod prctl;
@@ -70,6 +71,7 @@ pub mod rseq;
 pub mod rtnetlink;
 pub mod sched;
 pub mod signal;
+pub mod socket;
 pub mod syscall;
 pub mod sysinfo;
 pub mod time;
@@ -105,5 +107,11 @@ mod const_conversions {
 
     pub const fn i32_from_u32_allowing_wraparound(val: u32) -> i32 {
         val as i32
+    }
+
+    pub const fn u16_from_u32(val: u32) -> u16 {
+        assert!(val <= (u16::MAX as u32));
+
+        val as u16
     }
 }

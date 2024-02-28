@@ -5,7 +5,8 @@ use atomic_refcell::AtomicRefCell;
 use bytes::BytesMut;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use nix::sys::socket::{AddressFamily, MsgFlags, Shutdown, SockaddrIn};
+use linux_api::socket::Shutdown;
+use nix::sys::socket::{MsgFlags, SockaddrIn};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -318,8 +319,8 @@ impl TcpSocket {
         // connection is successfully established.
     }
 
-    pub fn address_family(&self) -> AddressFamily {
-        AddressFamily::Inet
+    pub fn address_family(&self) -> linux_api::socket::AddressFamily {
+        linux_api::socket::AddressFamily::AF_INET
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
@@ -497,7 +498,7 @@ impl TcpSocket {
             let num_recv = match rv {
                 Ok(x) => x,
                 Err(tcp::RecvError::Empty) => {
-                    if [Shutdown::Read, Shutdown::Both]
+                    if [Shutdown::SHUT_RD, Shutdown::SHUT_RDWR]
                         .map(Some)
                         .contains(&socket_ref.shutdown_status)
                     {
@@ -823,24 +824,24 @@ impl TcpSocket {
         // previously called and now shutdown(WR) has been called, we should call shutdown(RDWR) on
         // the tcp state.
         let how = match (how, self.shutdown_status) {
-            // if it was previously `Both`
-            (_, Some(Shutdown::Both)) => Shutdown::Both,
-            // if it's now `Both`
-            (Shutdown::Both, _) => Shutdown::Both,
-            (Shutdown::Read, None | Some(Shutdown::Read)) => Shutdown::Read,
-            (Shutdown::Read, Some(Shutdown::Write)) => Shutdown::Both,
-            (Shutdown::Write, None | Some(Shutdown::Write)) => Shutdown::Write,
-            (Shutdown::Write, Some(Shutdown::Read)) => Shutdown::Both,
+            // if it was previously `SHUT_RDWR`
+            (_, Some(Shutdown::SHUT_RDWR)) => Shutdown::SHUT_RDWR,
+            // if it's now `SHUT_RDWR`
+            (Shutdown::SHUT_RDWR, _) => Shutdown::SHUT_RDWR,
+            (Shutdown::SHUT_RD, None | Some(Shutdown::SHUT_RD)) => Shutdown::SHUT_RD,
+            (Shutdown::SHUT_RD, Some(Shutdown::SHUT_WR)) => Shutdown::SHUT_RDWR,
+            (Shutdown::SHUT_WR, None | Some(Shutdown::SHUT_WR)) => Shutdown::SHUT_WR,
+            (Shutdown::SHUT_WR, Some(Shutdown::SHUT_RD)) => Shutdown::SHUT_RDWR,
         };
 
         // Linux and the tcp library interpret shutdown flags differently. In the tcp library,
-        // `tcp::Shutdown` has a very specific meaning for `Read` and `Write`, whereas Linux is
+        // `tcp::Shutdown` has a very specific meaning for `SHUT_RD` and `SHUT_WR`, whereas Linux is
         // undocumented and not straightforward. Here we try to map from the Linux behaviour to the
         // tcp library behaviour.
         let tcp_how = match how {
-            Shutdown::Read => None,
-            Shutdown::Write => Some(tcp::Shutdown::Write),
-            Shutdown::Both => Some(tcp::Shutdown::Both),
+            Shutdown::SHUT_RD => None,
+            Shutdown::SHUT_WR => Some(tcp::Shutdown::Write),
+            Shutdown::SHUT_RDWR => Some(tcp::Shutdown::Both),
         };
 
         if let Some(tcp_how) = tcp_how {

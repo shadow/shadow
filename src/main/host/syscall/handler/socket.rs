@@ -1,7 +1,8 @@
 use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
+use linux_api::socket::Shutdown;
 use log::*;
-use nix::sys::socket::{Shutdown, SockFlag};
+use nix::sys::socket::SockFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -22,7 +23,7 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
                   /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int)]
     pub fn socket(
         ctx: &mut SyscallContext,
@@ -827,11 +828,11 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* how */ std::ffi::c_int)]
+    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* how */ std::ffi::c_uint)]
     pub fn shutdown(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
-        how: std::ffi::c_int,
+        how: std::ffi::c_uint,
     ) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -842,12 +843,7 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        let how = match how {
-            libc::SHUT_RD => Shutdown::Read,
-            libc::SHUT_WR => Shutdown::Write,
-            libc::SHUT_RDWR => Shutdown::Both,
-            _ => return Err(Errno::EINVAL.into()),
-        };
+        let how = Shutdown::try_from(how).or(Err(Errno::EINVAL))?;
 
         let File::Socket(socket) = file.inner_file() else {
             drop(desc_table);
@@ -861,7 +857,7 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ nix::sys::socket::AddressFamily,
+    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
                   /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int, /* sv */ [std::ffi::c_int; 2])]
     pub fn socketpair(
         ctx: &mut SyscallContext,
