@@ -216,10 +216,16 @@ path = "time/nanosleep/test_nanosleep.rs"
 name = "test_prctl"
 path = "prctl/test_prctl.rs"
 
+[[bin]]
+name = "test_libp2p_ping"
+path = "libp2p/ping/test_ping.rs"
+
 [dependencies]
 anyhow = { version = "1.0.78", features = ["backtrace"] }
 formatting-nostd = { path = "../lib/formatting-nostd" }
+futures = "0.3.29"
 libc = "0.2"
+libp2p = { version = "0.53.1", features = ["noise", "ping", "tcp", "tokio", "yamux"] }
 linux-api = { path = "../lib/linux-api", features  = ["std"] }
 neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
@@ -229,3 +235,4 @@ signal-hook = "0.3.17"
 once_cell = "1.19.0"
 vasi-sync = { path = "../lib/vasi-sync" }
 static_assertions = "1.1.0"
+tokio = { version = "1.34.0", features = ["full"] }
