@@ -14,7 +14,7 @@ perf_timers = []
 [dependencies]
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
-linux-api = { path = "../linux-api"}
+linux-api = { path = "../linux-api", features = ["rustix"] }
 num_enum = { version = "0.7.1", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }

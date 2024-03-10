@@ -220,7 +220,7 @@ path = "prctl/test_prctl.rs"
 anyhow = { version = "1.0.78", features = ["backtrace"] }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
-linux-api = { path = "../lib/linux-api", features  = ["std"] }
+linux-api = { path = "../lib/linux-api", features = ["rustix", "std"] }
 neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version="0.8.5", features=["small_rng"] }
