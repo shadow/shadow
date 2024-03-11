@@ -8,6 +8,7 @@ edition = "2021"
 [features]
 std = []
 rustix = ["dep:rustix"]
+c_bindings = ["dep:shadow-build-common", "dep:cbindgen"]
 
 [dependencies]
 bitflags = "2.4.1"
@@ -28,5 +29,5 @@ rustix = { optional=true, version = "0.38.28", default-features=false, features 
 rustix = { version = "0.38.28", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
-shadow-build-common = { path = "../shadow-build-common" }
-cbindgen = { version = "0.26.0", default_features = false }
+shadow-build-common = { optional = true, path = "../shadow-build-common" }
+cbindgen = { optional = true, version = "0.26.0", default_features = false }

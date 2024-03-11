@@ -1,5 +1,7 @@
+#[cfg(feature = "c_bindings")]
 use shadow_build_common::ShadowBuildCommon;
 
+#[cfg(feature = "c_bindings")]
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = build_common.cbindgen_base_config();
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -29,7 +31,10 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
 }
 
 fn main() {
-    let build_common =
-        shadow_build_common::ShadowBuildCommon::new(std::path::Path::new("../../.."), None);
-    run_cbindgen(&build_common);
+    #[cfg(feature = "c_bindings")]
+    {
+        let build_common =
+            shadow_build_common::ShadowBuildCommon::new(std::path::Path::new("../../.."), None);
+        run_cbindgen(&build_common);
+    }
 }
