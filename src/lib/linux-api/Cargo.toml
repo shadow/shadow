@@ -29,5 +29,5 @@ rustix = { optional=true, version = "0.38.28", default-features=false, features 
 rustix = { version = "0.38.28", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
-shadow-build-common = { optional = true, path = "../shadow-build-common" }
+shadow-build-common = { optional = true, path = "../shadow-build-common", features = ["cbindgen"] }
 cbindgen = { optional = true, version = "0.26.0", default_features = false }

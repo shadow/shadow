@@ -11,7 +11,7 @@ logger = { path = "../logger" }
 [build-dependencies]
 bindgen = { version = "0.69.1" }
 cc = { version = "1.0", features = ["parallel"] }
-shadow-build-common = { path = "../shadow-build-common" }
+shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }
 system-deps = "6.2"
 cbindgen = { version = "0.26.0", default_features = false }
 
