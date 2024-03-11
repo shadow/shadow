@@ -217,7 +217,7 @@ name = "test_prctl"
 path = "prctl/test_prctl.rs"
 
 [dependencies]
-anyhow = { version = "1.0.78", features = ["backtrace"] }
+anyhow = "1.0.78"
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["rustix", "std"] }
