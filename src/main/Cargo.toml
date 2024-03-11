@@ -10,7 +10,7 @@ path = "lib.rs"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-anyhow = { version = "1.0.78", features = ["backtrace"] }
+anyhow = "1.0.78"
 atomic_refcell = "0.1"
 backtrace = "0.3.69"
 bitflags = "2.4"
@@ -22,7 +22,7 @@ clap = { version = "4.5.0", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.3"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
-linux-api = { path = "../lib/linux-api", features = ["std"] }
+linux-api = { path = "../lib/linux-api", features = ["c_bindings", "std"] }
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 log-c2rust = { path = "../lib/log-c2rust" }
@@ -71,7 +71,7 @@ bytemuck = "1.14.0"
 perf_timers = []
 
 [build-dependencies]
-shadow-build-common = { path = "../lib/shadow-build-common" }
+shadow-build-common = { path = "../lib/shadow-build-common", features = ["bindgen", "cbindgen"] }
 bindgen = { version = "0.69.1" }
 cbindgen = { version = "0.26.0", default_features = false }
 cc = { version = "1.0", features = ["parallel"] }

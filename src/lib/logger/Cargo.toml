@@ -13,8 +13,8 @@ cc = { version = "1.0", features = ["parallel"] }
 bindgen = { version = "0.69.1" }
 # Needs to be a build-dependency as well for its generated header files
 # to be present, which our C build needs.
-linux-api = { path = "../linux-api" }
-shadow-build-common = { path = "../shadow-build-common" }
+linux-api = { path = "../linux-api", features = ["c_bindings"] }
+shadow-build-common = { path = "../shadow-build-common", features = ["bindgen"] }
 
 [lib]
 path = "src/lib.rs"

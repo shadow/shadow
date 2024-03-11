@@ -73,6 +73,7 @@ impl ShadowBuildCommon {
         b
     }
 
+    #[cfg(feature = "bindgen")]
     pub fn bindgen_builder(&self) -> bindgen::Builder {
         let mut builder = bindgen::Builder::default()
             // Tell cargo to invalidate the built crate whenever any of the
@@ -94,6 +95,7 @@ impl ShadowBuildCommon {
         builder
     }
 
+    #[cfg(feature = "cbindgen")]
     pub fn cbindgen_base_config(&self) -> cbindgen::Config {
         let header = "
 /*
@@ -143,6 +145,7 @@ impl ShadowBuildCommon {
     }
 }
 
+#[cfg(feature = "cbindgen")]
 pub trait CBindgenExt {
     fn get_mut(&mut self) -> &mut cbindgen::Config;
 
@@ -169,6 +172,7 @@ pub trait CBindgenExt {
     }
 }
 
+#[cfg(feature = "cbindgen")]
 impl CBindgenExt for cbindgen::Config {
     fn get_mut(&mut self) -> &mut cbindgen::Config {
         self

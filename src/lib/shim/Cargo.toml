@@ -14,7 +14,7 @@ perf_timers = []
 [dependencies]
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
-linux-api = { path = "../linux-api"}
+linux-api = { path = "../linux-api", features = ["rustix"] }
 num_enum = { version = "0.7.1", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
@@ -37,7 +37,7 @@ test-log = "0.2.14"
 bindgen = { version = "0.69.1" }
 cbindgen = { version = "0.26.0", default_features = false }
 cc = { version = "1.0", features = ["parallel"] }
-shadow-build-common = { path = "../shadow-build-common" }
+shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }
 # Building the C code from this crate's build script requires
 # that these bindings have been generated.
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
