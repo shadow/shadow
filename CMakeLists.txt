@@ -77,6 +77,13 @@ include(FindPkgConfig)
 # Keep consistent with Cargo files that pull in glib: `git grep glib -- '*/Cargo.toml'`
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0>=2.58)
 
+## show a warning if Go is installed and is version 1.21.x
+execute_process(COMMAND bash -c "go version | { read _ _ v _; echo \${v#go}; }" OUTPUT_VARIABLE GO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(GO_VERSION MATCHES "^1.21.")
+    # https://github.com/shadow/shadow/issues/3267
+    message(WARNING "Go version '${GO_VERSION}' is not supported. If running Shadow's extra tests, the Go-based extra tests will fail. See issue #3267.")
+endif()
+
 include(CheckSymbolExists)
 list(APPEND CMAKE_REQUIRED_INCLUDES ${GLIB_INCLUDE_DIRS})
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${GLIB_LIBRARIES})
