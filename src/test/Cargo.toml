@@ -4,6 +4,9 @@ version = "3.1.0"
 edition = "2021"
 publish = false
 
+[features]
+extra_tests = []
+
 [lib]
 name = "test_utils"
 path = "test_utils.rs"

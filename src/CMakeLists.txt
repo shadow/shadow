@@ -4,6 +4,10 @@ if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
   set(RUST_FEATURES "${RUST_FEATURES} perf_timers")
 endif()
 
+if(SHADOW_EXTRA_TESTS STREQUAL ON)
+  set(TEST_FEATURES "${TEST_FEATURES} extra_tests")
+endif()
+
 # Propagate global C and C++ flags to the Rust build
 set(RUST_CFLAGS "${CMAKE_C_FLAGS}")
 set(RUST_CXXFLAGS "${CMAKE_CXX_FLAGS}")
@@ -81,6 +85,7 @@ ExternalProject_Add(
         cargo build \
         --package shadow-tests \
         --target-dir \"${TARGETDIR}\" \
+        --features \"${TEST_FEATURES}\" \
         "
     BUILD_BYPRODUCTS
       ${TARGETDIR}/${RUST_TARGET}/debug/libshadow_shim_helper_rs.a ${TARGETDIR}/${RUST_TARGET}/release/libshadow_shim_helper_rs.a
