@@ -203,6 +203,7 @@ def build(args, remaining):
     if args.do_verbose: os.putenv("VERBOSE", "1")
     if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
     if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
+    if args.do_extra_test: cmake_cmd += " -DSHADOW_EXTRA_TESTS=ON"
     if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
 
     if args.do_coverage:
