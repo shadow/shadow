@@ -167,7 +167,7 @@ impl NetworkNamespace {
     pub fn interface_borrow_mut(
         &self,
         addr: Ipv4Addr,
-    ) -> Option<impl Deref<Target = NetworkInterface> + DerefMut + '_> {
+    ) -> Option<impl DerefMut<Target = NetworkInterface> + '_> {
         // Notes:
         // - The `is_loopback` matches all loopback addresses, but shadow will only work correctly
         //   with 127.0.0.1. Using any other loopback address will lead to problems.

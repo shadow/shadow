@@ -75,7 +75,7 @@ impl Counter {
     /// Returns the counter value for the key given by id, or 0 if no operations have
     /// been performed on the key.
     pub fn get_value(&self, id: &str) -> i64 {
-        match self.items.get(&id.to_string()) {
+        match self.items.get(id) {
             Some(val) => *val,
             None => 0,
         }
@@ -127,7 +127,7 @@ impl Counter {
     fn sorted_for_display(
         &self,
     ) -> impl IntoIterator<
-        IntoIter = impl Iterator<Item = (&String, &i64)> + ExactSizeIterator,
+        IntoIter = impl ExactSizeIterator<Item = (&String, &i64)>,
         Item = (&String, &i64),
     > {
         // Get the items in a vector so we can sort them.

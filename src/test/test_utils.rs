@@ -66,10 +66,10 @@ impl<T, E> ShadowTest<T, E> {
 }
 
 /// Runs provided tests until failure and outputs results to stdout.
-pub fn run_tests<'a, I, T: 'a, E: 'a>(tests: I, summarize: bool) -> Result<Vec<T>, E>
+pub fn run_tests<'a, I, T: 'a, E>(tests: I, summarize: bool) -> Result<Vec<T>, E>
 where
     I: IntoIterator<Item = &'a ShadowTest<T, E>>,
-    E: std::fmt::Debug + std::fmt::Display,
+    E: 'a + std::fmt::Debug + std::fmt::Display,
 {
     let mut results = vec![];
 

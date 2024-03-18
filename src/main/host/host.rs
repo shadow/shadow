@@ -938,7 +938,7 @@ impl Host {
 
     pub fn shim_shmem_lock_borrow_mut(
         &self,
-    ) -> Option<impl Deref<Target = HostShmemProtected> + DerefMut + '_> {
+    ) -> Option<impl DerefMut<Target = HostShmemProtected> + '_> {
         RefMut::filter_map(self.shim_shmem_lock.borrow_mut(), |l| {
             l.as_ref().map(|l| {
                 // SAFETY: Returned object holds a checked borrow of the lock;
