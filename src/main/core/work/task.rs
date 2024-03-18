@@ -63,7 +63,7 @@ pub mod export {
     use shadow_shim_helper_rs::{notnull::notnull_mut, HostId};
 
     use super::*;
-    use crate::{host::host::Host, utility::HostTreePointer};
+    use crate::utility::HostTreePointer;
 
     pub type TaskCallbackFunc =
         extern "C-unwind" fn(*const Host, *mut libc::c_void, *mut libc::c_void);

@@ -39,8 +39,6 @@ impl From<Signal> for i32 {
     }
 }
 
-use core::iter::Iterator;
-
 impl Signal {
     pub const SIGHUP: Self = Self::std_from_u32_const(bindings::LINUX_SIGHUP);
     pub const SIGINT: Self = Self::std_from_u32_const(bindings::LINUX_SIGINT);

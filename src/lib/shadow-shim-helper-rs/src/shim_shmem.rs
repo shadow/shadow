@@ -419,9 +419,7 @@ pub mod export {
     use std::sync::atomic::Ordering;
 
     use bytemuck::TransparentWrapper;
-    use linux_api::signal::{
-        linux_sigaction, linux_siginfo_t, linux_sigset_t, linux_stack_t, siginfo_t,
-    };
+    use linux_api::signal::{linux_sigaction, linux_siginfo_t, linux_sigset_t, linux_stack_t};
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;

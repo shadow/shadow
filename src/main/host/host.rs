@@ -1034,7 +1034,7 @@ impl Drop for Host {
 }
 
 mod export {
-    use std::{ops::DerefMut, os::raw::c_char, time::Duration};
+    use std::{os::raw::c_char, time::Duration};
 
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
@@ -1043,8 +1043,7 @@ mod export {
     use super::*;
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::{process::Process, thread::Thread},
-        network::router::Router,
+        host::thread::Thread,
     };
 
     #[no_mangle]

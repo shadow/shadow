@@ -659,7 +659,6 @@ mod export {
     use shadow_shim_helper_rs::simulation_time::CSimulationTime;
 
     use super::*;
-    use crate::host::process::Process;
 
     #[no_mangle]
     pub extern "C-unwind" fn worker_getDNS() -> *mut cshadow::DNS {

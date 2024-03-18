@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{self, Context};
+use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
