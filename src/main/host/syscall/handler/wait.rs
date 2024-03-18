@@ -15,7 +15,7 @@ use crate::host::syscall::types::SyscallError;
 
 enum WaitTarget {
     Pid(ProcessId),
-    PidFd(c_int),
+    PidFd(#[allow(dead_code)] c_int),
     Pgid(ProcessId),
     Any,
 }
