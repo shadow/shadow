@@ -938,7 +938,7 @@ impl Host {
 
     pub fn shim_shmem_lock_borrow_mut(
         &self,
-    ) -> Option<impl Deref<Target = HostShmemProtected> + DerefMut + '_> {
+    ) -> Option<impl DerefMut<Target = HostShmemProtected> + '_> {
         RefMut::filter_map(self.shim_shmem_lock.borrow_mut(), |l| {
             l.as_ref().map(|l| {
                 // SAFETY: Returned object holds a checked borrow of the lock;
@@ -1034,7 +1034,7 @@ impl Drop for Host {
 }
 
 mod export {
-    use std::{ops::DerefMut, os::raw::c_char, time::Duration};
+    use std::{os::raw::c_char, time::Duration};
 
     use libc::{in_addr_t, in_port_t};
     use rand::{Rng, RngCore};
@@ -1043,8 +1043,7 @@ mod export {
     use super::*;
     use crate::{
         cshadow::{CEmulatedTime, CSimulationTime},
-        host::{process::Process, thread::Thread},
-        network::router::Router,
+        host::thread::Thread,
     };
 
     #[no_mangle]

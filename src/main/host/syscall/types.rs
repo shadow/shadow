@@ -1,6 +1,5 @@
 //! Types used in emulating syscalls.
 
-use std::convert::From;
 use std::marker::PhantomData;
 use std::mem::size_of;
 

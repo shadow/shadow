@@ -1,4 +1,3 @@
-use core::result::Result;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
 use num_enum::{IntoPrimitive, TryFromPrimitive};

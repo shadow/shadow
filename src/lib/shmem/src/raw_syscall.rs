@@ -11,8 +11,6 @@
 // constants. We may also use already-existing definitions for some of the syscalls implemented
 // here.
 
-use core::result::Result;
-
 use linux_api::errno::Errno;
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;

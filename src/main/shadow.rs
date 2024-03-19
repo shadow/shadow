@@ -9,7 +9,7 @@ use std::io::IsTerminal;
 use std::os::unix::ffi::OsStrExt;
 use std::thread;
 
-use anyhow::{self, Context};
+use anyhow::Context;
 use clap::Parser;
 use nix::sys::{personality, resource, signal};
 use signal_hook::{consts, iterator::Signals};

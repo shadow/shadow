@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use super::*;
 
 /// When we go to sleep, this is the tolerance we allow when checking that we slept the correct

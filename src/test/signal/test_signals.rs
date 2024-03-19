@@ -1,6 +1,5 @@
 use std::arch::asm;
 use std::error::Error;
-use std::iter::Iterator;
 use std::os::unix::io::RawFd;
 use std::sync::mpsc::channel;
 use std::sync::Arc;

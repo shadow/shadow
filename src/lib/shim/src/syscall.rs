@@ -175,8 +175,6 @@ unsafe fn emulated_syscall_event(
 
 pub mod export {
     use super::*;
-    use shadow_shim_helper_rs::shim_event::ShimEventSyscall;
-    use shadow_shim_helper_rs::syscall_types::{SysCallArgs, SysCallReg};
 
     /// # Safety
     ///

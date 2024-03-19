@@ -603,8 +603,6 @@ mod export {
     use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
     use crate::host::descriptor::{CompatFile, Descriptor, File};
-    use crate::host::host::Host;
-    use crate::host::process::Process;
 
     /// Make the requested syscall from within the plugin.
     ///

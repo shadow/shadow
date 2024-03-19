@@ -1943,7 +1943,6 @@ fn make_name(host: &Host, exe_name: &str, id: ProcessId) -> CString {
 }
 
 mod export {
-    use std::ffi::c_char;
     use std::os::raw::c_void;
 
     use libc::size_t;
@@ -1954,9 +1953,6 @@ mod export {
     use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
 
     use super::*;
-    use crate::core::worker::Worker;
-    use crate::host::syscall::types::ForeignArrayPtr;
-    use crate::host::thread::Thread;
     use crate::utility::HostTreePointer;
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of

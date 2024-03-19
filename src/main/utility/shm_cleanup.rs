@@ -4,7 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{self, Context};
+use anyhow::Context;
 
 pub const SHM_DIR_PATH: &str = "/dev/shm/";
 const PROC_DIR_PATH: &str = "/proc/";
