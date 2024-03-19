@@ -30,8 +30,6 @@ jobs:
           - 'debian:11-slim'
           # EOL TBA https://wiki.debian.org/LTS
           - 'debian:12-slim'
-          # EOL May 18 2024 https://endoflife.date/fedora
-          - 'fedora:38'
         cc: ['gcc']
         buildtype: ['release']
         include:
