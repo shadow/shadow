@@ -49,3 +49,9 @@ opt-level = 1
 # significantly reduces the runtime of the build scripts, which is most impactful during incremental
 # builds.
 opt-level = 3
+
+[profile.release]
+# As of Rust 1.77, release builds are stripped of debugging symbols by default.
+# That's typically not what we want, since we do want useful backtraces etc,
+# and don't care so much about the shadow binary size.
+strip = false
