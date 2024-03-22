@@ -8,7 +8,6 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(kill);
 SYSCALL_HANDLER(tgkill);
 SYSCALL_HANDLER(tkill);
 SYSCALL_HANDLER(rt_sigaction);

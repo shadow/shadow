@@ -1946,7 +1946,6 @@ mod export {
     use std::os::raw::c_void;
 
     use libc::size_t;
-    use linux_api::signal::linux_siginfo_t;
     use log::trace;
     use shadow_shim_helper_rs::notnull::*;
     use shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess;
@@ -2226,26 +2225,6 @@ mod export {
     ) -> ManagedPhysicalMemoryAddr {
         let proc = unsafe { proc.as_ref().unwrap() };
         proc.physical_address(vptr)
-    }
-
-    /// Send the signal described in `siginfo` to `process`. `currentRunningThread`
-    /// should be set if there is one (e.g. if this is being called from a syscall
-    /// handler), and NULL otherwise (e.g. when called from a timer expiration event).
-    ///
-    /// # Safety
-    ///
-    /// Mandatory fields of `siginfo` must be initd.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn process_signal(
-        target_proc: *const Process,
-        current_running_thread: *const Thread,
-        siginfo_t: *const linux_siginfo_t,
-    ) {
-        let target_proc = unsafe { target_proc.as_ref().unwrap() };
-        let current_running_thread = unsafe { current_running_thread.as_ref() };
-        let siginfo_t = unsafe { siginfo_t::wrap_ref_assume_initd(siginfo_t.as_ref().unwrap()) };
-        Worker::with_active_host(|host| target_proc.signal(host, current_running_thread, siginfo_t))
-            .unwrap()
     }
 
     #[no_mangle]

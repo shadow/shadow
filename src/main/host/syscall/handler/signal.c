@@ -30,29 +30,6 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 // Helpers
 ///////////////////////////////////////////////////////////
 
-static SyscallReturn _syscallhandler_signalProcess(SyscallHandler* sys, const Process* process,
-                                                   int sig) {
-    if (sig == 0) {
-        return syscallreturn_makeDoneI64(0);
-    }
-
-    if (!linux_signal_is_valid(sig)) {
-        return syscallreturn_makeDoneErrno(EINVAL);
-    }
-
-    if (linux_signal_is_realtime(sig)) {
-        warning("Unimplemented signal %d", sig);
-        return syscallreturn_makeDoneErrno(ENOSYS);
-    }
-
-    pid_t processId = process_getProcessID(rustsyscallhandler_getProcess(sys));
-    linux_siginfo_t siginfo = linux_siginfo_new_for_kill(sig, processId, 0);
-
-    process_signal(process, rustsyscallhandler_getThread(sys), &siginfo);
-
-    return syscallreturn_makeDoneI64(0);
-}
-
 static SyscallReturn _syscallhandler_signalThread(SyscallHandler* sys, const Thread* thread,
                                                   int sig) {
     if (sig == 0) {
@@ -128,46 +105,6 @@ static SyscallReturn _syscallhandler_signalThread(SyscallHandler* sys, const Thr
 ///////////////////////////////////////////////////////////
 // System Calls
 ///////////////////////////////////////////////////////////
-
-SyscallReturn syscallhandler_kill(SyscallHandler* sys, const SysCallArgs* args) {
-    utility_debugAssert(sys && args);
-    pid_t pid = args->args[0].as_i64;
-    int sig = args->args[1].as_i64;
-
-    trace("kill called on pid %i with signal %i", pid, sig);
-
-    if (pid == -1) {
-        // kill(2): If  pid  equals -1, then sig is sent to every process for
-        // which the calling process has permission to send signals, except for
-        // process 1.
-        //
-        // Currently unimplemented, and unlikely to be needed in the context of
-        // a shadow simulation.
-        warning("kill with pid=-1 unimplemented");
-        return syscallreturn_makeDoneErrno(ENOSYS);
-    } else if (pid == 0) {
-        // kill(2): If pid equals 0, then sig is sent to every process in the
-        // process group of the calling process.
-        //
-        // Currently every emulated process is in its own process group.
-        pid = process_getProcessID(rustsyscallhandler_getProcess(sys));
-    } else if (pid < -1) {
-        // kill(2): If pid is less than -1, then sig is sent to every process in
-        // the process group whose ID is -pid.
-        //
-        // Currently every emulated process is in its own process group, where
-        // pgid=pid.
-        pid = -pid;
-    }
-
-    const Process* process = host_getProcess(rustsyscallhandler_getHost(sys), pid);
-    if (process == NULL) {
-        debug("Process %d not found", pid);
-        return syscallreturn_makeDoneErrno(ESRCH);
-    }
-
-    return _syscallhandler_signalProcess(sys, process, sig);
-}
 
 SyscallReturn syscallhandler_tgkill(SyscallHandler* sys, const SysCallArgs* args) {
     utility_debugAssert(sys && args);
