@@ -1636,16 +1636,6 @@ mod export {
         }
     }
 
-    #[no_mangle]
-    pub extern "C-unwind" fn linux_siginfo_new_for_tkill(
-        lsi_signo: i32,
-        sender_pid: i32,
-        sender_uid: u32,
-    ) -> linux_siginfo_t {
-        let signal = Signal::try_from(lsi_signo).unwrap();
-        unsafe { siginfo_t::peel(siginfo_t::new_for_tkill(signal, sender_pid, sender_uid)) }
-    }
-
     /// Returns the handler if there is one, or else NULL.
     #[no_mangle]
     pub unsafe extern "C-unwind" fn linux_sigaction_handler(

@@ -1,5 +1,6 @@
 use linux_api::errno::Errno;
-use linux_api::signal::{siginfo_t, Signal};
+use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalHandler};
+use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -7,6 +8,7 @@ use crate::cshadow as c;
 use crate::host::process::Process;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
 use crate::host::syscall::types::SyscallError;
+use crate::host::thread::Thread;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ linux_api::posix_types::kernel_pid_t,
@@ -89,24 +91,147 @@ impl SyscallHandler {
                   /* sig */ std::ffi::c_int)]
     pub fn tkill(
         ctx: &mut SyscallContext,
-        _pid: linux_api::posix_types::kernel_pid_t,
-        _sig: std::ffi::c_int,
+        tid: linux_api::posix_types::kernel_pid_t,
+        sig: std::ffi::c_int,
     ) -> Result<(), SyscallError> {
-        let rv = Self::legacy_syscall(c::syscallhandler_tkill, ctx)?;
-        assert_eq!(0, i32::from(rv));
-        Ok(())
+        log::trace!("tkill called on tid {tid} with signal {sig}");
+
+        let tid = tid.try_into().or(Err(Errno::ESRCH))?;
+
+        let Some(target_thread) = ctx.objs.host.thread_cloned_rc(tid) else {
+            return Err(Errno::ESRCH.into());
+        };
+        let target_thread = ExplicitDropper::new(target_thread, |value| {
+            value.explicit_drop(ctx.objs.host.root())
+        });
+        let target_thread = &*target_thread.borrow(ctx.objs.host.root());
+
+        Self::signal_thread(ctx.objs, target_thread, sig)
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int, /* tgid */ linux_api::posix_types::kernel_pid_t,
                   /* pid */ linux_api::posix_types::kernel_pid_t, /* sig */ std::ffi::c_int)]
     pub fn tgkill(
         ctx: &mut SyscallContext,
-        _tgid: linux_api::posix_types::kernel_pid_t,
-        _pid: linux_api::posix_types::kernel_pid_t,
-        _sig: std::ffi::c_int,
+        tgid: linux_api::posix_types::kernel_pid_t,
+        tid: linux_api::posix_types::kernel_pid_t,
+        sig: std::ffi::c_int,
     ) -> Result<(), SyscallError> {
-        let rv = Self::legacy_syscall(c::syscallhandler_tgkill, ctx)?;
-        assert_eq!(0, i32::from(rv));
+        log::trace!("tgkill called on tgid {tgid} and tid {tid} with signal {sig}");
+
+        let tgid = tgid.try_into().or(Err(Errno::ESRCH))?;
+        let tid = tid.try_into().or(Err(Errno::ESRCH))?;
+
+        let Some(target_thread) = ctx.objs.host.thread_cloned_rc(tid) else {
+            return Err(Errno::ESRCH.into());
+        };
+        let target_thread = ExplicitDropper::new(target_thread, |value| {
+            value.explicit_drop(ctx.objs.host.root())
+        });
+        let target_thread = &*target_thread.borrow(ctx.objs.host.root());
+
+        if target_thread.process_id() != tgid {
+            return Err(Errno::ESRCH.into());
+        }
+
+        Self::signal_thread(ctx.objs, target_thread, sig)
+    }
+
+    /// Send a signal to `target_thread` from the thread and process in `objs`. A signal of 0 will
+    /// be ignored.
+    fn signal_thread(
+        objs: &ThreadContext,
+        target_thread: &Thread,
+        signal: std::ffi::c_int,
+    ) -> Result<(), SyscallError> {
+        if signal == 0 {
+            return Ok(());
+        }
+
+        let Ok(signal) = Signal::try_from(signal) else {
+            return Err(Errno::EINVAL.into());
+        };
+
+        if signal.is_realtime() {
+            log::warn!("Unimplemented signal {signal:?}");
+            return Err(Errno::ENOTSUP.into());
+        }
+
+        // need to scope the shmem lock since `wakeup_for_signal` below takes its own shmem lock
+        let mut cond = {
+            let shmem_lock = &*objs.host.shim_shmem_lock_borrow().unwrap();
+
+            let target_process = objs
+                .host
+                .process_borrow(target_thread.process_id())
+                .unwrap();
+            let target_process = &*target_process.borrow(objs.host.root());
+
+            let process_shmem = target_process.borrow_as_runnable().unwrap();
+            let process_shmem = &*process_shmem.shmem();
+            let process_protected = process_shmem.protected.borrow(&shmem_lock.root);
+
+            let thread_shmem = target_thread.shmem();
+            let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
+
+            let action = unsafe { process_protected.signal_action(signal) };
+            let action_handler = unsafe { action.handler() };
+
+            let signal_is_ignored = match action_handler {
+                SignalHandler::SigIgn => true,
+                SignalHandler::SigDfl => defaultaction(signal) == LinuxDefaultAction::IGN,
+                _ => false,
+            };
+
+            if signal_is_ignored {
+                // don't deliver an ignored signal
+                return Ok(());
+            }
+
+            if thread_protected.pending_signals.has(signal) {
+                // Signal is already pending. From signal(7): In the case where a standard signal is
+                // already pending, the siginfo_t structure (see sigaction(2)) associated with that
+                // signal is not overwritten on arrival of subsequent instances of the same signal.
+                return Ok(());
+            }
+
+            thread_protected.pending_signals.add(signal);
+
+            let sender_pid = objs.process.id();
+            let sender_tid = objs.thread.id();
+
+            let siginfo = siginfo_t::new_for_tkill(signal, sender_pid.into(), 0);
+
+            thread_protected.set_pending_standard_siginfo(signal, &siginfo);
+
+            if sender_tid == target_thread.id() {
+                // Target is the current thread. It'll be handled synchronously when the current
+                // syscall returns (if it's unblocked).
+                return Ok(());
+            }
+
+            if thread_protected.blocked_signals.has(signal) {
+                // Target thread has the signal blocked. We'll leave it pending, but no need to
+                // schedule an event to process the signal. It'll get processed synchronously when
+                // the thread executes a syscall that would unblock the signal.
+                return Ok(());
+            }
+
+            let Some(cond) = target_thread.syscall_condition_mut() else {
+                // We may be able to get here if a thread is signalled before it runs for the first
+                // time. Just return; the signal will be delivered when the thread runs.
+                return Ok(());
+            };
+
+            cond
+        };
+
+        let was_scheduled = cond.wakeup_for_signal(objs.host, signal);
+
+        // it won't be scheduled if the signal is blocked, but we previously checked if the signal
+        // was blocked above
+        assert!(was_scheduled);
+
         Ok(())
     }
 

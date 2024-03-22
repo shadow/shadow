@@ -419,7 +419,7 @@ pub mod export {
     use std::sync::atomic::Ordering;
 
     use bytemuck::TransparentWrapper;
-    use linux_api::signal::{linux_sigaction, linux_siginfo_t, linux_sigset_t, linux_stack_t};
+    use linux_api::signal::{linux_sigaction, linux_sigset_t, linux_stack_t};
     use vasi_sync::scmutex::SelfContainedMutexGuard;
 
     use super::*;
@@ -600,56 +600,6 @@ pub mod export {
     ) -> libc::pid_t {
         let thread_mem = unsafe { thread.as_ref().unwrap() };
         thread_mem.tid
-    }
-
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn shimshmem_getThreadPendingSignals(
-        lock: *const ShimShmemHostLock,
-        thread: *const ShimShmemThread,
-    ) -> linux_sigset_t {
-        let thread_mem = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let protected = thread_mem.protected.borrow(&lock.root);
-        sigset_t::peel(protected.pending_signals)
-    }
-
-    /// Set the process's pending signal set.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn shimshmem_setThreadPendingSignals(
-        lock: *const ShimShmemHostLock,
-        thread: *const ShimShmemThread,
-        s: linux_sigset_t,
-    ) {
-        let thread_mem = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        protected.pending_signals = sigset_t::wrap(s);
-    }
-
-    /// Set the siginfo for the given signal number.
-    ///
-    /// # Safety
-    ///
-    /// Pointer args must be safely dereferenceable. The mandatory fields of `info` must be initd.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn shimshmem_setThreadSiginfo(
-        lock: *const ShimShmemHostLock,
-        thread: *const ShimShmemThread,
-        sig: i32,
-        info: *const linux_siginfo_t,
-    ) {
-        let thread_mem = unsafe { thread.as_ref().unwrap() };
-        let lock = unsafe { lock.as_ref().unwrap() };
-        let mut protected = thread_mem.protected.borrow_mut(&lock.root);
-        let info = unsafe { siginfo_t::wrap_ref_assume_initd(info.as_ref().unwrap()) };
-        protected.set_pending_standard_siginfo(Signal::try_from(sig).unwrap(), info);
     }
 
     /// # Safety

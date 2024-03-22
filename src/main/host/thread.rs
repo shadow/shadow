@@ -690,14 +690,6 @@ mod export {
     }
 
     #[no_mangle]
-    pub unsafe extern "C-unwind" fn thread_getSysCallCondition(
-        thread: *const Thread,
-    ) -> *mut c::SysCallCondition {
-        let thread = unsafe { thread.as_ref().unwrap() };
-        thread.cond.get().ptr()
-    }
-
-    #[no_mangle]
     pub unsafe extern "C-unwind" fn thread_clearSysCallCondition(thread: *const Thread) {
         let thread = unsafe { thread.as_ref().unwrap() };
         thread.cleanup_syscall_condition();
