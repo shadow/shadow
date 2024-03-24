@@ -200,7 +200,7 @@ static int _syscallhandler_checkPollArgs(UntypedForeignPtr fds_ptr, nfds_t nfds)
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_poll(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_poll(SyscallHandler* sys, const SyscallArgs* args) {
     UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     int timeout_millis = args->args[2].as_i64;
@@ -218,7 +218,7 @@ SyscallReturn syscallhandler_poll(SyscallHandler* sys, const SysCallArgs* args) 
     }
 }
 
-SyscallReturn syscallhandler_ppoll(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_ppoll(SyscallHandler* sys, const SyscallArgs* args) {
     UntypedForeignPtr fds_ptr = args->args[0].as_ptr; // struct pollfd*
     nfds_t nfds = args->args[1].as_u64;
     UntypedForeignPtr ts_timeout_ptr = args->args[2].as_ptr; // const struct timespec*

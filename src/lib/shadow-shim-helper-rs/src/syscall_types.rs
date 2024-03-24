@@ -220,7 +220,7 @@ impl From<ManagedPhysicalMemoryAddr> for u64 {
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct SysCallArgs {
+pub struct SyscallArgs {
     // SYS_* from sys/syscall.h.
     // (mostly included from
     // /usr/include/x86_64-linux-gnu/bits/syscall.h)
@@ -228,7 +228,7 @@ pub struct SysCallArgs {
     pub args: [SyscallReg; 6],
 }
 
-impl SysCallArgs {
+impl SyscallArgs {
     #[inline]
     pub fn get(&self, i: usize) -> SyscallReg {
         self.args[i]

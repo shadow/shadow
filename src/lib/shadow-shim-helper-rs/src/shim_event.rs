@@ -1,13 +1,13 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::syscall_types::{ForeignPtr, SysCallArgs, SyscallReg, UntypedForeignPtr};
+use crate::syscall_types::{ForeignPtr, SyscallArgs, SyscallReg, UntypedForeignPtr};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 /// Data for [`ShimEventToShim::Syscall`] and [`ShimEventToShadow::Syscall`]
 pub struct ShimEventSyscall {
-    pub syscall_args: SysCallArgs,
+    pub syscall_args: SyscallArgs,
 }
 
 /// Data for [`ShimEventToShim::SyscallComplete`] and [`ShimEventToShadow::SyscallComplete`]

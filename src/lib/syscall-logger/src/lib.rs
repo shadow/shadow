@@ -17,7 +17,7 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
+/// # use shadow_rs::host::syscall_types::{SyscallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
@@ -31,7 +31,7 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
+/// # use shadow_rs::host::syscall_types::{SyscallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {

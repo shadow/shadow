@@ -18,7 +18,7 @@ use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
     ShimEventToShadow, ShimEventToShim,
 };
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SyscallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallArgs, SyscallReg};
 use shadow_shmem::allocator::ShMemBlock;
 use vasi_sync::scchannel::SelfContainedChannelError;
 
@@ -75,7 +75,7 @@ impl ManagedThread {
     /// Panics if the native thread is dead or dies during the syscall,
     /// including if the syscall itself is SYS_exit or SYS_exit_group.
     pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SyscallReg]) -> SyscallReg {
-        let mut syscall_args = SysCallArgs {
+        let mut syscall_args = SyscallArgs {
             number: n,
             args: [SyscallReg::from(0u64); 6],
         };

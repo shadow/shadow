@@ -188,22 +188,22 @@ SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedFo
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_read(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_read(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_readHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SyscallReturn syscallhandler_pread64(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pread64(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_readHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                       args->args[2].as_u64, args->args[3].as_i64, true);
 }
 
-SyscallReturn syscallhandler_write(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_write(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_writeHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_u64, 0, false);
 }
 
-SyscallReturn syscallhandler_pwrite64(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwrite64(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_writeHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_i64, true);
 }

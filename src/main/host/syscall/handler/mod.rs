@@ -8,7 +8,7 @@ use std::time::Duration;
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::SysCallArgs;
+use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 use shadow_shim_helper_rs::syscall_types::SyscallReg;
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
@@ -55,7 +55,7 @@ mod unistd;
 mod wait;
 
 type LegacySyscallFn =
-    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SysCallArgs) -> SyscallReturn;
+    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SyscallArgs) -> SyscallReturn;
 
 // Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
@@ -112,7 +112,7 @@ impl SyscallHandler {
         }
     }
 
-    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
         // it wouldn't make sense if we were given a different host, process, and thread
         assert_eq!(ctx.host.id(), self.host_id);
         assert_eq!(ctx.process.id(), self.process_id);
@@ -329,7 +329,7 @@ impl SyscallHandler {
     }
 
     #[allow(non_upper_case_globals)]
-    fn run_handler(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    fn run_handler(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
@@ -731,7 +731,7 @@ impl std::ops::Drop for SyscallHandler {
 
 pub struct SyscallContext<'a, 'b> {
     pub objs: &'a ThreadContext<'b>,
-    pub args: &'a SysCallArgs,
+    pub args: &'a SyscallArgs,
     pub handler: &'a mut SyscallHandler,
 }
 

@@ -299,7 +299,7 @@ pub fn log_syscall_simple(
 mod test {
     use std::process::Command;
 
-    use shadow_shim_helper_rs::syscall_types::SysCallArgs;
+    use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 
     use super::*;
 
@@ -307,7 +307,7 @@ mod test {
     // can't call foreign function: gnu_get_libc_version
     #[cfg_attr(miri, ignore)]
     fn test_no_args() {
-        let args = SysCallArgs {
+        let args = SyscallArgs {
             number: 100,
             args: [0u32.into(); 6],
         };

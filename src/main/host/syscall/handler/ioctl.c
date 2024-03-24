@@ -60,7 +60,7 @@ static int _syscallhandler_ioctlFileHelper(SyscallHandler* sys, RegularFile* fil
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_ioctl(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_ioctl(SyscallHandler* sys, const SyscallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long request = args->args[1].as_i64;
     UntypedForeignPtr argPtr = args->args[2].as_ptr; // type depends on request
