@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
-use crate::host::syscall::condition::SysCallCondition;
+use crate::host::syscall::condition::SyscallCondition;
 use crate::host::syscall::Trigger;
 
 /// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
@@ -131,7 +131,7 @@ pub enum SyscallError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Blocked {
-    pub condition: SysCallCondition,
+    pub condition: SyscallCondition,
     pub restartable: bool,
 }
 
@@ -157,7 +157,7 @@ impl From<SyscallReturn> for SyscallResult {
             }
             // SAFETY: XXX: We're assuming this points to a valid SysCallCondition.
             SyscallReturn::Block(blocked) => Err(SyscallError::Blocked(Blocked {
-                condition: unsafe { SysCallCondition::consume_from_c(blocked.cond) },
+                condition: unsafe { SyscallCondition::consume_from_c(blocked.cond) },
                 restartable: blocked.restartable,
             })),
             SyscallReturn::Native => Err(SyscallError::Native),
@@ -216,21 +216,21 @@ impl From<std::io::Error> for SyscallError {
 impl SyscallError {
     pub fn new_blocked_on_file(file: File, state: FileState, restartable: bool) -> Self {
         Self::Blocked(Blocked {
-            condition: SysCallCondition::new(Trigger::from_file(file, state)),
+            condition: SyscallCondition::new(Trigger::from_file(file, state)),
             restartable,
         })
     }
 
     pub fn new_blocked_on_child(restartable: bool) -> Self {
         Self::Blocked(Blocked {
-            condition: SysCallCondition::new(Trigger::child()),
+            condition: SyscallCondition::new(Trigger::child()),
             restartable,
         })
     }
 
     pub fn new_blocked_until(unblock_time: EmulatedTime, restartable: bool) -> Self {
         Self::Blocked(Blocked {
-            condition: SysCallCondition::new_from_wakeup_time(unblock_time),
+            condition: SyscallCondition::new_from_wakeup_time(unblock_time),
             restartable,
         })
     }
@@ -242,8 +242,8 @@ impl SyscallError {
         })
     }
 
-    /// Returns the [condition](SysCallCondition) that the syscall is blocked on.
-    pub fn blocked_condition(&mut self) -> Option<&mut SysCallCondition> {
+    /// Returns the [condition](SyscallCondition) that the syscall is blocked on.
+    pub fn blocked_condition(&mut self) -> Option<&mut SyscallCondition> {
         if let Self::Blocked(Blocked {
             ref mut condition, ..
         }) = self

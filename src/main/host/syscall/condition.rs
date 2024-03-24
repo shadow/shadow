@@ -101,11 +101,11 @@ impl<'a> std::ops::Deref for SyscallConditionRefMut<'a> {
 
 /// An owned syscall condition.
 #[derive(Debug, PartialEq, Eq)]
-pub struct SysCallCondition {
+pub struct SyscallCondition {
     condition: Option<SyscallConditionRefMut<'static>>,
 }
 
-impl SysCallCondition {
+impl SyscallCondition {
     /// "Steal" from a C pointer. i.e. doesn't increase ref count, but will decrease the ref count
     /// when dropped.
     ///
@@ -124,7 +124,7 @@ impl SysCallCondition {
     // TODO: Add support for taking a Timer, ideally after we have a Rust
     // implementation or wrapper.
     pub fn new(trigger: Trigger) -> Self {
-        SysCallCondition {
+        SyscallCondition {
             condition: Some(unsafe {
                 SyscallConditionRefMut::borrow_from_c(cshadow::syscallcondition_new(trigger.into()))
             }),
@@ -136,7 +136,7 @@ impl SysCallCondition {
     ///
     /// Panics if `abs_wakeup_time` is before the current emulated time.
     pub fn new_from_wakeup_time(abs_wakeup_time: EmulatedTime) -> Self {
-        SysCallCondition {
+        SyscallCondition {
             condition: Some(unsafe {
                 SyscallConditionRefMut::borrow_from_c(cshadow::syscallcondition_newWithAbsTimeout(
                     EmulatedTime::to_c_emutime(Some(abs_wakeup_time)),
@@ -152,7 +152,7 @@ impl SysCallCondition {
     }
 }
 
-impl Drop for SysCallCondition {
+impl Drop for SyscallCondition {
     fn drop(&mut self) {
         if let Some(condition) = &self.condition {
             if !condition.c_ptr.ptr().is_null() {
@@ -162,7 +162,7 @@ impl Drop for SysCallCondition {
     }
 }
 
-impl std::ops::Deref for SysCallCondition {
+impl std::ops::Deref for SyscallCondition {
     type Target = SyscallConditionRefMut<'static>;
 
     fn deref(&self) -> &Self::Target {
@@ -170,7 +170,7 @@ impl std::ops::Deref for SysCallCondition {
     }
 }
 
-impl std::ops::DerefMut for SysCallCondition {
+impl std::ops::DerefMut for SyscallCondition {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.condition.as_mut().unwrap()
     }

@@ -57,8 +57,8 @@ pub struct Thread {
     // any RootedRc members we could get rid of the requirement to explicitly
     // drop Thread.
     desc_table: Option<RootedRc<RootedRefCell<DescriptorTable>>>,
-    // TODO: convert to SysCallCondition (Rust wrapper for c::SysCallCondition).
-    // Non-trivial because SysCallCondition is currently not `Send`.
+    // TODO: convert to SyscallCondition (Rust wrapper for c::SysCallCondition).
+    // Non-trivial because SyscallCondition is currently not `Send`.
     cond: Cell<SendPointer<c::SysCallCondition>>,
     /// The native, managed thread
     mthread: RefCell<ManagedThread>,

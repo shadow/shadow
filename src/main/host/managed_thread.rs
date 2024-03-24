@@ -24,7 +24,7 @@ use vasi_sync::scchannel::SelfContainedChannelError;
 
 use super::context::ThreadContext;
 use super::host::Host;
-use super::syscall::condition::SysCallCondition;
+use super::syscall::condition::SyscallCondition;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall::handler::SyscallHandler;
@@ -35,8 +35,8 @@ use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginP
 #[derive(Debug)]
 #[must_use]
 pub enum ResumeResult {
-    /// Blocked on a SysCallCondition.
-    Blocked(SysCallCondition),
+    /// Blocked on a SyscallCondition.
+    Blocked(SyscallCondition),
     /// The native thread has exited with the given code.
     ExitedThread(i32),
     /// The thread's process has exited.
@@ -284,7 +284,7 @@ impl ManagedThread {
                     match scr {
                         SyscallReturn::Block(b) => {
                             return ResumeResult::Blocked(unsafe {
-                                SysCallCondition::consume_from_c(b.cond)
+                                SyscallCondition::consume_from_c(b.cond)
                             })
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(

@@ -138,7 +138,7 @@ impl SyscallHandler {
             return if options.contains(WaitFlags::WNOHANG) {
                 Ok(0)
             } else {
-                // FIXME: save `target` in SysCallCondition and reuse, in case
+                // FIXME: save `target` in SyscallCondition and reuse, in case
                 // the target was specified as 0 => "current process group id"
                 // and the process group changes in the meantime.
                 Err(SyscallError::new_blocked_on_child(
