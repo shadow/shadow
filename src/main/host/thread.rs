@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::{shmalloc, ShMemBlock};
@@ -173,7 +173,7 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         n: i64,
-        args: &[SysCallReg],
+        args: &[SyscallReg],
     ) -> libc::c_long {
         self.mthread
             .borrow()
@@ -186,8 +186,8 @@ impl Thread {
         &self,
         ctx: &ProcessContext,
         n: i64,
-        args: &[SysCallReg],
-    ) -> Result<SysCallReg, Errno> {
+        args: &[SyscallReg],
+    ) -> Result<SyscallReg, Errno> {
         syscall::raw_return_value_to_result(self.native_syscall_raw(ctx, n, args))
     }
 
@@ -300,12 +300,12 @@ impl Thread {
                 ctx,
                 libc::SYS_mmap,
                 &[
-                    SysCallReg::from(addr),
-                    SysCallReg::from(len),
-                    SysCallReg::from(prot),
-                    SysCallReg::from(flags),
-                    SysCallReg::from(fd),
-                    SysCallReg::from(offset),
+                    SyscallReg::from(addr),
+                    SyscallReg::from(len),
+                    SyscallReg::from(prot),
+                    SyscallReg::from(flags),
+                    SyscallReg::from(fd),
+                    SyscallReg::from(offset),
                 ],
             )?
             .into())
@@ -326,11 +326,11 @@ impl Thread {
                 ctx,
                 libc::SYS_mremap,
                 &[
-                    SysCallReg::from(old_addr),
-                    SysCallReg::from(old_len),
-                    SysCallReg::from(new_len),
-                    SysCallReg::from(flags),
-                    SysCallReg::from(new_addr),
+                    SyscallReg::from(old_addr),
+                    SyscallReg::from(old_len),
+                    SyscallReg::from(new_len),
+                    SyscallReg::from(flags),
+                    SyscallReg::from(new_addr),
                 ],
             )?
             .into())
@@ -348,9 +348,9 @@ impl Thread {
             ctx,
             libc::SYS_mprotect,
             &[
-                SysCallReg::from(addr),
-                SysCallReg::from(len),
-                SysCallReg::from(prot),
+                SyscallReg::from(addr),
+                SyscallReg::from(len),
+                SyscallReg::from(prot),
             ],
         )?;
         Ok(())
@@ -368,9 +368,9 @@ impl Thread {
             ctx,
             libc::SYS_open,
             &[
-                SysCallReg::from(pathname),
-                SysCallReg::from(flags),
-                SysCallReg::from(mode),
+                SyscallReg::from(pathname),
+                SyscallReg::from(flags),
+                SyscallReg::from(mode),
             ],
         );
         Ok(i32::from(res?))
@@ -378,7 +378,7 @@ impl Thread {
 
     /// Natively execute close(2) on the given thread.
     pub fn native_close(&self, ctx: &ProcessContext, fd: i32) -> Result<(), Errno> {
-        self.native_syscall(ctx, libc::SYS_close, &[SysCallReg::from(fd)])?;
+        self.native_syscall(ctx, libc::SYS_close, &[SyscallReg::from(fd)])?;
         Ok(())
     }
 
@@ -388,7 +388,7 @@ impl Thread {
         ctx: &ProcessContext,
         addr: ForeignPtr<u8>,
     ) -> Result<ForeignPtr<u8>, Errno> {
-        let res = self.native_syscall(ctx, libc::SYS_brk, &[SysCallReg::from(addr)])?;
+        let res = self.native_syscall(ctx, libc::SYS_brk, &[SyscallReg::from(addr)])?;
         Ok(ForeignPtr::from(res))
     }
 
@@ -622,12 +622,12 @@ mod export {
     unsafe extern "C-unwind" fn thread_nativeSyscall(
         thread: *const Thread,
         n: libc::c_long,
-        arg1: SysCallReg,
-        arg2: SysCallReg,
-        arg3: SysCallReg,
-        arg4: SysCallReg,
-        arg5: SysCallReg,
-        arg6: SysCallReg,
+        arg1: SyscallReg,
+        arg2: SyscallReg,
+        arg3: SyscallReg,
+        arg4: SyscallReg,
+        arg5: SyscallReg,
+        arg6: SyscallReg,
     ) -> libc::c_long {
         let thread = unsafe { thread.as_ref().unwrap() };
         Worker::with_active_host(|host| {

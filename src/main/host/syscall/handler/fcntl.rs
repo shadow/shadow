@@ -1,7 +1,7 @@
 use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, FcntlCommand, OFlag};
 use log::debug;
-use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::syscall_types::SyscallReg;
 use syscall_logger::log_syscall;
 
 use crate::cshadow;
@@ -67,7 +67,7 @@ impl SyscallHandler {
                 let file = file.inner_file().borrow();
                 // combine the file status and access mode flags
                 let flags = file.status().as_o_flags() | file.mode().as_o_flags();
-                SysCallReg::from(flags.bits())
+                SyscallReg::from(flags.bits())
             }
             FcntlCommand::F_SETFL => {
                 let file = match desc.file() {
@@ -130,14 +130,14 @@ impl SyscallHandler {
                 }
 
                 file.set_status(status);
-                SysCallReg::from(0)
+                SyscallReg::from(0)
             }
-            FcntlCommand::F_GETFD => SysCallReg::from(desc.flags().bits()),
+            FcntlCommand::F_GETFD => SyscallReg::from(desc.flags().bits()),
             FcntlCommand::F_SETFD => {
                 let flags = i32::try_from(arg).or(Err(Errno::EINVAL))?;
                 let flags = DescriptorFlags::from_bits(flags).ok_or(Errno::EINVAL)?;
                 desc.set_flags(flags);
-                SysCallReg::from(0)
+                SyscallReg::from(0)
             }
             FcntlCommand::F_DUPFD => {
                 let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
@@ -146,7 +146,7 @@ impl SyscallHandler {
                 let new_fd = desc_table
                     .register_descriptor_with_min_fd(new_desc, min_fd)
                     .or(Err(Errno::EINVAL))?;
-                SysCallReg::from(i32::from(new_fd))
+                SyscallReg::from(i32::from(new_fd))
             }
             FcntlCommand::F_DUPFD_CLOEXEC => {
                 let min_fd = arg.try_into().or(Err(Errno::EINVAL))?;
@@ -155,7 +155,7 @@ impl SyscallHandler {
                 let new_fd = desc_table
                     .register_descriptor_with_min_fd(new_desc, min_fd)
                     .or(Err(Errno::EINVAL))?;
-                SysCallReg::from(i32::from(new_fd))
+                SyscallReg::from(i32::from(new_fd))
             }
             FcntlCommand::F_GETPIPE_SZ => {
                 let file = match desc.file() {
@@ -167,7 +167,7 @@ impl SyscallHandler {
                 };
 
                 if let File::Pipe(pipe) = file.inner_file() {
-                    SysCallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
+                    SyscallReg::from(i32::try_from(pipe.borrow().max_size()).unwrap())
                 } else {
                     return Err(Errno::EINVAL.into());
                 }

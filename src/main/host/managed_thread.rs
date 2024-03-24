@@ -18,7 +18,7 @@ use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
     ShimEventToShadow, ShimEventToShim,
 };
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SyscallReg};
 use shadow_shmem::allocator::ShMemBlock;
 use vasi_sync::scchannel::SelfContainedChannelError;
 
@@ -74,10 +74,10 @@ impl ManagedThread {
     ///
     /// Panics if the native thread is dead or dies during the syscall,
     /// including if the syscall itself is SYS_exit or SYS_exit_group.
-    pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
+    pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SyscallReg]) -> SyscallReg {
         let mut syscall_args = SysCallArgs {
             number: n,
-            args: [SysCallReg::from(0u64); 6],
+            args: [SyscallReg::from(0u64); 6],
         };
         syscall_args.args[..args.len()].copy_from_slice(args);
         match self.continue_plugin(
@@ -371,7 +371,7 @@ impl ManagedThread {
             ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes { clone_res }) => clone_res,
             r => panic!("Unexpected result: {r:?}"),
         };
-        let clone_res: SysCallReg = syscall::raw_return_value_to_result(clone_res)?;
+        let clone_res: SyscallReg = syscall::raw_return_value_to_result(clone_res)?;
         let child_native_tid = libc::pid_t::from(clone_res);
         trace!("native clone treated tid {child_native_tid}");
 

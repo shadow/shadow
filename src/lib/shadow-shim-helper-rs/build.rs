@@ -27,7 +27,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "shd_kernel_sigaction".into(),
             "HostId".into(),
             "SysCallArgs".into(),
-            "SysCallReg".into(),
+            "SyscallReg".into(),
             "ManagedPhysicalMemoryAddr".into(),
         ],
         // we provide our own definition for `UntypedForeignPtr` above

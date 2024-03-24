@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////
 
 static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, int fd,
-                                       unsigned long command, SysCallReg argReg) {
+                                       unsigned long command, SyscallReg argReg) {
     int result = 0;
 
     switch (command) {
@@ -173,7 +173,7 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
 SyscallReturn syscallhandler_fcntl(SyscallHandler* sys, const SysCallArgs* args) {
     int fd = args->args[0].as_i64;
     unsigned long command = args->args[1].as_i64;
-    SysCallReg argReg = args->args[2]; // type depends on command
+    SyscallReg argReg = args->args[2]; // type depends on command
 
     trace("fcntl called on fd %d for command %lu", fd, command);
 

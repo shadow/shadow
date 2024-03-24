@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::syscall_types::SyscallReg;
 use shadow_shim_helper_rs::util::time::TimeParts;
 
 use crate::core::worker::Worker;
@@ -59,8 +59,8 @@ pub trait SyscallDisplay {
 /// A syscall argument or return value. It implements [`Display`], and only reads memory and
 /// converts types when being formatted.
 pub struct SyscallVal<'a, T> {
-    pub reg: SysCallReg,
-    pub args: [SysCallReg; 6],
+    pub reg: SyscallReg,
+    pub args: [SyscallReg; 6],
     options: FmtOptions,
     mem: &'a MemoryManager,
     _phantom: PhantomData<T>,
@@ -68,8 +68,8 @@ pub struct SyscallVal<'a, T> {
 
 impl<'a, T> SyscallVal<'a, T> {
     pub fn new(
-        reg: SysCallReg,
-        args: [SysCallReg; 6],
+        reg: SyscallReg,
+        args: [SyscallReg; 6],
         options: FmtOptions,
         mem: &'a MemoryManager,
     ) -> Self {
@@ -126,7 +126,7 @@ where
     SyscallVal<'a, E>: Display,
     SyscallVal<'a, F>: Display,
 {
-    pub fn new(args: [SysCallReg; 6], options: FmtOptions, mem: &'a MemoryManager) -> Self {
+    pub fn new(args: [SyscallReg; 6], options: FmtOptions, mem: &'a MemoryManager) -> Self {
         Self {
             a: SyscallVal::new(args[0], args, options, mem),
             b: SyscallVal::new(args[1], args, options, mem),
@@ -192,7 +192,7 @@ where
     RV: std::fmt::Debug,
 {
     rv: &'a SyscallResult,
-    args: [SysCallReg; 6],
+    args: [SyscallReg; 6],
     options: FmtOptions,
     mem: &'a MemoryManager,
     _phantom: PhantomData<RV>,
@@ -205,7 +205,7 @@ where
 {
     pub fn new(
         rv: &'a SyscallResult,
-        args: [SysCallReg; 6],
+        args: [SyscallReg; 6],
         options: FmtOptions,
         mem: &'a MemoryManager,
     ) -> Self {
@@ -232,7 +232,7 @@ where
             }
             SyscallResult::Err(SyscallError::Failed(failed)) => {
                 let errno = failed.errno;
-                let rv = SysCallReg::from(errno.to_negated_i64());
+                let rv = SyscallReg::from(errno.to_negated_i64());
                 let rv = SyscallVal::<'_, RV>::new(rv, self.args, self.options, self.mem);
                 write!(f, "{rv} ({errno})")
             }
@@ -276,7 +276,7 @@ pub fn log_syscall_simple(
         return Ok(());
     };
 
-    let args = [SysCallReg::from(0i64); 6];
+    let args = [SyscallReg::from(0i64); 6];
     let mem = proc.memory_borrow();
     let rv = SyscallResultFmt::<libc::c_long>::new(result, args, logging_mode, &mem);
 

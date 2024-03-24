@@ -1,7 +1,7 @@
 use shadow_shmem::allocator::ShMemBlockSerialized;
 use vasi::VirtualAddressSpaceIndependent;
 
-use crate::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg, UntypedForeignPtr};
+use crate::syscall_types::{ForeignPtr, SysCallArgs, SyscallReg, UntypedForeignPtr};
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
@@ -14,7 +14,7 @@ pub struct ShimEventSyscall {
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct ShimEventSyscallComplete {
-    pub retval: SysCallReg,
+    pub retval: SyscallReg,
     /// Whether the syscall is eligible to be restarted. Only applicable
     /// when retval is -EINTR. See signal(7).
     pub restartable: bool,

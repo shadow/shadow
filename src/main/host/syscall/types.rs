@@ -7,7 +7,7 @@ use linux_api::errno::Errno;
 use log::Level::Debug;
 use log::*;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
@@ -141,7 +141,7 @@ pub struct Failed {
     pub restartable: bool,
 }
 
-pub type SyscallResult = Result<SysCallReg, SyscallError>;
+pub type SyscallResult = Result<SyscallReg, SyscallError>;
 
 impl From<SyscallReturn> for SyscallResult {
     fn from(r: SyscallReturn) -> Self {
@@ -258,7 +258,7 @@ impl SyscallError {
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct SyscallReturnDone {
-    pub retval: SysCallReg,
+    pub retval: SyscallReg,
     // Only meaningful when `retval` is -EINTR.
     //
     // Whether the interrupted syscall is restartable.
@@ -292,7 +292,7 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub unsafe extern "C-unwind" fn syscallreturn_makeDone(retval: SysCallReg) -> SyscallReturn {
+    pub unsafe extern "C-unwind" fn syscallreturn_makeDone(retval: SyscallReg) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval,
             restartable: false,

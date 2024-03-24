@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete, ShimEventToShadow,
     ShimEventToShim,
 };
-use shadow_shim_helper_rs::syscall_types::{SysCallArgs, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{SysCallArgs, SyscallReg};
 use shadow_shim_helper_rs::util::time::TimeParts;
 
 use crate::{bindings, global_host_shmem, tls_ipc, tls_thread_shmem};
@@ -19,7 +19,7 @@ use crate::{bindings, global_host_shmem, tls_ipc, tls_thread_shmem};
 /// # Safety
 ///
 /// The specified syscall must be safe to make.
-unsafe fn native_syscall(args: &SysCallArgs) -> SysCallReg {
+unsafe fn native_syscall(args: &SysCallArgs) -> SyscallReg {
     if args.number == libc::SYS_clone {
         panic!("Shouldn't get here. Should have gone through ShimEventAddThreadReq");
     } else if args.number == libc::SYS_exit {
@@ -55,7 +55,7 @@ unsafe fn native_syscall(args: &SysCallArgs) -> SysCallReg {
 unsafe fn emulated_syscall_event(
     mut ctx: Option<&mut ucontext>,
     syscall_event: &ShimEventSyscall,
-) -> SysCallReg {
+) -> SyscallReg {
     log::trace!(
         "sending syscall {} event",
         syscall_event.syscall_args.number
@@ -194,7 +194,7 @@ pub mod export {
                 // than actually provided is sound because any bit pattern is a
                 // valid i64.
                 let arg = unsafe { args.get::<i64>() };
-                SysCallReg::from(arg)
+                SyscallReg::from(arg)
             }),
         };
 
@@ -224,7 +224,7 @@ pub mod export {
                 // than actually provided is sound because any bit pattern is a
                 // valid i64.
                 let arg = unsafe { args.get::<i64>() };
-                SysCallReg::from(arg)
+                SyscallReg::from(arg)
             }),
         };
         // SAFETY: Ensured by caller.

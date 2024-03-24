@@ -282,7 +282,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("QDiscMode")
         // Imported from libc crate below
         .blocklist_type("siginfo_t")
-        .blocklist_type("SysCallReg")
+        .blocklist_type("SyscallReg")
         .blocklist_type("SysCallArgs")
         .blocklist_type("ForeignPtr")
         .blocklist_type("ManagedPhysicalMemoryAddr")
