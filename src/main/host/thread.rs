@@ -22,7 +22,7 @@ use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
-use crate::host::syscall::condition::{SysCallConditionRef, SysCallConditionRefMut};
+use crate::host::syscall::condition::{SyscallConditionRef, SyscallConditionRefMut};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{syscall, IsSend, ObjectCounter};
@@ -217,7 +217,7 @@ impl Thread {
         self.id == self.process_id.into()
     }
 
-    pub fn syscall_condition(&self) -> Option<SysCallConditionRef> {
+    pub fn syscall_condition(&self) -> Option<SyscallConditionRef> {
         // We check the for null explicitly here instead of using `as_mut` to
         // construct and match an `Option<&mut c::SysCallCondition>`, since it's
         // difficult to ensure we're not breaking any Rust aliasing rules when
@@ -226,18 +226,18 @@ impl Thread {
         if c.is_null() {
             None
         } else {
-            Some(unsafe { SysCallConditionRef::borrow_from_c(c) })
+            Some(unsafe { SyscallConditionRef::borrow_from_c(c) })
         }
     }
 
-    pub fn syscall_condition_mut(&self) -> Option<SysCallConditionRefMut> {
+    pub fn syscall_condition_mut(&self) -> Option<SyscallConditionRefMut> {
         // We can't safely use `as_mut` here, since that would construct a mutable reference,
         // and we can't prove no other reference exists.
         let c = self.cond.get().ptr();
         if c.is_null() {
             None
         } else {
-            Some(unsafe { SysCallConditionRefMut::borrow_from_c(c) })
+            Some(unsafe { SyscallConditionRefMut::borrow_from_c(c) })
         }
     }
 
