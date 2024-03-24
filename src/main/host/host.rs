@@ -44,7 +44,7 @@ use crate::host::futex_table::FutexTable;
 use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, PcapOptions};
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
-use crate::host::thread::ThreadId;
+use crate::host::thread::{Thread, ThreadId};
 use crate::network::relay::{RateLimit, Relay};
 use crate::network::router::Router;
 use crate::network::PacketDevice;
@@ -877,6 +877,22 @@ impl Host {
         unsafe { &*self.shim_shmem.get() }
     }
 
+    /// Returns the specified thread if it exists. If you already have the thread's process,
+    /// [`Process::thread_borrow`] may be more efficient.
+    pub fn thread_cloned_rc(
+        &self,
+        virtual_tid: ThreadId,
+    ) -> Option<RootedRc<RootedRefCell<Thread>>> {
+        for process in self.processes.borrow().values() {
+            let process = process.borrow(self.root());
+            if let Some(thread) = process.thread_borrow(virtual_tid) {
+                return Some(RootedRc::clone(&*thread, self.root()));
+            };
+        }
+
+        None
+    }
+
     /// Returns `true` if the host has a process that contains the specified thread.
     pub fn has_thread(&self, virtual_tid: ThreadId) -> bool {
         for process in self.processes.borrow().values() {
@@ -1041,10 +1057,7 @@ mod export {
     use shadow_shim_helper_rs::shim_shmem;
 
     use super::*;
-    use crate::{
-        cshadow::{CEmulatedTime, CSimulationTime},
-        host::thread::Thread,
-    };
+    use crate::cshadow::{CEmulatedTime, CSimulationTime};
 
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {
