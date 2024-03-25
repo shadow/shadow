@@ -8,8 +8,8 @@ use std::time::Duration;
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::syscall_types::SysCallArgs;
-use shadow_shim_helper_rs::syscall_types::SysCallReg;
+use shadow_shim_helper_rs::syscall_types::SyscallArgs;
+use shadow_shim_helper_rs::syscall_types::SyscallReg;
 use shadow_shim_helper_rs::util::SendPointer;
 use shadow_shim_helper_rs::HostId;
 
@@ -55,7 +55,7 @@ mod unistd;
 mod wait;
 
 type LegacySyscallFn =
-    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SysCallArgs) -> SyscallReturn;
+    unsafe extern "C-unwind" fn(*mut SyscallHandler, *const SyscallArgs) -> SyscallReturn;
 
 // Will eventually contain syscall handler state once migrated from the c handler
 pub struct SyscallHandler {
@@ -112,7 +112,7 @@ impl SyscallHandler {
         }
     }
 
-    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    pub fn syscall(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
         // it wouldn't make sense if we were given a different host, process, and thread
         assert_eq!(ctx.host.id(), self.host_id);
         assert_eq!(ctx.process.id(), self.process_id);
@@ -329,7 +329,7 @@ impl SyscallHandler {
     }
 
     #[allow(non_upper_case_globals)]
-    fn run_handler(&mut self, ctx: &ThreadContext, args: &SysCallArgs) -> SyscallResult {
+    fn run_handler(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
         const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
         const NR_shadow_init_memory_manager: SyscallNum =
             SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
@@ -731,7 +731,7 @@ impl std::ops::Drop for SyscallHandler {
 
 pub struct SyscallContext<'a, 'b> {
     pub objs: &'a ThreadContext<'b>,
-    pub args: &'a SysCallArgs,
+    pub args: &'a SyscallArgs,
     pub handler: &'a mut SyscallHandler,
 }
 
@@ -742,7 +742,7 @@ pub trait SyscallHandlerFn<T> {
 impl<F, T0> SyscallHandlerFn<()> for F
 where
     F: Fn(&mut SyscallContext) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
+    T0: Into<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(ctx).map(Into::into)
@@ -752,8 +752,8 @@ where
 impl<F, T0, T1> SyscallHandlerFn<(T1,)> for F
 where
     F: Fn(&mut SyscallContext, T1) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(ctx, ctx.args.get(0).into()).map(Into::into)
@@ -763,9 +763,9 @@ where
 impl<F, T0, T1, T2> SyscallHandlerFn<(T1, T2)> for F
 where
     F: Fn(&mut SyscallContext, T1, T2) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
-    T2: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
+    T2: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(ctx, ctx.args.get(0).into(), ctx.args.get(1).into()).map(Into::into)
@@ -775,10 +775,10 @@ where
 impl<F, T0, T1, T2, T3> SyscallHandlerFn<(T1, T2, T3)> for F
 where
     F: Fn(&mut SyscallContext, T1, T2, T3) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
-    T2: From<SysCallReg>,
-    T3: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
+    T2: From<SyscallReg>,
+    T3: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(
@@ -794,11 +794,11 @@ where
 impl<F, T0, T1, T2, T3, T4> SyscallHandlerFn<(T1, T2, T3, T4)> for F
 where
     F: Fn(&mut SyscallContext, T1, T2, T3, T4) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
-    T2: From<SysCallReg>,
-    T3: From<SysCallReg>,
-    T4: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
+    T2: From<SyscallReg>,
+    T3: From<SyscallReg>,
+    T4: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(
@@ -815,12 +815,12 @@ where
 impl<F, T0, T1, T2, T3, T4, T5> SyscallHandlerFn<(T1, T2, T3, T4, T5)> for F
 where
     F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
-    T2: From<SysCallReg>,
-    T3: From<SysCallReg>,
-    T4: From<SysCallReg>,
-    T5: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
+    T2: From<SyscallReg>,
+    T3: From<SyscallReg>,
+    T4: From<SyscallReg>,
+    T5: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(
@@ -838,13 +838,13 @@ where
 impl<F, T0, T1, T2, T3, T4, T5, T6> SyscallHandlerFn<(T1, T2, T3, T4, T5, T6)> for F
 where
     F: Fn(&mut SyscallContext, T1, T2, T3, T4, T5, T6) -> Result<T0, SyscallError>,
-    T0: Into<SysCallReg>,
-    T1: From<SysCallReg>,
-    T2: From<SysCallReg>,
-    T3: From<SysCallReg>,
-    T4: From<SysCallReg>,
-    T5: From<SysCallReg>,
-    T6: From<SysCallReg>,
+    T0: Into<SyscallReg>,
+    T1: From<SyscallReg>,
+    T2: From<SyscallReg>,
+    T3: From<SyscallReg>,
+    T4: From<SyscallReg>,
+    T5: From<SyscallReg>,
+    T6: From<SyscallReg>,
 {
     fn call(self, ctx: &mut SyscallContext) -> SyscallResult {
         self(

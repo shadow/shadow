@@ -17,7 +17,7 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
+/// # use shadow_rs::host::syscall_types::{SyscallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
@@ -31,7 +31,7 @@ use quote::ToTokens;
 /// ```compile_fail
 /// # use syscall_logger::log_syscall;
 /// # use shadow_rs::host::syscall::handler::SyscallContext;
-/// # use shadow_rs::host::syscall_types::{SysCallArgs, SyscallError};
+/// # use shadow_rs::host::syscall_types::{SyscallArgs, SyscallError};
 /// struct MyHandler {}
 ///
 /// impl MyHandler {
@@ -187,9 +187,9 @@ pub fn log_syscall(args: TokenStream, input: TokenStream) -> TokenStream {
             let memory = #context_arg_name.objs.process.memory_borrow();
 
             // Ugly hack to convert the `Result<T, SyscallError>` to a `SyscallResult` (so the `T`
-            // to a `SysCallReg`) without cloning the `SyscallError`. Since we need to convert back
+            // to a `SyscallReg`) without cloning the `SyscallError`. Since we need to convert back
             // to a `Result<T, SyscallError>` later, we keep a copy of the original `Result::Ok(T)`
-            // value. This assumes that `T: Into<SysCallReg> + Clone`.
+            // value. This assumes that `T: Into<SyscallReg> + Clone`.
             let rv_original_ok = rv.as_ref().ok().cloned();
             let rv = rv.map(|x| x.into());
 

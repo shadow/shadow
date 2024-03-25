@@ -36,7 +36,7 @@ typedef enum {
  * The functions defined with this macro should never be called outside
  * of syscall_handler.c. */
 #define SYSCALL_HANDLER(s)                                                                         \
-    SyscallReturn syscallhandler_##s(SyscallHandler* sys, const SysCallArgs* args);
+    SyscallReturn syscallhandler_##s(SyscallHandler* sys, const SyscallArgs* args);
 
 int _syscallhandler_validateLegacyFile(LegacyFile* descriptor, LegacyFileType expectedType);
 

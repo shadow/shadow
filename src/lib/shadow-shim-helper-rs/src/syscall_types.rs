@@ -220,17 +220,17 @@ impl From<ManagedPhysicalMemoryAddr> for u64 {
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub struct SysCallArgs {
+pub struct SyscallArgs {
     // SYS_* from sys/syscall.h.
     // (mostly included from
     // /usr/include/x86_64-linux-gnu/bits/syscall.h)
     pub number: libc::c_long,
-    pub args: [SysCallReg; 6],
+    pub args: [SyscallReg; 6],
 }
 
-impl SysCallArgs {
+impl SyscallArgs {
     #[inline]
-    pub fn get(&self, i: usize) -> SysCallReg {
+    pub fn get(&self, i: usize) -> SyscallReg {
         self.args[i]
     }
     #[inline]
@@ -242,146 +242,146 @@ impl SysCallArgs {
 /// A register used for input/output in a syscall.
 #[derive(Copy, Clone, Eq, VirtualAddressSpaceIndependent)]
 #[repr(C)]
-pub union SysCallReg {
+pub union SyscallReg {
     as_i64: i64,
     as_u64: u64,
     as_ptr: UntypedForeignPtr,
 }
-// SysCallReg and all of its fields must be transmutable with a 64 bit integer.
+// SyscallReg and all of its fields must be transmutable with a 64 bit integer.
 // TODO: Store as a single `u64` and explicitly transmute in the conversion
 // operations.  This requires getting rid of the direct field access in our C
 // code.
-static_assertions::assert_eq_align!(SysCallReg, u64);
-static_assertions::assert_eq_size!(SysCallReg, u64);
+static_assertions::assert_eq_align!(SyscallReg, u64);
+static_assertions::assert_eq_size!(SyscallReg, u64);
 
-impl PartialEq for SysCallReg {
+impl PartialEq for SyscallReg {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         unsafe { self.as_u64 == other.as_u64 }
     }
 }
 
-impl From<u64> for SysCallReg {
+impl From<u64> for SyscallReg {
     #[inline]
     fn from(v: u64) -> Self {
         Self { as_u64: v }
     }
 }
 
-impl From<SysCallReg> for u64 {
+impl From<SyscallReg> for u64 {
     #[inline]
-    fn from(v: SysCallReg) -> u64 {
+    fn from(v: SyscallReg) -> u64 {
         unsafe { v.as_u64 }
     }
 }
 
-impl From<u32> for SysCallReg {
+impl From<u32> for SyscallReg {
     #[inline]
     fn from(v: u32) -> Self {
         Self { as_u64: v as u64 }
     }
 }
 
-impl From<SysCallReg> for u32 {
+impl From<SyscallReg> for u32 {
     #[inline]
-    fn from(v: SysCallReg) -> u32 {
+    fn from(v: SyscallReg) -> u32 {
         (unsafe { v.as_u64 }) as u32
     }
 }
 
-impl From<usize> for SysCallReg {
+impl From<usize> for SyscallReg {
     #[inline]
     fn from(v: usize) -> Self {
         Self { as_u64: v as u64 }
     }
 }
 
-impl From<SysCallReg> for usize {
+impl From<SyscallReg> for usize {
     #[inline]
-    fn from(v: SysCallReg) -> usize {
+    fn from(v: SyscallReg) -> usize {
         unsafe { v.as_u64 as usize }
     }
 }
 
-impl From<isize> for SysCallReg {
+impl From<isize> for SyscallReg {
     #[inline]
     fn from(v: isize) -> Self {
         Self { as_i64: v as i64 }
     }
 }
 
-impl From<SysCallReg> for isize {
+impl From<SyscallReg> for isize {
     #[inline]
-    fn from(v: SysCallReg) -> isize {
+    fn from(v: SyscallReg) -> isize {
         unsafe { v.as_i64 as isize }
     }
 }
 
-impl From<i64> for SysCallReg {
+impl From<i64> for SyscallReg {
     #[inline]
     fn from(v: i64) -> Self {
         Self { as_i64: v }
     }
 }
 
-impl From<SysCallReg> for i64 {
+impl From<SyscallReg> for i64 {
     #[inline]
-    fn from(v: SysCallReg) -> i64 {
+    fn from(v: SyscallReg) -> i64 {
         unsafe { v.as_i64 }
     }
 }
 
-impl From<i32> for SysCallReg {
+impl From<i32> for SyscallReg {
     #[inline]
     fn from(v: i32) -> Self {
         Self { as_i64: v as i64 }
     }
 }
 
-impl From<SysCallReg> for i32 {
+impl From<SyscallReg> for i32 {
     #[inline]
-    fn from(v: SysCallReg) -> i32 {
+    fn from(v: SyscallReg) -> i32 {
         (unsafe { v.as_i64 }) as i32
     }
 }
 
-impl TryFrom<SysCallReg> for u8 {
+impl TryFrom<SyscallReg> for u8 {
     type Error = <u8 as TryFrom<u64>>::Error;
 
     #[inline]
-    fn try_from(v: SysCallReg) -> Result<u8, Self::Error> {
+    fn try_from(v: SyscallReg) -> Result<u8, Self::Error> {
         (unsafe { v.as_u64 }).try_into()
     }
 }
 
-impl TryFrom<SysCallReg> for u16 {
+impl TryFrom<SyscallReg> for u16 {
     type Error = <u16 as TryFrom<u64>>::Error;
 
     #[inline]
-    fn try_from(v: SysCallReg) -> Result<u16, Self::Error> {
+    fn try_from(v: SyscallReg) -> Result<u16, Self::Error> {
         (unsafe { v.as_u64 }).try_into()
     }
 }
 
-impl TryFrom<SysCallReg> for i8 {
+impl TryFrom<SyscallReg> for i8 {
     type Error = <i8 as TryFrom<i64>>::Error;
 
     #[inline]
-    fn try_from(v: SysCallReg) -> Result<i8, Self::Error> {
+    fn try_from(v: SyscallReg) -> Result<i8, Self::Error> {
         (unsafe { v.as_i64 }).try_into()
     }
 }
 
-impl TryFrom<SysCallReg> for i16 {
+impl TryFrom<SyscallReg> for i16 {
     type Error = <i16 as TryFrom<i64>>::Error;
 
     #[inline]
-    fn try_from(v: SysCallReg) -> Result<i16, Self::Error> {
+    fn try_from(v: SyscallReg) -> Result<i16, Self::Error> {
         (unsafe { v.as_i64 }).try_into()
     }
 }
 
-impl<T> From<ForeignPtr<T>> for SysCallReg {
+impl<T> From<ForeignPtr<T>> for SyscallReg {
     #[inline]
     fn from(v: ForeignPtr<T>) -> Self {
         Self {
@@ -390,32 +390,32 @@ impl<T> From<ForeignPtr<T>> for SysCallReg {
     }
 }
 
-impl<T> From<SysCallReg> for ForeignPtr<T> {
+impl<T> From<SyscallReg> for ForeignPtr<T> {
     #[inline]
-    fn from(v: SysCallReg) -> Self {
+    fn from(v: SyscallReg) -> Self {
         // This allows rust to infer the type for the cast. This isn't ideal since we generally want
         // to require that the user be explicit about casts (for example we use the
         // `NoTypeInference` trait on `ForeignPtr::cast`), but we need this type inference so that
-        // `SyscallHandlerFn` can convert the `SysCallReg` to the correct pointer type in syscall
+        // `SyscallHandlerFn` can convert the `SyscallReg` to the correct pointer type in syscall
         // handler arguments.
         (unsafe { v.as_ptr }).cast::<T>()
     }
 }
 
 // Useful for syscalls whose strongly-typed wrappers return some Result<(), ErrType>
-impl From<()> for SysCallReg {
+impl From<()> for SyscallReg {
     #[inline]
-    fn from(_: ()) -> SysCallReg {
-        SysCallReg { as_i64: 0 }
+    fn from(_: ()) -> SyscallReg {
+        SyscallReg { as_i64: 0 }
     }
 }
 
-impl std::fmt::Debug for SysCallReg {
+impl std::fmt::Debug for SyscallReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // prepare the pointer for formatting
         let as_ptr = DebugFormatter(move |fmt| write!(fmt, "{:p}", unsafe { self.as_ptr }));
 
-        f.debug_struct("SysCallReg")
+        f.debug_struct("SyscallReg")
             .field("as_i64", unsafe { &self.as_i64 })
             .field("as_u64", unsafe { &self.as_u64 })
             .field("as_ptr", &as_ptr)
@@ -423,88 +423,88 @@ impl std::fmt::Debug for SysCallReg {
     }
 }
 
-// implement conversions from `SysCallReg`
+// implement conversions from `SyscallReg`
 
-impl From<SysCallReg> for linux_api::sched::CloneFlags {
-    fn from(value: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::sched::CloneFlags {
+    fn from(value: SyscallReg) -> Self {
         Self::from_bits_retain(value.into())
     }
 }
 
-impl From<SysCallReg> for linux_api::fcntl::OFlag {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::fcntl::OFlag {
+    fn from(reg: SyscallReg) -> Self {
         Self::from_bits_retain(reg.into())
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::eventfd::EfdFlags {
+impl TryFrom<SyscallReg> for nix::sys::eventfd::EfdFlags {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::socket::AddressFamily {
+impl TryFrom<SyscallReg> for linux_api::socket::AddressFamily {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Ok(u16::try_from(reg).or(Err(()))?.into())
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::socket::MsgFlags {
+impl TryFrom<SyscallReg> for nix::sys::socket::MsgFlags {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
 
-impl TryFrom<SysCallReg> for nix::sys::stat::Mode {
+impl TryFrom<SyscallReg> for nix::sys::stat::Mode {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Self::from_bits(reg.into()).ok_or(())
     }
 }
 
-impl From<SysCallReg> for linux_api::mman::ProtFlags {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::mman::ProtFlags {
+    fn from(reg: SyscallReg) -> Self {
         Self::from_bits_retain(reg.into())
     }
 }
 
-impl From<SysCallReg> for linux_api::mman::MapFlags {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::mman::MapFlags {
+    fn from(reg: SyscallReg) -> Self {
         Self::from_bits_retain(reg.into())
     }
 }
 
-impl From<SysCallReg> for linux_api::mman::MRemapFlags {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::mman::MRemapFlags {
+    fn from(reg: SyscallReg) -> Self {
         Self::from_bits_retain(reg.into())
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::time::ClockId {
+impl TryFrom<SyscallReg> for linux_api::time::ClockId {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Self::try_from(i32::from(reg)).map_err(|_| ())
     }
 }
 
-impl From<SysCallReg> for linux_api::time::ClockNanosleepFlags {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::time::ClockNanosleepFlags {
+    fn from(reg: SyscallReg) -> Self {
         Self::from_bits_retain(reg.into())
     }
 }
 
-impl TryFrom<SysCallReg> for linux_api::time::ITimerId {
+impl TryFrom<SyscallReg> for linux_api::time::ITimerId {
     type Error = ();
-    fn try_from(reg: SysCallReg) -> Result<Self, Self::Error> {
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
         Self::try_from(i32::from(reg)).map_err(|_| ())
     }
 }
 
-impl From<SysCallReg> for linux_api::prctl::PrctlOp {
-    fn from(reg: SysCallReg) -> Self {
+impl From<SyscallReg> for linux_api::prctl::PrctlOp {
+    fn from(reg: SyscallReg) -> Self {
         Self::new(reg.into())
     }
 }

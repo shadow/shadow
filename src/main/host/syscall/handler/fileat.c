@@ -104,7 +104,7 @@ static SyscallReturn _syscallhandler_renameatHelper(SyscallHandler* sys, int old
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_openat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_openat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;
@@ -141,7 +141,7 @@ SyscallReturn syscallhandler_openat(SyscallHandler* sys, const SysCallArgs* args
     return syscallreturn_makeDoneI64(handle);
 }
 
-SyscallReturn syscallhandler_newfstatat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_newfstatat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     UntypedForeignPtr bufPtr = args->args[2].as_ptr;      // struct stat*
@@ -177,7 +177,7 @@ SyscallReturn syscallhandler_newfstatat(SyscallHandler* sys, const SysCallArgs* 
         regularfile_fstatat(dir_desc, pathname, buf, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_fchownat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_fchownat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     uid_t owner = args->args[2].as_u64;
@@ -200,7 +200,7 @@ SyscallReturn syscallhandler_fchownat(SyscallHandler* sys, const SysCallArgs* ar
         regularfile_fchownat(dir_desc, pathname, owner, group, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_fchmodat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_fchmodat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     uid_t mode = args->args[2].as_u64;
@@ -222,7 +222,7 @@ SyscallReturn syscallhandler_fchmodat(SyscallHandler* sys, const SysCallArgs* ar
         regularfile_fchmodat(dir_desc, pathname, mode, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_futimesat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_futimesat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     UntypedForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timeval [2]
@@ -248,7 +248,7 @@ SyscallReturn syscallhandler_futimesat(SyscallHandler* sys, const SysCallArgs* a
     return syscallreturn_makeDoneI64(regularfile_futimesat(dir_desc, pathname, times, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     UntypedForeignPtr timesPtr = args->args[2].as_ptr;    // const struct timespec [2]
@@ -276,7 +276,7 @@ SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SysCallArgs* a
         regularfile_utimensat(dir_desc, pathname, times, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int mode = args->args[2].as_i64;
@@ -298,7 +298,7 @@ SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SysCallArgs* a
         regularfile_faccessat(dir_desc, pathname, mode, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_mkdirat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_mkdirat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     mode_t mode = args->args[2].as_u64;
@@ -318,7 +318,7 @@ SyscallReturn syscallhandler_mkdirat(SyscallHandler* sys, const SysCallArgs* arg
     return syscallreturn_makeDoneI64(regularfile_mkdirat(dir_desc, pathname, mode, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_mknodat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_mknodat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     mode_t mode = args->args[2].as_u64;
@@ -340,7 +340,7 @@ SyscallReturn syscallhandler_mknodat(SyscallHandler* sys, const SysCallArgs* arg
         regularfile_mknodat(dir_desc, pathname, mode, dev, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_linkat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_linkat(SyscallHandler* sys, const SyscallArgs* args) {
     int olddirfd = args->args[0].as_i64;
     UntypedForeignPtr oldpathPtr = args->args[1].as_ptr; // const char*
     int newdirfd = args->args[2].as_i64;
@@ -372,7 +372,7 @@ SyscallReturn syscallhandler_linkat(SyscallHandler* sys, const SysCallArgs* args
         regularfile_linkat(olddir_desc, oldpath, newdir_desc, newpath, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_unlinkat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_unlinkat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;
@@ -392,7 +392,7 @@ SyscallReturn syscallhandler_unlinkat(SyscallHandler* sys, const SysCallArgs* ar
     return syscallreturn_makeDoneI64(regularfile_unlinkat(dir_desc, pathname, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_symlinkat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_symlinkat(SyscallHandler* sys, const SyscallArgs* args) {
     UntypedForeignPtr targetpathPtr = args->args[0].as_ptr; // const char*
     int dirfd = args->args[1].as_i64;
     UntypedForeignPtr linkpathPtr = args->args[2].as_ptr; // const char*
@@ -421,7 +421,7 @@ SyscallReturn syscallhandler_symlinkat(SyscallHandler* sys, const SysCallArgs* a
         regularfile_symlinkat(dir_desc, linkpath, targetpath, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_readlinkat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_readlinkat(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     UntypedForeignPtr bufPtr = args->args[2].as_ptr;      // char*
@@ -456,20 +456,20 @@ SyscallReturn syscallhandler_readlinkat(SyscallHandler* sys, const SysCallArgs* 
         regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_renameat(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_renameat(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_renameatHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_i64,
         args->args[3].as_ptr, 0);
 }
 
-SyscallReturn syscallhandler_renameat2(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_renameat2(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_renameatHelper(
         sys, args->args[0].as_i64, args->args[1].as_ptr, args->args[2].as_i64,
         args->args[3].as_ptr, args->args[4].as_u64);
 }
 
 #ifdef SYS_statx
-SyscallReturn syscallhandler_statx(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_statx(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int flags = args->args[2].as_i64;

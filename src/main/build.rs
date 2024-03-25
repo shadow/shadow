@@ -282,8 +282,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("QDiscMode")
         // Imported from libc crate below
         .blocklist_type("siginfo_t")
-        .blocklist_type("SysCallReg")
-        .blocklist_type("SysCallArgs")
+        .blocklist_type("SyscallReg")
+        .blocklist_type("SyscallArgs")
         .blocklist_type("ForeignPtr")
         .blocklist_type("ManagedPhysicalMemoryAddr")
         // we typedef `UntypedForeignPtr` to `ForeignPtr<()>` in rust
@@ -303,7 +303,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
         .raw_line("use shadow_shim_helper_rs::HostId;")
-        .raw_line("use shadow_shim_helper_rs::syscall_types::{ManagedPhysicalMemoryAddr, SysCallArgs, UntypedForeignPtr};")
+        .raw_line("use shadow_shim_helper_rs::syscall_types::{ManagedPhysicalMemoryAddr, SyscallArgs, UntypedForeignPtr};")
         .raw_line("#[allow(unused)]")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ProcessShmem, ThreadShmem};")
         .raw_line("#[allow(unused)]")

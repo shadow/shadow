@@ -18,13 +18,13 @@ use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
     ShimEventToShadow, ShimEventToShim,
 };
-use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SysCallArgs, SysCallReg};
+use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallArgs, SyscallReg};
 use shadow_shmem::allocator::ShMemBlock;
 use vasi_sync::scchannel::SelfContainedChannelError;
 
 use super::context::ThreadContext;
 use super::host::Host;
-use super::syscall::condition::SysCallCondition;
+use super::syscall::condition::SyscallCondition;
 use crate::core::worker::{Worker, WORKER_SHARED};
 use crate::cshadow;
 use crate::host::syscall::handler::SyscallHandler;
@@ -35,8 +35,8 @@ use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginP
 #[derive(Debug)]
 #[must_use]
 pub enum ResumeResult {
-    /// Blocked on a SysCallCondition.
-    Blocked(SysCallCondition),
+    /// Blocked on a SyscallCondition.
+    Blocked(SyscallCondition),
     /// The native thread has exited with the given code.
     ExitedThread(i32),
     /// The thread's process has exited.
@@ -74,10 +74,10 @@ impl ManagedThread {
     ///
     /// Panics if the native thread is dead or dies during the syscall,
     /// including if the syscall itself is SYS_exit or SYS_exit_group.
-    pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SysCallReg]) -> SysCallReg {
-        let mut syscall_args = SysCallArgs {
+    pub fn native_syscall(&self, ctx: &ThreadContext, n: i64, args: &[SyscallReg]) -> SyscallReg {
+        let mut syscall_args = SyscallArgs {
             number: n,
-            args: [SysCallReg::from(0u64); 6],
+            args: [SyscallReg::from(0u64); 6],
         };
         syscall_args.args[..args.len()].copy_from_slice(args);
         match self.continue_plugin(
@@ -284,7 +284,7 @@ impl ManagedThread {
                     match scr {
                         SyscallReturn::Block(b) => {
                             return ResumeResult::Blocked(unsafe {
-                                SysCallCondition::consume_from_c(b.cond)
+                                SyscallCondition::consume_from_c(b.cond)
                             })
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(
@@ -371,7 +371,7 @@ impl ManagedThread {
             ShimEventToShadow::AddThreadRes(ShimEventAddThreadRes { clone_res }) => clone_res,
             r => panic!("Unexpected result: {r:?}"),
         };
-        let clone_res: SysCallReg = syscall::raw_return_value_to_result(clone_res)?;
+        let clone_res: SyscallReg = syscall::raw_return_value_to_result(clone_res)?;
         let child_native_tid = libc::pid_t::from(clone_res);
         trace!("native clone treated tid {child_native_tid}");
 

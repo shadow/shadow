@@ -344,35 +344,35 @@ static SyscallReturn _syscallhandler_writevHelper(SyscallHandler* sys, int fd,
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_readv(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_readv(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SyscallReturn syscallhandler_preadv(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, 0, true, false);
 }
 
-SyscallReturn syscallhandler_preadv2(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_preadv2(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_readvHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                        args->args[2].as_u64, args->args[3].as_u64,
                                        args->args[4].as_u64, args->args[5].as_i64, true, true);
 }
 
-SyscallReturn syscallhandler_writev(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_writev(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, 0, 0, 0, false, false);
 }
 
-SyscallReturn syscallhandler_pwritev(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, 0, true, false);
 }
 
-SyscallReturn syscallhandler_pwritev2(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pwritev2(SyscallHandler* sys, const SyscallArgs* args) {
     return _syscallhandler_writevHelper(sys, args->args[0].as_i64, args->args[1].as_ptr,
                                         args->args[2].as_u64, args->args[3].as_u64,
                                         args->args[4].as_u64, args->args[5].as_i64, true, true);

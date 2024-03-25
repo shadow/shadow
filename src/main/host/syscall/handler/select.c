@@ -178,7 +178,7 @@ static int _syscallhandler_check_timeout(const struct timespec* timeout) {
 // System Calls
 ///////////////////////////////////////////////////////////
 
-SyscallReturn syscallhandler_select(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_select(SyscallHandler* sys, const SyscallArgs* args) {
     int nfds = args->args[0].as_i64;
     UntypedForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
     UntypedForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*
@@ -222,7 +222,7 @@ SyscallReturn syscallhandler_select(SyscallHandler* sys, const SysCallArgs* args
                                          timeout_ptr.val ? &ts_timeout_val : NULL);
 }
 
-SyscallReturn syscallhandler_pselect6(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_pselect6(SyscallHandler* sys, const SyscallArgs* args) {
     int nfds = args->args[0].as_i64;
     UntypedForeignPtr readfds_ptr = args->args[1].as_ptr;   // fd_set*
     UntypedForeignPtr writefds_ptr = args->args[2].as_ptr;  // fd_set*

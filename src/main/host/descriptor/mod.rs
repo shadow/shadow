@@ -933,7 +933,7 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::syscall::condition::SysCallCondition;
+    use crate::host::syscall::condition::SyscallCondition;
     use crate::host::syscall::types::{
         Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
@@ -955,7 +955,7 @@ mod tests {
                 restartable: false,
             })),
             Err(SyscallError::Blocked(Blocked {
-                condition: SysCallCondition::new(Trigger::from(c::Trigger {
+                condition: SyscallCondition::new(Trigger::from(c::Trigger {
                     type_: 1,
                     object: c::TriggerObject {
                         as_pointer: std::ptr::null_mut(),
@@ -981,7 +981,7 @@ mod tests {
     // can't call foreign function: syscallcondition_new
     #[cfg_attr(miri, ignore)]
     fn test_syscallreturn_roundtrip() {
-        let condition = SysCallCondition::new(Trigger::from(c::Trigger {
+        let condition = SyscallCondition::new(Trigger::from(c::Trigger {
             type_: 1,
             object: c::TriggerObject {
                 as_pointer: std::ptr::null_mut(),

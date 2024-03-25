@@ -157,7 +157,7 @@ static SyscallReturn _syscallhandler_futexWakeHelper(SyscallHandler* sys,
 // Support across different address spaces requires us to compute a unique id from the
 // hardware address (i.e., page table and offset). This is needed, e.g., when using
 // futexes across process boundaries.
-SyscallReturn syscallhandler_futex(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_futex(SyscallHandler* sys, const SyscallArgs* args) {
     utility_debugAssert(sys && args);
 
     UntypedForeignPtr uaddrptr = args->args[0].as_ptr; // int*

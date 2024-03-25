@@ -11,13 +11,13 @@ use crate::host::syscall::Trigger;
 
 /// An immutable reference to a syscall condition.
 #[derive(Debug, PartialEq, Eq)]
-pub struct SysCallConditionRef<'a> {
+pub struct SyscallConditionRef<'a> {
     c_ptr: SendPointer<cshadow::SysCallCondition>,
     _phantom: PhantomData<&'a ()>,
 }
 
 // do not define any mutable methods for this type
-impl<'a> SysCallConditionRef<'a> {
+impl<'a> SyscallConditionRef<'a> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
     ///
@@ -50,12 +50,12 @@ impl<'a> SysCallConditionRef<'a> {
 
 /// A mutable reference to a syscall condition.
 #[derive(Debug, PartialEq, Eq)]
-pub struct SysCallConditionRefMut<'a> {
-    condition: SysCallConditionRef<'a>,
+pub struct SyscallConditionRefMut<'a> {
+    condition: SyscallConditionRef<'a>,
 }
 
-// any immutable methods should be implemented on SysCallConditionRef instead
-impl<'a> SysCallConditionRefMut<'a> {
+// any immutable methods should be implemented on SyscallConditionRef instead
+impl<'a> SyscallConditionRefMut<'a> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
     ///
@@ -66,7 +66,7 @@ impl<'a> SysCallConditionRefMut<'a> {
     pub unsafe fn borrow_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
-            condition: unsafe { SysCallConditionRef::borrow_from_c(ptr) },
+            condition: unsafe { SyscallConditionRef::borrow_from_c(ptr) },
         }
     }
 
@@ -91,8 +91,8 @@ impl<'a> SysCallConditionRefMut<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for SysCallConditionRefMut<'a> {
-    type Target = SysCallConditionRef<'a>;
+impl<'a> std::ops::Deref for SyscallConditionRefMut<'a> {
+    type Target = SyscallConditionRef<'a>;
 
     fn deref(&self) -> &Self::Target {
         &self.condition
@@ -101,11 +101,11 @@ impl<'a> std::ops::Deref for SysCallConditionRefMut<'a> {
 
 /// An owned syscall condition.
 #[derive(Debug, PartialEq, Eq)]
-pub struct SysCallCondition {
-    condition: Option<SysCallConditionRefMut<'static>>,
+pub struct SyscallCondition {
+    condition: Option<SyscallConditionRefMut<'static>>,
 }
 
-impl SysCallCondition {
+impl SyscallCondition {
     /// "Steal" from a C pointer. i.e. doesn't increase ref count, but will decrease the ref count
     /// when dropped.
     ///
@@ -116,7 +116,7 @@ impl SysCallCondition {
     pub unsafe fn consume_from_c(ptr: *mut cshadow::SysCallCondition) -> Self {
         assert!(!ptr.is_null());
         Self {
-            condition: Some(unsafe { SysCallConditionRefMut::borrow_from_c(ptr) }),
+            condition: Some(unsafe { SyscallConditionRefMut::borrow_from_c(ptr) }),
         }
     }
 
@@ -124,9 +124,9 @@ impl SysCallCondition {
     // TODO: Add support for taking a Timer, ideally after we have a Rust
     // implementation or wrapper.
     pub fn new(trigger: Trigger) -> Self {
-        SysCallCondition {
+        SyscallCondition {
             condition: Some(unsafe {
-                SysCallConditionRefMut::borrow_from_c(cshadow::syscallcondition_new(trigger.into()))
+                SyscallConditionRefMut::borrow_from_c(cshadow::syscallcondition_new(trigger.into()))
             }),
         }
     }
@@ -136,9 +136,9 @@ impl SysCallCondition {
     ///
     /// Panics if `abs_wakeup_time` is before the current emulated time.
     pub fn new_from_wakeup_time(abs_wakeup_time: EmulatedTime) -> Self {
-        SysCallCondition {
+        SyscallCondition {
             condition: Some(unsafe {
-                SysCallConditionRefMut::borrow_from_c(cshadow::syscallcondition_newWithAbsTimeout(
+                SyscallConditionRefMut::borrow_from_c(cshadow::syscallcondition_newWithAbsTimeout(
                     EmulatedTime::to_c_emutime(Some(abs_wakeup_time)),
                 ))
             }),
@@ -152,7 +152,7 @@ impl SysCallCondition {
     }
 }
 
-impl Drop for SysCallCondition {
+impl Drop for SyscallCondition {
     fn drop(&mut self) {
         if let Some(condition) = &self.condition {
             if !condition.c_ptr.ptr().is_null() {
@@ -162,15 +162,15 @@ impl Drop for SysCallCondition {
     }
 }
 
-impl std::ops::Deref for SysCallCondition {
-    type Target = SysCallConditionRefMut<'static>;
+impl std::ops::Deref for SyscallCondition {
+    type Target = SyscallConditionRefMut<'static>;
 
     fn deref(&self) -> &Self::Target {
         self.condition.as_ref().unwrap()
     }
 }
 
-impl std::ops::DerefMut for SysCallCondition {
+impl std::ops::DerefMut for SyscallCondition {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.condition.as_mut().unwrap()
     }

@@ -72,7 +72,7 @@ static SyscallReturn _rt_sigaction(SyscallHandler* sys, int signum, UntypedForei
     return syscallreturn_makeDoneI64(0);
 }
 
-SyscallReturn syscallhandler_rt_sigaction(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_rt_sigaction(SyscallHandler* sys, const SyscallArgs* args) {
     utility_debugAssert(sys && args);
     SyscallReturn ret =
         _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
@@ -81,7 +81,7 @@ SyscallReturn syscallhandler_rt_sigaction(SyscallHandler* sys, const SysCallArgs
     return ret;
 }
 
-SyscallReturn syscallhandler_sigaltstack(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_sigaltstack(SyscallHandler* sys, const SyscallArgs* args) {
     utility_debugAssert(sys && args);
     UntypedForeignPtr ss_ptr = args->args[0].as_ptr;
     UntypedForeignPtr old_ss_ptr = args->args[1].as_ptr;
@@ -186,7 +186,7 @@ static SyscallReturn _rt_sigprocmask(SyscallHandler* sys, int how, UntypedForeig
     return syscallreturn_makeDoneI64(0);
 }
 
-SyscallReturn syscallhandler_rt_sigprocmask(SyscallHandler* sys, const SysCallArgs* args) {
+SyscallReturn syscallhandler_rt_sigprocmask(SyscallHandler* sys, const SyscallArgs* args) {
     utility_debugAssert(sys && args);
 
     SyscallReturn ret =
