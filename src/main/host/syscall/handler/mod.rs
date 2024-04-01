@@ -356,6 +356,7 @@ impl SyscallHandler {
             //
             SyscallNum::NR_accept => handle!(accept),
             SyscallNum::NR_accept4 => handle!(accept4),
+            SyscallNum::NR_alarm => handle!(alarm),
             SyscallNum::NR_bind => handle!(bind),
             SyscallNum::NR_brk => handle!(brk),
             SyscallNum::NR_capget => handle!(capget),

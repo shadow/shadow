@@ -296,6 +296,59 @@ fn test_leave_running() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_alarm() -> anyhow::Result<()> {
+    reset()?;
+
+    // The `alarm` syscall is a bit obnoxious to test directly, since it can
+    // only operate at 1s increments. However, it is defined to operate on the
+    // same timer as `getitimer` with ITIMER_REAL, so we can use that to
+    // validate that it's setting the itimer state as we expect without actually
+    // waiting for timers to fire, etc.
+
+    let seconds = 10;
+    // Return value should be 0 since there was no timer previously set.
+    assert_eq!(linux_api::time::alarm(seconds), Ok(0));
+
+    // itimer should be have been set to `seconds`
+    let val = getitimer(libc::ITIMER_REAL)?;
+    ensure_ord!(val.value, >=, TimeVal::milliseconds(i64::from(seconds) * 1000 - 100));
+    ensure_ord!(val.value, <=, TimeVal::seconds(seconds.into()));
+    // should be non-repeating
+    ensure_ord!(val.interval, ==, TimeVal::zero());
+
+    // calling with 0 should cancel, and return the remaining time in seconds,
+    // *rounded to the nearest second*, not truncated.
+    std::thread::sleep(std::time::Duration::from_millis(1));
+    let remaining_secs = linux_api::time::alarm(0).unwrap();
+    ensure_ord!(remaining_secs, ==, seconds);
+
+    // There should no longer be any timer set.
+    let val = getitimer(libc::ITIMER_REAL)?;
+    ensure_ord!(val.value, ==, TimeVal::zero());
+    ensure_ord!(val.interval, ==, TimeVal::zero());
+
+    // When there is less than one second remaining on a timer, `alarm` returns 1
+    // instead of 0, so that 0 always indicates no timer is set.
+    setitimer(
+        libc::ITIMER_REAL,
+        &libc::itimerval {
+            it_value: libc::timeval {
+                tv_sec: 0,
+                tv_usec: 100_000,
+            },
+            it_interval: libc::timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
+        },
+    )
+    .unwrap();
+    // Cancels, and we should get a rounded-up value of 1 back.
+    ensure_ord!(linux_api::time::alarm(0), ==, Ok(1));
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     // Install a SIGALRM handler that counts how many times it's been received.
     unsafe {
@@ -337,6 +390,7 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new("set_oneshot", test_oneshot, all_envs.clone()),
         ShadowTest::new("set_interval", test_interval, all_envs.clone()),
         ShadowTest::new("set_interval_zero", test_interval_zero, all_envs.clone()),
+        ShadowTest::new("alarm", test_alarm, all_envs.clone()),
         // Must be last.
         // Validate proper cleanup for a timer that's still running when the
         // process exits.

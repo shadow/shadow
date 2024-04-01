@@ -1,5 +1,6 @@
 use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
+use linux_syscall::Result64;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::bindings;
@@ -99,6 +100,23 @@ pub use bindings::linux_itimerval;
 #[allow(non_camel_case_types)]
 pub type itimerval = linux_itimerval;
 unsafe impl shadow_pod::Pod for itimerval {}
+
+/// Raw `alarm` syscall. Permits u64 arg and return value for generality with
+/// the general syscall ABI, but note that the `alarm` syscall definition itself
+/// uses u32.
+pub fn alarm_raw(secs: u64) -> Result<u64, Errno> {
+    unsafe { syscall!(linux_syscall::SYS_alarm, secs) }
+        .try_u64()
+        .map_err(Errno::from)
+}
+
+/// Make an `alarm` syscall.
+pub fn alarm(secs: u32) -> Result<u32, Errno> {
+    let res = alarm_raw(secs.into())?;
+    // The syscall defines the return type as u32, so it *should* always be
+    // convertible to u32.
+    Ok(res.try_into().unwrap())
+}
 
 mod export {
     use super::*;

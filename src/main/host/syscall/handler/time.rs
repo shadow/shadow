@@ -99,6 +99,55 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
+    #[log_syscall(/* rv */ std::ffi::c_uint, /* seconds */ std::ffi::c_uint)]
+    pub fn alarm(
+        ctx: &mut SyscallContext,
+        seconds: std::ffi::c_uint,
+    ) -> Result<std::ffi::c_uint, SyscallError> {
+        // We return the remaining time of any previously armed timer, or zero if there is none.
+        let prev_remaining = ctx
+            .objs
+            .process
+            .realtime_timer_borrow()
+            .remaining_time()
+            .unwrap_or(SimulationTime::ZERO);
+        let prev_remaining = std::time::Duration::from(prev_remaining);
+        // Linux rounds to the *nearest* second, but for sub-second values always rounds *up*.
+        let prev_remaining_secs = if (prev_remaining.as_secs() == 0
+            && prev_remaining.subsec_millis() > 0)
+            || prev_remaining.subsec_millis() > 500
+        {
+            // round up
+            prev_remaining.as_secs() + 1
+        } else {
+            // round down / truncate
+            prev_remaining.as_secs()
+        };
+
+        // The returned value is defined to be u32.
+        let prev_remaining_secs: u32 = u32::try_from(prev_remaining_secs).unwrap_or_else(|_| {
+            // unclear what we ought to do if it doesn't fit, or whether
+            // it's even possible to set a timer that far in the future in
+            // the first place.
+            debug!("Couldn't convert remaining time {prev_remaining:?} to u32; using u32::MAX");
+            u32::MAX
+        });
+
+        // alarm(2): If seconds is zero, any pending alarm is canceled.
+        if seconds == 0 {
+            ctx.objs.process.realtime_timer_borrow_mut().disarm();
+            return Ok(prev_remaining_secs);
+        }
+
+        ctx.objs.process.realtime_timer_borrow_mut().arm(
+            ctx.objs.host,
+            Worker::current_time().unwrap() + SimulationTime::from_secs(seconds.into()),
+            None,
+        );
+
+        Ok(prev_remaining_secs)
+    }
+
     #[log_syscall(/* rv */ std::ffi::c_int, /* clock_id */ linux_api::time::ClockId,
                   /* res */ *const std::ffi::c_void)]
     pub fn clock_getres(
