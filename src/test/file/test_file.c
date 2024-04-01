@@ -521,6 +521,19 @@ static void _test_lseek() {
     assert_nonneg_errno(close(fd));
 }
 
+static void _test_lseek_pipe() {
+    int pipes[2] = {-1, -1};
+
+    assert_nonneg_errno(pipe(pipes));
+
+    int rv = lseek(pipes[0], 0, SEEK_CUR);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(ESPIPE);
+
+    assert_nonneg_errno(close(pipes[0]));
+    assert_nonneg_errno(close(pipes[1]));
+}
+
 static void _test_fopen() {
     g_auto(AutoDeleteFile) adf = _create_auto_file();
     FILE* file;
@@ -983,6 +996,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/preadv", _test_preadv);
     g_test_add_func("/file/preadv2", _test_preadv2);
     g_test_add_func("/file/lseek", _test_lseek);
+    g_test_add_func("/file/lseek_pipe", _test_lseek_pipe);
     g_test_add_func("/file/fopen", _test_fopen);
     g_test_add_func("/file/fclose", _test_fclose);
     g_test_add_func("/file/fileno", _test_fileno);

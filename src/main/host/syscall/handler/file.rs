@@ -1,11 +1,14 @@
+use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_mode_t;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
 use crate::cshadow;
+use crate::host::descriptor::CompatFile;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallStringArg;
-use crate::host::syscall::types::SyscallResult;
+use crate::host::syscall::types::{SyscallError, SyscallResult};
+use crate::host::syscall::File;
 
 impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int, /* pathname */ SyscallStringArg,
@@ -104,9 +107,35 @@ impl SyscallHandler {
         Self::legacy_syscall(cshadow::syscallhandler_getdents64, ctx)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int)]
-    pub fn lseek(ctx: &mut SyscallContext) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_lseek, ctx)
+    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_uint,
+                  /* offset */ linux_api::posix_types::kernel_off_t, /* whence */ std::ffi::c_uint)]
+    pub fn lseek(
+        ctx: &mut SyscallContext,
+        fd: std::ffi::c_uint,
+        _offset: linux_api::posix_types::kernel_off_t,
+        _whence: std::ffi::c_uint,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
+
+        let file = {
+            match Self::get_descriptor(&desc_table, fd)?.file() {
+                CompatFile::New(file) => file,
+                // if it's a legacy file, use the C syscall handler instead
+                CompatFile::Legacy(_) => {
+                    drop(desc_table);
+                    return Self::legacy_syscall(cshadow::syscallhandler_lseek, ctx)
+                        .map(Into::into);
+                }
+            }
+        };
+
+        match file.inner_file() {
+            File::Pipe(_) => Err(Errno::ESPIPE.into()),
+            _ => {
+                warn_once_then_debug!("lseek() is not implemented for this type");
+                Err(Errno::ENOTSUP.into())
+            }
+        }
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int)]
