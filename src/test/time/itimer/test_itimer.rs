@@ -349,6 +349,28 @@ fn test_alarm() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_alarm_fired() -> anyhow::Result<()> {
+    reset()?;
+
+    // Set to expire in exactly 1s
+    assert_eq!(linux_api::time::alarm(1), Ok(0));
+
+    // Sleep slightly more than 1s
+    std::thread::sleep(std::time::Duration::from_millis(1001));
+
+    // Cancel, and get remaining time
+    let rem = linux_api::time::alarm(0).unwrap();
+
+    // Timer should have fired
+    ensure_ord!(SIGNAL_CTR.load(Ordering::Relaxed), ==, 1);
+
+    // `alarm` should return 0 when there is no timer scheduled, and
+    // there should be no timer scheduled since it already fired.
+    ensure_ord!(rem, ==, 0);
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     // Install a SIGALRM handler that counts how many times it's been received.
     unsafe {
@@ -391,6 +413,7 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new("set_interval", test_interval, all_envs.clone()),
         ShadowTest::new("set_interval_zero", test_interval_zero, all_envs.clone()),
         ShadowTest::new("alarm", test_alarm, all_envs.clone()),
+        ShadowTest::new("alarm_fired", test_alarm_fired, all_envs.clone()),
         // Must be last.
         // Validate proper cleanup for a timer that's still running when the
         // process exits.
