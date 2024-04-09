@@ -104,26 +104,26 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         seconds: std::ffi::c_uint,
     ) -> Result<std::ffi::c_uint, SyscallError> {
-        // We return the remaining time of any previously armed timer, or zero if there is none.
-        let prev_remaining = ctx
-            .objs
-            .process
-            .realtime_timer_borrow()
-            .remaining_time()
-            .unwrap_or(SimulationTime::ZERO);
-        let prev_remaining = std::time::Duration::from(prev_remaining);
-        // Linux rounds to the *nearest* second, but for sub-second values always rounds *up*.
-        let prev_remaining_secs = if (prev_remaining.as_secs() == 0
-            && prev_remaining.subsec_millis() > 0)
-            || prev_remaining.subsec_millis() > 500
-        {
-            // round up
-            prev_remaining.as_secs() + 1
-        } else {
-            // round down / truncate
-            prev_remaining.as_secs()
+        let prev_remaining = ctx.objs.process.realtime_timer_borrow().remaining_time();
+        let prev_remaining_secs = match prev_remaining {
+            Some(t) => {
+                let t = std::time::Duration::from(t);
+                if t.as_secs() == 0 {
+                    // Round up [0..1) to 1, so that we never return 0 if there
+                    // was a timer set. Even if t is exactly 0 (the timer was
+                    // schedule to fire at exactly now, but hasn't yet), we want
+                    // to return 1.
+                    1
+                } else if t.subsec_millis() > 500 {
+                    // Round up to the nearest second
+                    t.as_secs() + 1
+                } else {
+                    // Round down to the nearest second
+                    t.as_secs()
+                }
+            }
+            None => 0,
         };
-
         // The returned value is defined to be u32.
         let prev_remaining_secs: u32 = u32::try_from(prev_remaining_secs).unwrap_or_else(|_| {
             // unclear what we ought to do if it doesn't fit, or whether
@@ -133,17 +133,18 @@ impl SyscallHandler {
             u32::MAX
         });
 
-        // alarm(2): If seconds is zero, any pending alarm is canceled.
         if seconds == 0 {
+            // alarm(2): If seconds is zero, any pending alarm is canceled.
             ctx.objs.process.realtime_timer_borrow_mut().disarm();
-            return Ok(prev_remaining_secs);
+        } else {
+            // Otherwise arm the timer for the specified number of seconds
+            // (implicitly canceling the previous timer if there was one).
+            ctx.objs.process.realtime_timer_borrow_mut().arm(
+                ctx.objs.host,
+                Worker::current_time().unwrap() + SimulationTime::from_secs(seconds.into()),
+                None,
+            );
         }
-
-        ctx.objs.process.realtime_timer_borrow_mut().arm(
-            ctx.objs.host,
-            Worker::current_time().unwrap() + SimulationTime::from_secs(seconds.into()),
-            None,
-        );
 
         Ok(prev_remaining_secs)
     }

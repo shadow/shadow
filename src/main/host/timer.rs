@@ -141,6 +141,12 @@ impl Timer {
             debug_assert!(interval.is_positive());
             internal_brw.next_expire_time = Some(next_expire_time + interval);
             Self::schedule_new_expire_event(&mut internal_brw, internal_weak.clone(), host);
+        } else {
+            // Reset next expire time to None, so that `remaining_time`
+            // correctly returns `None`, instead of `Some(0)`. (i.e. `Some(0)`
+            // should mean that the timer is scheduled to fire now, but the
+            // event hasn't executed yet).
+            internal_brw.next_expire_time = None;
         }
 
         // Re-borrow as an immutable reference while executing the callback.
