@@ -25,9 +25,6 @@ case "$CONTAINER" in
   # We need to force a newer-than-default version of libclang
   # on some platforms. Some older versions have trouble finding
   # compiler header files in bindgen, when compiling with gcc.
-  ubuntu:18*)
-    APT_PACKAGES+=(libclang-9-dev)
-    ;;
   debian:10*)
     APT_PACKAGES+=(libclang-13-dev)
     ;;
