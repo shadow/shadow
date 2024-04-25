@@ -40,7 +40,7 @@ profile. You can do this by passing additional flags to `docker run`.
 Example:
 
 ```bash
-docker run -it --shm-size=1024g --security-opt seccomp=unconfined ubuntu:22.04
+docker run -it --shm-size=1024g --security-opt seccomp=unconfined ubuntu:24.04
 ```
 
 If you are having difficulty installing Shadow on any supported platforms, you
