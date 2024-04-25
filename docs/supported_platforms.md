@@ -4,8 +4,9 @@
 
 We support the following Linux x86-64 distributions:
 
-- Ubuntu 20.04, 22.04
+- Ubuntu 20.04, 22.04, 24.04
 - Debian 10, 11, and 12
+- Fedora 40
 
 We do not provide official support for other platforms. This means that we do
 not ensure that Shadow successfully builds and passes tests on other platforms.
