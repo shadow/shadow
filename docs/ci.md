@@ -28,7 +28,7 @@ For example, to perform an incremental build and test on ubuntu 24.04,
 with the gcc compiler in debug mode:
 
 ```{.bash}
-ci/run.sh -c ubuntu:24.04 -C gcc -b debug"
+ci/run.sh -c ubuntu:24.04 -C gcc -b debug
 ```
 
 If the tests fail, shadow's build directory, including test outputs, will be copied
