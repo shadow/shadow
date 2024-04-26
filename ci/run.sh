@@ -10,7 +10,7 @@ PUSH=0
 NOCACHE=
 REPO=shadowsim/shadow-ci
 
-CONTAINER=ubuntu:20.04
+CONTAINER=ubuntu:24.04
 CC=gcc
 BUILDTYPE=debug
 

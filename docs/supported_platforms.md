@@ -4,9 +4,9 @@
 
 We support the following Linux x86-64 distributions:
 
-- Ubuntu 20.04, 22.04
+- Ubuntu 20.04, 22.04, 24.04
 - Debian 10, 11, and 12
-- Fedora 38
+- Fedora 40
 
 We do not provide official support for other platforms. This means that we do
 not ensure that Shadow successfully builds and passes tests on other platforms.
@@ -40,7 +40,7 @@ profile. You can do this by passing additional flags to `docker run`.
 Example:
 
 ```bash
-docker run -it --shm-size=1024g --security-opt seccomp=unconfined ubuntu:22.04
+docker run -it --shm-size=1024g --security-opt seccomp=unconfined ubuntu:24.04
 ```
 
 If you are having difficulty installing Shadow on any supported platforms, you
