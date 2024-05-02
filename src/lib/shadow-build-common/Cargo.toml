@@ -11,7 +11,7 @@ cbindgen = ["dep:cbindgen"]
 
 [dependencies]
 bindgen = { optional = true, version = "0.69.1" }
-cbindgen = { optional = true, version = "0.26.0", default_features = false }
+cbindgen = { optional = true, version = "0.26.0", default-features = false }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.2"
 

@@ -29,7 +29,7 @@ bytemuck = "1.15.0"
 cc = { version = "1.0", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["cbindgen"] }
 system-deps = "6.2"
-cbindgen = { version = "0.26.0", default_features = false }
+cbindgen = { version = "0.26.0", default-features = false }
 
 [dev-dependencies]
 rand = "0.8.5"

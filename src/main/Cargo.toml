@@ -73,7 +73,7 @@ perf_timers = []
 [build-dependencies]
 shadow-build-common = { path = "../lib/shadow-build-common", features = ["bindgen", "cbindgen"] }
 bindgen = { version = "0.69.1" }
-cbindgen = { version = "0.26.0", default_features = false }
+cbindgen = { version = "0.26.0", default-features = false }
 cc = { version = "1.0", features = ["parallel"] }
 system-deps = "6.2"
 # Building the C code from this crate's build script requires
