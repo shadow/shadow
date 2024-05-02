@@ -85,7 +85,7 @@ fn test_path_helper(path: &str) -> Result<(), String> {
         let mut rv = [0_u8; 4];
         file.read_exact(&mut rv)
             .map_err(|_| "error reading file".to_string())?;
-        *val = u32::from_be_bytes([rv[0], rv[1], rv[2], rv[3]]) as f64 / core::u32::MAX as f64;
+        *val = u32::from_be_bytes([rv[0], rv[1], rv[2], rv[3]]) as f64 / u32::MAX as f64;
     }
 
     check_randomness(&values)
@@ -138,7 +138,7 @@ fn test_getrandom() -> Result<(), String> {
             return Err("error: getrandom returned bytes outside of expected range".to_string());
         }
 
-        *val = u32::from_be_bytes([rv[0], rv[1], rv[2], rv[3]]) as f64 / core::u32::MAX as f64;
+        *val = u32::from_be_bytes([rv[0], rv[1], rv[2], rv[3]]) as f64 / u32::MAX as f64;
     }
 
     check_randomness(&values)

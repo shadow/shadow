@@ -443,7 +443,7 @@ fn main() -> Result<(), String> {
                             for &timeout in
                                 [Duration::from_millis(0), Duration::from_millis(1)].iter()
                             {
-                                for &nfds in [-1, 3, 100, 1023, 1024, 1025, std::i32::MAX].iter() {
+                                for &nfds in [-1, 3, 100, 1023, 1024, 1025, i32::MAX].iter() {
                                     // For the expected outcomes
                                     let mut exp_result = 0;
                                     let mut exp_error = 0;
