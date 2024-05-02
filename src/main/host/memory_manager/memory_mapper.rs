@@ -329,7 +329,7 @@ impl Drop for MemoryMapper {
 
         // Mappings are no longer valid. Clear out our map, and unmap those regions from Shadow's
         // address space.
-        let mutations = self.regions.clear(std::usize::MIN..std::usize::MAX);
+        let mutations = self.regions.clear(usize::MIN..usize::MAX);
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {

@@ -192,7 +192,7 @@ fn test_poll_args_common(
             revents: 0,
         };
         if fd_inval {
-            pfd.fd = std::i32::MAX;
+            pfd.fd = i32::MAX;
         }
 
         // Get mutable pointer reference so we can pass it as a non-const libc pointer
@@ -339,7 +339,7 @@ fn main() -> Result<(), String> {
                 for &events in [0, libc::POLLIN, libc::POLLOUT].iter() {
                     for &timeout in [Duration::from_millis(0), Duration::from_millis(100)].iter() {
                         for &signal_time in [None, Some(Duration::from_millis(10))].iter() {
-                            for &nfds in [0, 1, std::u64::MAX].iter() {
+                            for &nfds in [0, 1, u64::MAX].iter() {
                                 // For the expected outcomes
                                 let mut exp_result = 0;
                                 let mut exp_error = 0;
@@ -349,7 +349,7 @@ fn main() -> Result<(), String> {
                                 if pfd_null && nfds == 1 {
                                     exp_result = -1;
                                     exp_error = libc::EFAULT;
-                                } else if nfds == std::u64::MAX {
+                                } else if nfds == u64::MAX {
                                     exp_result = -1;
                                     exp_error = libc::EINVAL;
                                 } else if fd_inval && nfds == 1 {
