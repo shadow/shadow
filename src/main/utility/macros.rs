@@ -33,6 +33,9 @@ macro_rules! log_once_at_level {
                 std::sync::atomic::Ordering::Relaxed,
                 std::sync::atomic::Ordering::Relaxed,
             ) {
+                // NOTE: Some parts of shadow duplicate the "(LOG_ONCE)" string in their own log
+                // messages (for example `SyscallHandler::run_handler`). If we change this string
+                // here, we should change it in other places as well.
                 Ok(_) => log::log!($lvl_once, "(LOG_ONCE) {}", format_args!($str $($x)*)),
                 Err(_) => log::log!($lvl_remaining, "(LOG_ONCE) {}", format_args!($str $($x)*)),
             }
