@@ -483,6 +483,13 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_new_tcp").unwrap().as_str())]
     pub use_new_tcp: Option<bool>,
+
+    /// List of syscall numbers to add "return 0" stubs for.
+    #[clap(hide_short_help = true)]
+    #[clap(value_parser = parse_set_u32)]
+    #[clap(long, value_name = "syscalls")]
+    #[clap(help = EXP_HELP.get("stub_syscalls").unwrap().as_str())]
+    pub stub_syscalls: Option<HashSet<u32>>,
 }
 
 impl ExperimentalOptions {
@@ -533,6 +540,7 @@ impl Default for ExperimentalOptions {
             scheduler: Some(Scheduler::ThreadPerCore),
             log_errors_to_tty: Some(true),
             use_new_tcp: Some(false),
+            stub_syscalls: Some(HashSet::new()),
         }
     }
 }
@@ -952,6 +960,11 @@ fn parse_set_log_info_flags(
 
 /// Parse a string as a comma-delimited set of `String` values.
 fn parse_set_str(s: &str) -> Result<HashSet<String>, <String as FromStr>::Err> {
+    parse_set(s)
+}
+
+/// Parse a string as a comma-delimited set of `u32` values.
+fn parse_set_u32(s: &str) -> Result<HashSet<u32>, <u32 as FromStr>::Err> {
     parse_set(s)
 }
 

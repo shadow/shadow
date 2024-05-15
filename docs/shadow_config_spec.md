@@ -85,6 +85,7 @@ hosts:
 - [`experimental.socket_send_autotune`](#experimentalsocket_send_autotune)
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.strace_logging_mode`](#experimentalstrace_logging_mode)
+- [`experimental.stub_syscalls`](#experimentalstub_syscalls)
 - [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscall_latency)
 - [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
@@ -424,6 +425,17 @@ Limitations:
   example, the log may show `syscall(...) = -1 (EINTR)`, but the managed
   process may not actually see this return value. Instead the syscall may be
   restarted.
+
+#### `experimental.stub_syscalls`
+
+Default: []  
+Type: Array of Integer
+
+List of syscall numbers to add "return 0" stubs for.
+
+If any of the listed syscalls are called by the managed application, *and* Shadow does not provide
+its own implementation of that syscall, Shadow will simply return 0 from the syscall instead of
+`ENOSYS`.
 
 #### `experimental.unblocked_syscall_latency`
 

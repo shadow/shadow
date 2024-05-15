@@ -129,6 +129,9 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
       --strace-logging-mode <mode>
           Log the syscalls for each process to individual "strace" files [default: "off"]
 
+      --stub-syscalls <syscalls>
+          List of syscall numbers to add "return 0" stubs for. [default: []]
+
       --unblocked-syscall-latency <seconds>
           Simulated latency of an unblocked syscall. For efficiency Shadow only actually adds this
           latency if and when `max_unapplied_cpu_latency` is reached. [default: "1 μs"]

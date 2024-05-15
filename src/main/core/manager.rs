@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
+use linux_api::syscall::SyscallNum;
 use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -611,6 +612,15 @@ impl<'a> Manager<'a> {
                 use_new_tcp: self.config.experimental.use_new_tcp.unwrap(),
                 use_mem_mapper: self.config.experimental.use_memory_manager.unwrap(),
                 use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
+                stub_syscalls: self
+                    .config
+                    .experimental
+                    .stub_syscalls
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|x| SyscallNum::new(*x))
+                    .collect(),
             };
 
             Box::new(unsafe {

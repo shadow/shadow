@@ -574,6 +574,46 @@ impl SyscallHandler {
                 rv
             }
             //
+            // STUBBED SYSCALL
+            //
+            _ if ctx.objs.host.params.stub_syscalls.contains(&syscall) => {
+                // only show a warning the first time we encounter this stubbed syscall
+                static WARNED_SET: OnceSet<SyscallNum> = OnceSet::new();
+
+                let level = if WARNED_SET.insert(syscall) {
+                    log::Level::Warn
+                } else {
+                    log::Level::Debug
+                };
+
+                // we can't use the `warn_once_then_debug` macro here since we want to log this for
+                // each unique syscall encountered, not only the first stubbed syscall encountered
+                log::log!(
+                    level,
+                    "(LOG_ONCE) Stubbed syscall {} ({}) called from thread {} in process {} on host {}",
+                    syscall_name,
+                    ctx.args.number,
+                    ctx.objs.thread.id(),
+                    &*ctx.objs.process.plugin_name(),
+                    ctx.objs.host.name(),
+                );
+
+                // the user wants us to stub this syscall and simply return 0
+                let rv = Ok(0.into());
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                rv
+            }
+            //
             // UNSUPPORTED SYSCALL
             //
             _ => {
@@ -586,21 +626,27 @@ impl SyscallHandler {
                     log::Level::Debug
                 };
 
+                let rv = Errno::ENOSYS;
+
                 // We can't use the `warn_once_then_debug` macro here since we want to log this for
                 // each unique syscall encountered, not only the first unsupported syscall
                 // encountered. We replicate the format of the `warn_once_then_debug` macro by
                 // prepending the `(LOG_ONCE) ` string.
                 log::log!(
                     level,
-                    "(LOG_ONCE) Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
+                    "(LOG_ONCE) Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}. \
+                    Returning {}, but if you wish you can tell Shadow to return 0 instead by using the experimental \
+                    'stub_syscalls' configuration option (ex: `stub_syscalls: {}`).",
                     syscall_name,
                     ctx.args.number,
                     ctx.objs.thread.id(),
                     &*ctx.objs.process.plugin_name(),
                     ctx.objs.host.name(),
+                    rv,
+                    ctx.args.number,
                 );
 
-                let rv = Err(Errno::ENOSYS.into());
+                let rv = Err(rv.into());
 
                 let (syscall_name, syscall_args) = match syscall.to_str() {
                     // log it in the form "poll(...)"
