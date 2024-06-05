@@ -593,7 +593,7 @@ impl SyscallHandler {
                 // already-warned set. Also detect the (rare) case that another
                 // thread already warned after we released the read-lock above.
                 let has_already_warned = has_already_warned
-                    || WARNED_SET
+                    || !WARNED_SET
                         .write()
                         .unwrap()
                         .get_or_insert_with(HashSet::new)
