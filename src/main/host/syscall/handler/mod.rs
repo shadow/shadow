@@ -581,6 +581,7 @@ impl SyscallHandler {
                 // only show a warning the first time we encounter this unsupported syscall
                 static WARNED_SET: RwLock<Option<HashSet<SyscallNum>>> = RwLock::new(None);
 
+                // First check with a (cheap) read-lock.
                 let has_already_warned = WARNED_SET
                     .read()
                     .unwrap()
@@ -588,16 +589,15 @@ impl SyscallHandler {
                     .map(|x| x.contains(&syscall))
                     .unwrap_or(false);
 
-                if !has_already_warned {
-                    // `insert()` returns `false` if the syscall num was already in the set.
-                    // This can happen if another thread added the syscall after we released
-                    // the read-lock, above, and took the write lock, below.
-                    WARNED_SET
+                // If it looks like we haven't already warned, add this to the
+                // already-warned set. Also detect the (rare) case that another
+                // thread already warned after we released the read-lock above.
+                let has_already_warned = has_already_warned
+                    || WARNED_SET
                         .write()
                         .unwrap()
                         .get_or_insert_with(HashSet::new)
                         .insert(syscall);
-                }
 
                 let level = if has_already_warned {
                     log::Level::Debug
