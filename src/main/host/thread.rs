@@ -200,11 +200,11 @@ impl Thread {
     }
 
     pub fn native_pid(&self) -> Pid {
-        self.mthread.borrow().native_pid()
+        Pid::from_raw(self.mthread.borrow().native_pid().as_raw_nonzero().get())
     }
 
     pub fn native_tid(&self) -> Pid {
-        self.mthread.borrow().native_tid()
+        Pid::from_raw(self.mthread.borrow().native_tid().as_raw_nonzero().get())
     }
 
     pub fn id(&self) -> ThreadId {

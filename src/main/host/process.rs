@@ -1067,7 +1067,7 @@ impl Process {
             let msg = format!(
                 "\
               \n** Pausing with SIGTSTP to enable debugger attachment to managed process\
-              \n** '{plugin_name:?}' (pid {native_pid}).\
+              \n** '{plugin_name:?}' (pid {native_pid:?}).\
               \n** If running Shadow under Bash, resume Shadow by pressing Ctrl-Z to background\
               \n** this task, and then typing \"fg\".\
               \n** If running GDB, resume Shadow by typing \"signal SIGCONT\"."
@@ -1077,7 +1077,11 @@ impl Process {
             nix::sys::signal::raise(nixsignal::Signal::SIGTSTP).unwrap();
         }
 
-        let memory_manager = unsafe { MemoryManager::new(native_pid) };
+        let memory_manager = unsafe {
+            MemoryManager::new(nix::unistd::Pid::from_raw(
+                native_pid.as_raw_nonzero().get(),
+            ))
+        };
         let threads = RefCell::new(BTreeMap::from([(
             main_thread_id,
             RootedRc::new(host.root(), RootedRefCell::new(host.root(), main_thread)),
@@ -1109,7 +1113,7 @@ impl Process {
                         itimer_real,
                         strace_logging,
                         dumpable: Cell::new(SuidDump::SUID_DUMP_USER),
-                        native_pid,
+                        native_pid: nix::unistd::Pid::from_raw(native_pid.as_raw_nonzero().get()),
                         unsafe_borrow_mut: RefCell::new(None),
                         unsafe_borrows: RefCell::new(Vec::new()),
                         threads,
@@ -1639,7 +1643,10 @@ impl Process {
             mthread.kill_and_drop();
             return;
         };
-        let old_native_pid = std::mem::replace(&mut runnable.native_pid, mthread.native_pid());
+        let old_native_pid = std::mem::replace(
+            &mut runnable.native_pid,
+            nix::unistd::Pid::from_raw(mthread.native_pid().as_raw_nonzero().get()),
+        );
 
         // Kill the previous native process
         nixsignal::kill(old_native_pid, nixsignal::Signal::SIGKILL)
@@ -1674,9 +1681,11 @@ impl Process {
             assert!(unsafe_borrows.is_empty());
             // Replace the MM, while still holding the references to the unsafe borrows
             // to ensure none exist.
-            runnable
-                .memory_manager
-                .replace(unsafe { MemoryManager::new(mthread.native_pid()) });
+            runnable.memory_manager.replace(unsafe {
+                MemoryManager::new(nix::unistd::Pid::from_raw(
+                    mthread.native_pid().as_raw_nonzero().get(),
+                ))
+            });
         }
 
         let new_tid = runnable.common.thread_group_leader_id();
