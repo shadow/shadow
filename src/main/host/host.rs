@@ -410,11 +410,10 @@ impl Host {
             // TODO: Add support for FnOnce?
             let envv = envv.clone();
             let argv = argv.clone();
-            let plugin_name = plugin_name.clone();
 
             let process = Process::spawn(
                 host,
-                plugin_name,
+                plugin_name.clone(),
                 &plugin_path,
                 argv,
                 envv,
@@ -422,7 +421,7 @@ impl Host {
                 host.params.strace_logging_options,
                 expected_final_state,
             )
-            .expect("Failed to initialize application {plugin_name:?}");
+            .unwrap_or_else(|e| panic!("Failed to initialize application {plugin_name:?}: {e:?}"));
             let (process_id, thread_id) = {
                 let process = process.borrow(host.root());
                 (process.id(), process.thread_group_leader_id())
