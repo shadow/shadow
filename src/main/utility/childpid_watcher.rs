@@ -249,7 +249,8 @@ impl ChildPidWatcher {
     /// an unrelated process with a recycled `pid`.
     pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
-        let pidfd = pidfd_open(pid).unwrap();
+        let pidfd =
+            pidfd_open(pid).unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
 
         let event = EpollEvent::new(EpollFlags::EPOLLIN, pid.as_raw().try_into().unwrap());
         self.epoll.add(&pidfd, event).unwrap();
