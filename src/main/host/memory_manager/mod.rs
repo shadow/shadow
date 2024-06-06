@@ -21,10 +21,11 @@ use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
 
 use linux_api::errno::Errno;
+use linux_api::mman::{MapFlags, ProtFlags};
+use linux_api::posix_types::Pid;
 use log::*;
 use memory_copier::MemoryCopier;
 use memory_mapper::MemoryMapper;
-use nix::unistd::Pid;
 use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -629,8 +630,8 @@ impl MemoryManager {
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
         length: usize,
-        prot: i32,
-        flags: i32,
+        prot: ProtFlags,
+        flags: MapFlags,
         fd: i32,
         offset: i64,
     ) -> Result<ForeignPtr<u8>, SyscallError> {
@@ -698,7 +699,7 @@ impl MemoryManager {
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
         size: usize,
-        prot: i32,
+        prot: ProtFlags,
     ) -> Result<i32, SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => Ok(mm.handle_mprotect(ctx, addr, size, prot)?),
@@ -724,7 +725,7 @@ where
     /// Allocate memory in the current active process.
     /// Must be freed explicitly via `free`.
     pub fn new(ctx: &ThreadContext, len: usize) -> Self {
-        let prot = libc::PROT_READ | libc::PROT_WRITE;
+        let prot = ProtFlags::PROT_READ | ProtFlags::PROT_WRITE;
 
         // Allocate through the MemoryManager, so that it knows about this region.
         let ptr = ctx
@@ -735,7 +736,7 @@ where
                 ForeignPtr::null(),
                 len * std::mem::size_of::<T>(),
                 prot,
-                libc::MAP_ANONYMOUS | libc::MAP_PRIVATE,
+                MapFlags::MAP_ANONYMOUS | MapFlags::MAP_PRIVATE,
                 -1,
                 0,
             )
@@ -791,7 +792,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn memorymanager_new(pid: libc::pid_t) -> *mut MemoryManager {
         Box::into_raw(Box::new(unsafe {
-            MemoryManager::new(nix::unistd::Pid::from_raw(pid))
+            MemoryManager::new(Pid::from_raw(pid).unwrap())
         }))
     }
 

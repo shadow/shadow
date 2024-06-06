@@ -5,8 +5,9 @@ use std::ops::{Deref, DerefMut};
 
 use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
+use linux_api::mman::{MapFlags, ProtFlags};
+use linux_api::posix_types::Pid;
 use linux_api::signal::stack_t;
-use nix::unistd::Pid;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -290,8 +291,8 @@ impl Thread {
         ctx: &ProcessContext,
         addr: ForeignPtr<u8>,
         len: usize,
-        prot: i32,
-        flags: i32,
+        prot: ProtFlags,
+        flags: MapFlags,
         fd: i32,
         offset: i64,
     ) -> Result<ForeignPtr<u8>, Errno> {
@@ -302,8 +303,8 @@ impl Thread {
                 &[
                     SyscallReg::from(addr),
                     SyscallReg::from(len),
-                    SyscallReg::from(prot),
-                    SyscallReg::from(flags),
+                    SyscallReg::from(prot.bits()),
+                    SyscallReg::from(flags.bits()),
                     SyscallReg::from(fd),
                     SyscallReg::from(offset),
                 ],
@@ -342,7 +343,7 @@ impl Thread {
         ctx: &ProcessContext,
         addr: ForeignPtr<u8>,
         len: usize,
-        prot: i32,
+        prot: ProtFlags,
     ) -> Result<(), Errno> {
         self.native_syscall(
             ctx,
@@ -350,7 +351,7 @@ impl Thread {
             &[
                 SyscallReg::from(addr),
                 SyscallReg::from(len),
-                SyscallReg::from(prot),
+                SyscallReg::from(prot.bits()),
             ],
         )?;
         Ok(())
@@ -404,8 +405,8 @@ impl Thread {
             ctx,
             ForeignPtr::null(),
             size,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            ProtFlags::PROT_READ | ProtFlags::PROT_WRITE,
+            MapFlags::MAP_PRIVATE | MapFlags::MAP_ANONYMOUS,
             -1,
             0,
         )

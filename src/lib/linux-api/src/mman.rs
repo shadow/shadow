@@ -8,7 +8,7 @@ bitflags::bitflags! {
     /// Prot flags, as used with `mmap`. These are u64 to match the x86-64 `mmap`
     /// syscall parameter:
     /// <https://github.com/torvalds/linux/tree/v6.3/arch/x86/kernel/sys_x86_64.c#L86>
-    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
     pub struct ProtFlags: u64 {
         const PROT_READ = const_conversions::u64_from_u32(bindings::LINUX_PROT_READ);
         const PROT_WRITE = const_conversions::u64_from_u32(bindings::LINUX_PROT_WRITE);
@@ -24,7 +24,7 @@ bitflags::bitflags! {
     /// Map flags, as used with `mmap`. These are u64 to match the x86-64 `mmap`
     /// syscall parameter:
     /// <https://github.com/torvalds/linux/tree/v6.3/arch/x86/kernel/sys_x86_64.c#L86>
-    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
     pub struct MapFlags: u64 {
         const MAP_TYPE = const_conversions::u64_from_u32(bindings::LINUX_MAP_TYPE);
         const MAP_FIXED = const_conversions::u64_from_u32(bindings::LINUX_MAP_FIXED);
@@ -65,7 +65,7 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Flags used with `mremap`. u64 to match the x86-64 `mremap` syscall parameter:
     /// <https://github.com/torvalds/linux/tree/v6.3/mm/mremap.c#L895>
-    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
     pub struct MRemapFlags: u64 {
         const MREMAP_MAYMOVE = const_conversions::u64_from_u32(bindings::LINUX_MREMAP_MAYMOVE);
         const MREMAP_FIXED = const_conversions::u64_from_u32(bindings::LINUX_MREMAP_FIXED);

@@ -1,20 +1,15 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::os::unix::prelude::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use nix::errno::Errno;
-use nix::sys::epoll::{Epoll, EpollCreateFlags, EpollEvent, EpollFlags};
-use nix::unistd::Pid;
-
-// TODO: consider using std::os::linux::process::PidFd once it's stabilized.
-fn pidfd_open(pid: Pid) -> nix::Result<File> {
-    let raw_fd =
-        nix::errno::Errno::result(unsafe { libc::syscall(libc::SYS_pidfd_open, pid.as_raw(), 0) })?;
-    Ok(unsafe { File::from_raw_fd(raw_fd.try_into().unwrap()) })
-}
+use linux_api::errno::Errno;
+use linux_api::posix_types::Pid;
+use rustix::event::{self, epoll};
+use rustix::fd::AsFd;
+use rustix::fd::OwnedFd;
+use rustix::io::FdFlags;
+use rustix::process::PidfdFlags;
 
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
@@ -22,7 +17,7 @@ fn pidfd_open(pid: Pid) -> nix::Result<File> {
 #[derive(Debug)]
 pub struct ChildPidWatcher {
     inner: Arc<Mutex<Inner>>,
-    epoll: Arc<Epoll>,
+    epoll: Arc<OwnedFd>,
 }
 
 pub type WatchHandle = u64;
@@ -38,7 +33,7 @@ struct PidData {
     // Registered callbacks.
     callbacks: HashMap<WatchHandle, Box<dyn Send + FnOnce(Pid)>>,
     // After the pid has exited, this fd is closed and set to None.
-    pidfd: Option<File>,
+    pidfd: Option<OwnedFd>,
     // Whether this pid has been unregistered. The whole struct is removed after
     // both the pid is unregistered, and `callbacks` is empty.
     unregistered: bool,
@@ -54,17 +49,17 @@ struct Inner {
     pids: HashMap<Pid, PidData>,
     // event_fd used to notify watcher thread via epoll. Calling thread writes a
     // single byte, which the watcher thread reads to reset.
-    command_notifier: File,
+    command_notifier: OwnedFd,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Inner {
     fn send_command(&mut self, cmd: Command) {
         self.commands.push(cmd);
-        nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
+        rustix::io::write(&self.command_notifier, &1u64.to_ne_bytes()).unwrap();
     }
 
-    fn unwatch_pid(&mut self, epoll: &Epoll, pid: Pid) {
+    fn unwatch_pid(&mut self, epoll: impl AsFd, pid: Pid) {
         let Some(piddata) = self.pids.get_mut(&pid) else {
             // Already unregistered the pid
             return;
@@ -73,14 +68,14 @@ impl Inner {
             // Already unwatched the pid
             return;
         };
-        epoll.delete(fd).unwrap();
+        epoll::delete(epoll, fd).unwrap();
     }
 
     fn pid_has_exited(&self, pid: Pid) -> bool {
         self.pids.get(&pid).unwrap().pidfd.is_none()
     }
 
-    fn remove_pid(&mut self, epoll: &Epoll, pid: Pid) {
+    fn remove_pid(&mut self, epoll: impl AsFd, pid: Pid) {
         debug_assert!(self.should_remove_pid(pid));
         self.unwatch_pid(epoll, pid);
         self.pids.remove(&pid);
@@ -97,7 +92,7 @@ impl Inner {
         pid_data.callbacks.is_empty() && pid_data.unregistered
     }
 
-    fn maybe_remove_pid(&mut self, epoll: &Epoll, pid: Pid) {
+    fn maybe_remove_pid(&mut self, epoll: impl AsFd, pid: Pid) {
         if self.should_remove_pid(pid) {
             self.remove_pid(epoll, pid)
         }
@@ -108,14 +103,15 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = Arc::new(Epoll::new(EpollCreateFlags::empty()).unwrap());
-        let command_notifier = {
-            let raw =
-                nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
-            File::from(raw)
-        };
-        let event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
-        epoll.add(&command_notifier, event).unwrap();
+        let epoll = Arc::new(epoll::create(epoll::CreateFlags::empty()).unwrap());
+        let command_notifier = event::eventfd(0, event::EventfdFlags::NONBLOCK).unwrap();
+        epoll::add(
+            &epoll,
+            &command_notifier,
+            epoll::EventData::new_u64(0),
+            epoll::EventFlags::IN,
+        )
+        .unwrap();
         let watcher = ChildPidWatcher {
             inner: Arc::new(Mutex::new(Inner {
                 next_handle: 1,
@@ -138,14 +134,14 @@ impl ChildPidWatcher {
         watcher
     }
 
-    fn thread_loop(inner: &Mutex<Inner>, epoll: &Epoll) {
-        let mut events = [EpollEvent::empty(); 10];
+    fn thread_loop(inner: &Mutex<Inner>, epoll: impl AsFd) {
         let mut commands = Vec::new();
         let mut done = false;
         while !done {
-            let nevents = match epoll.wait(&mut events, -1) {
-                Ok(n) => n,
-                Err(Errno::EINTR) => {
+            let mut events = epoll::EventVec::with_capacity(10);
+            match epoll::wait(epoll.as_fd(), &mut events, -1) {
+                Ok(()) => (),
+                Err(rustix::io::Errno::INTR) => {
                     // Just try again.
                     continue;
                 }
@@ -159,24 +155,25 @@ impl ChildPidWatcher {
             // caller unregisters it.
             let mut inner = inner.lock().unwrap();
 
-            for event in &events[0..nevents] {
-                let pid = Pid::from_raw(i32::try_from(event.data()).unwrap());
-                // We get an event for pid=0 when there's a write to the command_notifier;
-                // Ignore that here and handle below.
-                if pid.as_raw() != 0 {
-                    inner.unwatch_pid(epoll, pid);
-                    inner.run_callbacks_for_pid(pid);
-                    inner.maybe_remove_pid(epoll, pid);
+            for event in events.into_iter() {
+                if event.data.u64() == 0 {
+                    // We get an event for pid=0 when there's a write to the
+                    // command_notifier; Ignore that here and handle below.
+                    continue;
                 }
+                let pid = Pid::from_raw(i32::try_from(event.data.u64()).unwrap()).unwrap();
+                inner.unwatch_pid(epoll.as_fd(), pid);
+                inner.run_callbacks_for_pid(pid);
+                inner.maybe_remove_pid(epoll.as_fd(), pid);
             }
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
             let mut buf = [0; 8];
-            let res = nix::unistd::read(inner.command_notifier.as_raw_fd(), &mut buf);
+            let res = rustix::io::read(&inner.command_notifier, &mut buf);
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
-                Err(Errno::EAGAIN) => true,
+                Err(rustix::io::Errno::AGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
             // Run commands
@@ -186,12 +183,12 @@ impl ChildPidWatcher {
                     Command::RunCallbacks(pid) => {
                         debug_assert!(inner.pid_has_exited(pid));
                         inner.run_callbacks_for_pid(pid);
-                        inner.maybe_remove_pid(epoll, pid);
+                        inner.maybe_remove_pid(epoll.as_fd(), pid);
                     }
                     Command::UnregisterPid(pid) => {
                         if let Some(pid_data) = inner.pids.get_mut(&pid) {
                             pid_data.unregistered = true;
-                            inner.maybe_remove_pid(epoll, pid);
+                            inner.maybe_remove_pid(epoll.as_fd(), pid);
                         }
                     }
                     Command::Finish => {
@@ -221,17 +218,13 @@ impl ChildPidWatcher {
     /// child process gets its own copy of the address space and OS resources etc.
     /// Still, there may be some dragons here. Best to call exec before too long
     /// in the child.
-    pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, nix::Error> {
-        let raw_pid = unsafe { libc::syscall(libc::SYS_fork) };
-        if raw_pid < 0 {
-            let rv = Err(Errno::last());
-            return rv;
-        }
+    pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, Errno> {
+        let raw_pid = Errno::result_from_libc_errno(-1, unsafe { libc::syscall(libc::SYS_fork) })?;
         if raw_pid == 0 {
             child_fn();
             panic!("child_fn shouldn't have returned");
         }
-        let pid = Pid::from_raw(raw_pid.try_into().unwrap());
+        let pid = Pid::from_raw(raw_pid.try_into().unwrap()).unwrap();
         self.register_pid(pid);
 
         Ok(pid)
@@ -249,11 +242,15 @@ impl ChildPidWatcher {
     /// an unrelated process with a recycled `pid`.
     pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
-        let pidfd =
-            pidfd_open(pid).unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
-
-        let event = EpollEvent::new(EpollFlags::EPOLLIN, pid.as_raw().try_into().unwrap());
-        self.epoll.add(&pidfd, event).unwrap();
+        let pidfd = rustix::process::pidfd_open(pid.into(), PidfdFlags::empty())
+            .unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
+        epoll::add(
+            &self.epoll,
+            &pidfd,
+            epoll::EventData::new_u64(pid.as_raw_nonzero().get().try_into().unwrap()),
+            epoll::EventFlags::IN,
+        )
+        .unwrap();
 
         let prev = inner.pids.insert(
             pid,
@@ -353,13 +350,13 @@ impl std::fmt::Debug for PidData {
 mod tests {
     use std::sync::{Arc, Condvar};
 
-    use nix::sys::wait::WaitStatus;
-    use nix::sys::wait::{waitpid, WaitPidFlag};
+    use rustix::fd::AsRawFd;
+    use rustix::process::{waitpid, WaitOptions};
 
     use super::*;
 
     fn is_zombie(pid: Pid) -> bool {
-        let stat_name = format!("/proc/{}/stat", pid.as_raw());
+        let stat_name = format!("/proc/{}/stat", pid.as_raw_nonzero().get());
         let contents = std::fs::read_to_string(stat_name).unwrap();
         contents.contains(") Z")
     }
@@ -400,10 +397,8 @@ mod tests {
         watcher.unregister_pid(child);
 
         // Child should still be alive.
-        assert_eq!(
-            waitpid(child, Some(WaitPidFlag::WNOHANG)).unwrap(),
-            WaitStatus::StillAlive
-        );
+        let status = waitpid(Some(child.into()), WaitOptions::NOHANG).unwrap();
+        assert!(status.is_none(), "Unexpected status: {status:?}");
 
         // Callback shouldn't have run yet.
         assert!(!*callback_ran.0.lock().unwrap());
@@ -421,18 +416,21 @@ mod tests {
         // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
-        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
+        let status = waitpid(Some(child.into()), WaitOptions::empty())
+            .unwrap()
+            .unwrap();
+        assert_eq!(status.exit_status(), Some(42));
     }
 
     #[test]
     // can't call foreign functions
     #[cfg_attr(miri, ignore)]
     fn register_after_exit() {
-        let child = match unsafe { nix::unistd::fork() }.unwrap() {
-            nix::unistd::ForkResult::Parent { child } => child,
-            nix::unistd::ForkResult::Child => {
+        let child = match unsafe { libc::fork() } {
+            0 => {
                 unsafe { libc::_exit(42) };
             }
+            child => Pid::from_raw(child).unwrap(),
         };
 
         // Wait until child is dead, but don't reap it yet.
@@ -474,7 +472,13 @@ mod tests {
         // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
-        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
+        assert_eq!(
+            waitpid(Some(child.into()), WaitOptions::empty())
+                .unwrap()
+                .unwrap()
+                .exit_status(),
+            Some(42)
+        );
     }
 
     #[test]
@@ -520,7 +524,13 @@ mod tests {
         // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
-        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
+        assert_eq!(
+            waitpid(Some(child.into()), WaitOptions::empty())
+                .unwrap()
+                .unwrap()
+                .exit_status(),
+            Some(42)
+        );
     }
 
     #[test]
@@ -582,6 +592,12 @@ mod tests {
         // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
-        assert_eq!(waitpid(child, None).unwrap(), WaitStatus::Exited(child, 42));
+        assert_eq!(
+            waitpid(Some(child.into()), WaitOptions::empty())
+                .unwrap()
+                .unwrap()
+                .exit_status(),
+            Some(42)
+        );
     }
 }
