@@ -103,8 +103,12 @@ impl ChildPidWatcher {
     /// Create a ChildPidWatcher. Spawns a background thread, which is joined
     /// when the object is dropped.
     pub fn new() -> Self {
-        let epoll = Arc::new(epoll::create(epoll::CreateFlags::empty()).unwrap());
-        let command_notifier = event::eventfd(0, event::EventfdFlags::NONBLOCK).unwrap();
+        let epoll = Arc::new(epoll::create(epoll::CreateFlags::CLOEXEC).unwrap());
+        let command_notifier = event::eventfd(
+            0,
+            event::EventfdFlags::NONBLOCK | event::EventfdFlags::CLOEXEC,
+        )
+        .unwrap();
         epoll::add(
             &epoll,
             &command_notifier,
@@ -244,6 +248,13 @@ impl ChildPidWatcher {
         let mut inner = self.inner.lock().unwrap();
         let pidfd = rustix::process::pidfd_open(pid.into(), PidfdFlags::empty())
             .unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
+        // `pidfd_open(2)`: the close-on-exec flag is set on the file descriptor.
+        debug_assert!(
+            rustix::io::fcntl_getfd(&pidfd)
+                .unwrap()
+                .contains(FdFlags::CLOEXEC),
+            "pidfd_open unexpected didn't set CLOEXEC"
+        );
         epoll::add(
             &self.epoll,
             &pidfd,
