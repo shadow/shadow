@@ -13,6 +13,7 @@ use std::sync::{atomic, Arc};
 use linux_api::sched::CloneFlags;
 use log::{debug, error, log_enabled, trace, Level};
 use nix::errno::Errno;
+use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
@@ -107,6 +108,7 @@ impl ManagedThread {
 
         let child_pid =
             Self::spawn_native(plugin_path, argv, envv, strace_file, log_file, &ipc_shmem)?;
+        let child_pid = rustix::process::Pid::from_raw(child_pid.as_raw()).unwrap();
 
         // In Linux, the PID is equal to the TID of its first thread.
         let native_pid = child_pid;
@@ -125,7 +127,7 @@ impl ManagedThread {
         };
 
         trace!(
-            "waiting for start event from shim with native pid {}",
+            "waiting for start event from shim with native pid {:?}",
             native_pid
         );
         let start_req = ipc_shmem.from_plugin().receive().unwrap();
@@ -137,38 +139,39 @@ impl ManagedThread {
                 // The process died before initializing the shim.
                 //
                 // Reap the dead process and return an error.
-                let status = nix::sys::wait::waitpid(native_pid, None).unwrap();
-                match status {
-                    nix::sys::wait::WaitStatus::Exited(pid, 127) if pid == native_pid => {
-                        // posix_spawn(3):
-                        // > If  the child  fails  in  any  of the
-                        // > housekeeping steps described below, or fails to
-                        // > execute the desired file, it exits with a status of
-                        // > 127.
-                        debug!("posix_spawn failed to exec the process");
-                        // Assume that execve failed, and return a plausible reason
-                        // why it might have done so.
-                        // TODO: replace our usage of posix_spawn with a custom
-                        // implementation that can return the execve failure code?
-                        return Err(nix::errno::Errno::EPERM);
-                    }
-                    other => {
-                        // TODO: handle more gracefully.
-                        // * The native stdout/stderr might have a clue as to
-                        // why the process died.  Consider logging a hint to
-                        // check it (currently in the corresponding shimlog), or
-                        // directly capture it and display it here.
-                        // https://github.com/shadow/shadow/issues/3142
-                        // * Consider logging a warning here and continuing on to handle
-                        // the managed process exit normally. e.g. when this happens
-                        // as part of an emulated `execve`, we might want to continue
-                        // the simulation.
-                        panic!("Child process died unexpectedly before initialization: {other:?}");
-                    }
+                let status = rustix::process::waitpid(Some(native_pid), WaitOptions::empty())
+                    .unwrap()
+                    .unwrap();
+                if status.exit_status() == Some(127) {
+                    // posix_spawn(3):
+                    // > If  the child  fails  in  any  of the
+                    // > housekeeping steps described below, or fails to
+                    // > execute the desired file, it exits with a status of
+                    // > 127.
+                    debug!("posix_spawn failed to exec the process");
+                    // Assume that execve failed, and return a plausible reason
+                    // why it might have done so.
+                    // TODO: replace our usage of posix_spawn with a custom
+                    // implementation that can return the execve failure code?
+                    return Err(nix::errno::Errno::EPERM);
                 }
+                // TODO: handle more gracefully.
+                // * The native stdout/stderr might have a clue as to
+                // why the process died.  Consider logging a hint to
+                // check it (currently in the corresponding shimlog), or
+                // directly capture it and display it here.
+                // https://github.com/shadow/shadow/issues/3142
+                // * Consider logging a warning here and continuing on to handle
+                // the managed process exit normally. e.g. when this happens
+                // as part of an emulated `execve`, we might want to continue
+                // the simulation.
+                panic!("Child process died unexpectedly before initialization: {status:?}");
             }
             other => panic!("Unexpected result from shim: {other:?}"),
         };
+
+        let native_pid = nix::unistd::Pid::from_raw(native_pid.as_raw_nonzero().get());
+        let native_tid = nix::unistd::Pid::from_raw(native_tid.as_raw_nonzero().get());
 
         Ok(Self {
             ipc_shmem,
@@ -327,7 +330,7 @@ impl ManagedThread {
             .as_ref()
             .unwrap()
             .child_pid_watcher()
-            .unregister_pid(self.native_pid());
+            .unregister_pid(rustix::process::Pid::from_raw(self.native_pid().as_raw()).unwrap());
 
         self.cleanup_after_exit_initiated();
     }
@@ -398,7 +401,7 @@ impl ManagedThread {
                 .as_ref()
                 .unwrap()
                 .child_pid_watcher()
-                .register_pid(native_pid);
+                .register_pid(rustix::process::Pid::from_raw(native_pid.as_raw()).unwrap());
         }
 
         // Register the child thread's IPC block with the ChildPidWatcher.
@@ -409,9 +412,12 @@ impl ManagedThread {
                 .as_ref()
                 .unwrap()
                 .child_pid_watcher()
-                .register_callback(native_pid, move |_pid| {
-                    child_ipc_shmem.from_plugin().close_writer();
-                })
+                .register_callback(
+                    rustix::process::Pid::from_raw(native_pid.as_raw()).unwrap(),
+                    move |_pid| {
+                        child_ipc_shmem.from_plugin().close_writer();
+                    },
+                )
         };
 
         Ok(Self {
