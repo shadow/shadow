@@ -599,12 +599,12 @@ impl ManagedThread {
             .collect();
 
         let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
-        Errno::result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
+        posix_result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
 
         // Set up stdin
         let (stdin_reader, stdin_writer) =
             nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC).unwrap();
-        Errno::result(unsafe {
+        posix_result(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 stdin_reader,
@@ -631,7 +631,7 @@ impl ManagedThread {
         // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
         // https://austingroupbugs.net/view.php?id=411
         if let Some(strace_file) = strace_file {
-            Errno::result(unsafe {
+            posix_result(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     strace_file.as_raw_fd(),
@@ -639,7 +639,7 @@ impl ManagedThread {
                 )
             })
             .unwrap();
-            Errno::result(unsafe {
+            posix_result(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     libc::STDOUT_FILENO,
@@ -650,7 +650,7 @@ impl ManagedThread {
         }
 
         // set stdout/stderr as the shim log. This also clears the FD_CLOEXEC flag.
-        Errno::result(unsafe {
+        posix_result(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -658,7 +658,7 @@ impl ManagedThread {
             )
         })
         .unwrap();
-        Errno::result(unsafe {
+        posix_result(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -668,11 +668,11 @@ impl ManagedThread {
         .unwrap();
 
         let mut spawn_attr: libc::posix_spawnattr_t = shadow_pod::zeroed();
-        Errno::result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
+        posix_result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
 
         // In versions of glibc before 2.24, we need this to tell posix_spawn
         // to use vfork instead of fork. In later versions it's a no-op.
-        Errno::result(unsafe {
+        posix_result(unsafe {
             libc::posix_spawnattr_setflags(
                 &mut spawn_attr,
                 libc::POSIX_SPAWN_USEVFORK.try_into().unwrap(),
@@ -682,7 +682,7 @@ impl ManagedThread {
 
         let child_pid_res = {
             let mut child_pid = -1;
-            Errno::result(unsafe {
+            posix_result(unsafe {
                 libc::posix_spawn(
                     &mut child_pid,
                     plugin_path.as_ptr(),
@@ -692,7 +692,10 @@ impl ManagedThread {
                     envv_ptrs.as_ptr(),
                 )
             })
-            .map(|_| nix::unistd::Pid::from_raw(child_pid))
+            .map(|_| {
+                assert!(child_pid > 0, "Invalid pid: {child_pid}");
+                nix::unistd::Pid::from_raw(child_pid)
+            })
         };
 
         // Write the serialized shmem descriptor to the stdin pipe. The pipe
@@ -718,9 +721,8 @@ impl ManagedThread {
             nix::unistd::close(stdin_reader).unwrap();
         }
 
-        Errno::result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) })
-            .unwrap();
-        Errno::result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
+        posix_result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) }).unwrap();
+        posix_result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
 
         // Drop the cloned argv and env.
         drop(
@@ -790,4 +792,14 @@ fn tgkill(
     Errno::result(res).map(|i: i64| {
         assert_eq!(i, 0);
     })
+}
+
+/// Helper to handle results from posix_spawn and similar functions that
+/// return 0 on success, or the error code directly otherwise (not via errno).
+fn posix_result(i: i32) -> Result<(), Errno> {
+    if i == 0 {
+        Ok(())
+    } else {
+        Err(Errno::from_i32(i))
+    }
 }

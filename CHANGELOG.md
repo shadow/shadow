@@ -37,6 +37,7 @@ from the parent instead of reset to default (unless `CLONE_CLEAR_SIGHAND` is use
 * The build system now logs a warning when detecting golang version 1.21.x, which is
 incompatible with shadow's golang tests. (#3307, fixing #3267).
 * Changed some syscall error cases to return `ENOTSUP` instead of `ENOSYS` (#3314).
+* Fixed error detection and handling when spawning processes (#3344).
 
 Full changelog since v3.1.0:
 
