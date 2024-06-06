@@ -10,7 +10,10 @@ use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
 use std::sync::{atomic, Arc};
 
+use linux_api::errno::Errno;
+use linux_api::posix_types::Pid;
 use linux_api::sched::CloneFlags;
+use linux_api::signal::tgkill;
 use log::{debug, error, log_enabled, trace, Level};
 use rustix::pipe::PipeFlags;
 use rustix::process::WaitOptions;
@@ -52,8 +55,8 @@ pub struct ManagedThread {
     /* holds the event for the most recent call from the plugin/shim */
     current_event: RefCell<ShimEventToShadow>,
 
-    native_pid: rustix::process::Pid,
-    native_tid: rustix::process::Pid,
+    native_pid: linux_api::posix_types::Pid,
+    native_tid: linux_api::posix_types::Pid,
 
     // Value storing the current CPU affinity of the thread (more precisely,
     // of the native thread backing this thread object). This value will be set
@@ -63,11 +66,11 @@ pub struct ManagedThread {
 }
 
 impl ManagedThread {
-    pub fn native_pid(&self) -> rustix::process::Pid {
+    pub fn native_pid(&self) -> linux_api::posix_types::Pid {
         self.native_pid
     }
 
-    pub fn native_tid(&self) -> rustix::process::Pid {
+    pub fn native_tid(&self) -> linux_api::posix_types::Pid {
         self.native_tid
     }
 
@@ -97,7 +100,7 @@ impl ManagedThread {
         strace_file: Option<&std::fs::File>,
         log_file: &std::fs::File,
         injected_preloads: &[PathBuf],
-    ) -> nix::Result<Self> {
+    ) -> Result<Self, Errno> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
 
         let envv = inject_preloads(envv, injected_preloads);
@@ -108,7 +111,6 @@ impl ManagedThread {
 
         let child_pid =
             Self::spawn_native(plugin_path, argv, envv, strace_file, log_file, &ipc_shmem)?;
-        let child_pid = rustix::process::Pid::from_raw(child_pid.as_raw()).unwrap();
 
         // In Linux, the PID is equal to the TID of its first thread.
         let native_pid = child_pid;
@@ -139,9 +141,10 @@ impl ManagedThread {
                 // The process died before initializing the shim.
                 //
                 // Reap the dead process and return an error.
-                let status = rustix::process::waitpid(Some(native_pid), WaitOptions::empty())
-                    .unwrap()
-                    .unwrap();
+                let status =
+                    rustix::process::waitpid(Some(native_pid.into()), WaitOptions::empty())
+                        .unwrap()
+                        .unwrap();
                 if status.exit_status() == Some(127) {
                     // posix_spawn(3):
                     // > If  the child  fails  in  any  of the
@@ -153,7 +156,7 @@ impl ManagedThread {
                     // why it might have done so.
                     // TODO: replace our usage of posix_spawn with a custom
                     // implementation that can return the execve failure code?
-                    return Err(nix::errno::Errno::EPERM);
+                    return Err(Errno::EPERM);
                 }
                 // TODO: handle more gracefully.
                 // * The native stdout/stderr might have a clue as to
@@ -372,8 +375,7 @@ impl ManagedThread {
             r => panic!("Unexpected result: {r:?}"),
         };
         let clone_res: SyscallReg = syscall::raw_return_value_to_result(clone_res)?;
-        let child_native_tid =
-            rustix::process::Pid::from_raw(libc::pid_t::from(clone_res)).unwrap();
+        let child_native_tid = Pid::from_raw(libc::pid_t::from(clone_res)).unwrap();
         trace!("native clone treated tid {child_native_tid:?}");
 
         trace!(
@@ -496,7 +498,7 @@ impl ManagedThread {
                 break;
             }
             match tgkill(native_pid, native_tid, None) {
-                Err(nix::errno::Errno::ESRCH) => {
+                Err(Errno::ESRCH) => {
                     trace!("Thread is done exiting; proceeding with cleanup");
                     break;
                 }
@@ -550,7 +552,7 @@ impl ManagedThread {
         strace_file: Option<&std::fs::File>,
         shimlog_file: &std::fs::File,
         shmem_block: &ShMemBlock<IPCData>,
-    ) -> nix::Result<nix::unistd::Pid> {
+    ) -> Result<Pid, Errno> {
         // Preemptively check for likely reasons that execve might fail.
         // In particular we want to ensure that we  don't launch a statically
         // linked executable, since we'd then deadlock the whole simulation
@@ -562,22 +564,22 @@ impl ManagedThread {
             debug!("Failed to verify path {plugin_path:?}");
             match e {
                 // execve(2): ENOENT The file pathname [...] does not exist.
-                VerifyPluginPathError::NotFound => nix::errno::Errno::ENOENT,
+                VerifyPluginPathError::NotFound => Errno::ENOENT,
                 // execve(2): EACCES The file or a script interpreter is not a regular file.
-                VerifyPluginPathError::NotFile => nix::errno::Errno::EACCES,
+                VerifyPluginPathError::NotFile => Errno::EACCES,
                 // execve(2): EACCES Execute permission is denied for the file or a script or ELF interpreter.
-                VerifyPluginPathError::NotExecutable => nix::errno::Errno::EACCES,
+                VerifyPluginPathError::NotExecutable => Errno::EACCES,
                 // execve(2): ENOEXEC An executable is not in a recognized
                 // format, is for the wrong architecture, or has some other
                 // format error that means it cannot be executed.
-                VerifyPluginPathError::NotDynamicallyLinkedElf => nix::errno::Errno::ENOEXEC,
+                VerifyPluginPathError::NotDynamicallyLinkedElf => Errno::ENOEXEC,
                 // execve(2): EACCES Search permission is denied on a component
                 // of the path prefix of pathname or the name of a script
                 // interpreter.
-                VerifyPluginPathError::PathPermissionDenied => nix::errno::Errno::EACCES,
+                VerifyPluginPathError::PathPermissionDenied => Errno::EACCES,
                 VerifyPluginPathError::UnhandledIoError(_) => {
                     // Arbitrary error that should be handled by callers.
-                    nix::errno::Errno::ENOEXEC
+                    Errno::ENOEXEC
                 }
             }
         })?;
@@ -600,11 +602,14 @@ impl ManagedThread {
             .collect();
 
         let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
-        posix_result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe {
+            libc::posix_spawn_file_actions_init(&mut file_actions)
+        })
+        .unwrap();
 
         // Set up stdin
         let (stdin_reader, stdin_writer) = rustix::pipe::pipe_with(PipeFlags::CLOEXEC).unwrap();
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 stdin_reader.as_raw_fd(),
@@ -631,7 +636,7 @@ impl ManagedThread {
         // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
         // https://austingroupbugs.net/view.php?id=411
         if let Some(strace_file) = strace_file {
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     strace_file.as_raw_fd(),
@@ -639,7 +644,7 @@ impl ManagedThread {
                 )
             })
             .unwrap();
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     libc::STDOUT_FILENO,
@@ -650,7 +655,7 @@ impl ManagedThread {
         }
 
         // set stdout/stderr as the shim log. This also clears the FD_CLOEXEC flag.
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -658,7 +663,7 @@ impl ManagedThread {
             )
         })
         .unwrap();
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -668,11 +673,12 @@ impl ManagedThread {
         .unwrap();
 
         let mut spawn_attr: libc::posix_spawnattr_t = shadow_pod::zeroed();
-        posix_result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) })
+            .unwrap();
 
         // In versions of glibc before 2.24, we need this to tell posix_spawn
         // to use vfork instead of fork. In later versions it's a no-op.
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawnattr_setflags(
                 &mut spawn_attr,
                 libc::POSIX_SPAWN_USEVFORK.try_into().unwrap(),
@@ -682,7 +688,7 @@ impl ManagedThread {
 
         let child_pid_res = {
             let mut child_pid = -1;
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn(
                     &mut child_pid,
                     plugin_path.as_ptr(),
@@ -692,10 +698,7 @@ impl ManagedThread {
                     envv_ptrs.as_ptr(),
                 )
             })
-            .map(|_| {
-                assert!(child_pid > 0, "Invalid pid: {child_pid}");
-                nix::unistd::Pid::from_raw(child_pid)
-            })
+            .map(|_| Pid::from_raw(child_pid).unwrap_or_else(|| panic!("Invalid pid: {child_pid}")))
         };
 
         // Write the serialized shmem descriptor to the stdin pipe. The pipe
@@ -707,7 +710,7 @@ impl ManagedThread {
             // can't safely construct the &[u8] that it wants.
             let serialized = shmem_block.serialize();
             let serialized_bytes = shadow_pod::as_u8_slice(&serialized);
-            let written = nix::errno::Errno::result(unsafe {
+            let written = Errno::result_from_libc_errno(-1, unsafe {
                 libc::write(
                     stdin_writer.as_raw_fd(),
                     serialized_bytes.as_ptr().cast(),
@@ -719,8 +722,12 @@ impl ManagedThread {
             assert_eq!(written, isize::try_from(serialized_bytes.len()).unwrap());
         }
 
-        posix_result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) }).unwrap();
-        posix_result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe {
+            libc::posix_spawn_file_actions_destroy(&mut file_actions)
+        })
+        .unwrap();
+        Errno::result_from_libc_errnum(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) })
+            .unwrap();
 
         // Drop the cloned argv and env.
         drop(
@@ -752,7 +759,7 @@ impl ManagedThread {
     /// thread!) and then drops `self`.
     pub fn kill_and_drop(self) {
         if let Err(err) =
-            rustix::process::kill_process(self.native_pid(), rustix::process::Signal::Kill)
+            rustix::process::kill_process(self.native_pid().into(), rustix::process::Signal::Kill)
         {
             log::warn!(
                 "Couldn't kill managed process {:?}. kill: {:?}",
@@ -772,32 +779,5 @@ impl Drop for ManagedThread {
         // running thread accessing a deallocated or repurposed memory region
         // can cause numerous problems.
         assert!(!self.is_running());
-    }
-}
-
-fn tgkill(
-    pid: rustix::process::Pid,
-    tid: rustix::process::Pid,
-    signo: Option<nix::sys::signal::Signal>,
-) -> nix::Result<()> {
-    let pid = pid.as_raw_nonzero().get();
-    let tid = tid.as_raw_nonzero().get();
-    let signo = match signo {
-        Some(s) => s as i32,
-        None => 0,
-    };
-    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
-    nix::errno::Errno::result(res).map(|i: i64| {
-        assert_eq!(i, 0);
-    })
-}
-
-/// Helper to handle results from posix_spawn and similar functions that
-/// return 0 on success, or the error code directly otherwise (not via errno).
-fn posix_result(i: i32) -> Result<(), nix::errno::Errno> {
-    if i == 0 {
-        Ok(())
-    } else {
-        Err(nix::errno::Errno::from_i32(i))
     }
 }

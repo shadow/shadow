@@ -302,7 +302,7 @@ impl RunnableProcess {
         plugin_path: &CStr,
         argv: Vec<CString>,
         envv: Vec<CString>,
-    ) -> nix::Result<ManagedThread> {
+    ) -> Result<ManagedThread, Errno> {
         ManagedThread::spawn(
             plugin_path,
             argv,
@@ -943,7 +943,7 @@ impl Process {
         pause_for_debugging: bool,
         strace_logging_options: Option<FmtOptions>,
         expected_final_state: ProcessFinalState,
-    ) -> nix::Result<RootedRc<RootedRefCell<Process>>> {
+    ) -> Result<RootedRc<RootedRefCell<Process>>, Errno> {
         debug!("starting process '{:?}'", plugin_name);
 
         let main_thread_id = host.get_new_thread_id();

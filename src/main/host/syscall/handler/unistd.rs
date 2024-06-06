@@ -694,8 +694,7 @@ impl SyscallHandler {
             .process
             .borrow_as_runnable()
             .unwrap()
-            .spawn_mthread_for_exec(ctx.objs.host, abs_path, argv, envv)
-            .map_err(|e| Errno::try_from(e as i32).unwrap())?;
+            .spawn_mthread_for_exec(ctx.objs.host, abs_path, argv, envv)?;
 
         // If we get this far, then we should be able to ultimately succeed.
         // We need a mutable reference to the Process to update it, though, which we can't

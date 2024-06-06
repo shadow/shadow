@@ -1,16 +1,15 @@
 use std::collections::HashMap;
-use std::os::unix::prelude::{AsRawFd, FromRawFd};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use nix::fcntl::FdFlag;
+use linux_api::errno::Errno;
+use linux_api::posix_types::Pid;
 use rustix::event::{self, epoll};
 use rustix::fd::AsFd;
 use rustix::fd::OwnedFd;
-use rustix::io::{Errno, FdFlags};
+use rustix::io::FdFlags;
 use rustix::process::PidfdFlags;
-use rustix::thread::{Pid, RawPid};
 
 /// Utility for monitoring a set of child pid's, calling registered callbacks
 /// when one exits or is killed. Starts a background thread, which is shut down
@@ -146,7 +145,7 @@ impl ChildPidWatcher {
             let mut events = epoll::EventVec::with_capacity(10);
             match epoll::wait(epoll.as_fd(), &mut events, -1) {
                 Ok(()) => (),
-                Err(Errno::INTR) => {
+                Err(rustix::io::Errno::INTR) => {
                     // Just try again.
                     continue;
                 }
@@ -166,7 +165,7 @@ impl ChildPidWatcher {
                     // command_notifier; Ignore that here and handle below.
                     continue;
                 }
-                let pid = Pid::from_raw(RawPid::try_from(event.data.u64()).unwrap()).unwrap();
+                let pid = Pid::from_raw(i32::try_from(event.data.u64()).unwrap()).unwrap();
                 inner.unwatch_pid(epoll.as_fd(), pid);
                 inner.run_callbacks_for_pid(pid);
                 inner.maybe_remove_pid(epoll.as_fd(), pid);
@@ -178,7 +177,7 @@ impl ChildPidWatcher {
             debug_assert!(match res {
                 Ok(8) => true,
                 Ok(i) => panic!("Unexpected read size {}", i),
-                Err(Errno::AGAIN) => true,
+                Err(rustix::io::Errno::AGAIN) => true,
                 Err(e) => panic!("Unexpected error {:?}", e),
             });
             // Run commands
@@ -224,13 +223,7 @@ impl ChildPidWatcher {
     /// Still, there may be some dragons here. Best to call exec before too long
     /// in the child.
     pub unsafe fn fork_watchable(&self, child_fn: impl FnOnce()) -> Result<Pid, Errno> {
-        let raw_pid = unsafe { libc::syscall(libc::SYS_fork) };
-        if raw_pid < 0 {
-            let rv = Err(Errno::from_raw_os_error(unsafe {
-                *libc::__errno_location()
-            }));
-            return rv;
-        }
+        let raw_pid = Errno::result_from_libc_errno(-1, unsafe { libc::syscall(libc::SYS_fork) })?;
         if raw_pid == 0 {
             child_fn();
             panic!("child_fn shouldn't have returned");
@@ -253,7 +246,7 @@ impl ChildPidWatcher {
     /// an unrelated process with a recycled `pid`.
     pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
-        let pidfd = rustix::process::pidfd_open(pid, PidfdFlags::empty())
+        let pidfd = rustix::process::pidfd_open(pid.into(), PidfdFlags::empty())
             .unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
         let flags = rustix::io::fcntl_getfd(&pidfd).unwrap();
         rustix::io::fcntl_setfd(&pidfd, flags | FdFlags::CLOEXEC).unwrap();
@@ -363,7 +356,8 @@ impl std::fmt::Debug for PidData {
 mod tests {
     use std::sync::{Arc, Condvar};
 
-    use rustix::process::{waitpid, WaitOptions, WaitStatus};
+    use rustix::fd::AsRawFd;
+    use rustix::process::{waitpid, WaitOptions};
 
     use super::*;
 
@@ -409,7 +403,7 @@ mod tests {
         watcher.unregister_pid(child);
 
         // Child should still be alive.
-        let status = waitpid(Some(child), WaitOptions::NOHANG).unwrap();
+        let status = waitpid(Some(child.into()), WaitOptions::NOHANG).unwrap();
         assert!(status.is_none(), "Unexpected status: {status:?}");
 
         // Callback shouldn't have run yet.
@@ -428,7 +422,9 @@ mod tests {
         // TODO: use WNOHANG here if we go back to a pidfd-based implementation.
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
-        let status = waitpid(Some(child), WaitOptions::empty()).unwrap().unwrap();
+        let status = waitpid(Some(child.into()), WaitOptions::empty())
+            .unwrap()
+            .unwrap();
         assert_eq!(status.exit_status(), Some(42));
     }
 
@@ -483,7 +479,7 @@ mod tests {
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
         assert_eq!(
-            waitpid(Some(child), WaitOptions::empty())
+            waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
                 .exit_status(),
@@ -535,7 +531,7 @@ mod tests {
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
         assert_eq!(
-            waitpid(Some(child), WaitOptions::empty())
+            waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
                 .exit_status(),
@@ -603,7 +599,7 @@ mod tests {
         // With the current fd-based implementation we may be notified before kernel
         // marks the child reapable.
         assert_eq!(
-            waitpid(Some(child), WaitOptions::empty())
+            waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
                 .exit_status(),

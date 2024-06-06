@@ -741,6 +741,7 @@ dependencies = [
  "bitflags 2.5.0",
  "bytemuck",
  "cbindgen",
+ "libc",
  "linux-errno",
  "linux-raw-sys 0.6.4",
  "linux-syscall",
