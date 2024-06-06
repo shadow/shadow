@@ -388,6 +388,58 @@ impl Errno {
         assert!(rv.0 as u32 == val);
         rv
     }
+
+    /// Get libc's errno (generally global for the current thread).
+    #[cfg(feature = "libc")]
+    pub fn from_libc_errno() -> Self {
+        // SAFETY: We check for NULL, but otherwise assume that libc gives
+        // us a safely accessible pointer.
+        let raw = *unsafe { libc::__errno_location().as_ref().unwrap() };
+
+        Self::from_libc_errnum(raw)
+            .unwrap_or_else(|| panic!("Unexpected bad errno from libc: {raw}"))
+    }
+
+    /// Get a Result from the return value of a libc function that uses a
+    /// sentinel error value, and stores the errors themselves in errno.
+    #[cfg(feature = "libc")]
+    pub fn result_from_libc_errno<T>(sentinel: T, x: T) -> Result<T, Self>
+    where
+        T: Eq,
+    {
+        if x == sentinel {
+            Err(Self::from_libc_errno())
+        } else {
+            Ok(x)
+        }
+    }
+
+    /// Get a Result from a libc `errnum` return value, where 0 is used to
+    /// indicate "no error", and non-zero is an errno value. An example of such
+    /// a function is `libc::posix_spawn`.
+    ///
+    /// Panics if `errnum` is out of range. This shouldn't be the case for any `errnum` obtained
+    /// from libc APIs.
+    #[cfg(feature = "libc")]
+    pub fn result_from_libc_errnum(errnum: i32) -> Result<(), Self> {
+        if errnum == 0 {
+            Ok(())
+        } else {
+            Err(Self::from_libc_errnum(errnum)
+                .unwrap_or_else(|| panic!("errnum out of range: {errnum}")))
+        }
+    }
+
+    /// Convert from a libc error value. Returns `None` if out of range.
+    #[cfg(feature = "libc")]
+    pub fn from_libc_errnum(errnum: i32) -> Option<Self> {
+        // For now we assume that libc uses the same errnum values
+        // as the kernel. This isn't explicitly guaranteed, but we don't
+        // know of any exceptions in practice. In case it turns out not to be true
+        // we can either change this to a full explicit mapping, or handle
+        // individual known exceptions here.
+        Self::from_u16(u16::try_from(errnum).ok()?)
+    }
 }
 
 impl core::convert::From<linux_errno::Error> for Errno {
