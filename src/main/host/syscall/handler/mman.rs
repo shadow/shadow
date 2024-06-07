@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use linux_api::errno::Errno;
 use linux_api::fcntl::OFlag;
-use linux_api::mman::MapFlags;
+use linux_api::mman::{MapFlags, ProtFlags};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use syscall_logger::log_syscall;
 
@@ -95,13 +95,10 @@ impl SyscallHandler {
         let addr: usize = addr.try_into().unwrap();
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 
-        // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
-        // casting from signed to unsigned)
-        if prot as u32 as u64 != prot {
-            warn_once_then_trace!("Ignoring truncated prot flags from mprotect: {prot}");
-        }
-
-        let prot = prot as i32;
+        let Some(prot) = ProtFlags::from_bits(prot) else {
+            warn_once_then_trace!("Unrecognized prot flags for mprotect: {prot}");
+            return Err(Errno::EINVAL.into());
+        };
 
         // delegate to the memory manager
         let mut memory_manager = ctx.objs.process.memory_borrow_mut();
@@ -136,20 +133,13 @@ impl SyscallHandler {
 
         let offset = offset as i64;
 
-        // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
-        // casting from signed to unsigned)
-        if prot as u32 as u64 != prot {
-            warn_once_then_trace!("Ignoring truncated prot flags from mmap: {prot}");
-        }
-
-        let prot = prot as i32;
-
-        let flags = match MapFlags::from_bits(flags) {
-            Some(x) => x,
-            None => {
-                warn_once_then_debug!("Invalid mmap flags: {flags}");
-                MapFlags::from_bits_truncate(flags)
-            }
+        let Some(prot) = ProtFlags::from_bits(prot) else {
+            log::debug!("Unrecognized prot flags {prot}");
+            return Err(Errno::EINVAL.into());
+        };
+        let Some(flags) = MapFlags::from_bits(flags) else {
+            log::debug!("Unrecognized map flags {flags}");
+            return Err(Errno::EINVAL.into());
         };
 
         // at least one of these values is required according to man page
@@ -158,7 +148,7 @@ impl SyscallHandler {
 
         // need non-zero len, and at least one of the above options
         if len == 0 || !required_flags.intersects(flags) {
-            log::debug!("Invalid len ({len}), prot ({prot}), or flags ({flags:?})");
+            log::debug!("Invalid len ({len}), prot ({prot:?}), or flags ({flags:?})");
             return Err(Errno::EINVAL.into());
         }
 
@@ -216,16 +206,6 @@ impl SyscallHandler {
             log::warn!("mmap on fd {fd} for {len} bytes failed");
             return Err(Errno::EACCES.into());
         };
-
-        let flags = flags.bits();
-
-        // check for truncated flag bits (use u32 instead of i32 to prevent sign extension when
-        // casting from signed to unsigned)
-        if flags as u32 as u64 != flags {
-            warn_once_then_trace!("Ignoring truncated flags from mmap: {flags}");
-        }
-
-        let flags = flags as i32;
 
         // delegate execution of the mmap itself to the memory manager
         let mut memory_manager = ctx.objs.process.memory_borrow_mut();

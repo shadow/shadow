@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use linux_api::errno::Errno;
+use linux_api::posix_types::Pid;
 use linux_api::sched::{CloneFlags, SuidDump};
 use linux_api::signal::{
     defaultaction, siginfo_t, sigset_t, LinuxDefaultAction, SigActionFlags, Signal,
@@ -23,7 +24,7 @@ use log::{debug, trace, warn};
 use nix::fcntl::OFlag;
 use nix::sys::signal as nixsignal;
 use nix::sys::stat::Mode;
-use nix::unistd::Pid;
+use rustix::process::{WaitOptions, WaitStatus};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
@@ -1077,11 +1078,7 @@ impl Process {
             nix::sys::signal::raise(nixsignal::Signal::SIGTSTP).unwrap();
         }
 
-        let memory_manager = unsafe {
-            MemoryManager::new(nix::unistd::Pid::from_raw(
-                native_pid.as_raw_nonzero().get(),
-            ))
-        };
+        let memory_manager = unsafe { MemoryManager::new(native_pid) };
         let threads = RefCell::new(BTreeMap::from([(
             main_thread_id,
             RootedRc::new(host.root(), RootedRefCell::new(host.root(), main_thread)),
@@ -1113,7 +1110,7 @@ impl Process {
                         itimer_real,
                         strace_logging,
                         dumpable: Cell::new(SuidDump::SUID_DUMP_USER),
-                        native_pid: nix::unistd::Pid::from_raw(native_pid.as_raw_nonzero().get()),
+                        native_pid,
                         unsafe_borrow_mut: RefCell::new(None),
                         unsafe_borrows: RefCell::new(Vec::new()),
                         threads,
@@ -1290,7 +1287,10 @@ impl Process {
             #[cfg(feature = "perf_timers")]
             runnable.start_cpu_delay_timer();
 
-            if let Err(err) = nixsignal::kill(runnable.native_pid(), nixsignal::Signal::SIGKILL) {
+            if let Err(err) = rustix::process::kill_process(
+                runnable.native_pid().into(),
+                rustix::process::Signal::Kill,
+            ) {
                 warn!("kill: {:?}", err);
             }
 
@@ -1500,29 +1500,28 @@ impl Process {
             runnable.total_run_time.get()
         );
 
-        use nix::sys::wait::WaitStatus;
-        let exit_status = match (
-            killed_by_shadow,
-            nix::sys::wait::waitpid(runnable.native_pid(), None),
-        ) {
-            (true, Ok(WaitStatus::Signaled(_pid, nixsignal::Signal::SIGKILL, _core_dump))) => {
-                ExitStatus::StoppedByShadow
+        let wait_res: Option<WaitStatus> =
+            rustix::process::waitpid(Some(runnable.native_pid().into()), WaitOptions::empty())
+                .unwrap_or_else(|e| {
+                    panic!("Error waiting for {:?}: {:?}", runnable.native_pid(), e)
+                });
+        let wait_status = wait_res.unwrap();
+        let exit_status = if killed_by_shadow {
+            if wait_status.terminating_signal()
+                != Some(Signal::SIGKILL.as_i32().try_into().unwrap())
+            {
+                warn!("Unexpected waitstatus after killed by shadow: {wait_status:?}");
             }
-            (true, waitstatus) => {
-                warn!("Unexpected waitstatus after killed by shadow: {waitstatus:?}");
-                ExitStatus::StoppedByShadow
-            }
-            (false, Ok(WaitStatus::Exited(_pid, code))) => ExitStatus::Normal(code),
-            (false, Ok(WaitStatus::Signaled(_pid, signal, _core_dump))) => {
-                let signal = Signal::try_from(signal as i32).unwrap();
-                ExitStatus::Signaled(signal)
-            }
-            (false, Ok(status)) => {
-                panic!("Unexpected status: {status:?}");
-            }
-            (false, Err(e)) => {
-                panic!("waitpid: {e:?}");
-            }
+            ExitStatus::StoppedByShadow
+        } else if let Some(code) = wait_status.exit_status() {
+            ExitStatus::Normal(code.try_into().unwrap())
+        } else if let Some(signal) = wait_status.terminating_signal() {
+            ExitStatus::Signaled(Signal::try_from(i32::try_from(signal).unwrap()).unwrap())
+        } else {
+            panic!(
+                "Unexpected status: {wait_status:?} for pid {:?}",
+                runnable.native_pid()
+            );
         };
 
         let (main_result_string, log_level) = {
@@ -1643,21 +1642,18 @@ impl Process {
             mthread.kill_and_drop();
             return;
         };
-        let old_native_pid = std::mem::replace(
-            &mut runnable.native_pid,
-            nix::unistd::Pid::from_raw(mthread.native_pid().as_raw_nonzero().get()),
-        );
+        let old_native_pid = std::mem::replace(&mut runnable.native_pid, mthread.native_pid());
 
         // Kill the previous native process
-        nixsignal::kill(old_native_pid, nixsignal::Signal::SIGKILL)
-            .expect("Unable to send kill signal to managed process {old_native_pid}");
-        match nix::sys::wait::waitpid(old_native_pid, None) {
-            Ok(nix::sys::wait::WaitStatus::Signaled(pid, sig, _c)) => {
-                assert_eq!(pid, old_native_pid);
-                assert_eq!(sig, nixsignal::Signal::SIGKILL);
-            }
-            r => panic!("Unexpected waitpid result: {r:?}"),
-        };
+        rustix::process::kill_process(old_native_pid.into(), rustix::process::Signal::Kill)
+            .expect("Unable to send kill signal to managed process {old_native_pid:?}");
+        let wait_res = rustix::process::waitpid(Some(old_native_pid.into()), WaitOptions::empty())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            wait_res.terminating_signal(),
+            Some(Signal::SIGKILL.as_i32().try_into().unwrap())
+        );
 
         let execing_thread = runnable.threads.borrow_mut().remove(&tid).unwrap();
 
@@ -1681,11 +1677,9 @@ impl Process {
             assert!(unsafe_borrows.is_empty());
             // Replace the MM, while still holding the references to the unsafe borrows
             // to ensure none exist.
-            runnable.memory_manager.replace(unsafe {
-                MemoryManager::new(nix::unistd::Pid::from_raw(
-                    mthread.native_pid().as_raw_nonzero().get(),
-                ))
-            });
+            runnable
+                .memory_manager
+                .replace(unsafe { MemoryManager::new(mthread.native_pid()) });
         }
 
         let new_tid = runnable.common.thread_group_leader_id();
@@ -2154,7 +2148,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn process_getNativePid(proc: *const Process) -> libc::pid_t {
         let proc = unsafe { proc.as_ref().unwrap() };
-        proc.native_pid().as_raw()
+        proc.native_pid().as_raw_nonzero().get()
     }
 
     /// Flushes and invalidates all previously returned readable/writable plugin
