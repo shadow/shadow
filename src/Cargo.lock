@@ -516,7 +516,7 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "formatting-nostd"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "cc",
  "libc",
@@ -564,7 +564,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "gml-parser"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "nom",
 ]
@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "linux-api"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bitflags 2.5.0",
  "bytemuck",
@@ -793,7 +793,7 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
 name = "log-c2rust"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "cbindgen",
  "cc",
@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "logger"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bindgen",
  "cc",
@@ -1340,7 +1340,7 @@ dependencies = [
 
 [[package]]
 name = "scheduler"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "atomic_refcell",
  "crossbeam",
@@ -1445,7 +1445,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-build-common"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bindgen",
  "cbindgen",
@@ -1455,14 +1455,14 @@ dependencies = [
 
 [[package]]
 name = "shadow-build-info"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "time",
 ]
 
 [[package]]
 name = "shadow-pod"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "libc",
 ]
@@ -1526,7 +1526,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-shim"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bindgen",
  "cbindgen",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-shim-helper-rs"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bytemuck",
  "cbindgen",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "shadow-tests"
-version = "3.2.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "formatting-nostd",
@@ -1597,7 +1597,7 @@ dependencies = [
 
 [[package]]
 name = "shadow_shmem"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "formatting-nostd",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "shadow_tsc"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bindgen",
  "cbindgen",
@@ -1691,7 +1691,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "std-util"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "strsim"
@@ -1723,7 +1723,7 @@ dependencies = [
 
 [[package]]
 name = "syscall-logger"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1751,7 +1751,7 @@ checksum = "e1fc403891a21bcfb7c37834ba66a547a8f402146eba7265b5a6d88059c9ff2f"
 
 [[package]]
 name = "tcp"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bitflags 2.5.0",
  "bytes",
@@ -1979,7 +1979,7 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "vasi"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "static_assertions",
  "vasi-macro",
@@ -1987,7 +1987,7 @@ dependencies = [
 
 [[package]]
 name = "vasi-macro"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1998,7 +1998,7 @@ dependencies = [
 
 [[package]]
 name = "vasi-sync"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "criterion",
  "libc",

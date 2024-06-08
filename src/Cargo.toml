@@ -31,6 +31,10 @@ members = [
     "lib/vasi-sync",
 ]
 
+[workspace.package]
+edition = "2021"
+publish = false
+
 [profile.dev]
 # Without this, the shim requires a relatively large stack, especially during
 # initialization.  Rust makes it difficult to avoid putting objects temporarily
