@@ -1,6 +1,4 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
-use std::sync::RwLock;
 
 #[cfg(feature = "perf_timers")]
 use std::time::Duration;
@@ -25,6 +23,7 @@ use crate::host::syscall::types::SyscallReturn;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::counter::Counter;
+use crate::utility::once_set::OnceSet;
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -579,35 +578,18 @@ impl SyscallHandler {
             //
             _ => {
                 // only show a warning the first time we encounter this unsupported syscall
-                static WARNED_SET: RwLock<Option<HashSet<SyscallNum>>> = RwLock::new(None);
+                static WARNED_SET: OnceSet<SyscallNum> = OnceSet::new();
 
-                // First check with a (cheap) read-lock.
-                let has_already_warned = WARNED_SET
-                    .read()
-                    .unwrap()
-                    .as_ref()
-                    .map(|x| x.contains(&syscall))
-                    .unwrap_or(false);
-
-                // If it looks like we haven't already warned, add this to the
-                // already-warned set. Also detect the (rare) case that another
-                // thread already warned after we released the read-lock above.
-                let has_already_warned = has_already_warned
-                    || !WARNED_SET
-                        .write()
-                        .unwrap()
-                        .get_or_insert_with(HashSet::new)
-                        .insert(syscall);
-
-                let level = if has_already_warned {
-                    log::Level::Debug
-                } else {
+                let level = if WARNED_SET.insert(syscall) {
                     log::Level::Warn
+                } else {
+                    log::Level::Debug
                 };
 
-                // we can't use the `warn_once_then_debug` macro here since we want to log this for
+                // We can't use the `warn_once_then_debug` macro here since we want to log this for
                 // each unique syscall encountered, not only the first unsupported syscall
-                // encountered
+                // encountered. We replicate the format of the `warn_once_then_debug` macro by
+                // prepending the `(LOG_ONCE) ` string.
                 log::log!(
                     level,
                     "(LOG_ONCE) Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
