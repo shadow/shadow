@@ -130,17 +130,11 @@ impl ByteQueue {
     /// Push packet data onto the queue in a single chunk. Exactly `size` bytes will be read into
     /// the packet.
     pub fn push_packet<R: Read>(&mut self, mut src: R, size: usize) -> std::io::Result<()> {
-        // we may need somewhere to store a new buffer
-        let mut new_buf;
-
         let unused = match &mut self.unused_buffer {
             // if the existing 'unused_buffer' has enough space
             Some(buf) if buf.len() >= size => buf,
             // otherwise allocate a new buffer
-            _ => {
-                new_buf = self.alloc_zeroed_buffer(size);
-                &mut new_buf
-            }
+            _ => &mut self.alloc_zeroed_buffer(size),
         };
         assert_eq!(unused.len(), unused.capacity());
 
