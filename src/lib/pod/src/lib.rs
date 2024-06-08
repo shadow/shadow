@@ -115,9 +115,8 @@ impl<const N: usize, T: Pod> PodTransmute<N, T> {
     fn transmute_array(x: &[u8; N]) -> T {
         // this should perform a compile-time check
         #[allow(clippy::let_unit_value)]
-        {
-            let _ = Self::CHECK;
-        }
+        let _ = Self::CHECK;
+
         // this should perform a runtime check in case the above compile-time check didn't run, but
         // should be compiled out if the compile-time check did run
         assert_eq!(N, core::mem::size_of::<T>());
