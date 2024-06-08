@@ -308,7 +308,6 @@ impl<'a> Manager<'a> {
                 dns: unsafe { SyncSendPointer::new(dns) },
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
-                #[allow(clippy::map_clone)]
                 status_logger_state: status_logger_state.map(Arc::clone),
                 runahead: Runahead::new(
                     self.config.experimental.use_dynamic_runahead.unwrap(),
