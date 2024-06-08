@@ -1277,8 +1277,7 @@ impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for NullableOption
 
 impl<T> FromStr for NullableOption<T>
 where
-    <T as FromStr>::Err: std::fmt::Debug + std::fmt::Display,
-    T: FromStr,
+    T: FromStr<Err: std::fmt::Debug + std::fmt::Display>,
 {
     type Err = T::Err;
 
