@@ -7,7 +7,10 @@ simulation performance. Many of these options are considered "experimental",
 which means that they may be changed or removed at any time. If you find any of
 these options useful, [let us know][discussions].
 
-Be careful as these options may also *worsen* the simulation performance.
+Be careful as these options may also *worsen* the simulation performance or in
+some cases alter the simulation behaviour. Also remember that Shadow's
+`--debug` build flag will significantly reduce the simulation performance, so
+don't use this flag when running long simulations.
 
 [discussions]: https://github.com/shadow/shadow/discussions
 

@@ -147,10 +147,18 @@ echo "kernel.threads-max = 4194304" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
+The kernel has a [fixed system-wide limit][linux-pid-limit] of 4,194,304
+processes/threads. When running extremely large simulations, or when running
+multiple simulations in parallel, you should be aware of this limit and ensure
+the total number of processes/threads used by all simulations will not exceed
+this limit.
+
 The kernel may cap the `kernel.threads-max` value automatically so that, in the
 maximum limit, the memory consumed by kernel thread control structures do not
 consume more than approx. (1/8)th of system memory (see
 <https://stackoverflow.com/a/21926745>).
+
+[linux-pid-limit]: https://github.com/torvalds/linux/blob/b8481381d4e2549f06812eb6069198144696340c/include/linux/threads.h#L30-L35
 
 ### User Limits
 
