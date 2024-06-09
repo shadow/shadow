@@ -4,4 +4,4 @@ edition.workspace = true
 publish.workspace = true
 
 [build-dependencies]
-time = { version = "0.3.31", features = ["formatting"] }
+time = { version = "0.3.36", features = ["formatting"] }

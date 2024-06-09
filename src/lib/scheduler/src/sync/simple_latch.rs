@@ -156,7 +156,7 @@ pub fn libc_futex(
     } else {
         let errno = unsafe { *libc::__errno_location() };
         debug_assert_eq!(rv, -1);
-        Err(Errno::from_i32(errno))
+        Err(Errno::from_raw(errno))
     }
 }
 

@@ -7,6 +7,7 @@ use std::thread;
 
 use nix::errno::Errno;
 use nix::sys::epoll::{Epoll, EpollCreateFlags, EpollEvent, EpollFlags};
+use nix::sys::eventfd::EventFd;
 use nix::unistd::Pid;
 
 // TODO: consider using std::os::linux::process::PidFd once it's stabilized.
@@ -61,7 +62,7 @@ struct Inner {
 impl Inner {
     fn send_command(&mut self, cmd: Command) {
         self.commands.push(cmd);
-        nix::unistd::write(self.command_notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(self.command_notifier, &1u64.to_ne_bytes()).unwrap();
     }
 
     fn unwatch_pid(&mut self, epoll: &Epoll, pid: Pid) {
@@ -110,8 +111,8 @@ impl ChildPidWatcher {
     pub fn new() -> Self {
         let epoll = Arc::new(Epoll::new(EpollCreateFlags::empty()).unwrap());
         let command_notifier = {
-            let raw =
-                nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK).unwrap();
+            let raw = EventFd::from_value_and_flags(0, nix::sys::eventfd::EfdFlags::EFD_NONBLOCK)
+                .unwrap();
             File::from(raw)
         };
         let event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
