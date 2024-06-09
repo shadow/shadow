@@ -180,6 +180,9 @@ impl SharedBuf {
         self.state
     }
 
+    /// Refresh the shared buffer's state and optionally send any signals. These two functionalities
+    /// are combined into a single method since a state change and signals can be emitted as a
+    /// single event, improving performance.
     fn refresh_state(&mut self, signals: BufferSignals, cb_queue: &mut CallbackQueue) {
         let state_mask = BufferState::READABLE
             | BufferState::WRITABLE
@@ -264,6 +267,7 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
+    /// Buffer-related signals that listeners can watch for.
     #[derive(Default, Copy, Clone, Debug)]
     pub struct BufferSignals: u8 {
         /// The buffer now has additional data available to read.

@@ -109,20 +109,23 @@ impl ThreadUnparker {
 
     /// Unpark the assigned thread.
     pub fn unpark(&self) {
-        // TODO: Rust does not guarantee any synchronization between the thread that parks and the
-        // thread that unparks:
+        // NOTE: Rust now does guarantee some synchronization between the thread that parks and the
+        // thread that unparks, so the change to `ready_flag` should be seen by the parked thread:
         //
-        // https://doc.rust-lang.org/nightly/std/thread/fn.park.html#park-and-unpark
+        // https://doc.rust-lang.org/std/thread/fn.park.html#memory-ordering
         //
-        // > Notice that being unblocked does not imply any synchronization with someone that
-        // > unparked this thread, it could also be spurious. For example, it would be a valid, but
-        // > inefficient, implementation to make both park and unpark return immediately without doing
-        // > anything.
-        //
-        // There is no guarentee that the change to `ready_flag` will be visible after the parked
-        // thread resumes, which may lead to a deadlock. In practice, rust currently does use an
-        // atomic with release-acquire ordering, but this might be relaxed in the future.
-        // https://github.com/rust-lang/rust/blob/21b246587c2687935bd6004ffa5dcc4f4dd6600d/library/std/src/sys_common/thread_parker/futex.rs#L21-L27
+        // > Calls to park synchronize-with calls to unpark, meaning that memory operations
+        // > performed before a call to unpark are made visible to the thread that consumes the
+        // > token and returns from park. Note that all park and unpark operations for a given
+        // > thread form a total order and park synchronizes-with all prior unpark operations.
+        // >
+        // > In atomic ordering terms, unpark performs a Release operation and park performs the
+        // > corresponding Acquire operation. Calls to unpark for the same thread form a release
+        // > sequence.
+        // >
+        // > Note that being unblocked does not imply a call was made to unpark, because wakeups can
+        // > also be spurious. For example, a valid, but inefficient, implementation could have park
+        // > and unpark return immediately without doing anything, making all wakeups spurious.
         self.ready_flag.store(true, Ordering::Release);
         self.thread.unpark();
     }

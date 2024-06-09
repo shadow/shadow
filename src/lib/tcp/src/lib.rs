@@ -1,7 +1,11 @@
-//! A TCP implementation with a somewhat-BSD-like socket API. A [dependencies](Dependencies) object
-//! must be be provided to support setting timers and getting the current time. The TCP state object
-//! should probably be used with a reference-counting wrapper so that a reference to the state
-//! object can be stored in the timer callbacks.
+//! A TCP implementation with a somewhat-BSD-like socket API. It is written as a
+//! ["sans-I/O"][sans-io] library meaning it doesn't do any networking I/O itself, it just accepts
+//! bytes and provides bytes. A [dependencies](Dependencies) object must be be provided to support
+//! setting timers and getting the current time. The TCP state object should probably be used with a
+//! reference-counting wrapper so that a reference to the state object can be stored in the timer
+//! callbacks.
+//!
+//! [sans-io]: https://sans-io.readthedocs.io
 //!
 //! ```
 //! use std::cell::RefCell;

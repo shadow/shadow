@@ -236,7 +236,10 @@ pub enum HostIter<'a, 'b, HostType: Host> {
 }
 
 impl<'a, 'b, HostType: Host> HostIter<'a, 'b, HostType> {
-    /// For each [`Host`], calls `f` with each `Host`. The `Host` must be returned by the closure.
+    /// For each [`Host`], calls `f` with the host. The `Host` must be returned by the closure. The
+    /// ownership of the `Host` is transferred in and out of the closure rather than using a mutable
+    /// reference since Shadow needs to put the host in a global with `'static` lifetime (the
+    /// worker).
     pub fn for_each<F>(&mut self, f: F)
     where
         F: FnMut(HostType) -> HostType,

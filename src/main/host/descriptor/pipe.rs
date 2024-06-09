@@ -293,9 +293,22 @@ impl Pipe {
             monitoring_state.insert(BufferState::NO_READERS);
         }
 
+        // TODO: We have to monitor all of the buffer's signals that we might want to pass to the
+        // pipe file's listeners, but this adds extra overhead when the file doesn't have any
+        // listeners that are listening for some of these signals. For example if there's a noisy
+        // signal `BufferSignals::FOO` that we want to forward to file listeners as
+        // `FileSignals::FOO`, we must always subscribe to `BufferSignals::FOO` signals even if the
+        // pipe doesn't have any file listeners subscribed to `FileSignals::FOO`. We don't know if
+        // there are currently file listeners subscribed to this file signal, so we must always emit
+        // them. This means we might receive a lot of notifications for `BufferSignals::Foo` that we
+        // ultimitely throw away since no file listener wants them. It would be great if there was a
+        // nice way to optimize this somehow so that we only listen for `BufferSignals::FOO` if we
+        // have a listener for `FileSignals::FOO`.
+        let monitoring_signals = BufferSignals::BUFFER_GREW;
+
         let handle = pipe.buffer.as_ref().unwrap().borrow_mut().add_listener(
             monitoring_state,
-            BufferSignals::BUFFER_GREW,
+            monitoring_signals,
             move |buffer_state, buffer_signals, cb_queue| {
                 // if the file hasn't been dropped
                 if let Some(pipe) = weak.upgrade() {
@@ -342,7 +355,8 @@ impl Pipe {
 
     /// Align the pipe's state to the buffer state. For example if the buffer is both `READABLE` and
     /// `WRITABLE`, and the pipe is only open in `READ` mode, the pipe's `READABLE` state will be
-    /// set and the `WRITABLE` state will be unchanged.
+    /// set and the `WRITABLE` state will be unchanged. This method may also pass through signals
+    /// from the buffer to any of the file's listeners.
     fn align_state_to_buffer(
         &mut self,
         buffer_state: BufferState,
