@@ -63,3 +63,9 @@ impl From<Pid> for rustix::process::Pid {
         rustix::process::Pid::from_raw(value.as_raw_nonzero().into()).unwrap()
     }
 }
+
+/// A raw file descriptor value.
+// Considered newtype'ing this and restricting to unsigned, but
+// for now sticking to the precedent of a simple alias as per
+// `std::os::fd::RawFd`, and `rustix::fd::RawFd`.
+pub type RawFd = i32;
