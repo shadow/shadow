@@ -128,7 +128,8 @@ impl<T> Drop for RootedRcCommon<T> {
     #[inline]
     fn drop(&mut self) {
         if self.internal.is_some() {
-            log::error!("Dropped without calling `safely_drop`");
+            // `explicit_drop` is the public interface for the internal `safely_drop`
+            log::error!("Dropped without calling `explicit_drop`");
 
             // We *can* continue without violating Rust safety properties; the
             // underlying object will just be leaked, since the ref count will
@@ -142,7 +143,7 @@ impl<T> Drop for RootedRcCommon<T> {
             // just obscure the original panic.
             #[cfg(debug_assertions)]
             if !std::thread::panicking() {
-                panic!("Dropped without calling `safely_drop`");
+                panic!("Dropped without calling `explicit_drop`");
             }
         }
     }
@@ -287,7 +288,7 @@ mod test_rooted_rc {
         let rc = std::rc::Rc::new(());
         let rrc = RootedRc::new(&root, rc.clone());
         drop(rrc);
-        // Because we didn't call `safely_drop`, RootedRc can't safely call the
+        // Because we didn't call `explicit_drop`, RootedRc can't safely call the
         // inner rc's Drop. Instead of panicking, we just leak it.
         assert_eq!(std::rc::Rc::strong_count(&rc), 2);
     }
