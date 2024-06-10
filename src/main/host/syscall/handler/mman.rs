@@ -96,7 +96,19 @@ impl SyscallHandler {
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 
         let Some(prot) = ProtFlags::from_bits(prot) else {
-            warn_once_then_trace!("Unrecognized prot flags for mprotect: {prot}");
+            for flag in ProtFlags::from_bits_retain(prot)
+                .difference(ProtFlags::all())
+                .iter()
+            {
+                log_once_per_value_at_level!(
+                    flag,
+                    ProtFlags,
+                    log::Level::Warn,
+                    log::Level::Debug,
+                    "Unrecognized prot flag: 0x{:x}",
+                    flag.bits()
+                );
+            }
             return Err(Errno::EINVAL.into());
         };
 
@@ -134,11 +146,35 @@ impl SyscallHandler {
         let offset = offset as i64;
 
         let Some(prot) = ProtFlags::from_bits(prot) else {
-            log::debug!("Unrecognized prot flags {prot}");
+            for flag in ProtFlags::from_bits_retain(prot)
+                .difference(ProtFlags::all())
+                .iter()
+            {
+                log_once_per_value_at_level!(
+                    flag,
+                    ProtFlags,
+                    log::Level::Warn,
+                    log::Level::Debug,
+                    "Unrecognized prot flag: 0x{:x}",
+                    flag.bits()
+                );
+            }
             return Err(Errno::EINVAL.into());
         };
         let Some(flags) = MapFlags::from_bits(flags) else {
-            log::debug!("Unrecognized map flags {flags}");
+            for flag in MapFlags::from_bits_retain(flags)
+                .difference(MapFlags::all())
+                .iter()
+            {
+                log_once_per_value_at_level!(
+                    flag,
+                    MapFlags,
+                    log::Level::Warn,
+                    log::Level::Debug,
+                    "Unrecognized map flag: 0x{:x}",
+                    flag.bits()
+                );
+            }
             return Err(Errno::EINVAL.into());
         };
 
