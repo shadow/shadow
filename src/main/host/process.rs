@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use linux_api::errno::Errno;
+use linux_api::fcntl::OFlag;
 use linux_api::posix_types::Pid;
 use linux_api::sched::{CloneFlags, SuidDump};
 use linux_api::signal::{
@@ -21,9 +22,6 @@ use linux_api::signal::{
     SignalFromI32Error,
 };
 use log::{debug, trace, warn};
-use nix::fcntl::OFlag;
-use nix::sys::signal as nixsignal;
-use nix::sys::stat::Mode;
 use rustix::process::{WaitOptions, WaitStatus};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
@@ -1075,7 +1073,8 @@ impl Process {
             );
             eprintln!("{}", msg);
 
-            nix::sys::signal::raise(nixsignal::Signal::SIGTSTP).unwrap();
+            rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::Tstp)
+                .unwrap();
         }
 
         let memory_manager = unsafe { MemoryManager::new(native_pid) };
@@ -1328,15 +1327,22 @@ impl Process {
         access_mode: OFlag,
     ) {
         let stdfile = unsafe { cshadow::regularfile_new() };
-        let cwd = nix::unistd::getcwd().unwrap();
+        let cwd = rustix::process::getcwd(Vec::new()).unwrap();
         let path = utility::pathbuf_to_nul_term_cstring(path);
-        let cwd = utility::pathbuf_to_nul_term_cstring(cwd);
+        // "Convert" to libc int, assuming here that the kernel's `OFlag` values
+        // are compatible with libc's values.
+        // XXX: We're assuming here that the kernel and libc flags are ABI
+        // compatible, which isn't guaranteed, but is mostly true in practice.
+        // TODO: We probably ought to change `regularfile_open` and friends to
+        // use a direct syscall instead of libc's wrappers, and explicitly take
+        // the kernel version of flags, mode, etc.
+        let access_mode = access_mode.bits();
         let errorcode = unsafe {
             cshadow::regularfile_open(
                 stdfile,
                 path.as_ptr(),
-                (access_mode | OFlag::O_CREAT | OFlag::O_TRUNC).bits(),
-                (Mode::S_IRUSR | Mode::S_IWUSR | Mode::S_IRGRP | Mode::S_IROTH).bits(),
+                access_mode | libc::O_CREAT | libc::O_TRUNC,
+                libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IROTH,
                 cwd.as_ptr(),
             )
         };
