@@ -133,13 +133,13 @@ impl ShmFile {
     /// Map the given interval of the file into shadow's address space.
     fn mmap_into_shadow(&self, interval: &Interval, prot: ProtFlags) -> *mut c_void {
         unsafe {
-            rustix::mm::mmap(
+            linux_api::mman::mmap(
                 std::ptr::null_mut(),
                 interval.len(),
-                rustix::mm::ProtFlags::from_bits_retain(prot.bits().try_into().unwrap()),
-                rustix::mm::MapFlags::SHARED,
-                &self.shm_file,
-                u64::try_from(interval.start).unwrap(),
+                prot,
+                MapFlags::MAP_SHARED,
+                self.shm_file.as_raw_fd(),
+                interval.start,
             )
         }
         .unwrap()
@@ -339,7 +339,7 @@ impl Drop for MemoryMapper {
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
-                    unsafe { rustix::mm::munmap(region.shadow_base, interval.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
@@ -463,7 +463,7 @@ impl MemoryMapper {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { rustix::mm::munmap(region.shadow_base, removed_range.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, removed_range.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust base
@@ -481,7 +481,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        rustix::mm::munmap(
+                        linux_api::mman::munmap(
                             region.shadow_base.add((interval.start..new_end).len()),
                             removed_range.len(),
                         )
@@ -502,7 +502,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        rustix::mm::munmap(
+                        linux_api::mman::munmap(
                             (left_region.shadow_base.add(left.len())) as *mut c_void,
                             removed_range.len(),
                         )
@@ -523,7 +523,7 @@ impl MemoryMapper {
                     self.shm_file.dealloc(&interval);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { rustix::mm::munmap(region.shadow_base, interval.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
@@ -717,7 +717,7 @@ impl MemoryMapper {
                 };
 
                 // Unmap the old location from Shadow.
-                unsafe { rustix::mm::munmap(region.shadow_base, old_size) }
+                unsafe { linux_api::mman::munmap(region.shadow_base, old_size) }
                     .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                 // Update the region metadata.
@@ -916,12 +916,10 @@ impl MemoryMapper {
                         extant_region.shadow_base =
                             unsafe { extant_region.shadow_base.add(modified_interval.len()) };
                         unsafe {
-                            rustix::mm::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                rustix::mm::MprotectFlags::from_bits_retain(
-                                    u32::try_from(prot.bits()).unwrap(),
-                                ),
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| {
@@ -951,12 +949,10 @@ impl MemoryMapper {
                         modified_region.shadow_base =
                             unsafe { modified_region.shadow_base.add(extant_interval.len()) };
                         unsafe {
-                            rustix::mm::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                rustix::mm::MprotectFlags::from_bits_retain(
-                                    prot.bits().try_into().unwrap(),
-                                ),
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
@@ -980,12 +976,10 @@ impl MemoryMapper {
                                 .add(left_interval.len() + modified_interval.len())
                         };
                         unsafe {
-                            rustix::mm::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                rustix::mm::MprotectFlags::from_bits_retain(
-                                    prot.bits().try_into().unwrap(),
-                                ),
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
@@ -999,12 +993,10 @@ impl MemoryMapper {
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
                         unsafe {
-                            rustix::mm::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                rustix::mm::MprotectFlags::from_bits_retain(
-                                    prot.bits().try_into().unwrap(),
-                                ),
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
