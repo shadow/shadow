@@ -33,12 +33,43 @@ macro_rules! log_once_at_level {
                 std::sync::atomic::Ordering::Relaxed,
                 std::sync::atomic::Ordering::Relaxed,
             ) {
-                // NOTE: Some parts of shadow duplicate the "(LOG_ONCE)" string in their own log
-                // messages (for example `SyscallHandler::run_handler`). If we change this string
-                // here, we should change it in other places as well.
                 Ok(_) => log::log!($lvl_once, "(LOG_ONCE) {}", format_args!($str $($x)*)),
                 Err(_) => log::log!($lvl_remaining, "(LOG_ONCE) {}", format_args!($str $($x)*)),
             }
+        }
+    };
+}
+
+/// Log a message once at level `lvl_once` for each distinct value, and any
+/// later log messages from this line with an already-logged value at level
+/// `lvl_remaining`. A log target is not supported. The string "(LOG_ONCE)" will
+/// be prepended to the message to indicate that future messages won't be logged
+/// at `lvl_once`.
+///
+/// The fast-path (where the given value has already been logged) aquires a
+/// read-lock and looks up the value in a hash table.
+///
+/// ```
+/// # use log::Level;
+/// # use shadow_rs::log_once_per_value_at_level;
+/// # let unknown_flag: i32 = 0;
+/// log_once_per_value_at_level!(unknown_flag, i32, Level::Warn, Level::Debug, "Unknown flag value {unknown_flag}");
+/// ```
+#[allow(unused_macros)]
+#[macro_export]
+macro_rules! log_once_per_value_at_level {
+    ($value:expr, $t:ty, $lvl_once:expr, $lvl_remaining:expr, $str:literal $($x:tt)*) => {
+        // don't do atomic operations if this log statement isn't enabled
+        if log::log_enabled!($lvl_once) || log::log_enabled!($lvl_remaining) {
+            use $crate::utility::once_set::OnceSet;
+            static LOGGED_SET : OnceSet<$t> = OnceSet::new();
+
+            let level = if LOGGED_SET.insert($value) {
+                $lvl_once
+            } else {
+                $lvl_remaining
+            };
+            log::log!(level, "(LOG_ONCE) {}", format_args!($str $($x)*))
         }
     };
 }

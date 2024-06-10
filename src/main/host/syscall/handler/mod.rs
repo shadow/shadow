@@ -23,7 +23,6 @@ use crate::host::syscall::types::SyscallReturn;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::thread::ThreadId;
 use crate::utility::counter::Counter;
-use crate::utility::once_set::OnceSet;
 
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -577,22 +576,10 @@ impl SyscallHandler {
             // UNSUPPORTED SYSCALL
             //
             _ => {
-                // only show a warning the first time we encounter this unsupported syscall
-                static WARNED_SET: OnceSet<SyscallNum> = OnceSet::new();
-
-                let level = if WARNED_SET.insert(syscall) {
-                    log::Level::Warn
-                } else {
-                    log::Level::Debug
-                };
-
-                // We can't use the `warn_once_then_debug` macro here since we want to log this for
-                // each unique syscall encountered, not only the first unsupported syscall
-                // encountered. We replicate the format of the `warn_once_then_debug` macro by
-                // prepending the `(LOG_ONCE) ` string.
-                log::log!(
-                    level,
-                    "(LOG_ONCE) Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
+                log_once_per_value_at_level!(
+                    syscall,
+                    SyscallNum, log::Level::Warn, log::Level::Debug,
+                    "Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
                     syscall_name,
                     ctx.args.number,
                     ctx.objs.thread.id(),
