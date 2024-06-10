@@ -43,6 +43,28 @@ macro_rules! log_once_at_level {
     };
 }
 
+#[allow(unused_macros)]
+#[macro_export]
+macro_rules! log_once_per_value_at_level {
+    ($value:expr, $t:ty, $lvl_once:expr, $lvl_remaining:expr, $str:literal $($x:tt)*) => {
+        // don't do atomic operations if this log statement isn't enabled
+        if log::log_enabled!($lvl_once) || log::log_enabled!($lvl_remaining) {
+            use $crate::utility::once_set::OnceSet;
+            static LOGGED_SET : OnceSet<$t> = OnceSet::new();
+
+            let level = if LOGGED_SET.insert($value) {
+                $lvl_once
+            } else {
+                $lvl_remaining
+            };
+            // NOTE: Some parts of shadow duplicate the "(LOG_ONCE)" string in their own log
+            // messages (for example `SyscallHandler::run_handler`). If we change this string
+            // here, we should change it in other places as well.
+            log::log!(level, "(LOG_ONCE) {}", format_args!($str $($x)*))
+        }
+    };
+}
+
 /// Log a message once at warn level, and any later log messages from this line at debug level. A
 /// log target is not supported. The string "(LOG_ONCE)" will be prepended to the message to
 /// indicate that future messages won't be logged at warn level.
