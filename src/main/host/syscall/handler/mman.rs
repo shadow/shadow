@@ -343,16 +343,16 @@ impl SyscallHandler {
         // get original flags that were used to open the file
         let mut flags = OFlag::from_bits_retain(unsafe { c::regularfile_getFlagsAtOpen(file) });
         // use only the file creation flags, except O_CLOEXEC
-        flags &= creation_flags & !OFlag::O_CLOEXEC;
+        flags &= creation_flags.difference(OFlag::O_CLOEXEC);
         // add any file access mode and file status flags that shadow doesn't implement
-        flags |= native_flags & !OFlag::from_bits_retain(unsafe { c::SHADOW_FLAG_MASK });
+        flags |= native_flags.difference(OFlag::from_bits_retain(unsafe { c::SHADOW_FLAG_MASK }));
         // add any flags that shadow implements
         flags |= OFlag::from_bits_retain(unsafe { c::regularfile_getShadowFlags(file) });
         // be careful not to try re-creating or truncating it
-        flags &= !(OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_TMPFILE | OFlag::O_TRUNC);
+        flags -= OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_TMPFILE | OFlag::O_TRUNC;
         // don't use O_NOFOLLOW since it will prevent the plugin from opening the
         // /proc/<shadow-pid>/fd/<linux-fd> file, which is a symbolic link
-        flags &= !OFlag::O_NOFOLLOW;
+        flags -= OFlag::O_NOFOLLOW;
 
         let mode = unsafe { c::regularfile_getModeAtOpen(file) };
 
