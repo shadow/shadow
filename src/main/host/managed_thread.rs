@@ -10,9 +10,13 @@ use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
 use std::sync::{atomic, Arc};
 
+use linux_api::errno::Errno;
+use linux_api::posix_types::Pid;
 use linux_api::sched::CloneFlags;
+use linux_api::signal::tgkill;
 use log::{debug, error, log_enabled, trace, Level};
-use nix::errno::Errno;
+use rustix::pipe::PipeFlags;
+use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
     ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
@@ -51,8 +55,8 @@ pub struct ManagedThread {
     /* holds the event for the most recent call from the plugin/shim */
     current_event: RefCell<ShimEventToShadow>,
 
-    native_pid: nix::unistd::Pid,
-    native_tid: nix::unistd::Pid,
+    native_pid: linux_api::posix_types::Pid,
+    native_tid: linux_api::posix_types::Pid,
 
     // Value storing the current CPU affinity of the thread (more precisely,
     // of the native thread backing this thread object). This value will be set
@@ -62,11 +66,11 @@ pub struct ManagedThread {
 }
 
 impl ManagedThread {
-    pub fn native_pid(&self) -> nix::unistd::Pid {
+    pub fn native_pid(&self) -> linux_api::posix_types::Pid {
         self.native_pid
     }
 
-    pub fn native_tid(&self) -> nix::unistd::Pid {
+    pub fn native_tid(&self) -> linux_api::posix_types::Pid {
         self.native_tid
     }
 
@@ -96,7 +100,7 @@ impl ManagedThread {
         strace_file: Option<&std::fs::File>,
         log_file: &std::fs::File,
         injected_preloads: &[PathBuf],
-    ) -> nix::Result<Self> {
+    ) -> Result<Self, Errno> {
         debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
 
         let envv = inject_preloads(envv, injected_preloads);
@@ -125,7 +129,7 @@ impl ManagedThread {
         };
 
         trace!(
-            "waiting for start event from shim with native pid {}",
+            "waiting for start event from shim with native pid {:?}",
             native_pid
         );
         let start_req = ipc_shmem.from_plugin().receive().unwrap();
@@ -137,35 +141,34 @@ impl ManagedThread {
                 // The process died before initializing the shim.
                 //
                 // Reap the dead process and return an error.
-                let status = nix::sys::wait::waitpid(native_pid, None).unwrap();
-                match status {
-                    nix::sys::wait::WaitStatus::Exited(pid, 127) if pid == native_pid => {
-                        // posix_spawn(3):
-                        // > If  the child  fails  in  any  of the
-                        // > housekeeping steps described below, or fails to
-                        // > execute the desired file, it exits with a status of
-                        // > 127.
-                        debug!("posix_spawn failed to exec the process");
-                        // Assume that execve failed, and return a plausible reason
-                        // why it might have done so.
-                        // TODO: replace our usage of posix_spawn with a custom
-                        // implementation that can return the execve failure code?
-                        return Err(nix::errno::Errno::EPERM);
-                    }
-                    other => {
-                        // TODO: handle more gracefully.
-                        // * The native stdout/stderr might have a clue as to
-                        // why the process died.  Consider logging a hint to
-                        // check it (currently in the corresponding shimlog), or
-                        // directly capture it and display it here.
-                        // https://github.com/shadow/shadow/issues/3142
-                        // * Consider logging a warning here and continuing on to handle
-                        // the managed process exit normally. e.g. when this happens
-                        // as part of an emulated `execve`, we might want to continue
-                        // the simulation.
-                        panic!("Child process died unexpectedly before initialization: {other:?}");
-                    }
+                let status =
+                    rustix::process::waitpid(Some(native_pid.into()), WaitOptions::empty())
+                        .unwrap()
+                        .unwrap();
+                if status.exit_status() == Some(127) {
+                    // posix_spawn(3):
+                    // > If  the child  fails  in  any  of the
+                    // > housekeeping steps described below, or fails to
+                    // > execute the desired file, it exits with a status of
+                    // > 127.
+                    debug!("posix_spawn failed to exec the process");
+                    // Assume that execve failed, and return a plausible reason
+                    // why it might have done so.
+                    // TODO: replace our usage of posix_spawn with a custom
+                    // implementation that can return the execve failure code?
+                    return Err(Errno::EPERM);
                 }
+                // TODO: handle more gracefully.
+                // * The native stdout/stderr might have a clue as to
+                // why the process died.  Consider logging a hint to
+                // check it (currently in the corresponding shimlog), or
+                // directly capture it and display it here.
+                // https://github.com/shadow/shadow/issues/3142
+                // * Consider logging a warning here and continuing on to handle
+                // the managed process exit normally. e.g. when this happens
+                // as part of an emulated `execve`, we might want to continue
+                // the simulation.
+                panic!("Child process died unexpectedly before initialization: {status:?}");
             }
             other => panic!("Unexpected result from shim: {other:?}"),
         };
@@ -372,11 +375,11 @@ impl ManagedThread {
             r => panic!("Unexpected result: {r:?}"),
         };
         let clone_res: SyscallReg = syscall::raw_return_value_to_result(clone_res)?;
-        let child_native_tid = libc::pid_t::from(clone_res);
-        trace!("native clone treated tid {child_native_tid}");
+        let child_native_tid = Pid::from_raw(libc::pid_t::from(clone_res)).unwrap();
+        trace!("native clone treated tid {child_native_tid:?}");
 
         trace!(
-            "waiting for start event from shim with native tid {}",
+            "waiting for start event from shim with native tid {:?}",
             child_native_tid
         );
         let start_req = child_ipc_shmem.from_plugin().receive().unwrap();
@@ -388,7 +391,7 @@ impl ManagedThread {
         let native_pid = if flags.contains(CloneFlags::CLONE_THREAD) {
             self.native_pid
         } else {
-            nix::unistd::Pid::from_raw(child_native_tid)
+            child_native_tid
         };
 
         if !flags.contains(CloneFlags::CLONE_THREAD) {
@@ -420,7 +423,7 @@ impl ManagedThread {
             return_code: Cell::new(None),
             current_event: RefCell::new(start_req),
             native_pid,
-            native_tid: nix::unistd::Pid::from_raw(child_native_tid),
+            native_tid: child_native_tid,
             // TODO: can we assume it's inherited from the current thread affinity?
             affinity: Cell::new(cshadow::AFFINITY_UNINIT),
         })
@@ -487,7 +490,7 @@ impl ManagedThread {
         // Alternatively we could use `set_tid_address` or `set_robust_list` to
         // be notified on a futex. Those are a bit underdocumented and fragile,
         // though. In practice this shouldn't have to loop significantly.
-        trace!("Waiting for native thread {native_pid}.{native_tid} to exit");
+        trace!("Waiting for native thread {native_pid:?}.{native_tid:?} to exit");
         loop {
             if self.ipc_shmem.from_plugin().writer_is_closed() {
                 // This indicates that the whole process has stopped executing;
@@ -506,17 +509,17 @@ impl ManagedThread {
                 Ok(()) if native_pid == native_tid => {
                     // Thread leader could be in a zombie state waiting for
                     // the other threads to exit.
-                    let filename = format!("/proc/{native_pid}/stat");
+                    let filename = format!("/proc/{}/stat", native_pid.as_raw_nonzero().get());
                     let stat = match std::fs::read_to_string(filename) {
                         Err(e) => {
                             assert!(e.kind() == std::io::ErrorKind::NotFound);
-                            trace!("tgl {native_pid} is fully dead");
+                            trace!("tgl {native_pid:?} is fully dead");
                             break;
                         }
                         Ok(s) => s,
                     };
                     if stat.contains(") Z") {
-                        trace!("tgl {native_pid} is a zombie");
+                        trace!("tgl {native_pid:?} is a zombie");
                         break;
                     }
                     // Still alive and in a non-zombie state; continue
@@ -535,7 +538,7 @@ impl ManagedThread {
             .unwrap_or(cshadow::AFFINITY_UNINIT);
         self.affinity.set(unsafe {
             cshadow::affinity_setProcessAffinity(
-                self.native_tid().into(),
+                self.native_tid().as_raw_nonzero().get(),
                 current_affinity,
                 self.affinity.get(),
             )
@@ -549,7 +552,7 @@ impl ManagedThread {
         strace_file: Option<&std::fs::File>,
         shimlog_file: &std::fs::File,
         shmem_block: &ShMemBlock<IPCData>,
-    ) -> nix::Result<nix::unistd::Pid> {
+    ) -> Result<Pid, Errno> {
         // Preemptively check for likely reasons that execve might fail.
         // In particular we want to ensure that we  don't launch a statically
         // linked executable, since we'd then deadlock the whole simulation
@@ -599,15 +602,17 @@ impl ManagedThread {
             .collect();
 
         let mut file_actions: libc::posix_spawn_file_actions_t = shadow_pod::zeroed();
-        posix_result(unsafe { libc::posix_spawn_file_actions_init(&mut file_actions) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe {
+            libc::posix_spawn_file_actions_init(&mut file_actions)
+        })
+        .unwrap();
 
         // Set up stdin
-        let (stdin_reader, stdin_writer) =
-            nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC).unwrap();
-        posix_result(unsafe {
+        let (stdin_reader, stdin_writer) = rustix::pipe::pipe_with(PipeFlags::CLOEXEC).unwrap();
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
-                stdin_reader,
+                stdin_reader.as_raw_fd(),
                 libc::STDIN_FILENO,
             )
         })
@@ -631,7 +636,7 @@ impl ManagedThread {
         // https://github.com/bminor/glibc/commit/805334b26c7e6e83557234f2008497c72176a6cd
         // https://austingroupbugs.net/view.php?id=411
         if let Some(strace_file) = strace_file {
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     strace_file.as_raw_fd(),
@@ -639,7 +644,7 @@ impl ManagedThread {
                 )
             })
             .unwrap();
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn_file_actions_adddup2(
                     &mut file_actions,
                     libc::STDOUT_FILENO,
@@ -650,7 +655,7 @@ impl ManagedThread {
         }
 
         // set stdout/stderr as the shim log. This also clears the FD_CLOEXEC flag.
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -658,7 +663,7 @@ impl ManagedThread {
             )
         })
         .unwrap();
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawn_file_actions_adddup2(
                 &mut file_actions,
                 shimlog_file.as_raw_fd(),
@@ -668,11 +673,12 @@ impl ManagedThread {
         .unwrap();
 
         let mut spawn_attr: libc::posix_spawnattr_t = shadow_pod::zeroed();
-        posix_result(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe { libc::posix_spawnattr_init(&mut spawn_attr) })
+            .unwrap();
 
         // In versions of glibc before 2.24, we need this to tell posix_spawn
         // to use vfork instead of fork. In later versions it's a no-op.
-        posix_result(unsafe {
+        Errno::result_from_libc_errnum(unsafe {
             libc::posix_spawnattr_setflags(
                 &mut spawn_attr,
                 libc::POSIX_SPAWN_USEVFORK.try_into().unwrap(),
@@ -682,7 +688,7 @@ impl ManagedThread {
 
         let child_pid_res = {
             let mut child_pid = -1;
-            posix_result(unsafe {
+            Errno::result_from_libc_errnum(unsafe {
                 libc::posix_spawn(
                     &mut child_pid,
                     plugin_path.as_ptr(),
@@ -692,24 +698,21 @@ impl ManagedThread {
                     envv_ptrs.as_ptr(),
                 )
             })
-            .map(|_| {
-                assert!(child_pid > 0, "Invalid pid: {child_pid}");
-                nix::unistd::Pid::from_raw(child_pid)
-            })
+            .map(|_| Pid::from_raw(child_pid).unwrap_or_else(|| panic!("Invalid pid: {child_pid}")))
         };
 
         // Write the serialized shmem descriptor to the stdin pipe. The pipe
         // buffer should be large enough that we can write it all without having
         // to wait for data to be read.
         if child_pid_res.is_ok() {
-            // we avoid using the nix write wrapper here, since we can't guarantee
+            // we avoid using the rustix write wrapper here, since we can't guarantee
             // that all bytes of the serialized shmem block are initd, and hence
-            // can't safely construct the &[u8] that the nix wrapper wants.
+            // can't safely construct the &[u8] that it wants.
             let serialized = shmem_block.serialize();
             let serialized_bytes = shadow_pod::as_u8_slice(&serialized);
-            let written = nix::errno::Errno::result(unsafe {
+            let written = Errno::result_from_libc_errno(-1, unsafe {
                 libc::write(
-                    stdin_writer,
+                    stdin_writer.as_raw_fd(),
                     serialized_bytes.as_ptr().cast(),
                     serialized_bytes.len(),
                 )
@@ -717,12 +720,14 @@ impl ManagedThread {
             .unwrap();
             // TODO: loop if needed. Shouldn't be in practice, though.
             assert_eq!(written, isize::try_from(serialized_bytes.len()).unwrap());
-            nix::unistd::close(stdin_writer).unwrap();
-            nix::unistd::close(stdin_reader).unwrap();
         }
 
-        posix_result(unsafe { libc::posix_spawn_file_actions_destroy(&mut file_actions) }).unwrap();
-        posix_result(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) }).unwrap();
+        Errno::result_from_libc_errnum(unsafe {
+            libc::posix_spawn_file_actions_destroy(&mut file_actions)
+        })
+        .unwrap();
+        Errno::result_from_libc_errnum(unsafe { libc::posix_spawnattr_destroy(&mut spawn_attr) })
+            .unwrap();
 
         // Drop the cloned argv and env.
         drop(
@@ -754,10 +759,10 @@ impl ManagedThread {
     /// thread!) and then drops `self`.
     pub fn kill_and_drop(self) {
         if let Err(err) =
-            nix::sys::signal::kill(self.native_pid(), nix::sys::signal::Signal::SIGKILL)
+            rustix::process::kill_process(self.native_pid().into(), rustix::process::Signal::Kill)
         {
             log::warn!(
-                "Couldn't kill managed process {}. kill: {:?}",
+                "Couldn't kill managed process {:?}. kill: {:?}",
                 self.native_pid(),
                 err
             );
@@ -774,32 +779,5 @@ impl Drop for ManagedThread {
         // running thread accessing a deallocated or repurposed memory region
         // can cause numerous problems.
         assert!(!self.is_running());
-    }
-}
-
-fn tgkill(
-    pid: nix::unistd::Pid,
-    tid: nix::unistd::Pid,
-    signo: Option<nix::sys::signal::Signal>,
-) -> nix::Result<()> {
-    let pid = pid.as_raw();
-    let tid = tid.as_raw();
-    let signo = match signo {
-        Some(s) => s as i32,
-        None => 0,
-    };
-    let res = unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, signo) };
-    Errno::result(res).map(|i: i64| {
-        assert_eq!(i, 0);
-    })
-}
-
-/// Helper to handle results from posix_spawn and similar functions that
-/// return 0 on success, or the error code directly otherwise (not via errno).
-fn posix_result(i: i32) -> Result<(), Errno> {
-    if i == 0 {
-        Ok(())
-    } else {
-        Err(Errno::from_i32(i))
     }
 }

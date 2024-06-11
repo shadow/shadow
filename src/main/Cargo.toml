@@ -22,7 +22,7 @@ clap = { version = "4.5.0", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.3"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
-linux-api = { path = "../lib/linux-api", features = ["c_bindings", "std"] }
+linux-api = { path = "../lib/linux-api", features = ["c_bindings", "libc", "rustix", "std"] }
 # don't log debug or trace levels in release mode
 log = { version = "0.4", features = ["release_max_level_debug"] }
 log-c2rust = { path = "../lib/log-c2rust" }
@@ -66,6 +66,7 @@ vasi-sync = { path = "../lib/vasi-sync" }
 vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
 which = "6.0.0"
 bytemuck = "1.16.0"
+rustix = { version = "0.38.34", features = ["event", "mm", "pipe"] }
 
 [features]
 perf_timers = []

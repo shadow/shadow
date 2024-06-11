@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::{AtomicRef, AtomicRefCell};
+use linux_api::posix_types::Pid;
 use once_cell::sync::Lazy;
 use rand::Rng;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -243,7 +244,7 @@ impl Worker {
         Worker::with(|w| w.worker_id)
     }
 
-    pub fn active_process_native_pid() -> Option<nix::unistd::Pid> {
+    pub fn active_process_native_pid() -> Option<Pid> {
         Worker::with_active_process(|p| p.native_pid())
     }
 
@@ -255,7 +256,7 @@ impl Worker {
         Worker::with_active_thread(|thread| thread.id())
     }
 
-    pub fn active_thread_native_tid() -> Option<nix::unistd::Pid> {
+    pub fn active_thread_native_tid() -> Option<Pid> {
         Worker::with_active_thread(|thread| thread.native_tid())
     }
 

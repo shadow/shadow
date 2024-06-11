@@ -206,6 +206,7 @@ const fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::EEXIST => Some("EEXIST"),
         Errno::ECHILD => Some("ECHILD"),
         Errno::EACCES => Some("EACCES"),
+        Errno::ENOEXEC => Some("ENOEXEC"),
         _ => None,
     }
 }
@@ -344,6 +345,7 @@ impl Errno {
     pub const EEXIST: Self = Self::from_u32_const(bindings::LINUX_EEXIST);
     pub const ECHILD: Self = Self::from_u32_const(bindings::LINUX_ECHILD);
     pub const EACCES: Self = Self::from_u32_const(bindings::LINUX_EACCES);
+    pub const ENOEXEC: Self = Self::from_u32_const(bindings::LINUX_ENOEXEC);
     // NOTE: add new entries to `errno_to_str` above
 
     // Aliases
@@ -387,6 +389,72 @@ impl Errno {
         // check for truncation
         assert!(rv.0 as u32 == val);
         rv
+    }
+
+    /// Get libc's errno (global for the current thread).
+    #[cfg(feature = "libc")]
+    pub fn from_libc_errno() -> Self {
+        // SAFETY: The safety requirements for calling this function are
+        // undocumented, and I'm not aware of any.
+        let ptr = unsafe { libc::__errno_location() };
+        assert!(!ptr.is_null());
+        // SAFETY: We verified that `ptr` is non-NULL, and can only assume that
+        // libc gives us a pointer that is safe to dereference.
+        //
+        // `errno(2)` guarantees that it's thread-local, so there shouldn't be any
+        // data-races from other threads.
+        //
+        // A signal handler could run on the current thread and change the `errno`
+        // value at `*ptr`. A well-behaved handler should always restore the original
+        // value before returning (`signal-safety(7)`) which should make this
+        // sound; nonetheless we try to make the dereference "as atomic" as
+        // possible, e.g.  by directly dereferencing the pointer and not
+        // converting it to a Rust reference.
+        let raw = unsafe { *ptr };
+
+        Self::from_libc_errnum(raw)
+            .unwrap_or_else(|| panic!("Unexpected bad errno from libc: {raw}"))
+    }
+
+    /// Get a Result from the return value of a libc function that uses a
+    /// sentinel error value, and stores the errors themselves in errno.
+    #[cfg(feature = "libc")]
+    pub fn result_from_libc_errno<T>(sentinel: T, x: T) -> Result<T, Self>
+    where
+        T: Eq,
+    {
+        if x == sentinel {
+            Err(Self::from_libc_errno())
+        } else {
+            Ok(x)
+        }
+    }
+
+    /// Get a Result from a libc `errnum` return value, where 0 is used to
+    /// indicate "no error", and non-zero is an errno value. An example of such
+    /// a function is `libc::posix_spawn`.
+    ///
+    /// Panics if `errnum` is out of range. This shouldn't be the case for any `errnum` obtained
+    /// from libc APIs.
+    #[cfg(feature = "libc")]
+    pub fn result_from_libc_errnum(errnum: i32) -> Result<(), Self> {
+        if errnum == 0 {
+            Ok(())
+        } else {
+            Err(Self::from_libc_errnum(errnum)
+                .unwrap_or_else(|| panic!("errnum out of range: {errnum}")))
+        }
+    }
+
+    /// Convert from a libc error value. Returns `None` if out of range.
+    #[cfg(feature = "libc")]
+    pub fn from_libc_errnum(errnum: i32) -> Option<Self> {
+        // For now we assume that libc uses the same errnum values
+        // as the kernel. This isn't explicitly guaranteed, but we don't
+        // know of any exceptions in practice. In case it turns out not to be true
+        // we can either change this to a full explicit mapping, or handle
+        // individual known exceptions here.
+        Self::from_u16(u16::try_from(errnum).ok()?)
     }
 }
 

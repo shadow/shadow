@@ -299,6 +299,7 @@ pub fn log_syscall_simple(
 mod test {
     use std::process::Command;
 
+    use linux_api::posix_types::Pid;
     use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 
     use super::*;
@@ -314,7 +315,7 @@ mod test {
 
         // 10 seconds should be long enough to keep the process alive while the following code runs
         let mut proc = Command::new("sleep").arg(10.to_string()).spawn().unwrap();
-        let pid = nix::unistd::Pid::from_raw(proc.id().try_into().unwrap());
+        let pid = Pid::from_raw(proc.id().try_into().unwrap()).unwrap();
 
         let mem = unsafe { MemoryManager::new(pid) };
 

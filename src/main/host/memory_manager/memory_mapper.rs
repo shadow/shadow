@@ -3,17 +3,18 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fmt::Debug;
 use std::fs::File;
-use std::num::NonZeroUsize;
 use std::os::raw::c_void;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::process;
 
 use linux_api::errno::Errno;
+use linux_api::mman::MapFlags;
+use linux_api::mman::ProtFlags;
+use linux_api::posix_types::Pid;
 use log::*;
-use nix::sys::memfd::MemFdCreateFlag;
-use nix::unistd::Pid;
-use nix::{fcntl, sys};
+use rustix::fs::FallocateFlags;
+use rustix::fs::MemfdFlags;
 use shadow_pod::Pod;
 use shadow_shim_helper_rs::notnull::*;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -26,15 +27,17 @@ use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
 use crate::utility::proc_maps::{MappingPath, Sharing};
 
-const HEAP_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
-const STACK_PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
+/// Used when mapping heap regions.
+const HEAP_PROT: ProtFlags = ProtFlags::PROT_READ.union(ProtFlags::PROT_WRITE);
+/// Used when mapping stack regions.
+const STACK_PROT: ProtFlags = ProtFlags::PROT_READ.union(ProtFlags::PROT_WRITE);
 
 // Represents a region of plugin memory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Region {
     // Where the region is mapped into shadow's address space, or NULL if it isn't.
     shadow_base: *mut c_void,
-    prot: i32,
+    prot: ProtFlags,
     sharing: proc_maps::Sharing,
     // The *original* path. Not the path to our mem file.
     original_path: Option<proc_maps::MappingPath>,
@@ -95,18 +98,18 @@ pub struct MemoryMapper {
 struct ShmFile {
     shm_file: File,
     shm_plugin_fd: i32,
-    len: libc::off_t,
+    len: usize,
 }
 
 impl ShmFile {
     /// Allocate space in the file for the given interval.
     fn alloc(&mut self, interval: &Interval) {
-        let needed_len = interval.end as libc::off_t;
+        let needed_len = interval.end;
         // Ensure that the file size extends through the end of the interval.
         // Unlike calling fallocate or posix_fallocate, this does not pre-reserve
         // any space. The OS will allocate the space on-demand as it's written.
         if needed_len > self.len {
-            nix::unistd::ftruncate(&self.shm_file, needed_len).unwrap();
+            rustix::fs::ftruncate(&self.shm_file, u64::try_from(needed_len).unwrap()).unwrap();
             self.len = needed_len;
         }
     }
@@ -114,26 +117,25 @@ impl ShmFile {
     /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
         trace!("dealloc {:?}", interval);
-        fcntl::fallocate(
-            self.shm_file.as_raw_fd(),
-            fcntl::FallocateFlags::FALLOC_FL_PUNCH_HOLE
-                | fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
-            interval.start as i64,
-            interval.len() as i64,
+        rustix::fs::fallocate(
+            &self.shm_file,
+            FallocateFlags::PUNCH_HOLE | FallocateFlags::KEEP_SIZE,
+            u64::try_from(interval.start).unwrap(),
+            u64::try_from(interval.len()).unwrap(),
         )
         .unwrap();
     }
 
     /// Map the given interval of the file into shadow's address space.
-    fn mmap_into_shadow(&self, interval: &Interval, prot: i32) -> *mut c_void {
+    fn mmap_into_shadow(&self, interval: &Interval, prot: ProtFlags) -> *mut c_void {
         unsafe {
-            sys::mman::mmap(
-                None,
-                NonZeroUsize::new(interval.len()).unwrap(),
-                sys::mman::ProtFlags::from_bits(prot).unwrap(),
-                sys::mman::MapFlags::MAP_SHARED,
-                Some(&self.shm_file),
-                interval.start as i64,
+            linux_api::mman::mmap(
+                std::ptr::null_mut(),
+                interval.len(),
+                prot,
+                MapFlags::MAP_SHARED,
+                self.shm_file.as_raw_fd(),
+                interval.start,
             )
         }
         .unwrap()
@@ -175,14 +177,14 @@ impl ShmFile {
     }
 
     /// Map the given range of the file into the plugin's address space.
-    fn mmap_into_plugin(&self, ctx: &ThreadContext, interval: &Interval, prot: i32) {
+    fn mmap_into_plugin(&self, ctx: &ThreadContext, interval: &Interval, prot: ProtFlags) {
         ctx.thread
             .native_mmap(
                 &ProcessContext::new(ctx.host, ctx.process),
                 ForeignPtr::from(interval.start).cast::<u8>(),
                 interval.len(),
                 prot,
-                libc::MAP_SHARED | libc::MAP_FIXED,
+                MapFlags::MAP_SHARED | MapFlags::MAP_FIXED,
                 self.shm_plugin_fd,
                 interval.start as i64,
             )
@@ -193,16 +195,16 @@ impl ShmFile {
 /// Get the current mapped regions of the process.
 fn get_regions(pid: Pid) -> IntervalMap<Region> {
     let mut regions = IntervalMap::new();
-    for mapping in proc_maps::mappings_for_pid(pid.as_raw()).unwrap() {
-        let mut prot = 0;
+    for mapping in proc_maps::mappings_for_pid(pid.as_raw_nonzero().get()).unwrap() {
+        let mut prot = ProtFlags::empty();
         if mapping.read {
-            prot |= libc::PROT_READ;
+            prot |= ProtFlags::PROT_READ;
         }
         if mapping.write {
-            prot |= libc::PROT_WRITE;
+            prot |= ProtFlags::PROT_WRITE;
         }
         if mapping.execute {
-            prot |= libc::PROT_EXEC;
+            prot |= ProtFlags::PROT_EXEC;
         }
         let mutations = regions.insert(
             mapping.begin..mapping.end,
@@ -333,7 +335,7 @@ impl Drop for MemoryMapper {
         for m in mutations {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
-                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
@@ -384,8 +386,7 @@ impl MemoryMapper {
             u32::from(ctx.process.id())
         ))
         .unwrap();
-        let raw_file =
-            nix::sys::memfd::memfd_create(&shm_name, MemFdCreateFlag::MFD_CLOEXEC).unwrap();
+        let raw_file = rustix::fs::memfd_create(&shm_name, MemfdFlags::CLOEXEC).unwrap();
         let shm_file = File::from(raw_file);
 
         // Other processes can open the file via /proc.
@@ -458,7 +459,7 @@ impl MemoryMapper {
                     self.shm_file.dealloc(&removed_range);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { sys::mman::munmap(region.shadow_base, removed_range.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, removed_range.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                     // Adjust base
@@ -476,7 +477,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        sys::mman::munmap(
+                        linux_api::mman::munmap(
                             region.shadow_base.add((interval.start..new_end).len()),
                             removed_range.len(),
                         )
@@ -497,7 +498,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe {
-                        sys::mman::munmap(
+                        linux_api::mman::munmap(
                             (left_region.shadow_base.add(left.len())) as *mut c_void,
                             removed_range.len(),
                         )
@@ -518,7 +519,7 @@ impl MemoryMapper {
                     self.shm_file.dealloc(&interval);
 
                     // Unmap range from Shadow's address space.
-                    unsafe { sys::mman::munmap(region.shadow_base, interval.len()) }
+                    unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
                         .unwrap_or_else(|e| warn!("munmap: {}", e));
                 }
             }
@@ -536,8 +537,8 @@ impl MemoryMapper {
         &mut self,
         ctx: &ThreadContext,
         ptr: ForeignArrayPtr<u8>,
-        prot: i32,
-        flags: i32,
+        prot: ProtFlags,
+        flags: MapFlags,
         fd: i32,
     ) {
         trace!(
@@ -550,8 +551,8 @@ impl MemoryMapper {
         }
         let addr = usize::from(ptr.ptr());
         let interval = addr..(addr + ptr.len());
-        let is_anonymous = flags & libc::MAP_ANONYMOUS != 0;
-        let sharing = if flags & libc::MAP_PRIVATE != 0 {
+        let is_anonymous = flags.contains(MapFlags::MAP_ANONYMOUS);
+        let sharing = if flags.contains(MapFlags::MAP_PRIVATE) {
             Sharing::Private
         } else {
             Sharing::Shared
@@ -563,8 +564,12 @@ impl MemoryMapper {
             // sense to eventually move the mechanics of opening the child fd into here (in which
             // case we'll already have it) than to pipe the string through this API.
             Some(MappingPath::Path(
-                std::fs::read_link(format!("/proc/{}/fd/{}", ctx.thread.native_pid(), fd))
-                    .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
+                std::fs::read_link(format!(
+                    "/proc/{}/fd/{}",
+                    ctx.thread.native_pid().as_raw_nonzero().get(),
+                    fd
+                ))
+                .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
             ))
         };
         let mut region = Region {
@@ -708,7 +713,7 @@ impl MemoryMapper {
                 };
 
                 // Unmap the old location from Shadow.
-                unsafe { sys::mman::munmap(region.shadow_base, old_size) }
+                unsafe { linux_api::mman::munmap(region.shadow_base, old_size) }
                     .unwrap_or_else(|e| warn!("munmap: {}", e));
 
                 // Update the region metadata.
@@ -882,12 +887,11 @@ impl MemoryMapper {
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
         size: usize,
-        prot: i32,
+        prot: ProtFlags,
     ) -> Result<i32, Errno> {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(&ctx, addr, size, prot)?;
-        let protflags = sys::mman::ProtFlags::from_bits(prot).unwrap();
 
         // Update protections. We remove the affected range, and then update and re-insert affected
         // regions.
@@ -908,10 +912,10 @@ impl MemoryMapper {
                         extant_region.shadow_base =
                             unsafe { extant_region.shadow_base.add(modified_interval.len()) };
                         unsafe {
-                            sys::mman::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                protflags,
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| {
@@ -919,7 +923,7 @@ impl MemoryMapper {
                                 "mprotect({:?}, {:?}, {:?}): {}",
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                protflags,
+                                prot,
                                 e
                             );
                         });
@@ -941,10 +945,10 @@ impl MemoryMapper {
                         modified_region.shadow_base =
                             unsafe { modified_region.shadow_base.add(extant_interval.len()) };
                         unsafe {
-                            sys::mman::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                protflags,
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
@@ -968,10 +972,10 @@ impl MemoryMapper {
                                 .add(left_interval.len() + modified_interval.len())
                         };
                         unsafe {
-                            sys::mman::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                protflags,
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
@@ -985,10 +989,10 @@ impl MemoryMapper {
                     modified_region.prot = prot;
                     if !modified_region.shadow_base.is_null() {
                         unsafe {
-                            sys::mman::mprotect(
+                            linux_api::mman::mprotect(
                                 modified_region.shadow_base,
                                 modified_interval.len(),
-                                protflags,
+                                prot,
                             )
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));

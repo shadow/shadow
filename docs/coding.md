@@ -53,8 +53,9 @@ few `nix`-style higher-level wrappers. It does not depend on `std` or `libc`.
 It also re-exports these definitions as a C library that can be used without
 creating conflicts with libc headers or linux system headers.
 Use this when working with the syscall ABI (such as when implementing syscall
-handlers), and for making syscalls when none of the higher-level crates are
-suitable (see below).
+handlers), for internal parameters and state that are likely to interact with
+the syscall ABI (such as file states), and for making syscalls when none of the
+higher-level crates are suitable (see below).
 
 * [`libc`](https://docs.rs/libc/latest/libc/) provides fairly low-level bindings
 of system libc standard headers. If you need syscall-level ABI-compatibility,
@@ -62,7 +63,8 @@ use `linux-api` instead. If you don't, prefer one of the higher-level crates.
 
 * [`nix`](https://docs.rs/nix/latest/nix/) provides a safer and more Rust-idiomatic
 layer on top of the `libc` crate, as well as adapters for underlying `libc` definitions.
-There's currently a lot of usage of this in Shadow, but we're trying to move away from it.
+There's currently a lot of usage of this in Shadow, but we're working on moving
+away from it (see [#3345](https://github.com/shadow/shadow/issues/3345)).
 In most scenarios, one of the other crates mentioned here is a more appropriate choice.
 
 * [`rustix`](https://docs.rs/rustix/latest/rustix/) provides a similar API to `nix`, but
