@@ -246,7 +246,9 @@ impl ChildPidWatcher {
     /// an unrelated process with a recycled `pid`.
     pub fn register_pid(&self, pid: Pid) {
         let mut inner = self.inner.lock().unwrap();
-        let pidfd = rustix::process::pidfd_open(pid.into(), PidfdFlags::empty())
+        // We defensively make the pidfd non-blocking, since we intend to always
+        // use epoll to validate that it's ready before operating on it.
+        let pidfd = rustix::process::pidfd_open(pid.into(), PidfdFlags::NONBLOCK)
             .unwrap_or_else(|e| panic!("pidfd_open failed for {pid:?}: {e:?}"));
         // `pidfd_open(2)`: the close-on-exec flag is set on the file descriptor.
         debug_assert!(
