@@ -59,12 +59,13 @@ pub enum Mode {
     ///
     /// This mode is nearly as fast as native, but:
     /// * Assumes that if the "thread pointer" in `%fs:0` is non-NULL for a
-    /// given thread, that it is stable and unique for the lifetime of that
-    /// thread.  This seems like a fairly reasonable assumption, and seems to
-    /// hold so far, but isn't guaranteed.
+    ///   given thread, that it is stable and unique for the lifetime of that
+    ///   thread.  This seems like a fairly reasonable assumption, and seems to
+    ///   hold so far, but isn't guaranteed.
     /// * Requires that each thread using thread local storage from this module
-    /// calls [`ThreadLocalStorage::unregister_current_thread`] before exiting, since the thread pointer
-    /// may subsequently be used for another thread.
+    ///   calls [`ThreadLocalStorage::unregister_current_thread`] before
+    ///   exiting, since the thread pointer may subsequently be used for another
+    ///   thread.
     ///
     /// [ELF-TLS]: "ELF Handling For Thread-Local Storage", by Ulrich Drepper.
     /// <https://www.akkadia.org/drepper/tls.pdf>
@@ -138,8 +139,9 @@ struct TlsOneThreadStorage {
 impl TlsOneThreadStorage {
     /// # Safety
     ///
-    /// * `alloc` must be dereferenceable and live for the lifetime of this process.
-    /// (A zeroed buffer is a valid dereferenceable instance of `Self`)
+    /// * `alloc` must be dereferenceable and live for the lifetime of this
+    ///   process. (A zeroed buffer is a valid dereferenceable instance of
+    ///   `Self`)
     /// * `alloc` must *only* be accessed through this function.
     pub unsafe fn from_static_lifetime_zeroed_allocation(
         alloc: *mut TlsOneThreadStorageAllocation,
