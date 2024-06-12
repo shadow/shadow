@@ -140,8 +140,8 @@ impl Display for SelfContainedChannelError {
 /// Breaking the documented API contracts may result both in immediate panics,
 /// and panics in subsequent operations on the channel. To avoid this, the user
 /// must:
-/// * Never allow parallel `send` or `receive` operations. This is a single-producer,
-/// single-consumer channel.
+/// * Never allow parallel `send` or `receive` operations. This is a
+///   single-producer, single-consumer channel.
 /// * Never call `send` when there is already a message pending.
 ///
 /// Loosely inspired by the channel implementation examples in "Rust Atomics and

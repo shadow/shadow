@@ -5,10 +5,10 @@
 //!
 //! * Directly read or write process memory
 //! * Obtain smart pointers ([`ProcessMemoryRef`] and [`ProcessMemoryRefMut`])
-//! to process memory
+//!   to process memory
 //! * Obtain cursors to process memory implementing `std::io::Seek` and either
-//! `std::io::Read` or `std::io::Write` ([`MemoryReaderCursor`] and
-//! [`MemoryWriterCursor`])
+//!   `std::io::Read` or `std::io::Write` ([`MemoryReaderCursor`] and
+//!   [`MemoryWriterCursor`])
 //!
 //! For the [`MemoryManager`] to maintain a consistent view of the process's address space,
 //! and for it to be able to enforce Rust's safety requirements for references and sharing,

@@ -128,7 +128,7 @@ unsafe extern "C-unwind" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
 /// # Safety
 ///
 /// * `ctx` must be dereferenceable, and must be safe for the newly spawned
-/// child thread to restore.
+///   child thread to restore.
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
@@ -211,7 +211,7 @@ unsafe fn do_clone_process(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64
 /// # Safety
 ///
 /// * `ctx` must be dereferenceable, and must be safe for the newly spawned
-/// child thread to restore.
+///   child thread to restore.
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
@@ -336,7 +336,7 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
 /// # Safety
 ///
 /// * `ctx` must be dereferenceable, and must be safe for the newly spawned
-/// child thread to restore.
+///   child thread to restore.
 /// * Other pointers, if non-null, must be safely dereferenceable.
 /// * `child_stack` must be "sufficiently big" for the child thread to run on.
 /// * `tls` if provided must point to correctly initialized thread local storage.
