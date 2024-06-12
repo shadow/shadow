@@ -926,7 +926,13 @@ impl TcpSocket {
                 Ok(bytes_written as libc::socklen_t)
             }
             _ => {
-                log::warn!("getsockopt called with unsupported level {level} and opt {optname}");
+                log_once_per_value_at_level!(
+                    (level, optname),
+                    (i32, i32),
+                    log::Level::Warn,
+                    log::Level::Debug,
+                    "getsockopt called with unsupported level {level} and opt {optname}"
+                );
                 Err(Errno::ENOPROTOOPT.into())
             }
         }
@@ -958,7 +964,13 @@ impl TcpSocket {
                 log::trace!("setsockopt SO_BROADCAST not yet implemented");
             }
             _ => {
-                log::warn!("setsockopt called with unsupported level {level} and opt {optname}");
+                log_once_per_value_at_level!(
+                    (level, optname),
+                    (i32, i32),
+                    log::Level::Warn,
+                    log::Level::Debug,
+                    "setsockopt called with unsupported level {level} and opt {optname}"
+                );
                 return Err(Errno::ENOPROTOOPT.into());
             }
         }
