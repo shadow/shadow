@@ -16,7 +16,7 @@ MINOR changes (backwards-compatible):
 
 PATCH changes (bugfixes):
 
-*
+* Log messages about unrecognized sockopt values are now only logged at level WARN once for each distinct value (and at DEBUG afterwards) (#3353).
 
 Full changelog since v3.2.0:
 
