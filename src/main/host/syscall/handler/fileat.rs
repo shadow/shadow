@@ -56,11 +56,6 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int)]
-    pub fn newfstatat(ctx: &mut SyscallContext) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_newfstatat, ctx)
-    }
-
-    #[log_syscall(/* rv */ std::ffi::c_int)]
     pub fn readlinkat(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_readlinkat, ctx)
     }
@@ -73,11 +68,6 @@ impl SyscallHandler {
     #[log_syscall(/* rv */ std::ffi::c_int)]
     pub fn renameat2(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_renameat2, ctx)
-    }
-
-    #[log_syscall(/* rv */ std::ffi::c_int)]
-    pub fn statx(ctx: &mut SyscallContext) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_statx, ctx)
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int)]

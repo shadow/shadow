@@ -78,16 +78,6 @@ impl SyscallHandler {
     }
 
     #[log_syscall(/* rv */ std::ffi::c_int)]
-    pub fn fstat(ctx: &mut SyscallContext) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_fstat, ctx)
-    }
-
-    #[log_syscall(/* rv */ std::ffi::c_int)]
-    pub fn fstatfs(ctx: &mut SyscallContext) -> SyscallResult {
-        Self::legacy_syscall(cshadow::syscallhandler_fstatfs, ctx)
-    }
-
-    #[log_syscall(/* rv */ std::ffi::c_int)]
     pub fn fsync(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_fsync, ctx)
     }
