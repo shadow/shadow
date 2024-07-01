@@ -112,6 +112,9 @@ bindgen_flags+=("--allowlist-type=__kernel_fd_set")
 # netlink.h
 bindgen_flags+=("--allowlist-type=nlmsghdr")
 
+# select.h
+bindgen_flags+=("--allowlist-type=stat")
+
 # non-exposed socket types
 bindgen_flags+=("--allowlist-type=sock_shutdown_cmd")
 
