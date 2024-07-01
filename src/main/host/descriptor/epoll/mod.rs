@@ -136,6 +136,11 @@ impl Epoll {
         Err(Errno::ENOTTY.into())
     }
 
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        warn_once_then_debug!("We do not yet handle stat calls on epoll fds");
+        Err(Errno::EINVAL.into())
+    }
+
     /// Executes an epoll control operation on the target file.
     ///
     /// We think this panics if `target_file` is an instance of this epoll object due to recursive

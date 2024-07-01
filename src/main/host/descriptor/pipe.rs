@@ -3,6 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
+use linux_api::stat::SFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
@@ -244,6 +245,42 @@ impl Pipe {
     ) -> SyscallResult {
         log::warn!("We do not yet handle ioctl request {request:?} on pipes");
         Err(Errno::EINVAL.into())
+    }
+
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        warn_once_then_debug!("Not all fields of 'struct stat' are implemented for pipes");
+
+        Ok(linux_api::stat::stat {
+            // the device and inode are non-zero on linux, but shadow can't really give meaningful
+            // values here
+            st_dev: 0,
+            st_ino: 0,
+            // this may need to be >1 if shadow ever supports named pipes
+            st_nlink: 1,
+            // linux seems to use a mode of readable+writable for both ends of a pipe, but as a
+            // reminder this st_mode field is the mode of the pipe in the pipefs filesystem, not the
+            // mode of the pipe file (linux struct file) itself
+            st_mode: (SFlag::S_IFIFO | SFlag::S_IRUSR | SFlag::S_IWUSR).bits(),
+            // shadow pretends to run as root, although this gets messy since file-related syscalls
+            // that are passed through to linux have the uid/gid of the user running the simulation
+            st_uid: 0,
+            st_gid: 0,
+            l__pad0: 0,
+            st_rdev: 0,
+            // apparently the behaviour of this field depends on what unix you're running, but on
+            // linux it seems to always be 0
+            st_size: 0,
+            // TODO
+            st_blksize: 0,
+            st_blocks: 0,
+            st_atime: 0,
+            st_atime_nsec: 0,
+            st_mtime: 0,
+            st_mtime_nsec: 0,
+            st_ctime: 0,
+            st_ctime_nsec: 0,
+            l__unused: [0; 3],
+        })
     }
 
     pub fn connect_to_buffer(
