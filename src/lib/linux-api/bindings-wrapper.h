@@ -18,6 +18,7 @@
 #include <linux/sched.h>
 #include <linux/signal.h>
 #include <linux/sockios.h>
+#include <linux/stat.h>
 #include <linux/time.h>
 #include <linux/time_types.h>
 #include <linux/unistd.h>
@@ -26,6 +27,11 @@
 
 #include <asm/ioctls.h>
 #include <asm/sigcontext.h>
+// linux defines "struct stat" differently in both "asm/stat.h" and "asm-generic/stat.h"; not sure
+// which we're supposed to use, but "asm/stat.h" *seems* to be the right version for x86-64, since
+// it seems to better match glibc's "struct stat" in "/usr/include/bits/struct_stat.h" ("st_nlink"
+// is ordered before "st_mode").
+#include <asm/stat.h>
 #include <asm/ucontext.h>
 #include <asm/unistd_64.h>
 

@@ -210,6 +210,11 @@ impl TimerFd {
         Err(Errno::EINVAL.into())
     }
 
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        warn_once_then_debug!("We do not yet handle stat calls on timerfds");
+        Err(Errno::EINVAL.into())
+    }
+
     pub fn add_listener(
         &mut self,
         monitoring_state: FileState,

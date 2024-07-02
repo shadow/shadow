@@ -1267,6 +1267,55 @@ pub const LINUX_SIOCSHWTSTAMP: u32 = 35248;
 pub const LINUX_SIOCGHWTSTAMP: u32 = 35249;
 pub const LINUX_SIOCDEVPRIVATE: u32 = 35312;
 pub const LINUX_SIOCPROTOPRIVATE: u32 = 35296;
+pub const LINUX_S_IFMT: u32 = 61440;
+pub const LINUX_S_IFSOCK: u32 = 49152;
+pub const LINUX_S_IFLNK: u32 = 40960;
+pub const LINUX_S_IFREG: u32 = 32768;
+pub const LINUX_S_IFBLK: u32 = 24576;
+pub const LINUX_S_IFDIR: u32 = 16384;
+pub const LINUX_S_IFCHR: u32 = 8192;
+pub const LINUX_S_IFIFO: u32 = 4096;
+pub const LINUX_S_ISUID: u32 = 2048;
+pub const LINUX_S_ISGID: u32 = 1024;
+pub const LINUX_S_ISVTX: u32 = 512;
+pub const LINUX_S_IRWXU: u32 = 448;
+pub const LINUX_S_IRUSR: u32 = 256;
+pub const LINUX_S_IWUSR: u32 = 128;
+pub const LINUX_S_IXUSR: u32 = 64;
+pub const LINUX_S_IRWXG: u32 = 56;
+pub const LINUX_S_IRGRP: u32 = 32;
+pub const LINUX_S_IWGRP: u32 = 16;
+pub const LINUX_S_IXGRP: u32 = 8;
+pub const LINUX_S_IRWXO: u32 = 7;
+pub const LINUX_S_IROTH: u32 = 4;
+pub const LINUX_S_IWOTH: u32 = 2;
+pub const LINUX_S_IXOTH: u32 = 1;
+pub const LINUX_STATX_TYPE: u32 = 1;
+pub const LINUX_STATX_MODE: u32 = 2;
+pub const LINUX_STATX_NLINK: u32 = 4;
+pub const LINUX_STATX_UID: u32 = 8;
+pub const LINUX_STATX_GID: u32 = 16;
+pub const LINUX_STATX_ATIME: u32 = 32;
+pub const LINUX_STATX_MTIME: u32 = 64;
+pub const LINUX_STATX_CTIME: u32 = 128;
+pub const LINUX_STATX_INO: u32 = 256;
+pub const LINUX_STATX_SIZE: u32 = 512;
+pub const LINUX_STATX_BLOCKS: u32 = 1024;
+pub const LINUX_STATX_BASIC_STATS: u32 = 2047;
+pub const LINUX_STATX_BTIME: u32 = 2048;
+pub const LINUX_STATX_MNT_ID: u32 = 4096;
+pub const LINUX_STATX_DIOALIGN: u32 = 8192;
+pub const LINUX_STATX__RESERVED: u32 = 2147483648;
+pub const LINUX_STATX_ALL: u32 = 4095;
+pub const LINUX_STATX_ATTR_COMPRESSED: u32 = 4;
+pub const LINUX_STATX_ATTR_IMMUTABLE: u32 = 16;
+pub const LINUX_STATX_ATTR_APPEND: u32 = 32;
+pub const LINUX_STATX_ATTR_NODUMP: u32 = 64;
+pub const LINUX_STATX_ATTR_ENCRYPTED: u32 = 2048;
+pub const LINUX_STATX_ATTR_AUTOMOUNT: u32 = 4096;
+pub const LINUX_STATX_ATTR_MOUNT_ROOT: u32 = 8192;
+pub const LINUX_STATX_ATTR_VERITY: u32 = 1048576;
+pub const LINUX_STATX_ATTR_DAX: u32 = 2097152;
 pub const LINUX___X32_SYSCALL_BIT: u32 = 1073741824;
 pub const LINUX___NR_read: u32 = 0;
 pub const LINUX___NR_write: u32 = 1;
@@ -1740,6 +1789,7 @@ pub const LINUX_TIOCSER_TEMT: u32 = 1;
 pub const LINUX_FP_XSTATE_MAGIC1: u32 = 1179670611;
 pub const LINUX_FP_XSTATE_MAGIC2: u32 = 1179670597;
 pub const LINUX_X86_FXSR_MAGIC: u32 = 0;
+pub const LINUX_STAT_HAVE_NSEC: u32 = 1;
 pub const LINUX_UC_FP_XSTATE: u32 = 1;
 pub const LINUX_UC_SIGCONTEXT_SS: u32 = 2;
 pub const LINUX_UC_STRICT_RESTORE_SS: u32 = 4;
@@ -5695,6 +5745,223 @@ impl ::core::fmt::Debug for linux_sigcontext {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         write ! (f , "linux_sigcontext {{ r8: {:?}, r9: {:?}, r10: {:?}, r11: {:?}, r12: {:?}, r13: {:?}, r14: {:?}, r15: {:?}, rdi: {:?}, rsi: {:?}, rbp: {:?}, rbx: {:?}, rdx: {:?}, rax: {:?}, rcx: {:?}, rsp: {:?}, rip: {:?}, eflags: {:?}, cs: {:?}, gs: {:?}, fs: {:?}, l__bindgen_anon_1: {:?}, err: {:?}, trapno: {:?}, oldmask: {:?}, cr2: {:?}, fpstate: {:?}, reserved1: {:?} }}" , self . r8 , self . r9 , self . r10 , self . r11 , self . r12 , self . r13 , self . r14 , self . r15 , self . rdi , self . rsi , self . rbp , self . rbx , self . rdx , self . rax , self . rcx , self . rsp , self . rip , self . eflags , self . cs , self . gs , self . fs , self . l__bindgen_anon_1 , self . err , self . trapno , self . oldmask , self . cr2 , self . fpstate , self . reserved1)
     }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_stat {
+    pub st_dev: linux___kernel_ulong_t,
+    pub st_ino: linux___kernel_ulong_t,
+    pub st_nlink: linux___kernel_ulong_t,
+    pub st_mode: ::core::ffi::c_uint,
+    pub st_uid: ::core::ffi::c_uint,
+    pub st_gid: ::core::ffi::c_uint,
+    pub l__pad0: ::core::ffi::c_uint,
+    pub st_rdev: linux___kernel_ulong_t,
+    pub st_size: linux___kernel_long_t,
+    pub st_blksize: linux___kernel_long_t,
+    pub st_blocks: linux___kernel_long_t,
+    pub st_atime: linux___kernel_ulong_t,
+    pub st_atime_nsec: linux___kernel_ulong_t,
+    pub st_mtime: linux___kernel_ulong_t,
+    pub st_mtime_nsec: linux___kernel_ulong_t,
+    pub st_ctime: linux___kernel_ulong_t,
+    pub st_ctime_nsec: linux___kernel_ulong_t,
+    pub l__unused: [linux___kernel_long_t; 3usize],
+}
+#[test]
+fn bindgen_test_layout_stat() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_stat> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_stat>(),
+        144usize,
+        concat!("Size of: ", stringify!(linux_stat))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_stat>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux_stat))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_dev) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_dev)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_ino) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_ino)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_nlink) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_nlink)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_mode) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_mode)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_uid) as usize - ptr as usize },
+        28usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_uid)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_gid) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_gid)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l__pad0) as usize - ptr as usize },
+        36usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(l__pad0)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_rdev) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_rdev)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_size) as usize - ptr as usize },
+        48usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_blksize) as usize - ptr as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_blksize)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_blocks) as usize - ptr as usize },
+        64usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_blocks)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_atime) as usize - ptr as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_atime)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_atime_nsec) as usize - ptr as usize },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_atime_nsec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_mtime) as usize - ptr as usize },
+        88usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_mtime)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_mtime_nsec) as usize - ptr as usize },
+        96usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_mtime_nsec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_ctime) as usize - ptr as usize },
+        104usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_ctime)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).st_ctime_nsec) as usize - ptr as usize },
+        112usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(st_ctime_nsec)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l__unused) as usize - ptr as usize },
+        120usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_stat),
+            "::",
+            stringify!(l__unused)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Copy, Clone)]

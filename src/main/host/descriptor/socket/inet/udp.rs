@@ -647,6 +647,11 @@ impl UdpSocket {
         }
     }
 
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        warn_once_then_debug!("We do not yet handle stat calls on udp sockets");
+        Err(Errno::EINVAL.into())
+    }
+
     pub fn listen(
         _socket: &Arc<AtomicRefCell<Self>>,
         _backlog: i32,

@@ -265,6 +265,9 @@ impl FileRef<'_> {
         pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
+    );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
@@ -281,6 +284,9 @@ impl FileRefMut<'_> {
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
     );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn has_open_file(&self) -> bool

@@ -45,6 +45,7 @@ mod select;
 mod shadow;
 mod signal;
 mod socket;
+mod stat;
 mod sysinfo;
 mod time;
 mod timerfd;

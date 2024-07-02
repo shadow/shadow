@@ -205,6 +205,9 @@ impl SocketRef<'_> {
         pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), Unix, Inet, Netlink;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
+    );
+    enum_passthrough!(self, (), Unix, Inet, Netlink;
         pub fn has_open_file(&self) -> bool
     );
     enum_passthrough!(self, (), Unix, Inet, Netlink;
@@ -245,6 +248,9 @@ impl SocketRefMut<'_> {
     );
     enum_passthrough!(self, (), Unix, Inet, Netlink;
         pub fn status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), Unix, Inet, Netlink;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
     );
     enum_passthrough!(self, (), Unix, Inet, Netlink;
         pub fn has_open_file(&self) -> bool

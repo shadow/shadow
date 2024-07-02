@@ -218,6 +218,10 @@ path = "time/nanosleep/test_nanosleep.rs"
 name = "test_prctl"
 path = "prctl/test_prctl.rs"
 
+[[bin]]
+name = "test_stat"
+path = "stat/test_stat.rs"
+
 [dependencies]
 anyhow = "1.0.78"
 formatting-nostd = { path = "../lib/formatting-nostd" }

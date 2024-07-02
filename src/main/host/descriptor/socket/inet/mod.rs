@@ -267,6 +267,9 @@ impl InetSocketRef<'_> {
         pub fn status(&self) -> FileStatus
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
+    );
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
@@ -317,6 +320,9 @@ impl InetSocketRefMut<'_> {
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn status(&self) -> FileStatus
+    );
+    enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
+        pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
     );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
