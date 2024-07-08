@@ -72,6 +72,7 @@ pub mod rtnetlink;
 pub mod sched;
 pub mod signal;
 pub mod socket;
+pub mod stat;
 pub mod syscall;
 pub mod sysinfo;
 pub mod time;

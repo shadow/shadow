@@ -213,6 +213,11 @@ impl UnixSocket {
             .ioctl(&mut self.common, request, arg_ptr, memory_manager)
     }
 
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        warn_once_then_debug!("We do not yet handle stat calls on unix sockets");
+        Err(Errno::EINVAL.into())
+    }
+
     pub fn listen(
         socket: &Arc<AtomicRefCell<Self>>,
         backlog: i32,
