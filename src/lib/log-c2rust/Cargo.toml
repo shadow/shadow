@@ -11,7 +11,7 @@ formatting-nostd = { path = "../formatting-nostd" }
 log = { version = "0.4", features = ["release_max_level_debug"] }
 num_enum = { version = "0.7.1", default-features=false }
 logger = { path = "../logger" }
-va_list = { version = "0.1.4", default-features = false }
+va_list = { version = "0.2.0", default-features = false }
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }

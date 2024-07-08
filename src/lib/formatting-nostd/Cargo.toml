@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 libc = { version = "0.2.151", default-features = false }
 rustix = { version = "0.38.28", default-features = false }
-va_list = { version = "0.1.4", default-features = false }
+va_list = { version = "0.2.0", default-features = false }
 
 [dev-dependencies]
 rustix = { version = "0.38.28", default-features = false, features=["pipe"] }
