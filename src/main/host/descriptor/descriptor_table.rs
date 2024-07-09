@@ -196,8 +196,35 @@ impl DescriptorTable {
         old_self.descriptors.into_values()
     }
 
+    /// Remove and return all descriptors in the range. If you want to remove all descriptors, you
+    /// should use [`remove_all`](Self::remove_all).
+    pub fn remove_range(
+        &mut self,
+        range: impl std::ops::RangeBounds<DescriptorHandle>,
+    ) -> impl Iterator<Item = Descriptor> {
+        // This code is not very efficient but it shouldn't be called often, so it should be fine
+        // for now. If we wanted something more efficient, we'd need to redesign the descriptor
+        // table to not use a hash map.
+
+        let fds: Vec<_> = self
+            .iter()
+            .filter_map(|(fd, _)| range.contains(fd).then_some(*fd))
+            .collect();
+
+        let mut descriptors = Vec::with_capacity(fds.len());
+        for fd in fds {
+            descriptors.push(self.deregister_descriptor(fd).unwrap());
+        }
+
+        descriptors.into_iter()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&DescriptorHandle, &Descriptor)> {
         self.descriptors.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&DescriptorHandle, &mut Descriptor)> {
+        self.descriptors.iter_mut()
     }
 }
 

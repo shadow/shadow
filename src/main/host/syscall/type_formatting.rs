@@ -221,6 +221,7 @@ simple_debug_impl!(nix::sys::socket::MsgFlags);
 simple_display_impl!(linux_api::prctl::PrctlOp);
 simple_display_impl!(linux_api::socket::AddressFamily);
 
+bitflags_impl!(linux_api::close_range::CloseRangeFlags);
 bitflags_impl!(linux_api::fcntl::OFlag);
 bitflags_impl!(linux_api::mman::ProtFlags);
 bitflags_impl!(linux_api::mman::MapFlags);
