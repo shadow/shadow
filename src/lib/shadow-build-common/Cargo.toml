@@ -12,7 +12,7 @@ cbindgen = ["dep:cbindgen"]
 [dependencies]
 bindgen = { optional = true, version = "0.69.1" }
 cbindgen = { optional = true, version = "0.26.0", default-features = false }
-cc = { version = "1.0", features = ["parallel"] }
+cc = { version = "1.1", features = ["parallel"] }
 system-deps = "7.0"
 
 [package.metadata.system-deps]

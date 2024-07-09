@@ -14,6 +14,6 @@ logger = { path = "../logger" }
 va_list = { version = "0.2.0", default-features = false }
 
 [build-dependencies]
-cc = { version = "1.0", features = ["parallel"] }
+cc = { version = "1.1", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["cbindgen"] }
 cbindgen = { version = "0.26.0", default-features = false }
