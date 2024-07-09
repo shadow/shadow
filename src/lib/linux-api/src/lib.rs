@@ -52,6 +52,7 @@
 mod bindings;
 
 pub mod capability;
+pub mod close_range;
 pub mod epoll;
 pub mod errno;
 pub mod exit;
