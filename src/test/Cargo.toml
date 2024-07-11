@@ -222,6 +222,10 @@ path = "prctl/test_prctl.rs"
 name = "test_stat"
 path = "stat/test_stat.rs"
 
+[[bin]]
+name = "test_close_range"
+path = "close_range/test_close_range.rs"
+
 [dependencies]
 anyhow = "1.0.78"
 formatting-nostd = { path = "../lib/formatting-nostd" }

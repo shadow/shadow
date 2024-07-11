@@ -483,6 +483,12 @@ impl From<SyscallReg> for linux_api::mman::MRemapFlags {
     }
 }
 
+impl From<SyscallReg> for linux_api::close_range::CloseRangeFlags {
+    fn from(reg: SyscallReg) -> Self {
+        Self::from_bits_retain(reg.into())
+    }
+}
+
 impl TryFrom<SyscallReg> for linux_api::time::ClockId {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {

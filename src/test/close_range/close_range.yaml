@@ -1,0 +1,12 @@
+general:
+  stop_time: 20
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: ../../target/debug/test_close_range
+      args: --shadow-passing
+      start_time: 1
