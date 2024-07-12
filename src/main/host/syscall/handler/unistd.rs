@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use std::os::unix::ffi::OsStringExt;
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
@@ -873,5 +874,34 @@ impl SyscallHandler {
             .write(name_ptr, &name)?;
 
         Ok(0)
+    }
+
+    #[log_syscall(/* rv */ std::ffi::c_int, /* path */ SyscallStringArg)]
+    pub fn chdir(ctx: &mut SyscallContext, path: ForeignPtr<std::ffi::c_char>) -> SyscallResult {
+        // The native working directory must match the emulated one
+        // <https://github.com/shadow/shadow/issues/2960>. First execute the
+        // native chdir, propagating any failures.
+        let (process, thread) = ctx.objs.split_thread();
+        thread.native_chdir(&process, path)?;
+
+        // Update our internal copy of the cwd.
+        //
+        // We could try to work it out ourselves based on the previous cwd and
+        // the path we were passed, but this seems a bit tricky and error-prone.
+        //
+        // We could have the managed thread execute a native `getcwd`, but we'd
+        // also need to have it allocate and free memory to use with it, making
+        // this a bit complex and high overhead.
+        //
+        // Instead we use the proc file system. `/proc/<pid>/cwd` should be a
+        // symbolic link to the actual working dir we just set.
+        let procpath = format!("/proc/{}/cwd", thread.native_tid().as_raw_nonzero().get());
+        let newcwd = std::fs::read_link(&procpath)
+            .unwrap_or_else(|e| panic!("Couldn't find new cwd {procpath}: {e:?}"));
+        let mut newcwd = newcwd.into_os_string().into_vec();
+        newcwd.push(0);
+        let newcwd = CString::from_vec_with_nul(newcwd).unwrap();
+        process.process.set_current_working_dir(newcwd);
+        Ok(0.into())
     }
 }
