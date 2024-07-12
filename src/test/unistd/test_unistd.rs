@@ -5,6 +5,8 @@
 
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -53,6 +55,7 @@ fn main() {
     test_getpid_kill();
     test_getpgrp();
     test_getsid();
+    test_mkdir();
 }
 
 /// Tests that the results are plausible, but can't really validate that it's our
@@ -149,6 +152,44 @@ fn test_getpid_kill() {
     let rv = unsafe { libc::kill(pid as libc::pid_t, libc::SIGUSR1) };
     assert_eq!(rv, 0);
     assert_eq!(SIGACTION_COUNT.load(Ordering::SeqCst), 1);
+}
+
+fn test_mkdir() {
+    let dirname = c"./newdir";
+    let dirpath = OsStr::from_bytes(dirname.to_bytes());
+    let mode = libc::S_IRWXU;
+    linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+        libc::mkdir(dirname.as_ptr(), mode)
+    })
+    .unwrap();
+
+    // Validate that the directory exists with the expected properties.
+    let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+    linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+        libc::stat(dirname.as_ptr(), &mut stat)
+    })
+    .unwrap();
+    // Validate that it has the expected permissions.
+    assert_eq!(stat.st_mode, libc::S_IFDIR | mode);
+
+    // Trying to create it again should fail.
+    assert_eq!(
+        linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+            libc::mkdir(dirname.as_ptr(), 0)
+        }),
+        Err(linux_api::errno::Errno::EEXIST)
+    );
+
+    // Clean up.
+    std::fs::remove_dir(dirpath).unwrap();
+
+    // Creating a directory with an invalid path component should fail.
+    assert_eq!(
+        linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+            libc::mkdir(c"./nonexistent/foo".as_ptr(), 0)
+        }),
+        Err(linux_api::errno::Errno::ENOENT)
+    );
 }
 
 fn gethostname_with_short_buffer() -> libc::c_int {
