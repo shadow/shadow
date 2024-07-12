@@ -57,6 +57,7 @@ fn main() {
     test_getsid();
     test_mkdir();
     test_mkdirat();
+    test_chdir();
 }
 
 /// Tests that the results are plausible, but can't really validate that it's our
@@ -273,6 +274,57 @@ fn test_mkdirat() {
     );
     linux_api::errno::Errno::result_from_libc_errno(-1, unsafe { libc::close(tmpfd) }).unwrap();
     std::fs::remove_file("regfile").unwrap();
+}
+
+fn test_chdir() {
+    let start_cwd = std::env::current_dir().unwrap();
+
+    let mut new_dir = start_cwd.clone();
+    new_dir.push("newdir");
+
+    let new_dir_cstr = {
+        let mut v = Vec::from(new_dir.as_os_str().as_bytes());
+        v.push(0);
+        CString::from_vec_with_nul(v).unwrap()
+    };
+
+    linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+        libc::mkdir(new_dir_cstr.as_ptr(), libc::S_IRWXU)
+    })
+    .unwrap();
+    linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+        libc::chdir(new_dir_cstr.as_ptr())
+    })
+    .unwrap();
+
+    // Check that cwd matches the new directory.
+    assert_eq!(&std::env::current_dir().unwrap(), &new_dir);
+
+    // Also check that a file created relative to cwd uses the new directory.
+    // This is specifically to look for problems related to
+    // <https://github.com/shadow/shadow/issues/2960>
+    {
+        // Create the file.
+        let path = c"./tmpfile";
+        let fd = linux_api::errno::Errno::result_from_libc_errno(-1, unsafe {
+            libc::open(path.as_ptr(), libc::O_CREAT | libc::O_RDWR, libc::S_IRWXU)
+        })
+        .unwrap();
+        // Close it.
+        linux_api::errno::Errno::result_from_libc_errno(-1, unsafe { libc::close(fd) }).unwrap();
+
+        // Validate that it exists at the expected path.
+        let mut expected_path = new_dir.clone();
+        expected_path.push("tmpfile");
+        std::fs::metadata(&expected_path).unwrap();
+
+        // Remove the file.
+        std::fs::remove_file(expected_path).unwrap();
+    }
+
+    // Clean up.
+    std::env::set_current_dir(start_cwd).unwrap();
+    std::fs::remove_dir(&new_dir).unwrap();
 }
 
 fn gethostname_with_short_buffer() -> libc::c_int {
