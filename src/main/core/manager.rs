@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
+use linux_api::syscall::SyscallNum;
 use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -611,6 +612,24 @@ impl<'a> Manager<'a> {
                 use_new_tcp: self.config.experimental.use_new_tcp.unwrap(),
                 use_mem_mapper: self.config.experimental.use_memory_manager.unwrap(),
                 use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
+                syscall_overrides: self
+                    .config
+                    .experimental
+                    .syscall_overrides
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|(syscall, exps)| {
+                        exps.iter()
+                            .map(|exp| {
+                                cel_interpreter::Program::compile(exp).with_context(|| {
+                                    format!("Failed to compile syscall override expression: {exp}")
+                                })
+                            })
+                            .collect::<Result<_, _>>()
+                            .map(|prog| (SyscallNum::new(*syscall), prog))
+                    })
+                    .collect::<Result<_, _>>()?,
             };
 
             Box::new(unsafe {
