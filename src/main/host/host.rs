@@ -1,7 +1,7 @@
 //! An emulated Linux system.
 
 use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::num::NonZeroU8;
@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
 use linux_api::signal::{siginfo_t, Signal};
+use linux_api::syscall::SyscallNum;
 use log::{debug, trace};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
@@ -86,6 +87,7 @@ pub struct HostParameters {
     pub use_new_tcp: bool,
     pub use_mem_mapper: bool,
     pub use_syscall_counters: bool,
+    pub syscall_overrides: HashMap<SyscallNum, Vec<String>>,
 }
 
 use super::cpu::Cpu;

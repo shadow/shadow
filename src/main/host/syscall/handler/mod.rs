@@ -345,6 +345,69 @@ impl SyscallHandler {
         let syscall = SyscallNum::new(ctx.args.number.try_into().unwrap());
         let syscall_name = syscall.to_str().unwrap_or("unknown-syscall");
 
+        // apply any user-provided syscall overrides if applicable
+        if let Some(overrides) = ctx.objs.host.params.syscall_overrides.get(&syscall) {
+            let rv = crate::core::manager::LUA.with(|lua| {
+                // make sure to set every global each time (and not conditionally) since stale
+                // globals from the last syscall handler will still be set
+                let globals = lua.globals();
+
+                // we don't know what types the args really represent (if anything), so we'll just treat
+                // them as integers
+                globals.set("args", args.args.map(i64::from)).unwrap();
+
+                // things that the expression could potentially want to know
+                globals.set("host", ctx.objs.host.name()).unwrap();
+                globals
+                    .set("process", &*ctx.objs.process.plugin_name())
+                    .unwrap();
+                globals
+                    .set("pid", u64::from(ctx.objs.process.id()))
+                    .unwrap();
+                globals.set("tid", u64::from(ctx.objs.thread.id())).unwrap();
+
+                // compile and run all of the expressions until we find one that returns an integer
+                overrides
+                    .iter()
+                    .find_map(|s| match lua.load(s).eval::<Option<i64>>() {
+                        Ok(Some(x)) => Some(x.into()),
+                        Ok(None) => None,
+                        Err(e) => {
+                            warn_once_then_debug!(
+                                "A syscall override expression failed to execute; Ignoring"
+                            );
+                            log::debug!("Syscall override expression failed: {e}");
+                            None
+                        }
+                    })
+            });
+
+            // if one of the expressions returned an integer, return it
+            if let Some(rv) = rv {
+                // the return value could be negative which is typically an error value, but we
+                // wouldn't know for sure that it is an error so we'll just always use `Ok`
+                let rv = Ok(rv);
+
+                log::debug!(
+                    "Applying a syscall override expression to syscall {} ({})",
+                    syscall_name,
+                    ctx.args.number,
+                );
+
+                log_syscall_simple(
+                    ctx.objs.process,
+                    ctx.objs.process.strace_logging_options(),
+                    ctx.objs.thread.id(),
+                    syscall_name,
+                    "...",
+                    &rv,
+                )
+                .unwrap();
+
+                return rv;
+            }
+        }
+
         macro_rules! handle {
             ($f:ident) => {{
                 SyscallHandlerFn::call(Self::$f, &mut ctx)

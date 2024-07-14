@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
+use linux_api::syscall::SyscallNum;
 use log::warn;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -36,6 +37,10 @@ use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility;
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::status_bar::Status;
+
+thread_local! {
+    pub static LUA: mlua::Lua = mlua::Lua::new();
+}
 
 pub struct Manager<'a> {
     manager_config: Option<ManagerConfig>,
@@ -611,6 +616,15 @@ impl<'a> Manager<'a> {
                 use_new_tcp: self.config.experimental.use_new_tcp.unwrap(),
                 use_mem_mapper: self.config.experimental.use_memory_manager.unwrap(),
                 use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
+                syscall_overrides: self
+                    .config
+                    .experimental
+                    .syscall_overrides
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|(syscall, exps)| (SyscallNum::new(*syscall), exps.clone()))
+                    .collect(),
             };
 
             Box::new(unsafe {
