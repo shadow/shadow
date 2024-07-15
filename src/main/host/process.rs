@@ -161,8 +161,7 @@ struct Common {
     plugin_name: CString,
 
     // absolute path to the process's working directory.
-    // Currently we enforce that this is in sync with the native working directory
-    // by disallowing `chdir`.
+    // This must remain in sync with the actual working dir of the native process.
     // See https://github.com/shadow/shadow/issues/2960
     working_dir: CString,
 }
@@ -834,6 +833,13 @@ impl ProcessState {
         }
     }
 
+    fn common_mut(&mut self) -> &mut Common {
+        match self {
+            ProcessState::Runnable(r) => &mut r.common,
+            ProcessState::Zombie(z) => &mut z.common,
+        }
+    }
+
     fn as_runnable(&self) -> Option<&RunnableProcess> {
         match self {
             ProcessState::Runnable(r) => Some(r),
@@ -897,6 +903,12 @@ impl Process {
     fn common(&self) -> Ref<Common> {
         Ref::map(self.state.borrow(), |state| {
             state.as_ref().unwrap().common()
+        })
+    }
+
+    fn common_mut(&self) -> RefMut<Common> {
+        RefMut::map(self.state.borrow_mut(), |state| {
+            state.as_mut().unwrap().common_mut()
         })
     }
 
@@ -1632,6 +1644,14 @@ impl Process {
 
     pub fn current_working_dir(&self) -> impl Deref<Target = CString> + '_ {
         Ref::map(self.common(), |common| &common.working_dir)
+    }
+
+    /// Set the process's working directory.
+    /// This must be kept in sync with the actual working dir of the native process.
+    /// See <https://github.com/shadow/shadow/issues/2960>
+    // TODO: This ought to be at the thread level, to support `CLONE_FS`.
+    pub fn set_current_working_dir(&self, path: CString) {
+        self.common_mut().working_dir = path;
     }
 
     /// Update `self` to complete an `exec` syscall from thread `tid`, replacing

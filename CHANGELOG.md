@@ -12,7 +12,7 @@ MAJOR changes (breaking):
 
 MINOR changes (backwards-compatible):
 
-*
+* Implemented the `chdir` syscall. (#3368)
 
 PATCH changes (bugfixes):
 

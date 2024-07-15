@@ -230,7 +230,7 @@ path = "close_range/test_close_range.rs"
 anyhow = "1.0.78"
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
-linux-api = { path = "../lib/linux-api", features = ["rustix", "std"] }
+linux-api = { path = "../lib/linux-api", features = ["rustix", "std", "libc"] }
 neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version = "0.8.5", features = ["small_rng"] }

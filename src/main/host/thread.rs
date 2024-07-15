@@ -393,6 +393,16 @@ impl Thread {
         Ok(ForeignPtr::from(res))
     }
 
+    /// Natively execute a chdir(2) syscall on the given thread.
+    pub fn native_chdir(
+        &self,
+        ctx: &ProcessContext,
+        pathname: ForeignPtr<std::ffi::c_char>,
+    ) -> Result<i32, Errno> {
+        let res = self.native_syscall(ctx, libc::SYS_chdir, &[SyscallReg::from(pathname)]);
+        Ok(i32::from(res?))
+    }
+
     /// Allocates some space in the plugin's memory. Use `get_writeable_ptr` to write to it, and
     /// `flush` to ensure that the write is flushed to the plugin's memory.
     pub fn malloc_foreign_ptr(
