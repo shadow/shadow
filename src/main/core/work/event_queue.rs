@@ -25,7 +25,13 @@ impl EventQueue {
     /// Will panic if two events are pushed that have no relative order
     /// (`event_a.partial_cmp(&event_b) == None`). Will be non-deterministic if two events are
     /// pushed that are equal (`event_a == event_b`).
+    ///
+    /// Will panic if the event time is earlier than the last popped event time (time moves
+    /// backward).
     pub fn push(&mut self, event: Event) {
+        // make sure time never moves backward
+        assert!(event.time() >= self.last_popped_event_time);
+
         self.queue.push(Reverse(event.into()));
     }
 
