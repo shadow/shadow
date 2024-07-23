@@ -13,10 +13,14 @@ MAJOR changes (breaking):
 MINOR changes (backwards-compatible):
 
 * Implemented the `chdir` syscall. (#3368)
+* Implemented the `close_range` syscall. (#3364)
+* Added partial support the `fstat` syscall with pipes. (#3361)
 
 PATCH changes (bugfixes):
 
 * Log messages about unrecognized sockopt values are now only logged at level WARN once for each distinct value (and at DEBUG afterwards) (#3353).
+* Fixed rust/clippy warnings for rust 1.80. (#3354, #3355)
+* Fixed a build error on rust nightly (and future stable rust versions) by upgrading dependencies. (#3334)
 
 Full changelog since v3.2.0:
 
