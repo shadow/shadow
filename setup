@@ -8,8 +8,7 @@
  */
 '''
 
-import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, tarfile, gzip, stat, time
-from datetime import datetime
+import sys, os, argparse, subprocess, multiprocessing, shutil
 
 import logging
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
