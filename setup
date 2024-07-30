@@ -211,9 +211,6 @@ def build(args, remaining):
                     + " builds")
         cmake_cmd.extend(["-D", "SHADOW_COVERAGE=ON"])
 
-    # we will run from build directory
-    calledDirectory = os.getcwd()
-
     # add extra search directories as absolution paths
     make_paths_absolute(args.search_prefix)
 
@@ -273,10 +270,6 @@ def test(args, remaining):
         logging.error("please run './setup build --test' before testing!")
         return -1
 
-    # go to build dir and install from makefile
-    calledDirectory = os.getcwd()
-    os.chdir(testdir)
-
     # test, wait for it to finish
     testcmd = ["ctest", f"-j{args.njobs}", "--timeout", str(args.timeout)]
     if args.do_verbose:
@@ -295,11 +288,9 @@ def test(args, remaining):
     testcmd += remaining
 
     logging.info(f"calling {testcmd}")
-    retcode = subprocess.call(testcmd)
+    retcode = subprocess.call(testcmd, cwd=testdir)
     logging.info(f"{testcmd[0]} returned {retcode}")
 
-    # go back to where we came from
-    os.chdir(calledDirectory)
     return retcode
 
 def install(args, remaining):
@@ -308,20 +299,14 @@ def install(args, remaining):
         logging.error("please build before installing!")
         return -1
 
-    # go to build dir and install from makefile
-    calledDirectory = os.getcwd()
-    os.chdir(builddir)
-
     # call make install, wait for it to finish
     makeCommand = ["make", "install"]
 
     logging.info(f"calling {makeCommand}")
-    retcode = subprocess.call(makeCommand)
+    retcode = subprocess.call(makeCommand, cwd=builddir)
     logging.debug(f"make install returned {retcode}")
     if retcode == 0: logging.info("now run \'shadow\' from \'PREFIX/bin\' (check your PATH!)")
 
-    # go back to where we came from
-    os.chdir(calledDirectory)
     return retcode
 
 def getfullpath(path):
