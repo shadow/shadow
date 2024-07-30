@@ -6,6 +6,7 @@
 - [Nginx](#nginx)
 - [iPerf 2](#iperf-2)
 - [iPerf 3](#iperf-3)
+- [Jetty](#jetty)
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
 - [CTorrent and opentracker](#ctorrent-and-opentracker)
 - [http-server](#http-server)
@@ -177,6 +178,23 @@ socket option.
 3. iPerf 3 uses a [busy loop](limitations.md#busy-loops) that is incompatible
 with Shadow and will cause Shadow to deadlock. A workaround is to use the
 `model_unblocked_syscall_latency` option.
+
+## Jetty
+
+Running Jetty with the http module works, but we haven't tested anything more
+than this.
+
+### Example
+
+#### `shadow.yaml`
+
+```yaml
+{{#include ../examples/apps/jetty/shadow.yaml}}
+```
+
+```bash
+{{#include ../examples/apps/jetty/run.sh:body}}
+```
 
 ## etcd (distributed key-value store)
 
