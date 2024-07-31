@@ -8,8 +8,7 @@
  */
 '''
 
-import sys, os, argparse, subprocess, multiprocessing, shlex, shutil, tarfile, gzip, stat, time
-from datetime import datetime
+import sys, os, argparse, subprocess, multiprocessing, shutil
 
 import logging
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
@@ -171,7 +170,7 @@ def has_bear():
     # Use the shell to see if bear exists. Capture output to prevent it being
     # printed to the console.
     return subprocess.run(
-        "bear --version",
+        ["bear", "--version"],
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE).returncode == 0
@@ -196,30 +195,27 @@ def build(args, remaining):
     if not os.path.exists(installdir): os.makedirs(installdir)
 
     # build up args string for the cmake command
-    cmake_cmd = "cmake " + rootdir + " -DCMAKE_INSTALL_PREFIX=" + installdir
+    cmake_cmd = ["cmake", rootdir, "-D", "CMAKE_INSTALL_PREFIX=" + installdir]
 
     # other cmake options
-    cmake_cmd += " -DCMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")
+    cmake_cmd.extend(["-D", "CMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")])
     if args.do_verbose: os.putenv("VERBOSE", "1")
-    if args.do_test: cmake_cmd += " -DSHADOW_TEST=ON"
-    if args.do_werror: cmake_cmd += " -DSHADOW_WERROR=ON"
-    if args.do_extra_test: cmake_cmd += " -DSHADOW_EXTRA_TESTS=ON"
-    if args.do_use_perf_timers: cmake_cmd += " -DSHADOW_USE_PERF_TIMERS=ON"
+    if args.do_test: cmake_cmd.extend(["-D", "SHADOW_TEST=ON"])
+    if args.do_werror: cmake_cmd.extend(["-D", "SHADOW_WERROR=ON"])
+    if args.do_extra_test: cmake_cmd.extend(["-D", "SHADOW_EXTRA_TESTS=ON"])
+    if args.do_use_perf_timers: cmake_cmd.extend(["-D", "SHADOW_USE_PERF_TIMERS=ON"])
 
     if args.do_coverage:
         if not args.do_debug:
             logging.warning("You usually want to enable --debug for coverage"
                     + " builds")
-        cmake_cmd += " -DSHADOW_COVERAGE=ON"
-
-    # we will run from build directory
-    calledDirectory = os.getcwd()
+        cmake_cmd.extend(["-D", "SHADOW_COVERAGE=ON"])
 
     # add extra search directories as absolution paths
     make_paths_absolute(args.search_prefix)
 
     # make sure we can access them from cmake
-    cmake_cmd += " -DCMAKE_PREFIX_PATH=" + ';'.join(args.search_prefix)
+    cmake_cmd.extend(["-D", "CMAKE_PREFIX_PATH=" + ';'.join(args.search_prefix)])
 
     # look for the clang/clang++ compilers
  #   clangccpath = which("clang")
@@ -233,34 +229,34 @@ def build(args, remaining):
     # set clang/llvm as compiler
  #   os.putenv("CC", clangccpath)
  #   os.putenv("CXX", clangcxxpath)
-    #cmake_cmd += " -D_CMAKE_TOOLCHAIN_PREFIX=llvm-"
+    #cmake_cmd.extend(["-D", "_CMAKE_TOOLCHAIN_PREFIX=llvm-"])
 
     # call cmake to configure the make process, wait for completion
-    logging.info("running \'{0}\' from \'{1}\'".format(cmake_cmd, builddir))
-    retcode = subprocess.call(cmake_cmd.strip().split(), cwd=builddir)
-    logging.debug("cmake returned " + str(retcode))
+    logging.info(f"running {cmake_cmd} from \'{builddir}\'")
+    retcode = subprocess.call(cmake_cmd, cwd=builddir)
+    logging.debug(f"cmake returned {retcode}")
     if retcode != 0:
         logging.error(f"Non-zero return code {retcode} from cmake.")
         return retcode
 
     # call make, wait for it to finish
-    make = ""
+    make = []
     if has_bear():
-        make += "bear --append --"
-    make += f" make -j{args.njobs}"
+        make.extend(["bear", "--append", "--"])
+    make.extend(["make", f"-j{args.njobs}"])
 
-    logging.info("calling " + make)
-    retcode = subprocess.call(shlex.split(make), cwd=builddir)
-    logging.debug("make returned " + str(retcode))
+    logging.info(f"calling {make}")
+    retcode = subprocess.call(make, cwd=builddir)
+    logging.debug(f"make returned {retcode}")
     if retcode != 0:
         logging.error(f"Non-zero return code {retcode} from make.")
         return retcode
 
     if args.do_extra_test:
-        make += " extra_tests"
-        logging.info("calling " + make)
-        retcode = subprocess.call(shlex.split(make), cwd=builddir)
-        logging.debug("make returned " + str(retcode))
+        make.append("extra_tests")
+        logging.info(f"calling {make}")
+        retcode = subprocess.call(make, cwd=builddir)
+        logging.debug(f"make returned {retcode}")
         if retcode != 0:
             logging.error(f"Non-zero return code {retcode} from make.")
             return retcode
@@ -274,33 +270,27 @@ def test(args, remaining):
         logging.error("please run './setup build --test' before testing!")
         return -1
 
-    # go to build dir and install from makefile
-    calledDirectory = os.getcwd()
-    os.chdir(testdir)
-
     # test, wait for it to finish
-    testcmd = "ctest -j{0} --timeout {1}".format(args.njobs, args.timeout)
+    testcmd = ["ctest", f"-j{args.njobs}", "--timeout", str(args.timeout)]
     if args.do_verbose:
-        testcmd += " --verbose"
+        testcmd.append("--verbose")
 
     if args.rerun_failed:
-        testcmd += " --rerun-failed"
+        testcmd.append("--rerun-failed")
 
     if args.testname_regex is not None:
-        testcmd += " -R {}".format(args.testname_regex)
+        testcmd.extend(["-R", args.testname_regex])
 
     if args.do_extra_test:
-        testcmd += " -C extra"
+        testcmd.extend(["-C", "extra"])
 
     # pass the remaining arguments (the arguments after a '--') directly to ctest
-    testcmd = testcmd.strip().split() + remaining
+    testcmd += remaining
 
-    logging.info("calling '{}'".format(' '.join(testcmd)))
-    retcode = subprocess.call(testcmd)
-    logging.info(str(testcmd) + " returned " + str(retcode))
+    logging.info(f"calling {testcmd}")
+    retcode = subprocess.call(testcmd, cwd=testdir)
+    logging.info(f"{testcmd[0]} returned {retcode}")
 
-    # go back to where we came from
-    os.chdir(calledDirectory)
     return retcode
 
 def install(args, remaining):
@@ -309,20 +299,14 @@ def install(args, remaining):
         logging.error("please build before installing!")
         return -1
 
-    # go to build dir and install from makefile
-    calledDirectory = os.getcwd()
-    os.chdir(builddir)
-
     # call make install, wait for it to finish
-    makeCommand = "make install"
+    makeCommand = ["make", "install"]
 
-    logging.info("calling \'"+makeCommand+"\'")
-    retcode = subprocess.call(makeCommand.strip().split())
-    logging.debug("make install returned " + str(retcode))
+    logging.info(f"calling {makeCommand}")
+    retcode = subprocess.call(makeCommand, cwd=builddir)
+    logging.debug(f"make install returned {retcode}")
     if retcode == 0: logging.info("now run \'shadow\' from \'PREFIX/bin\' (check your PATH!)")
 
-    # go back to where we came from
-    os.chdir(calledDirectory)
     return retcode
 
 def getfullpath(path):
