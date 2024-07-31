@@ -8,7 +8,6 @@ use nix::sys::timerfd::{TimerFlags, TimerSetTimeFlags};
 use shadow_shim_helper_rs::{
     emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
 };
-use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::host::descriptor::{
@@ -21,7 +20,12 @@ use crate::host::{
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* clockid */ linux_api::time::ClockId, /* flags */ std::ffi::c_int)]
+    log_syscall!(
+        timerfd_create,
+        /* rv */ std::ffi::c_int,
+        /* clockid */ linux_api::time::ClockId,
+        /* flags */ std::ffi::c_int,
+    );
     pub fn timerfd_create(
         ctx: &mut SyscallContext,
         clockid: std::ffi::c_int,
@@ -67,7 +71,12 @@ impl SyscallHandler {
         Ok(i32::try_from(fd.val()).unwrap())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /*curr_value*/ *const std::ffi::c_void)]
+    log_syscall!(
+        timerfd_gettime,
+        /* rv */ std::ffi::c_int,
+        /* fd */ std::ffi::c_int,
+        /*curr_value*/ *const std::ffi::c_void,
+    );
     pub fn timerfd_gettime(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -122,8 +131,14 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /* flags */ std::ffi::c_int,
-                  /* new_value */ *const std::ffi::c_void, /* old_value */ *const std::ffi::c_void)]
+    log_syscall!(
+        timerfd_settime,
+        /* rv */ std::ffi::c_int,
+        /* fd */ std::ffi::c_int,
+        /* flags */ std::ffi::c_int,
+        /* new_value */ *const std::ffi::c_void,
+        /* old_value */ *const std::ffi::c_void,
+    );
     pub fn timerfd_settime(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,

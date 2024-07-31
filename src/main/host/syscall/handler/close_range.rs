@@ -1,7 +1,6 @@
 use linux_api::close_range::CloseRangeFlags;
 use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
-use syscall_logger::log_syscall;
 
 use crate::host::descriptor::descriptor_table;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -9,8 +8,13 @@ use crate::host::syscall::types::SyscallError;
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* first */ std::ffi::c_uint,
-                  /* last */ std::ffi::c_uint, /* flags */ CloseRangeFlags)]
+    log_syscall!(
+        close_range,
+        /* rv */ std::ffi::c_int,
+        /* first */ std::ffi::c_uint,
+        /* last */ std::ffi::c_uint,
+        /* flags */ CloseRangeFlags,
+    );
     pub fn close_range(
         ctx: &mut SyscallContext,
         first: std::ffi::c_uint,

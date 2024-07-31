@@ -1,6 +1,5 @@
 use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
@@ -11,8 +10,13 @@ use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int)]
+    log_syscall!(
+        readv,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+    );
     pub fn readv(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -66,8 +70,15 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
+    log_syscall!(
+        preadv,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+        /* pos_l */ libc::c_ulong,
+        /* pos_h */ libc::c_ulong,
+    );
     pub fn preadv(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -132,9 +143,16 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
-                  /* flags */ std::ffi::c_int)]
+    log_syscall!(
+        preadv2,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+        /* pos_l */ libc::c_ulong,
+        /* pos_h */ libc::c_ulong,
+        /* flags */ std::ffi::c_int,
+    );
     pub fn preadv2(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -274,8 +292,13 @@ impl SyscallHandler {
         result
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int)]
+    log_syscall!(
+        writev,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+    );
     pub fn writev(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -329,8 +352,15 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong)]
+    log_syscall!(
+        pwritev,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+        /* pos_l */ libc::c_ulong,
+        /* pos_h */ libc::c_ulong,
+    );
     pub fn pwritev(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -396,9 +426,16 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* fd */ std::ffi::c_int, /* iov */ *const libc::iovec,
-                  /* iovcnt */ std::ffi::c_int, /* pos_l */ libc::c_ulong, /* pos_h */ libc::c_ulong,
-                  /* flags */ std::ffi::c_int)]
+    log_syscall!(
+        pwritev2,
+        /* rv */ libc::ssize_t,
+        /* fd */ std::ffi::c_int,
+        /* iov */ *const libc::iovec,
+        /* iovcnt */ std::ffi::c_int,
+        /* pos_l */ libc::c_ulong,
+        /* pos_h */ libc::c_ulong,
+        /* flags */ std::ffi::c_int,
+    );
     pub fn pwritev2(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,

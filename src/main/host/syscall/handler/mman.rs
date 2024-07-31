@@ -5,7 +5,6 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::OFlag;
 use linux_api::mman::{MapFlags, ProtFlags};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, FileState};
@@ -14,7 +13,11 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContex
 use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void)]
+    log_syscall!(
+        brk,
+        /* rv */ std::ffi::c_int,
+        /* addr */ *const std::ffi::c_void,
+    );
     pub fn brk(
         ctx: &mut SyscallContext,
         addr: ForeignPtr<u8>,
@@ -30,9 +33,15 @@ impl SyscallHandler {
     //                 unsigned long, new_len, unsigned long, flags,
     //                 unsigned long, new_addr)
     // ```
-    #[log_syscall(/* rv */ *const std::ffi::c_void, /* old_address */ *const std::ffi::c_void,
-                  /* old_size */ std::ffi::c_ulong, /* new_size */ std::ffi::c_ulong,
-                  /* flags */ linux_api::mman::MRemapFlags, /* new_address */ *const std::ffi::c_void)]
+    log_syscall!(
+        mremap,
+        /* rv */ *const std::ffi::c_void,
+        /* old_address */ *const std::ffi::c_void,
+        /* old_size */ std::ffi::c_ulong,
+        /* new_size */ std::ffi::c_ulong,
+        /* flags */ linux_api::mman::MRemapFlags,
+        /* new_address */ *const std::ffi::c_void,
+    );
     pub fn mremap(
         ctx: &mut SyscallContext,
         old_addr: std::ffi::c_ulong,
@@ -66,7 +75,12 @@ impl SyscallHandler {
     // ```
     // SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
     // ```
-    #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void, /* length */ usize)]
+    log_syscall!(
+        munmap,
+        /* rv */ std::ffi::c_int,
+        /* addr */ *const std::ffi::c_void,
+        /* length */ usize,
+    );
     pub fn munmap(
         ctx: &mut SyscallContext,
         addr: std::ffi::c_ulong,
@@ -84,8 +98,13 @@ impl SyscallHandler {
     // ```
     // SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len, unsigned long, prot)
     // ```
-    #[log_syscall(/* rv */ std::ffi::c_int, /* addr */ *const std::ffi::c_void, /* len */ usize,
-                  /* prot */ linux_api::mman::ProtFlags)]
+    log_syscall!(
+        mprotect,
+        /* rv */ std::ffi::c_int,
+        /* addr */ *const std::ffi::c_void,
+        /* len */ usize,
+        /* prot */ linux_api::mman::ProtFlags,
+    );
     pub fn mprotect(
         ctx: &mut SyscallContext,
         addr: std::ffi::c_ulong,
@@ -119,10 +138,16 @@ impl SyscallHandler {
     //                 unsigned long, prot, unsigned long, flags,
     //                 unsigned long, fd, unsigned long, off)
     // ```
-    #[log_syscall(/* rv */ *const std::ffi::c_void, /* addr */ *const std::ffi::c_void,
-                  /* length */ usize, /* prot */ linux_api::mman::ProtFlags,
-                  /* flags */ linux_api::mman::MapFlags, /* fd */ std::ffi::c_ulong,
-                  /* offset */ std::ffi::c_ulong)]
+    log_syscall!(
+        mmap,
+        /* rv */ *const std::ffi::c_void,
+        /* addr */ *const std::ffi::c_void,
+        /* length */ usize,
+        /* prot */ linux_api::mman::ProtFlags,
+        /* flags */ linux_api::mman::MapFlags,
+        /* fd */ std::ffi::c_ulong,
+        /* offset */ std::ffi::c_ulong,
+    );
     pub fn mmap(
         ctx: &mut SyscallContext,
         addr: std::ffi::c_ulong,

@@ -8,7 +8,6 @@ use shadow_shim_helper_rs::explicit_drop::ExplicitDropper;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
@@ -306,13 +305,15 @@ impl SyscallHandler {
 
     // Note that the syscall args are different than the libc wrapper.
     // See "C library/kernel differences" in clone(2).
-    #[log_syscall(
+    log_syscall!(
+        clone,
         /* rv */ kernel_pid_t,
         /* flags */ CloneFlags,
         /* child_stack */ *const std::ffi::c_void,
         /* ptid */ *const kernel_pid_t,
         /* ctid */ *const kernel_pid_t,
-        /* newtls */ *const std::ffi::c_void)]
+        /* newtls */ *const std::ffi::c_void,
+    );
     pub fn clone(
         ctx: &mut SyscallContext,
         flags_and_exit_signal: i32,
@@ -342,10 +343,12 @@ impl SyscallHandler {
         Self::clone_internal(ctx, flags, exit_signal, child_stack, ptid, ctid, newtls)
     }
 
-    #[log_syscall(
+    log_syscall!(
+        clone3,
         /* rv */ kernel_pid_t,
         /* args*/ *const linux_api::sched::clone_args,
-        /* args_size*/ usize)]
+        /* args_size*/ usize,
+    );
     pub fn clone3(
         ctx: &mut SyscallContext,
         args: ForeignPtr<linux_api::sched::clone_args>,
@@ -382,7 +385,7 @@ impl SyscallHandler {
         )
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t)]
+    log_syscall!(fork, /* rv */ kernel_pid_t);
     pub fn fork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
@@ -397,7 +400,7 @@ impl SyscallHandler {
         )
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t)]
+    log_syscall!(vfork, /* rv */ kernel_pid_t);
     pub fn vfork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
@@ -412,14 +415,17 @@ impl SyscallHandler {
         )
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t)]
+    log_syscall!(gettid, /* rv */ kernel_pid_t);
     pub fn gettid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(kernel_pid_t::from(ctx.objs.thread.id()))
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int,
+    log_syscall!(
+        capget,
+        /* rv */ std::ffi::c_int,
         /* hdrp */ *const std::ffi::c_void,
-        /* datap */ *const std::ffi::c_void)]
+        /* datap */ *const std::ffi::c_void,
+    );
     pub fn capget(
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,
@@ -451,9 +457,12 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int,
+    log_syscall!(
+        capset,
+        /* rv */ std::ffi::c_int,
         /* hdrp */ *const std::ffi::c_void,
-        /* datap */ *const std::ffi::c_void)]
+        /* datap */ *const std::ffi::c_void,
+    );
     pub fn capset(
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,

@@ -6,7 +6,6 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::core::worker::Worker;
 use crate::cshadow;
@@ -18,7 +17,11 @@ use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* size */ std::ffi::c_int)]
+    log_syscall!(
+        epoll_create,
+        /* rv */ std::ffi::c_int,
+        /* size */ std::ffi::c_int,
+    );
     pub fn epoll_create(
         ctx: &mut SyscallContext,
         size: std::ffi::c_int,
@@ -32,7 +35,11 @@ impl SyscallHandler {
         Self::epoll_create_helper(ctx, 0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* flags */ std::ffi::c_int)]
+    log_syscall!(
+        epoll_create1,
+        /* rv */ std::ffi::c_int,
+        /* flags */ std::ffi::c_int,
+    );
     pub fn epoll_create1(
         ctx: &mut SyscallContext,
         flags: std::ffi::c_int,
@@ -73,8 +80,14 @@ impl SyscallHandler {
         Ok(fd.val().try_into().unwrap())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int, /* op */ std::ffi::c_int,
-                  /* fd */ std::ffi::c_int, /* event */ *const std::ffi::c_void)]
+    log_syscall!(
+        epoll_ctl,
+        /* rv */ std::ffi::c_int,
+        /* epfd */ std::ffi::c_int,
+        /* op */ std::ffi::c_int,
+        /* fd */ std::ffi::c_int,
+        /* event */ *const std::ffi::c_void,
+    );
     pub fn epoll_ctl(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,
@@ -178,9 +191,14 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int,
-                  /* events */ *const std::ffi::c_void, /* max_events */ std::ffi::c_int,
-                  /* timeout */ std::ffi::c_int)]
+    log_syscall!(
+        epoll_wait,
+        /* rv */ std::ffi::c_int,
+        /* epfd */ std::ffi::c_int,
+        /* events */ *const std::ffi::c_void,
+        /* max_events */ std::ffi::c_int,
+        /* timeout */ std::ffi::c_int,
+    );
     pub fn epoll_wait(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,
@@ -193,10 +211,16 @@ impl SyscallHandler {
         Self::epoll_wait_helper(ctx, epfd, events_ptr, max_events, timeout, None)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int,
-                  /* events */ *const std::ffi::c_void, /* max_events */ std::ffi::c_int,
-                  /* timeout */ std::ffi::c_int, /* sigmask */ *const std::ffi::c_void,
-                  /* sigsetsize */ linux_api::posix_types::kernel_size_t)]
+    log_syscall!(
+        epoll_pwait,
+        /* rv */ std::ffi::c_int,
+        /* epfd */ std::ffi::c_int,
+        /* events */ *const std::ffi::c_void,
+        /* max_events */ std::ffi::c_int,
+        /* timeout */ std::ffi::c_int,
+        /* sigmask */ *const std::ffi::c_void,
+        /* sigsetsize */ linux_api::posix_types::kernel_size_t,
+    );
     pub fn epoll_pwait(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,
@@ -219,10 +243,16 @@ impl SyscallHandler {
         Self::epoll_wait_helper(ctx, epfd, events_ptr, max_events, timeout, sigmask)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* epfd */ std::ffi::c_int,
-                  /* events */ *const std::ffi::c_void, /* max_events */ std::ffi::c_int,
-                  /* timeout */ *const std::ffi::c_void, /* sigmask */ *const std::ffi::c_void,
-                  /* sigsetsize */ linux_api::posix_types::kernel_size_t)]
+    log_syscall!(
+        epoll_pwait2,
+        /* rv */ std::ffi::c_int,
+        /* epfd */ std::ffi::c_int,
+        /* events */ *const std::ffi::c_void,
+        /* max_events */ std::ffi::c_int,
+        /* timeout */ *const std::ffi::c_void,
+        /* sigmask */ *const std::ffi::c_void,
+        /* sigsetsize */ linux_api::posix_types::kernel_size_t,
+    );
     pub fn epoll_pwait2(
         ctx: &mut SyscallContext,
         epfd: std::ffi::c_int,

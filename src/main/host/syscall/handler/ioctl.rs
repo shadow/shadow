@@ -3,7 +3,6 @@ use linux_api::fcntl::DescriptorFlags;
 use linux_api::ioctls::IoctlRequest;
 use log::debug;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, FileStatus};
@@ -11,7 +10,12 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::SyscallResult;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int, /* request */ std::ffi::c_ulong)]
+    log_syscall!(
+        ioctl,
+        /* rv */ std::ffi::c_int,
+        /* fd */ std::ffi::c_int,
+        /* request */ std::ffi::c_ulong,
+    );
     pub fn ioctl(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,

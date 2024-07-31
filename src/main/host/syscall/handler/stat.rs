@@ -1,5 +1,4 @@
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::cshadow;
 use crate::host::descriptor::CompatFile;
@@ -7,13 +6,17 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int)]
+    log_syscall!(statx, /* rv */ std::ffi::c_int);
     pub fn statx(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_statx, ctx)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_uint,
-                  /* statbuf */ *const linux_api::stat::stat)]
+    log_syscall!(
+        fstat,
+        /* rv */ std::ffi::c_int,
+        /* fd */ std::ffi::c_uint,
+        /* statbuf */ *const linux_api::stat::stat,
+    );
     pub fn fstat(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_uint,
@@ -39,12 +42,12 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int)]
+    log_syscall!(fstatfs, /* rv */ std::ffi::c_int);
     pub fn fstatfs(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_fstatfs, ctx)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int)]
+    log_syscall!(newfstatat, /* rv */ std::ffi::c_int);
     pub fn newfstatat(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_newfstatat, ctx)
     }

@@ -347,7 +347,24 @@ impl SyscallHandler {
 
         macro_rules! handle {
             ($f:ident) => {{
-                SyscallHandlerFn::call(Self::$f, &mut ctx)
+                let rv = SyscallHandlerFn::call(Self::$f, &mut ctx);
+
+                // log the syscall if enabled
+                if let Some(strace_fmt_options) = ctx.objs.process.strace_logging_options() {
+                    ctx.objs.process.with_strace_file(|file| {
+                        crate::utility::macros::SyscallLogger::$f(
+                            file,
+                            ctx.args.args,
+                            &rv,
+                            strace_fmt_options,
+                            ctx.objs.thread.id(),
+                            &*ctx.objs.process.memory_borrow(),
+                        )
+                        .unwrap();
+                    });
+                }
+
+                rv
             }};
         }
 

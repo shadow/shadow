@@ -11,7 +11,6 @@ use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
@@ -28,7 +27,11 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::u8_to_i8_slice;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* fd */ std::ffi::c_int)]
+    log_syscall!(
+        close,
+        /* rv */ std::ffi::c_int,
+        /* fd */ std::ffi::c_int,
+    );
     pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         trace!("Trying to close fd {}", fd);
 
@@ -53,7 +56,11 @@ impl SyscallHandler {
         })
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int)]
+    log_syscall!(
+        dup,
+        /* rv */ std::ffi::c_int,
+        /* oldfd */ std::ffi::c_int,
+    );
     pub fn dup(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
@@ -69,7 +76,12 @@ impl SyscallHandler {
         Ok(std::ffi::c_int::from(new_fd).into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int)]
+    log_syscall!(
+        dup2,
+        /* rv */ std::ffi::c_int,
+        /* oldfd */ std::ffi::c_int,
+        /* newfd */ std::ffi::c_int,
+    );
     pub fn dup2(
         ctx: &mut SyscallContext,
         old_fd: std::ffi::c_int,
@@ -102,8 +114,13 @@ impl SyscallHandler {
         Ok(std::ffi::c_int::from(new_fd).into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* oldfd */ std::ffi::c_int, /* newfd */ std::ffi::c_int,
-                  /* flags */ linux_api::fcntl::OFlag)]
+    log_syscall!(
+        dup3,
+        /* rv */ std::ffi::c_int,
+        /* oldfd */ std::ffi::c_int,
+        /* newfd */ std::ffi::c_int,
+        /* flags */ linux_api::fcntl::OFlag,
+    );
     pub fn dup3(
         ctx: &mut SyscallContext,
         old_fd: std::ffi::c_int,
@@ -157,8 +174,13 @@ impl SyscallHandler {
         Ok(std::ffi::c_int::from(new_fd).into())
     }
 
-    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
-                  /* count */ usize)]
+    log_syscall!(
+        read,
+        /* rv */ isize,
+        /* fd */ std::ffi::c_int,
+        /* buf */ *const std::ffi::c_void,
+        /* count */ usize,
+    );
     pub fn read(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -204,8 +226,14 @@ impl SyscallHandler {
         Ok(bytes_read)
     }
 
-    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
-                  /* count */ usize, /* offset */ kernel_off_t)]
+    log_syscall!(
+        pread64,
+        /* rv */ isize,
+        /* fd */ std::ffi::c_int,
+        /* buf */ *const std::ffi::c_void,
+        /* count */ usize,
+        /* offset */ kernel_off_t,
+    );
     pub fn pread64(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -267,8 +295,13 @@ impl SyscallHandler {
         Self::readv_helper(ctx, file, &[iov], offset, 0)
     }
 
-    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int,
-                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ usize)]
+    log_syscall!(
+        write,
+        /* rv */ isize,
+        /* fd */ std::ffi::c_int,
+        /* buf */ SyscallBufferArg</* count */ 2>,
+        /* count */ usize,
+    );
     pub fn write(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -314,9 +347,14 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ isize, /* fd */ std::ffi::c_int,
-                  /* buf */ SyscallBufferArg</* count */ 2>, /* count */ usize,
-                  /* offset */ kernel_off_t)]
+    log_syscall!(
+        pwrite64,
+        /* rv */ isize,
+        /* fd */ std::ffi::c_int,
+        /* buf */ SyscallBufferArg</* count */ 2>,
+        /* count */ usize,
+        /* offset */ kernel_off_t,
+    );
     pub fn pwrite64(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -379,7 +417,11 @@ impl SyscallHandler {
         Self::writev_helper(ctx, file, &[iov], offset, 0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pipefd */ [std::ffi::c_int; 2])]
+    log_syscall!(
+        pipe,
+        /* rv */ std::ffi::c_int,
+        /* pipefd */ [std::ffi::c_int; 2],
+    );
     pub fn pipe(
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
@@ -387,8 +429,12 @@ impl SyscallHandler {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pipefd */ [std::ffi::c_int; 2],
-                  /* flags */ linux_api::fcntl::OFlag)]
+    log_syscall!(
+        pipe2,
+        /* rv */ std::ffi::c_int,
+        /* pipefd */ [std::ffi::c_int; 2],
+        /* flags */ linux_api::fcntl::OFlag,
+    );
     pub fn pipe2(
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
@@ -485,22 +531,26 @@ impl SyscallHandler {
         }
     }
 
-    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
+    log_syscall!(getpid, /* rv */ linux_api::posix_types::kernel_pid_t);
     pub fn getpid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(ctx.objs.process.id().into())
     }
 
-    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t)]
+    log_syscall!(getppid, /* rv */ linux_api::posix_types::kernel_pid_t);
     pub fn getppid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(ctx.objs.process.parent_id().into())
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t)]
+    log_syscall!(getpgrp, /* rv */ kernel_pid_t);
     pub fn getpgrp(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         Ok(ctx.objs.process.group_id().into())
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t, /* pid*/ kernel_pid_t)]
+    log_syscall!(
+        getpgid,
+        /* rv */ kernel_pid_t,
+        /* pid*/ kernel_pid_t,
+    );
     pub fn getpgid(
         ctx: &mut SyscallContext,
         pid: kernel_pid_t,
@@ -516,7 +566,12 @@ impl SyscallHandler {
         Ok(process.group_id().into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ kernel_pid_t, /* pgid */kernel_pid_t)]
+    log_syscall!(
+        setpgid,
+        /* rv */ std::ffi::c_int,
+        /* pid */ kernel_pid_t,
+        /* pgid */ kernel_pid_t,
+    );
     pub fn setpgid(
         ctx: &mut SyscallContext,
         pid: kernel_pid_t,
@@ -589,7 +644,11 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t, /* pid */ kernel_pid_t)]
+    log_syscall!(
+        getsid,
+        /* rv */ kernel_pid_t,
+        /* pid */ kernel_pid_t,
+    );
     pub fn getsid(
         ctx: &mut SyscallContext,
         pid: kernel_pid_t,
@@ -613,7 +672,7 @@ impl SyscallHandler {
         Ok(process.session_id().into())
     }
 
-    #[log_syscall(/* rv */ kernel_pid_t)]
+    log_syscall!(setsid, /* rv */ kernel_pid_t);
     pub fn setsid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
         let pid = ctx.objs.process.id();
         if ctx.objs.host.process_session_id_of_group_id(pid).is_some() {
@@ -769,11 +828,13 @@ impl SyscallHandler {
         Err(SyscallError::new_blocked_until(EmulatedTime::MAX, false))
     }
 
-    #[log_syscall(
+    log_syscall!(
+        execve,
         /* rv */ i32,
         /* pathname */ SyscallStringArg,
         /* argv */ *const std::ffi::c_void,
-        /* envp */ *const std::ffi::c_void)]
+        /* envp */ *const std::ffi::c_void,
+    );
     pub fn execve(
         ctx: &mut SyscallContext,
         pathname: ForeignPtr<std::ffi::c_char>,
@@ -798,13 +859,15 @@ impl SyscallHandler {
         .map(|_| 0)
     }
 
-    #[log_syscall(
+    log_syscall!(
+        execveat,
         /* rv */ i32,
         /* dirfd */ std::ffi::c_int,
         /* pathname */ SyscallStringArg,
         /* argv */ *const std::ffi::c_void,
         /* envp */ *const std::ffi::c_void,
-        /* flags */ std::ffi::c_int)]
+        /* flags */ std::ffi::c_int,
+    );
     pub fn execveat(
         _ctx: &mut SyscallContext,
         _dirfd: std::ffi::c_int,
@@ -818,7 +881,11 @@ impl SyscallHandler {
         Err(Errno::ENOSYS.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* error_code */ std::ffi::c_int)]
+    log_syscall!(
+        exit_group,
+        /* rv */ std::ffi::c_int,
+        /* error_code */ std::ffi::c_int,
+    );
     pub fn exit_group(
         _ctx: &mut SyscallContext,
         error_code: std::ffi::c_int,
@@ -827,8 +894,11 @@ impl SyscallHandler {
         Err(SyscallError::Native)
     }
 
-    #[log_syscall(/* rv */ linux_api::posix_types::kernel_pid_t,
-                  /* tidptr */ *const std::ffi::c_int)]
+    log_syscall!(
+        set_tid_address,
+        /* rv */ linux_api::posix_types::kernel_pid_t,
+        /* tidptr */ *const std::ffi::c_int,
+    );
     pub fn set_tid_address(
         ctx: &mut SyscallContext,
         tid_ptr: ForeignPtr<std::ffi::c_int>,
@@ -839,7 +909,11 @@ impl SyscallHandler {
         Ok(ctx.objs.thread.id().into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* name */ *const std::ffi::c_void)]
+    log_syscall!(
+        uname,
+        /* rv */ std::ffi::c_int,
+        /* name */ *const std::ffi::c_void,
+    );
     pub fn uname(
         ctx: &mut SyscallContext,
         name_ptr: ForeignPtr<linux_api::utsname::new_utsname>,
@@ -876,7 +950,11 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* path */ SyscallStringArg)]
+    log_syscall!(
+        chdir,
+        /* rv */ std::ffi::c_int,
+        /* path */ SyscallStringArg,
+    );
     pub fn chdir(ctx: &mut SyscallContext, path: ForeignPtr<std::ffi::c_char>) -> SyscallResult {
         // The native working directory must match the emulated one
         // <https://github.com/shadow/shadow/issues/2960>. First execute the

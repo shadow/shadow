@@ -3,7 +3,6 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::rseq;
 use log::warn;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
@@ -15,7 +14,13 @@ const CURRENT_CPU: u32 = 0;
 const RSEQ_FLAG_UNREGISTER: i32 = 1;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ usize, /* mask */ *const std::ffi::c_void)]
+    log_syscall!(
+        sched_getaffinity,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+        /* cpusetsize */ usize,
+        /* mask */ *const std::ffi::c_void,
+    );
     pub fn sched_getaffinity(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
@@ -52,7 +57,13 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ i32, /* pid */ kernel_pid_t, /* cpusetsize */ usize, /* mask */ *const std::ffi::c_void)]
+    log_syscall!(
+        sched_setaffinity,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+        /* cpusetsize */ usize,
+        /* mask */ *const std::ffi::c_void,
+    );
     pub fn sched_setaffinity(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
@@ -88,7 +99,14 @@ impl SyscallHandler {
         Ok(0)
     }
 
-    #[log_syscall(/* rv */ i32, /* rseq */ *const std::ffi::c_void, /* rseq_len */ u32, /* flags */ i32, /* sig */ u32)]
+    log_syscall!(
+        rseq,
+        /* rv */ i32,
+        /* rseq */ *const std::ffi::c_void,
+        /* rseq_len */ u32,
+        /* flags */ i32,
+        /* sig */ u32,
+    );
     pub fn rseq(
         ctx: &mut SyscallContext,
         rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,

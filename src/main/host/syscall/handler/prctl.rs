@@ -2,15 +2,20 @@ use linux_api::errno::Errno;
 use linux_api::prctl::PrctlOp;
 use linux_api::sched::SuidDump;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* option */ PrctlOp,
-                  /* arg2 */ std::ffi::c_ulong, /* arg3 */ std::ffi::c_ulong,
-                  /* arg4 */ std::ffi::c_ulong, /* arg5 */ std::ffi::c_ulong)]
+    log_syscall!(
+        prctl,
+        /* rv */ std::ffi::c_int,
+        /* option */ PrctlOp,
+        /* arg2 */ std::ffi::c_ulong,
+        /* arg3 */ std::ffi::c_ulong,
+        /* arg4 */ std::ffi::c_ulong,
+        /* arg5 */ std::ffi::c_ulong,
+    );
     pub fn prctl(
         ctx: &mut SyscallContext,
         option: PrctlOp,

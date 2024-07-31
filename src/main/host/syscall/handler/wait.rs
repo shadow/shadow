@@ -7,7 +7,6 @@ use linux_api::resource::rusage;
 use linux_api::signal::{siginfo_t, Signal};
 use linux_api::wait::{WaitFlags, WaitId};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::process::{ExitStatus, Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -190,12 +189,14 @@ impl SyscallHandler {
         Ok(matching_child_zombie_pid.into())
     }
 
-    #[log_syscall(
+    log_syscall!(
+        wait4,
         /* rv */ kernel_pid_t,
         /* pid */ kernel_pid_t,
         /* status */ *const c_int,
         /* options */ c_int,
-        /* usage */ *const std::ffi::c_void)]
+        /* usage */ *const std::ffi::c_void,
+    );
     pub fn wait4(
         ctx: &mut SyscallContext,
         pid: kernel_pid_t,
@@ -228,13 +229,15 @@ impl SyscallHandler {
         Self::wait_internal(ctx, target, status, ForeignPtr::null(), wait_flags, usage)
     }
 
-    #[log_syscall(
+    log_syscall!(
+        waitid,
         /* rv */ kernel_pid_t,
         /* which */ c_int,
         /* upid */ kernel_pid_t,
         /* infop */ *const std::ffi::c_void,
         /* options */ c_int,
-        /* uru */ *const std::ffi::c_void)]
+        /* uru */ *const std::ffi::c_void,
+    );
     pub fn waitid(
         ctx: &mut SyscallContext,
         which: c_int,

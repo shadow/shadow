@@ -2,7 +2,6 @@ use linux_api::errno::Errno;
 use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalHandler};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::cshadow as c;
 use crate::host::process::Process;
@@ -11,8 +10,12 @@ use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ linux_api::posix_types::kernel_pid_t,
-                  /* sig */ std::ffi::c_int)]
+    log_syscall!(
+        kill,
+        /* rv */ std::ffi::c_int,
+        /* pid */ linux_api::posix_types::kernel_pid_t,
+        /* sig */ std::ffi::c_int,
+    );
     pub fn kill(
         ctx: &mut SyscallContext,
         pid: linux_api::posix_types::kernel_pid_t,
@@ -87,8 +90,12 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ linux_api::posix_types::kernel_pid_t,
-                  /* sig */ std::ffi::c_int)]
+    log_syscall!(
+        tkill,
+        /* rv */ std::ffi::c_int,
+        /* pid */ linux_api::posix_types::kernel_pid_t,
+        /* sig */ std::ffi::c_int,
+    );
     pub fn tkill(
         ctx: &mut SyscallContext,
         tid: linux_api::posix_types::kernel_pid_t,
@@ -109,8 +116,13 @@ impl SyscallHandler {
         Self::signal_thread(ctx.objs, target_thread, sig)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* tgid */ linux_api::posix_types::kernel_pid_t,
-                  /* pid */ linux_api::posix_types::kernel_pid_t, /* sig */ std::ffi::c_int)]
+    log_syscall!(
+        tgkill,
+        /* rv */ std::ffi::c_int,
+        /* tgid */ linux_api::posix_types::kernel_pid_t,
+        /* pid */ linux_api::posix_types::kernel_pid_t,
+        /* sig */ std::ffi::c_int,
+    );
     pub fn tgkill(
         ctx: &mut SyscallContext,
         tgid: linux_api::posix_types::kernel_pid_t,
@@ -235,9 +247,14 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sig */ std::ffi::c_int,
-                  /* act */ *const std::ffi::c_void, /* oact */ *const std::ffi::c_void,
-                  /* sigsetsize */ libc::size_t)]
+    log_syscall!(
+        rt_sigaction,
+        /* rv */ std::ffi::c_int,
+        /* sig */ std::ffi::c_int,
+        /* act */ *const std::ffi::c_void,
+        /* oact */ *const std::ffi::c_void,
+        /* sigsetsize */ libc::size_t,
+    );
     pub fn rt_sigaction(
         ctx: &mut SyscallContext,
         _sig: std::ffi::c_int,
@@ -250,9 +267,14 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* how */ std::ffi::c_int,
-                  /* nset */ *const std::ffi::c_void, /* oset */ *const std::ffi::c_void,
-                  /* sigsetsize */ libc::size_t)]
+    log_syscall!(
+        rt_sigprocmask,
+        /* rv */ std::ffi::c_int,
+        /* how */ std::ffi::c_int,
+        /* nset */ *const std::ffi::c_void,
+        /* oset */ *const std::ffi::c_void,
+        /* sigsetsize */ libc::size_t,
+    );
     pub fn rt_sigprocmask(
         ctx: &mut SyscallContext,
         _how: std::ffi::c_int,
@@ -265,8 +287,12 @@ impl SyscallHandler {
         Ok(())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* uss */ *const std::ffi::c_void,
-                  /* uoss */ *const std::ffi::c_void)]
+    log_syscall!(
+        sigaltstack,
+        /* rv */ std::ffi::c_int,
+        /* uss */ *const std::ffi::c_void,
+        /* uoss */ *const std::ffi::c_void,
+    );
     pub fn sigaltstack(
         ctx: &mut SyscallContext,
         _uss: ForeignPtr<linux_api::signal::stack_t>,
