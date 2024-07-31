@@ -8,6 +8,7 @@
 - [iPerf 3](#iperf-3)
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
 - [CTorrent and opentracker](#ctorrent-and-opentracker)
+- [MySQL-server](#mysql-server)
 - [http-server](#http-server)
 
 ## libopenblas
@@ -269,6 +270,30 @@ cat shadow.data/hosts/downloader1/foo
 
 1. Shadow must be run as a non-root user since opentracker will attempt to drop
 privileges if it detects that the effective user is root.
+
+## MySQL server
+
+The MySQL server has [busy-loops](limitations.md#busy-loops) that shadow
+currently cannot detect or escape.
+
+This can be worked around by patching the source code to inject a `yield` call
+into such loops (thanks
+[datacompboy](https://github.com/shadow/shadow/issues/1792#issuecomment-2223190467)!),
+recompiling, and running shadow with `--model-unblocked-syscall-latency=true`.
+
+```
+--- mysql-8.0-8.0.37.orig/storage/innobase/include/ut0ut.h
++++ mysql-8.0-8.0.37/storage/innobase/include/ut0ut.h
+@@ -84,7 +84,7 @@ this program; if not, write to the Free
+ instruction has important side-effects and must not be removed.
+ Also asm volatile may trigger a memory barrier (spilling all registers
+ to memory). */
+-#define UT_RELAX_CPU() __asm__ __volatile__("pause")
++#define UT_RELAX_CPU() std::this_thread::yield()
+
+ #elif defined(HAVE_FAKE_PAUSE_INSTRUCTION)
+ #define UT_RELAX_CPU() __asm__ __volatile__("rep; nop")
+```
 
 ## http-server
 
