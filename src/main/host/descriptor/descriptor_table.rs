@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use log::*;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::syscall_types::SyscallReg;
 
 use crate::host::descriptor::Descriptor;
 use crate::host::host::Host;
@@ -303,6 +304,12 @@ impl From<DescriptorHandle> for i32 {
 
 impl From<DescriptorHandle> for i64 {
     fn from(x: DescriptorHandle) -> i64 {
+        x.0.into()
+    }
+}
+
+impl From<DescriptorHandle> for SyscallReg {
+    fn from(x: DescriptorHandle) -> SyscallReg {
         x.0.into()
     }
 }

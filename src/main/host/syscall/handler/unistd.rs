@@ -15,6 +15,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
+use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
@@ -61,19 +62,20 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* oldfd */ std::ffi::c_int,
     );
-    pub fn dup(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
+    pub fn dup(
+        ctx: &mut SyscallContext,
+        fd: std::ffi::c_int,
+    ) -> Result<DescriptorHandle, SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
-        let new_fd = desc_table
-            .register_descriptor(new_desc)
-            .or(Err(Errno::ENFILE))?;
 
-        // return the new fd
-        Ok(std::ffi::c_int::from(new_fd).into())
+        Ok(desc_table
+            .register_descriptor(new_desc)
+            .or(Err(Errno::ENFILE))?)
     }
 
     log_syscall!(
@@ -86,7 +88,10 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         old_fd: std::ffi::c_int,
         new_fd: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
+        let old_fd = DescriptorHandle::try_from(old_fd).or(Err(Errno::EBADF))?;
+        let new_fd = DescriptorHandle::try_from(new_fd).or(Err(Errno::EBADF))?;
+
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
@@ -94,10 +99,8 @@ impl SyscallHandler {
         // from 'man 2 dup2': "If oldfd is a valid file descriptor, and newfd has the same
         // value as oldfd, then dup2() does nothing, and returns newfd"
         if old_fd == new_fd {
-            return Ok(new_fd.into());
+            return Ok(new_fd);
         }
-
-        let new_fd = new_fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 
         // duplicate the descriptor
         let new_desc = desc.dup(DescriptorFlags::empty());
@@ -111,7 +114,7 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(std::ffi::c_int::from(new_fd).into())
+        Ok(new_fd)
     }
 
     log_syscall!(
@@ -126,7 +129,7 @@ impl SyscallHandler {
         old_fd: std::ffi::c_int,
         new_fd: std::ffi::c_int,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let mut desc_table = ctx.objs.thread.descriptor_table_borrow_mut(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, old_fd)?;
@@ -171,7 +174,7 @@ impl SyscallHandler {
         }
 
         // return the new fd
-        Ok(std::ffi::c_int::from(new_fd).into())
+        Ok(new_fd)
     }
 
     log_syscall!(

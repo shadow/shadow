@@ -5,6 +5,7 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 use nix::sys::eventfd::EfdFlags;
 
+use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -19,7 +20,7 @@ impl SyscallHandler {
     pub fn eventfd(
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         Self::eventfd_helper(ctx, init_val, 0)
     }
 
@@ -33,7 +34,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         Self::eventfd_helper(ctx, init_val, flags)
     }
 
@@ -41,12 +42,8 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
-        log::trace!(
-            "eventfd() called with initval {} and flags {}",
-            init_val,
-            flags
-        );
+    ) -> Result<DescriptorHandle, SyscallError> {
+        log::trace!("eventfd() called with initval {init_val} and flags {flags}");
 
         // get the flags
         let flags = match EfdFlags::from_bits(flags) {
@@ -88,6 +85,6 @@ impl SyscallHandler {
 
         log::trace!("eventfd() returning fd {}", fd);
 
-        Ok(fd.val().try_into().unwrap())
+        Ok(fd)
     }
 }

@@ -5,6 +5,7 @@ use log::*;
 use nix::sys::socket::SockFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
+use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
@@ -34,7 +35,7 @@ impl SyscallHandler {
         domain: std::ffi::c_int,
         socket_type: std::ffi::c_int,
         protocol: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
@@ -136,9 +137,9 @@ impl SyscallHandler {
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 
-        log::trace!("Created socket fd {}", fd);
+        log::trace!("Created socket fd {fd}");
 
-        Ok(fd.val().into())
+        Ok(fd)
     }
 
     log_syscall!(
@@ -656,7 +657,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -706,7 +707,7 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -748,7 +749,7 @@ impl SyscallHandler {
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<DescriptorHandle, SyscallError> {
         let File::Socket(ref socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
@@ -816,14 +817,12 @@ impl SyscallHandler {
             new_desc.set_flags(DescriptorFlags::FD_CLOEXEC);
         }
 
-        let new_fd = ctx
+        Ok(ctx
             .objs
             .thread
             .descriptor_table_borrow_mut(ctx.objs.host)
             .register_descriptor(new_desc)
-            .or(Err(Errno::ENFILE))?;
-
-        Ok(new_fd.val().into())
+            .or(Err(Errno::ENFILE))?)
     }
 
     log_syscall!(

@@ -10,6 +10,7 @@ use shadow_shim_helper_rs::{
 };
 
 use crate::core::worker::Worker;
+use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::{
     timerfd::TimerFd, CompatFile, Descriptor, File, FileStatus, OpenFile,
 };
@@ -30,7 +31,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         clockid: std::ffi::c_int,
         flags: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         let Ok(clockid) = ClockId::try_from(clockid) else {
             log::debug!("Invalid clockid: {clockid}");
             return Err(Errno::EINVAL.into());
@@ -68,7 +69,7 @@ impl SyscallHandler {
 
         log::trace!("timerfd_create() returning fd {fd}");
 
-        Ok(i32::try_from(fd.val()).unwrap())
+        Ok(fd)
     }
 
     log_syscall!(
