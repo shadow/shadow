@@ -25,7 +25,7 @@ impl SyscallHandler {
         _uaddr2: ForeignPtr<u32>,
         _val3: u32,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        Ok(Self::legacy_syscall(c::syscallhandler_futex, ctx)?.into())
+        Self::legacy_syscall(c::syscallhandler_futex, ctx)
     }
 
     log_syscall!(

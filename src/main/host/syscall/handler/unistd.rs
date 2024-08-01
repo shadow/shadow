@@ -207,7 +207,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_read, ctx).map(Into::into);
+                        return Self::legacy_syscall(c::syscallhandler_read, ctx);
                     }
                 }
             }
@@ -261,8 +261,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx)
-                            .map(Into::into);
+                        return Self::legacy_syscall(c::syscallhandler_pread64, ctx);
                     }
                 }
             }
@@ -328,7 +327,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_write, ctx).map(Into::into);
+                        return Self::legacy_syscall(c::syscallhandler_write, ctx);
                     }
                 }
             }
@@ -382,8 +381,7 @@ impl SyscallHandler {
                     // if it's a legacy file, use the C syscall handler instead
                     CompatFile::Legacy(_) => {
                         drop(desc_table);
-                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx)
-                            .map(Into::into);
+                        return Self::legacy_syscall(c::syscallhandler_pwrite64, ctx);
                     }
                 }
             }

@@ -18,7 +18,7 @@ impl SyscallHandler {
         _nfds: std::ffi::c_uint,
         _timeout_msecs: std::ffi::c_int,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        Ok(Self::legacy_syscall(c::syscallhandler_poll, ctx)?.into())
+        Self::legacy_syscall(c::syscallhandler_poll, ctx)
     }
 
     log_syscall!(
@@ -38,6 +38,6 @@ impl SyscallHandler {
         _sigmask: ForeignPtr<linux_api::signal::sigset_t>,
         _sigsetsize: libc::size_t,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        Ok(Self::legacy_syscall(c::syscallhandler_ppoll, ctx)?.into())
+        Self::legacy_syscall(c::syscallhandler_ppoll, ctx)
     }
 }
