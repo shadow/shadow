@@ -555,7 +555,7 @@ impl TcpSocket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let socket_ref = &mut *socket.borrow_mut();
 
         // linux also makes this cast, so negative backlogs wrap around to large positive backlogs
@@ -588,14 +588,14 @@ impl TcpSocket {
                     rng,
                 )?;
 
-                Ok::<_, SyscallError>(Some(handle))
+                Ok::<_, Errno>(Some(handle))
             };
             socket_ref.with_tcp_state(cb_queue, |state| state.listen(backlog, associate_fn))
         };
 
         let handle = match rv {
             Ok(x) => x,
-            Err(tcp::ListenError::InvalidState) => return Err(Errno::EINVAL.into()),
+            Err(tcp::ListenError::InvalidState) => return Err(Errno::EINVAL),
             Err(tcp::ListenError::FailedAssociation(e)) => return Err(e),
         };
 

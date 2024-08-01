@@ -224,7 +224,7 @@ impl UnixSocket {
         _net_ns: &NetworkNamespace,
         _rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let mut socket_ref = socket.borrow_mut();
         let socket_ref = socket_ref.deref_mut();
         socket_ref
@@ -716,7 +716,7 @@ impl ProtocolState {
         common: &mut UnixSocketCommon,
         backlog: i32,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let (new_state, rv) = match self {
             Self::ConnOrientedInitial(x) => x.take().unwrap().listen(common, backlog, cb_queue),
             Self::ConnOrientedListening(x) => x.take().unwrap().listen(common, backlog, cb_queue),
@@ -955,9 +955,9 @@ where
         _common: &mut UnixSocketCommon,
         _backlog: i32,
         _cb_queue: &mut CallbackQueue,
-    ) -> (ProtocolState, Result<(), SyscallError>) {
+    ) -> (ProtocolState, Result<(), Errno>) {
         log::warn!("listen() while in state {}", std::any::type_name::<Self>());
-        (self.into(), Err(Errno::EOPNOTSUPP.into()))
+        (self.into(), Err(Errno::EOPNOTSUPP))
     }
 
     fn connect(
@@ -1112,11 +1112,11 @@ impl Protocol for ConnOrientedInitial {
         common: &mut UnixSocketCommon,
         backlog: i32,
         cb_queue: &mut CallbackQueue,
-    ) -> (ProtocolState, Result<(), SyscallError>) {
+    ) -> (ProtocolState, Result<(), Errno>) {
         // it must have already been bound
         let bound_addr = match self.bound_addr {
             Some(x) => x,
-            None => return (self.into(), Err(Errno::EINVAL.into())),
+            None => return (self.into(), Err(Errno::EINVAL)),
         };
 
         let new_state = ConnOrientedListening {
@@ -1373,7 +1373,7 @@ impl Protocol for ConnOrientedListening {
         common: &mut UnixSocketCommon,
         backlog: i32,
         cb_queue: &mut CallbackQueue,
-    ) -> (ProtocolState, Result<(), SyscallError>) {
+    ) -> (ProtocolState, Result<(), Errno>) {
         self.queue_limit = backlog_to_queue_size(backlog);
 
         // refresh the socket's file state

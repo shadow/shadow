@@ -299,9 +299,9 @@ impl NetlinkSocket {
         _net_ns: &NetworkNamespace,
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         warn_once_then_debug!("We do not yet handle listen request on netlink sockets");
-        Err(Errno::EINVAL.into())
+        Err(Errno::EINVAL)
     }
 
     pub fn connect(

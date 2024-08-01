@@ -633,7 +633,7 @@ impl LegacyTcpSocket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let socket_ref = socket.borrow();
 
         // only listen on the socket if it is not used for other functions
@@ -641,7 +641,7 @@ impl LegacyTcpSocket {
             unsafe { c::tcp_isListeningAllowed(socket_ref.as_legacy_tcp()) } == 1;
         if !is_listening_allowed {
             log::debug!("Cannot listen on previously used socket");
-            return Err(Errno::EOPNOTSUPP.into());
+            return Err(Errno::EOPNOTSUPP);
         }
 
         // if we are already listening, just update the backlog and return 0

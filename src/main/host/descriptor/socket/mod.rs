@@ -104,7 +104,7 @@ impl Socket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         match self {
             Self::Unix(socket) => UnixSocket::listen(socket, backlog, net_ns, rng, cb_queue),
             Self::Inet(socket) => InetSocket::listen(socket, backlog, net_ns, rng, cb_queue),

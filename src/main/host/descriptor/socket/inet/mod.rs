@@ -112,7 +112,7 @@ impl InetSocket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         match self {
             Self::LegacyTcp(socket) => {
                 LegacyTcpSocket::listen(socket, backlog, net_ns, rng, cb_queue)
@@ -500,7 +500,7 @@ fn associate_socket(
     check_generic_peer: bool,
     net_ns: &NetworkNamespace,
     rng: impl rand::Rng,
-) -> Result<(SocketAddrV4, AssociationHandle), SyscallError> {
+) -> Result<(SocketAddrV4, AssociationHandle), Errno> {
     log::trace!("Trying to associate socket with addresses (local={local_addr}, peer={peer_addr})");
 
     if !local_addr.ip().is_unspecified() && net_ns.interface_borrow(*local_addr.ip()).is_none() {
@@ -508,7 +508,7 @@ fn associate_socket(
             "No network interface exists for the provided local address {}",
             local_addr.ip(),
         );
-        return Err(Errno::EINVAL.into());
+        return Err(Errno::EINVAL);
     };
 
     let protocol = match socket {
@@ -525,7 +525,7 @@ fn associate_socket(
             net_ns.get_random_free_port(protocol, *local_addr.ip(), peer_addr, rng)
         else {
             log::debug!("Association required an ephemeral port but none are available");
-            return Err(Errno::EADDRINUSE.into());
+            return Err(Errno::EADDRINUSE);
         };
 
         log::debug!("Associating with generated ephemeral port {new_port}");
@@ -540,9 +540,9 @@ fn associate_socket(
             log::debug!(
                 "The provided addresses (local={local_addr}, peer={peer_addr}) are not available"
             );
-            return Err(Errno::EADDRINUSE.into());
+            return Err(Errno::EADDRINUSE);
         }
-        Err(_e) => return Err(Errno::EADDRNOTAVAIL.into()),
+        Err(_e) => return Err(Errno::EADDRNOTAVAIL),
         Ok(false) => {}
     }
 
@@ -557,9 +557,9 @@ fn associate_socket(
                     "The generic addresses (local={local_addr}, peer={}) are not available",
                     SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)
                 );
-                return Err(Errno::EADDRINUSE.into());
+                return Err(Errno::EADDRINUSE);
             }
-            Err(_e) => return Err(Errno::EADDRNOTAVAIL.into()),
+            Err(_e) => return Err(Errno::EADDRNOTAVAIL),
             Ok(false) => {}
         }
     }

@@ -658,8 +658,8 @@ impl UdpSocket {
         _net_ns: &NetworkNamespace,
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
-        Err(Errno::EOPNOTSUPP.into())
+    ) -> Result<(), Errno> {
+        Err(Errno::EOPNOTSUPP)
     }
 
     pub fn connect(
