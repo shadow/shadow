@@ -11,14 +11,15 @@ use crate::host::syscall::types::SyscallResult;
 impl SyscallHandler {
     log_syscall!(
         fcntl,
-        /* rv */ std::ffi::c_int,
-        /* fd */ std::ffi::c_int,
-        /* cmd */ std::ffi::c_int,
+        /* rv */ std::ffi::c_long,
+        /* fd */ std::ffi::c_uint,
+        /* cmd */ std::ffi::c_uint,
+        /* arg */ std::ffi::c_ulong,
     );
     pub fn fcntl(
         ctx: &mut SyscallContext,
-        fd: std::ffi::c_int,
-        cmd: std::ffi::c_int,
+        fd: std::ffi::c_uint,
+        cmd: std::ffi::c_uint,
         arg: std::ffi::c_ulong,
     ) -> SyscallResult {
         // NOTE: this function should *not* run the C syscall handler if the cmd modifies the
