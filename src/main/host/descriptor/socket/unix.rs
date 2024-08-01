@@ -97,7 +97,7 @@ impl UnixSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         // return the bound address if set, otherwise return an empty unix sockaddr
         Ok(Some(
             self.protocol_state
@@ -106,7 +106,7 @@ impl UnixSocket {
         ))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         // return the peer address if set, otherwise return an empty unix sockaddr
         Ok(Some(
             self.protocol_state
@@ -481,7 +481,7 @@ impl ProtocolState {
         }
     }
 
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().peer_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().peer_address(),
@@ -492,7 +492,7 @@ impl ProtocolState {
         }
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_ref().unwrap().bound_address(),
             Self::ConnOrientedListening(x) => x.as_ref().unwrap().bound_address(),
@@ -874,8 +874,8 @@ trait Protocol
 where
     Self: Sized + Into<ProtocolState>,
 {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError>;
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno>;
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno>;
     fn refresh_file_state(
         &self,
         common: &mut UnixSocketCommon,
@@ -1011,11 +1011,11 @@ where
 }
 
 impl Protocol for ConnOrientedInitial {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
-        Err(Errno::ENOTCONN.into())
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
+        Err(Errno::ENOTCONN)
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(self.bound_addr)
     }
 
@@ -1316,11 +1316,11 @@ impl Protocol for ConnOrientedInitial {
 }
 
 impl Protocol for ConnOrientedListening {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
-        Err(Errno::ENOTCONN.into())
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
+        Err(Errno::ENOTCONN)
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(Some(self.bound_addr))
     }
 
@@ -1503,11 +1503,11 @@ impl Protocol for ConnOrientedListening {
 }
 
 impl Protocol for ConnOrientedConnected {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(self.peer_addr)
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(self.bound_addr)
     }
 
@@ -1653,12 +1653,12 @@ impl Protocol for ConnOrientedConnected {
 }
 
 impl Protocol for ConnOrientedClosed {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
-        Err(Errno::ENOTCONN.into())
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
+        Err(Errno::ENOTCONN)
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
-        Err(Errno::EBADFD.into())
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
+        Err(Errno::EBADFD)
     }
 
     fn refresh_file_state(
@@ -1696,14 +1696,14 @@ impl Protocol for ConnOrientedClosed {
 }
 
 impl Protocol for ConnLessInitial {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         match self.peer {
             Some(_) => Ok(self.peer_addr),
-            None => Err(Errno::ENOTCONN.into()),
+            None => Err(Errno::ENOTCONN),
         }
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(self.bound_addr)
     }
 
@@ -1920,11 +1920,11 @@ impl Protocol for ConnLessInitial {
 }
 
 impl Protocol for ConnLessClosed {
-    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn peer_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(None)
     }
 
-    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<SockaddrUnix<libc::sockaddr_un>>, Errno> {
         Ok(None)
     }
 

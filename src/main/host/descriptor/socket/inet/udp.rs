@@ -202,7 +202,7 @@ impl UdpSocket {
         !self.send_buffer.is_empty()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut addr = self
             .bound_addr
             .unwrap_or(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0));
@@ -218,7 +218,7 @@ impl UdpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         Ok(Some(self.peer_addr.ok_or(Errno::ENOTCONN)?.into()))
     }
 

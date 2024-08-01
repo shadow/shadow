@@ -129,15 +129,15 @@ impl NetlinkSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, Errno> {
         self.protocol_state.bound_address()
     }
 
-    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, Errno> {
         warn_once_then_debug!(
             "getpeername() syscall not yet supported for netlink sockets; Returning ENOSYS"
         );
-        Err(Errno::ENOSYS.into())
+        Err(Errno::ENOSYS)
     }
 
     pub fn address_family(&self) -> linux_api::socket::AddressFamily {
@@ -433,7 +433,7 @@ impl ProtocolState {
         }))
     }
 
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         match self {
             Self::Initial(x) => x.as_ref().unwrap().bound_address(),
             Self::Closed(x) => x.as_ref().unwrap().bound_address(),
@@ -527,7 +527,7 @@ impl ProtocolState {
 }
 
 impl InitialState {
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         Ok(self.bound_addr)
     }
 
@@ -952,7 +952,7 @@ impl InitialState {
 }
 
 impl ClosedState {
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         Ok(None)
     }
 

@@ -288,7 +288,7 @@ impl TcpSocket {
         self.tcp_state.wants_to_send()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         // The socket state won't always have the local address. For example if the socket was bound
         // but connect() hasn't yet been called, the socket state will not have a local or remote
         // address. Instead we should get the local address from the association.
@@ -300,7 +300,7 @@ impl TcpSocket {
         ))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         // The association won't always have the peer address. For example if the socket was bound
         // before connect() was called, the association will have a peer of 0.0.0.0. Instead we
         // should get the peer address from the socket state.

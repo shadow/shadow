@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
 use inet::{InetSocket, InetSocketRef, InetSocketRefMut};
+use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use linux_api::socket::Shutdown;
 use netlink::NetlinkSocket;
@@ -217,7 +218,7 @@ impl SocketRef<'_> {
 
 // socket-specific functions
 impl SocketRef<'_> {
-    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
@@ -225,7 +226,7 @@ impl SocketRef<'_> {
         }
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
@@ -297,7 +298,7 @@ impl SocketRefMut<'_> {
 
 // socket-specific functions
 impl SocketRefMut<'_> {
-    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
@@ -305,7 +306,7 @@ impl SocketRefMut<'_> {
         }
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
             Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),

@@ -185,7 +185,7 @@ impl LegacyTcpSocket {
         self.peek_packet().is_some()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut ip: libc::in_addr_t = 0;
         let mut port: libc::in_port_t = 0;
 
@@ -203,7 +203,7 @@ impl LegacyTcpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut ip: libc::in_addr_t = 0;
         let mut port: libc::in_port_t = 0;
 
@@ -211,7 +211,7 @@ impl LegacyTcpSocket {
         let okay =
             unsafe { c::legacysocket_getPeerName(self.as_legacy_socket(), &mut ip, &mut port) };
         if okay != 1 {
-            return Err(Errno::ENOTCONN.into());
+            return Err(Errno::ENOTCONN);
         }
 
         let ip = Ipv4Addr::from(u32::from_be(ip));
