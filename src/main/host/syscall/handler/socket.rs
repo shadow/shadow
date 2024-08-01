@@ -4,7 +4,6 @@ use linux_api::socket::Shutdown;
 use log::*;
 use nix::sys::socket::SockFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
@@ -23,8 +22,13 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
-                  /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int)]
+    log_syscall!(
+        socket,
+        /* rv */ std::ffi::c_int,
+        /* domain */ linux_api::socket::AddressFamily,
+        /* type */ std::ffi::c_int,
+        /* protocol */ std::ffi::c_int,
+    );
     pub fn socket(
         ctx: &mut SyscallContext,
         domain: std::ffi::c_int,
@@ -137,8 +141,13 @@ impl SyscallHandler {
         Ok(fd.val().into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int,
-                  /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
+    log_syscall!(
+        bind,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ SyscallSockAddrArg</* addrlen */ 2>,
+        /* addrlen */ libc::socklen_t,
+    );
     pub fn bind(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -171,11 +180,16 @@ impl SyscallHandler {
         Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int,
-                  /* buf */ SyscallBufferArg</* len */ 2>, /* len */ libc::size_t,
-                  /* flags */ nix::sys::socket::MsgFlags,
-                  /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
-                  /* addrlen */ libc::socklen_t)]
+    log_syscall!(
+        sendto,
+        /* rv */ libc::ssize_t,
+        /* sockfd */ std::ffi::c_int,
+        /* buf */ SyscallBufferArg</* len */ 2>,
+        /* len */ libc::size_t,
+        /* flags */ nix::sys::socket::MsgFlags,
+        /* dest_addr */ SyscallSockAddrArg</* addrlen */ 5>,
+        /* addrlen */ libc::socklen_t,
+    );
     pub fn sendto(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -250,8 +264,13 @@ impl SyscallHandler {
         Ok(bytes_sent)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* msg */ *const libc::msghdr,
-                  /* flags */ nix::sys::socket::MsgFlags)]
+    log_syscall!(
+        sendmsg,
+        /* rv */ libc::ssize_t,
+        /* sockfd */ std::ffi::c_int,
+        /* msg */ *const libc::msghdr,
+        /* flags */ nix::sys::socket::MsgFlags,
+    );
     pub fn sendmsg(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -318,9 +337,16 @@ impl SyscallHandler {
         Ok(bytes_written)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* buf */ *const std::ffi::c_void,
-                  /* len */ libc::size_t, /* flags */ nix::sys::socket::MsgFlags,
-                  /* src_addr */ *const libc::sockaddr, /* addrlen */ *const libc::socklen_t)]
+    log_syscall!(
+        recvfrom,
+        /* rv */ libc::ssize_t,
+        /* sockfd */ std::ffi::c_int,
+        /* buf */ *const std::ffi::c_void,
+        /* len */ libc::size_t,
+        /* flags */ nix::sys::socket::MsgFlags,
+        /* src_addr */ *const libc::sockaddr,
+        /* addrlen */ *const libc::socklen_t,
+    );
     pub fn recvfrom(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -399,8 +425,13 @@ impl SyscallHandler {
         Ok(return_val)
     }
 
-    #[log_syscall(/* rv */ libc::ssize_t, /* sockfd */ std::ffi::c_int, /* msg */ *const libc::msghdr,
-                  /* flags */ nix::sys::socket::MsgFlags)]
+    log_syscall!(
+        recvmsg,
+        /* rv */ libc::ssize_t,
+        /* sockfd */ std::ffi::c_int,
+        /* msg */ *const libc::msghdr,
+        /* flags */ nix::sys::socket::MsgFlags,
+    );
     pub fn recvmsg(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -480,8 +511,13 @@ impl SyscallHandler {
         Ok(result.return_val)
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ *const libc::socklen_t)]
+    log_syscall!(
+        getsockname,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ *const libc::sockaddr,
+        /* addrlen */ *const libc::socklen_t,
+    );
     pub fn getsockname(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -522,8 +558,13 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ *const libc::socklen_t)]
+    log_syscall!(
+        getpeername,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ *const libc::sockaddr,
+        /* addrlen */ *const libc::socklen_t,
+    );
     pub fn getpeername(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -566,7 +607,12 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* backlog */ std::ffi::c_int)]
+    log_syscall!(
+        listen,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* backlog */ std::ffi::c_int,
+    );
     pub fn listen(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -598,8 +644,13 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ *const libc::socklen_t)]
+    log_syscall!(
+        accept,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ *const libc::sockaddr,
+        /* addrlen */ *const libc::socklen_t,
+    );
     pub fn accept(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -641,8 +692,14 @@ impl SyscallHandler {
         result
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* addr */ *const libc::sockaddr,
-                  /* addrlen */ *const libc::socklen_t, /* flags */ std::ffi::c_int)]
+    log_syscall!(
+        accept4,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ *const libc::sockaddr,
+        /* addrlen */ *const libc::socklen_t,
+        /* flags */ std::ffi::c_int,
+    );
     pub fn accept4(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -769,8 +826,13 @@ impl SyscallHandler {
         Ok(new_fd.val().into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int,
-                  /* addr */ SyscallSockAddrArg</* addrlen */ 2>, /* addrlen */ libc::socklen_t)]
+    log_syscall!(
+        connect,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* addr */ SyscallSockAddrArg</* addrlen */ 2>,
+        /* addrlen */ libc::socklen_t,
+    );
     pub fn connect(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -828,7 +890,12 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* how */ std::ffi::c_uint)]
+    log_syscall!(
+        shutdown,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* how */ std::ffi::c_uint,
+    );
     pub fn shutdown(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -857,8 +924,14 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* domain */ linux_api::socket::AddressFamily,
-                  /* type */ std::ffi::c_int, /* protocol */ std::ffi::c_int, /* sv */ [std::ffi::c_int; 2])]
+    log_syscall!(
+        socketpair,
+        /* rv */ std::ffi::c_int,
+        /* domain */ linux_api::socket::AddressFamily,
+        /* type */ std::ffi::c_int,
+        /* protocol */ std::ffi::c_int,
+        /* sv */ [std::ffi::c_int; 2],
+    );
     pub fn socketpair(
         ctx: &mut SyscallContext,
         domain: std::ffi::c_int,
@@ -954,9 +1027,15 @@ impl SyscallHandler {
         }
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* level */ std::ffi::c_int,
-                  /* optname */ std::ffi::c_int, /* optval */ *const std::ffi::c_void,
-                  /* optlen */ *const libc::socklen_t)]
+    log_syscall!(
+        getsockopt,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* level */ std::ffi::c_int,
+        /* optname */ std::ffi::c_int,
+        /* optval */ *const std::ffi::c_void,
+        /* optlen */ *const libc::socklen_t,
+    );
     pub fn getsockopt(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
@@ -1007,9 +1086,15 @@ impl SyscallHandler {
         Ok(0.into())
     }
 
-    #[log_syscall(/* rv */ std::ffi::c_int, /* sockfd */ std::ffi::c_int, /* level */ std::ffi::c_int,
-                  /* optname */ std::ffi::c_int, /* optval */ *const std::ffi::c_void,
-                  /* optlen */ libc::socklen_t)]
+    log_syscall!(
+        setsockopt,
+        /* rv */ std::ffi::c_int,
+        /* sockfd */ std::ffi::c_int,
+        /* level */ std::ffi::c_int,
+        /* optname */ std::ffi::c_int,
+        /* optval */ *const std::ffi::c_void,
+        /* optlen */ libc::socklen_t,
+    );
     pub fn setsockopt(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,

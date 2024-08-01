@@ -1065,6 +1065,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
 name = "petgraph"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1501,6 +1507,7 @@ dependencies = [
  "neli",
  "nix 0.27.1",
  "once_cell",
+ "paste",
  "petgraph",
  "rand",
  "rand_chacha",
@@ -1523,7 +1530,6 @@ dependencies = [
  "signal-hook",
  "static_assertions",
  "std-util",
- "syscall-logger",
  "system-deps",
  "tcp",
  "tempfile",
@@ -1727,15 +1733,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "syscall-logger"
-version = "0.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.65",
 ]
 
 [[package]]

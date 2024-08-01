@@ -1,14 +1,18 @@
 use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ std::ffi::c_int, /* pid */ linux_api::posix_types::kernel_pid_t,
-                  /* resource */ std::ffi::c_uint, /* new_rlim */ *const std::ffi::c_void,
-                  /* old_rlim */ *const std::ffi::c_void)]
+    log_syscall!(
+        prlimit64,
+        /* rv */ std::ffi::c_int,
+        /* pid */ linux_api::posix_types::kernel_pid_t,
+        /* resource */ std::ffi::c_uint,
+        /* new_rlim */ *const std::ffi::c_void,
+        /* old_rlim */ *const std::ffi::c_void,
+    );
     pub fn prlimit64(
         _ctx: &mut SyscallContext,
         pid: linux_api::posix_types::kernel_pid_t,

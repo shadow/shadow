@@ -2,14 +2,18 @@ use linux_api::errno::Errno;
 use log::*;
 use rand::RngCore;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use syscall_logger::log_syscall;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallResult};
 
 impl SyscallHandler {
-    #[log_syscall(/* rv */ isize, /* buf */ *const std::ffi::c_void, /* count */ usize,
-                  /* flags */ std::ffi::c_uint)]
+    log_syscall!(
+        getrandom,
+        /* rv */ isize,
+        /* buf */ *const std::ffi::c_void,
+        /* count */ usize,
+        /* flags */ std::ffi::c_uint,
+    );
     pub fn getrandom(
         ctx: &mut SyscallContext,
         buf_ptr: ForeignPtr<u8>,
