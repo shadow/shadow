@@ -466,6 +466,7 @@ jobs:
           ./examples/apps/etcd/install_deps.sh
           ./examples/apps/http-server/install_deps.sh
           ./examples/apps/iperf-2/install_deps.sh
+          ./examples/apps/jetty/install_deps.sh
           ./examples/apps/nginx/install_deps.sh
           ./examples/apps/wget2/install_deps.sh
           ./examples/docs/basic-file-transfer/install_deps.sh

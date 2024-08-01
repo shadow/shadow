@@ -1,0 +1,22 @@
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: java
+      args: -jar ../../../jetty-home-12.0.12/start.jar jetty.http.port=80 --modules=http
+      expected_final_state: running
+  client1: &client_host
+    network_node_id: 0
+    processes:
+    - path: curl
+      args: -s server
+      start_time: 2s
+  client2: *client_host
+  client3: *client_host
