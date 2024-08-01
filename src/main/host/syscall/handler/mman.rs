@@ -110,7 +110,7 @@ impl SyscallHandler {
         addr: std::ffi::c_ulong,
         len: usize,
         prot: std::ffi::c_ulong,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let addr: usize = addr.try_into().unwrap();
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 

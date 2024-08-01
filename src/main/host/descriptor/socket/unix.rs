@@ -142,7 +142,7 @@ impl UnixSocket {
         addr: Option<&SockaddrStorage>,
         _net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
         socket_ref
             .protocol_state
@@ -561,7 +561,7 @@ impl ProtocolState {
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         match self {
             Self::ConnOrientedInitial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
             Self::ConnOrientedListening(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
@@ -898,7 +898,7 @@ where
         _socket: &Arc<AtomicRefCell<UnixSocket>>,
         _addr: Option<&SockaddrStorage>,
         _rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         log::warn!("bind() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())
     }
@@ -1050,14 +1050,14 @@ impl Protocol for ConnOrientedInitial {
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if already bound
         if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
 
         self.bound_addr = Some(common.bind(socket, addr, rng)?);
-        Ok(0.into())
+        Ok(())
     }
 
     fn sendmsg(
@@ -1762,14 +1762,14 @@ impl Protocol for ConnLessInitial {
         socket: &Arc<AtomicRefCell<UnixSocket>>,
         addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if already bound
         if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
         }
 
         self.bound_addr = Some(common.bind(socket, addr, rng)?);
-        Ok(0.into())
+        Ok(())
     }
 
     fn sendmsg(

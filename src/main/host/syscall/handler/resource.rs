@@ -19,7 +19,7 @@ impl SyscallHandler {
         resource: std::ffi::c_uint,
         _new_rlim: ForeignPtr<()>,
         _old_rlim: ForeignPtr<()>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         log::trace!("prlimit64 called on pid {pid} for resource {resource}");
 
         // TODO: For determinism, we may want to enforce static limits for certain resources, like

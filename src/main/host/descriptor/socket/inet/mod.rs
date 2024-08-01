@@ -98,7 +98,7 @@ impl InetSocket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         match self {
             Self::LegacyTcp(socket) => LegacyTcpSocket::bind(socket, addr, net_ns, rng),
             Self::Tcp(socket) => TcpSocket::bind(socket, addr, net_ns, rng),

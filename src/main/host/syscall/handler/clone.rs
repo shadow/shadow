@@ -11,7 +11,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
-use crate::host::syscall::types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 use super::{SyscallContext, SyscallHandler};
@@ -430,7 +430,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,
         datap: ForeignPtr<[user_cap_data; 2]>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // If the version is not 3, we return the error
         let hdrp = ctx.objs.process.memory_borrow().read(hdrp)?;
         if hdrp.version != LINUX_CAPABILITY_VERSION_3 {
@@ -454,7 +454,7 @@ impl SyscallHandler {
                 .memory_borrow_mut()
                 .write(datap, &[empty, empty])?;
         }
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -467,7 +467,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,
         datap: ForeignPtr<[user_cap_data; 2]>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // If the version is not 3, we return the error
         let hdrp = ctx.objs.process.memory_borrow().read(hdrp)?;
         if hdrp.version != LINUX_CAPABILITY_VERSION_3 {
@@ -486,6 +486,6 @@ impl SyscallHandler {
                 return Err(Errno::EINVAL.into());
             }
         }
-        Ok(0.into())
+        Ok(())
     }
 }

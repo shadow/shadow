@@ -90,7 +90,7 @@ impl Socket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         match self {
             Self::Unix(socket) => UnixSocket::bind(socket, addr, net_ns, rng),
             Self::Inet(socket) => InetSocket::bind(socket, addr, net_ns, rng),

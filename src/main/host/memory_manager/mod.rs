@@ -699,7 +699,7 @@ impl MemoryManager {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: ProtFlags,
-    ) -> Result<i32, SyscallError> {
+    ) -> Result<(), SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => Ok(mm.handle_mprotect(ctx, addr, size, prot)?),
             None => Err(SyscallError::Native),

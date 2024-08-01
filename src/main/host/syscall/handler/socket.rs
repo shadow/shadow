@@ -18,7 +18,7 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
 use crate::host::syscall::types::ForeignArrayPtr;
-use crate::host::syscall::types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::SyscallError;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 
@@ -154,7 +154,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let file = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -524,7 +524,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -556,7 +556,7 @@ impl SyscallHandler {
             addr_len_ptr,
         )?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -571,7 +571,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -605,7 +605,7 @@ impl SyscallHandler {
             addr_len_ptr,
         )?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -618,7 +618,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         backlog: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -642,7 +642,7 @@ impl SyscallHandler {
             })
         })?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -837,7 +837,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len: libc::socklen_t,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if we were previously blocked, get the active file from the last syscall handler
         // invocation since it may no longer exist in the descriptor table
         let file = ctx
@@ -886,7 +886,7 @@ impl SyscallHandler {
 
         result?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -899,7 +899,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         how: std::ffi::c_uint,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -920,7 +920,7 @@ impl SyscallHandler {
             CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().shutdown(how, cb_queue))
         })?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -937,7 +937,7 @@ impl SyscallHandler {
         socket_type: std::ffi::c_int,
         protocol: std::ffi::c_int,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
@@ -1010,7 +1010,7 @@ impl SyscallHandler {
 
         // clean up in case of error
         match write_res {
-            Ok(_) => Ok(0.into()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
@@ -1042,7 +1042,7 @@ impl SyscallHandler {
         optname: std::ffi::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -1082,7 +1082,7 @@ impl SyscallHandler {
         // write the new optlen back to the plugin
         mem.write(optlen_ptr, &optlen_new)?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -1101,7 +1101,7 @@ impl SyscallHandler {
         optname: std::ffi::c_int,
         optval_ptr: ForeignPtr<()>,
         optlen: libc::socklen_t,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
@@ -1122,6 +1122,6 @@ impl SyscallHandler {
             .borrow_mut()
             .setsockopt(level, optname, optval_ptr, optlen, &mem)?;
 
-        Ok(0.into())
+        Ok(())
     }
 }

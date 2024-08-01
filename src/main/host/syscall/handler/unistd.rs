@@ -23,7 +23,7 @@ use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{read_cstring_vec, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
-use crate::host::syscall::types::{ForeignArrayPtr, SyscallError, SyscallResult};
+use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::u8_to_i8_slice;
 
@@ -33,7 +33,7 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_int,
     );
-    pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> SyscallResult {
+    pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> Result<(), SyscallError> {
         trace!("Trying to close fd {}", fd);
 
         let fd = fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
@@ -53,7 +53,6 @@ impl SyscallHandler {
         crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
             CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.objs.host, cb_queue))
                 .unwrap_or(Ok(()))
-                .map(|()| 0.into())
         })
     }
 
@@ -426,7 +425,7 @@ impl SyscallHandler {
     pub fn pipe(
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         Self::pipe_helper(ctx, fd_ptr, 0)
     }
 
@@ -440,7 +439,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
         flags: std::ffi::c_int,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         Self::pipe_helper(ctx, fd_ptr, flags)
     }
 
@@ -448,7 +447,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd_ptr: ForeignPtr<[std::ffi::c_int; 2]>,
         flags: i32,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // make sure they didn't pass a NULL pointer
         if fd_ptr.is_null() {
             return Err(linux_api::errno::Errno::EFAULT.into());
@@ -516,7 +515,7 @@ impl SyscallHandler {
 
         // clean up in case of error
         match write_res {
-            Ok(_) => Ok(0.into()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 CallbackQueue::queue_and_run(|cb_queue| {
                     // ignore any errors when closing
@@ -577,7 +576,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         pid: kernel_pid_t,
         pgid: kernel_pid_t,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let _processrc_borrow;
         let _process_borrow;
         let process: &Process;
@@ -642,7 +641,7 @@ impl SyscallHandler {
             // specified by pid is made the same as its process ID.
             process.set_group_id(process.id());
         }
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(
@@ -918,7 +917,7 @@ impl SyscallHandler {
     pub fn uname(
         ctx: &mut SyscallContext,
         name_ptr: ForeignPtr<linux_api::utsname::new_utsname>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         // NOTE: On linux x86-64, `SYS_uname` corresponds with `__NR_uname` which calls
         // `sys_newuname` and not `sys_uname`. The correct mapping is:
         //
@@ -948,7 +947,7 @@ impl SyscallHandler {
             .memory_borrow_mut()
             .write(name_ptr, &name)?;
 
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(
@@ -956,7 +955,10 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* path */ SyscallStringArg,
     );
-    pub fn chdir(ctx: &mut SyscallContext, path: ForeignPtr<std::ffi::c_char>) -> SyscallResult {
+    pub fn chdir(
+        ctx: &mut SyscallContext,
+        path: ForeignPtr<std::ffi::c_char>,
+    ) -> Result<(), SyscallError> {
         // The native working directory must match the emulated one
         // <https://github.com/shadow/shadow/issues/2960>. First execute the
         // native chdir, propagating any failures.
@@ -981,6 +983,6 @@ impl SyscallHandler {
         newcwd.push(0);
         let newcwd = CString::from_vec_with_nul(newcwd).unwrap();
         process.process.set_current_working_dir(newcwd);
-        Ok(0.into())
+        Ok(())
     }
 }

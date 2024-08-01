@@ -238,7 +238,7 @@ impl LegacyTcpSocket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if the address pointer was NULL
         let Some(addr) = addr else {
             return Err(Errno::EFAULT.into());
@@ -299,7 +299,7 @@ impl LegacyTcpSocket {
             )
         };
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn readv(

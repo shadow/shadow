@@ -21,14 +21,16 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: std::ffi::c_uint,
         statbuf_ptr: ForeignPtr<linux_api::stat::stat>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let file = match Self::get_descriptor(&desc_table, fd)?.file() {
             CompatFile::New(file) => file.clone(),
             // if it's a legacy file, use the C syscall handler instead
             CompatFile::Legacy(_) => {
                 drop(desc_table);
-                return Self::legacy_syscall(cshadow::syscallhandler_fstat, ctx);
+                let rv: i32 = Self::legacy_syscall(cshadow::syscallhandler_fstat, ctx)?;
+                assert_eq!(rv, 0);
+                return Ok(());
             }
         };
 
@@ -39,7 +41,7 @@ impl SyscallHandler {
             .memory_borrow_mut()
             .write(statbuf_ptr, &stat)?;
 
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(fstatfs, /* rv */ std::ffi::c_int);

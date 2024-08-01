@@ -95,7 +95,7 @@ impl SyscallHandler {
         op: std::ffi::c_int,
         fd: std::ffi::c_int,
         event_ptr: ForeignPtr<linux_api::epoll::epoll_event>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         // See here for the order that the input args are checked in Linux:
         // https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2111
 
@@ -189,7 +189,7 @@ impl SyscallHandler {
                     .ctl(op, fd, target, events, data, weak_epoll, cb_queue)
             })
         })?;
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(
