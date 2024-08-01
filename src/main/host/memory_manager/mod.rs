@@ -633,7 +633,7 @@ impl MemoryManager {
         flags: MapFlags,
         fd: i32,
         offset: i64,
-    ) -> Result<ForeignPtr<u8>, SyscallError> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let addr = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
