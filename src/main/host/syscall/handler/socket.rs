@@ -629,7 +629,6 @@ impl SyscallHandler {
         };
 
         let File::Socket(socket) = file.inner_file() else {
-            drop(desc_table);
             return Err(Errno::ENOTSOCK);
         };
 
@@ -912,7 +911,6 @@ impl SyscallHandler {
         let how = Shutdown::try_from(how).or(Err(Errno::EINVAL))?;
 
         let File::Socket(socket) = file.inner_file() else {
-            drop(desc_table);
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -1109,7 +1107,6 @@ impl SyscallHandler {
         };
 
         let File::Socket(socket) = file.inner_file() else {
-            drop(desc_table);
             return Err(Errno::ENOTSOCK.into());
         };
 
