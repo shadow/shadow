@@ -5,7 +5,7 @@ Check the current comment at the top of `src/bindings.rs` to see the
 version used to generate the bindings last time. Then, force your local
 tooling to match versions like:
 
-    cargo install --force --version 0.65.1 bindgen-cli
+    cargo install --force --version 0.69.4 bindgen-cli
 
 Then the magix you want to regenerate src/bindings.rs is:
 
