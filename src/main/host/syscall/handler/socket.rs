@@ -944,24 +944,21 @@ impl SyscallHandler {
 
         // only AF_UNIX (AF_LOCAL) is supported on Linux (and technically AF_TIPC)
         if domain != libc::AF_UNIX {
-            warn!("Domain {} is not supported for socketpair()", domain);
+            warn!("Domain {domain} is not supported for socketpair()");
             return Err(Errno::EOPNOTSUPP.into());
         }
 
         let socket_type = match UnixSocketType::try_from(socket_type) {
             Ok(x) => x,
             Err(e) => {
-                warn!("{}", e);
+                warn!("Not a unix socket type: {e}");
                 return Err(Errno::EPROTONOSUPPORT.into());
             }
         };
 
         // unix sockets don't support any protocols
         if protocol != 0 {
-            warn!(
-                "Unsupported socket protocol {}, we only support default protocol 0",
-                protocol
-            );
+            warn!("Unsupported socket protocol {protocol}, we only support default protocol 0");
             return Err(Errno::EPROTONOSUPPORT.into());
         }
 
