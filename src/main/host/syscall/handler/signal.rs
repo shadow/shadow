@@ -20,7 +20,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         pid: linux_api::posix_types::kernel_pid_t,
         sig: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         log::trace!("kill called on pid {pid} with signal {sig}");
 
         let pid = if pid == -1 {
@@ -30,7 +30,7 @@ impl SyscallHandler {
             // Currently unimplemented, and unlikely to be needed in the context of a shadow
             // simulation.
             log::warn!("kill with pid=-1 unimplemented");
-            return Err(Errno::ENOTSUP.into());
+            return Err(Errno::ENOTSUP);
         } else if pid == 0 {
             // kill(2): If pid equals 0, then sig is sent to every process in the process group of
             // the calling process.
@@ -55,7 +55,7 @@ impl SyscallHandler {
 
         let Some(target_process) = ctx.objs.host.process_borrow(pid) else {
             log::debug!("Process {pid} not found");
-            return Err(Errno::ESRCH.into());
+            return Err(Errno::ESRCH);
         };
         let target_process = &*target_process.borrow(ctx.objs.host.root());
 
@@ -68,18 +68,18 @@ impl SyscallHandler {
         objs: &ThreadContext,
         target_process: &Process,
         signal: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         if signal == 0 {
             return Ok(());
         }
 
         let Ok(signal) = Signal::try_from(signal) else {
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
 
         if signal.is_realtime() {
             log::warn!("Unimplemented signal {signal:?}");
-            return Err(Errno::ENOTSUP.into());
+            return Err(Errno::ENOTSUP);
         }
 
         let sender_pid = objs.process.id().into();
@@ -100,13 +100,13 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: linux_api::posix_types::kernel_pid_t,
         sig: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         log::trace!("tkill called on tid {tid} with signal {sig}");
 
         let tid = tid.try_into().or(Err(Errno::ESRCH))?;
 
         let Some(target_thread) = ctx.objs.host.thread_cloned_rc(tid) else {
-            return Err(Errno::ESRCH.into());
+            return Err(Errno::ESRCH);
         };
         let target_thread = ExplicitDropper::new(target_thread, |value| {
             value.explicit_drop(ctx.objs.host.root())
@@ -128,14 +128,14 @@ impl SyscallHandler {
         tgid: linux_api::posix_types::kernel_pid_t,
         tid: linux_api::posix_types::kernel_pid_t,
         sig: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         log::trace!("tgkill called on tgid {tgid} and tid {tid} with signal {sig}");
 
         let tgid = tgid.try_into().or(Err(Errno::ESRCH))?;
         let tid = tid.try_into().or(Err(Errno::ESRCH))?;
 
         let Some(target_thread) = ctx.objs.host.thread_cloned_rc(tid) else {
-            return Err(Errno::ESRCH.into());
+            return Err(Errno::ESRCH);
         };
         let target_thread = ExplicitDropper::new(target_thread, |value| {
             value.explicit_drop(ctx.objs.host.root())
@@ -143,7 +143,7 @@ impl SyscallHandler {
         let target_thread = &*target_thread.borrow(ctx.objs.host.root());
 
         if target_thread.process_id() != tgid {
-            return Err(Errno::ESRCH.into());
+            return Err(Errno::ESRCH);
         }
 
         Self::signal_thread(ctx.objs, target_thread, sig)
@@ -155,18 +155,18 @@ impl SyscallHandler {
         objs: &ThreadContext,
         target_thread: &Thread,
         signal: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         if signal == 0 {
             return Ok(());
         }
 
         let Ok(signal) = Signal::try_from(signal) else {
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
 
         if signal.is_realtime() {
             log::warn!("Unimplemented signal {signal:?}");
-            return Err(Errno::ENOTSUP.into());
+            return Err(Errno::ENOTSUP);
         }
 
         // need to scope the shmem lock since `wakeup_for_signal` below takes its own shmem lock

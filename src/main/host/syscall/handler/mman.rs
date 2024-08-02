@@ -156,7 +156,7 @@ impl SyscallHandler {
         flags: std::ffi::c_ulong,
         fd: std::ffi::c_ulong,
         offset: std::ffi::c_ulong,
-    ) -> Result<ForeignPtr<u8>, SyscallError> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         log::trace!("mmap called on fd {fd} for {len} bytes");
 
         let addr: usize = addr.try_into().unwrap();
@@ -176,7 +176,7 @@ impl SyscallHandler {
                 "Unrecognized prot flag: {:#x}",
                 unrecognized.bits()
             );
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
         let Some(flags) = MapFlags::from_bits(flags) else {
             let unrecognized = MapFlags::from_bits_retain(flags).difference(MapFlags::all());
@@ -188,7 +188,7 @@ impl SyscallHandler {
                 "Unrecognized map flag: {:#x}",
                 unrecognized.bits()
             );
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
 
         // at least one of these values is required according to man page
@@ -198,14 +198,14 @@ impl SyscallHandler {
         // need non-zero len, and at least one of the above options
         if len == 0 || !required_flags.intersects(flags) {
             log::debug!("Invalid len ({len}), prot ({prot:?}), or flags ({flags:?})");
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         }
 
         // we ignore the fd on anonymous mappings, otherwise it must refer to a regular file
         // TODO: why does this fd <= 2 exist?
         if fd <= 2 && !flags.contains(MapFlags::MAP_ANONYMOUS) {
             log::debug!("Invalid fd {fd} and MAP_ANONYMOUS is not set in flags {flags:?}");
-            return Err(Errno::EBADF.into());
+            return Err(Errno::EBADF);
         }
 
         // we only need a file if it's not an anonymous mapping
@@ -219,7 +219,7 @@ impl SyscallHandler {
 
                 let CompatFile::Legacy(file) = desc.file() else {
                     // this syscall uses a regular file, which is implemented in C
-                    return Err(Errno::EINVAL.into());
+                    return Err(Errno::EINVAL);
                 };
 
                 file.ptr()
@@ -234,12 +234,12 @@ impl SyscallHandler {
                 // close themselves even if there are still file handles (see
                 // `_tcp_endOfFileSignalled`), so we can't make this a panic.
                 log::warn!("File {file:p} (fd={fd}) is closed");
-                return Err(Errno::EBADF.into());
+                return Err(Errno::EBADF);
             }
 
             if unsafe { c::legacyfile_getType(file) } != c::_LegacyFileType_DT_FILE {
                 log::debug!("Descriptor exists for fd {fd}, but is not a regular file type");
-                return Err(Errno::EACCES.into());
+                return Err(Errno::EACCES);
             }
 
             // success; we know we have a file type descriptor
@@ -253,7 +253,7 @@ impl SyscallHandler {
         // the file is None for an anonymous mapping, or a non-null Some otherwise
         let Ok(plugin_fd) = plugin_fd.transpose() else {
             log::warn!("mmap on fd {fd} for {len} bytes failed");
-            return Err(Errno::EACCES.into());
+            return Err(Errno::EACCES);
         };
 
         // delegate execution of the mmap itself to the memory manager
@@ -278,7 +278,7 @@ impl SyscallHandler {
             Self::close_plugin_file(ctx.objs, plugin_fd);
         }
 
-        Ok(mmap_result?)
+        mmap_result
     }
 
     fn open_plugin_file(

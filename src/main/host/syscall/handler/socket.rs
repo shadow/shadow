@@ -35,7 +35,7 @@ impl SyscallHandler {
         domain: std::ffi::c_int,
         socket_type: std::ffi::c_int,
         protocol: std::ffi::c_int,
-    ) -> Result<DescriptorHandle, SyscallError> {
+    ) -> Result<DescriptorHandle, Errno> {
         // remove any flags from the socket type
         let flags = socket_type & (libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC);
         let socket_type = socket_type & !flags;
@@ -57,7 +57,7 @@ impl SyscallHandler {
                     Ok(x) => x,
                     Err(e) => {
                         warn!("{}", e);
-                        return Err(Errno::EPROTONOSUPPORT.into());
+                        return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
 
@@ -67,7 +67,7 @@ impl SyscallHandler {
                         "Unsupported socket protocol {}, we only support default protocol 0",
                         protocol
                     );
-                    return Err(Errno::EPROTONOSUPPORT.into());
+                    return Err(Errno::EPROTONOSUPPORT);
                 }
 
                 Socket::Unix(UnixSocket::new(
@@ -80,7 +80,7 @@ impl SyscallHandler {
                 libc::SOCK_STREAM => {
                     if protocol != 0 && protocol != libc::IPPROTO_TCP {
                         log::debug!("Unsupported inet stream socket protocol {protocol}");
-                        return Err(Errno::EPROTONOSUPPORT.into());
+                        return Err(Errno::EPROTONOSUPPORT);
                     }
 
                     if ctx.objs.host.params.use_new_tcp {
@@ -95,7 +95,7 @@ impl SyscallHandler {
                 libc::SOCK_DGRAM => {
                     if protocol != 0 && protocol != libc::IPPROTO_UDP {
                         log::debug!("Unsupported inet dgram socket protocol {protocol}");
-                        return Err(Errno::EPROTONOSUPPORT.into());
+                        return Err(Errno::EPROTONOSUPPORT);
                     }
                     let send_buf_size = ctx.objs.host.params.init_sock_send_buf_size;
                     let recv_buf_size = ctx.objs.host.params.init_sock_recv_buf_size;
@@ -105,26 +105,26 @@ impl SyscallHandler {
                         recv_buf_size.try_into().unwrap(),
                     )))
                 }
-                _ => return Err(Errno::ESOCKTNOSUPPORT.into()),
+                _ => return Err(Errno::ESOCKTNOSUPPORT),
             },
             libc::AF_NETLINK => {
                 let socket_type = match NetlinkSocketType::try_from(socket_type) {
                     Ok(x) => x,
                     Err(e) => {
                         warn!("{}", e);
-                        return Err(Errno::EPROTONOSUPPORT.into());
+                        return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
                 let family = match NetlinkFamily::try_from(protocol) {
                     Ok(x) => x,
                     Err(e) => {
                         warn!("{}", e);
-                        return Err(Errno::EPROTONOSUPPORT.into());
+                        return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
                 Socket::Netlink(NetlinkSocket::new(file_flags, socket_type, family))
             }
-            _ => return Err(Errno::EAFNOSUPPORT.into()),
+            _ => return Err(Errno::EAFNOSUPPORT),
         };
 
         let mut desc = Descriptor::new(CompatFile::New(OpenFile::new(File::Socket(socket))));
@@ -524,7 +524,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let addr_to_write: Option<SockaddrStorage> = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -532,16 +532,16 @@ impl SyscallHandler {
 
             let CompatFile::New(file) = desc.file() else {
                 // we don't have any C socket objects
-                return Err(Errno::ENOTSOCK.into());
+                return Err(Errno::ENOTSOCK);
             };
 
             let File::Socket(socket) = file.inner_file() else {
-                return Err(Errno::ENOTSOCK.into());
+                return Err(Errno::ENOTSOCK);
             };
 
             // linux will return an EFAULT before other errors
             if addr_ptr.is_null() || addr_len_ptr.is_null() {
-                return Err(Errno::EFAULT.into());
+                return Err(Errno::EFAULT);
             }
 
             let socket = socket.borrow();
@@ -571,7 +571,7 @@ impl SyscallHandler {
         fd: std::ffi::c_int,
         addr_ptr: ForeignPtr<u8>,
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let addr_to_write = {
             // get the descriptor, or return early if it doesn't exist
             let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
@@ -579,16 +579,16 @@ impl SyscallHandler {
 
             let CompatFile::New(file) = desc.file() else {
                 // we don't have any C socket objects
-                return Err(Errno::ENOTSOCK.into());
+                return Err(Errno::ENOTSOCK);
             };
 
             let File::Socket(socket) = file.inner_file() else {
-                return Err(Errno::ENOTSOCK.into());
+                return Err(Errno::ENOTSOCK);
             };
 
             // linux will return an EFAULT before other errors like ENOTCONN
             if addr_ptr.is_null() || addr_len_ptr.is_null() {
-                return Err(Errno::EFAULT.into());
+                return Err(Errno::EFAULT);
             }
 
             // this is a clippy false-positive
@@ -618,19 +618,19 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         fd: std::ffi::c_int,
         backlog: std::ffi::c_int,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         // get the descriptor, or return early if it doesn't exist
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
         let desc = Self::get_descriptor(&desc_table, fd)?;
 
         let CompatFile::New(file) = desc.file() else {
             // we don't have any C socket objects
-            return Err(Errno::ENOTSOCK.into());
+            return Err(Errno::ENOTSOCK);
         };
 
         let File::Socket(socket) = file.inner_file() else {
             drop(desc_table);
-            return Err(Errno::ENOTSOCK.into());
+            return Err(Errno::ENOTSOCK);
         };
 
         let mut rng = ctx.objs.host.random_mut();
