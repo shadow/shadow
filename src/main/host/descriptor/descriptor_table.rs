@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use log::*;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::syscall_types::SyscallReg;
 
 use crate::host::descriptor::Descriptor;
 use crate::host::host::Host;
@@ -287,11 +288,29 @@ impl From<DescriptorHandle> for u32 {
     }
 }
 
+impl From<DescriptorHandle> for u64 {
+    fn from(x: DescriptorHandle) -> u64 {
+        x.0.into()
+    }
+}
+
 impl From<DescriptorHandle> for i32 {
     fn from(x: DescriptorHandle) -> i32 {
         const _: () = assert!(FD_MAX <= i32::MAX as u32);
         // the constructor makes sure this won't panic
         x.0.try_into().unwrap()
+    }
+}
+
+impl From<DescriptorHandle> for i64 {
+    fn from(x: DescriptorHandle) -> i64 {
+        x.0.into()
+    }
+}
+
+impl From<DescriptorHandle> for SyscallReg {
+    fn from(x: DescriptorHandle) -> SyscallReg {
+        x.0.into()
     }
 }
 

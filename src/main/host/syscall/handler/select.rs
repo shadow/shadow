@@ -22,7 +22,7 @@ impl SyscallHandler {
         _exp: ForeignPtr<linux_api::posix_types::kernel_fd_set>,
         _tvp: ForeignPtr<linux_api::time::kernel_old_timeval>,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        Ok(Self::legacy_syscall(c::syscallhandler_select, ctx)?.into())
+        Self::legacy_syscall(c::syscallhandler_select, ctx)
     }
 
     log_syscall!(
@@ -44,6 +44,6 @@ impl SyscallHandler {
         _tsp: ForeignPtr<linux_api::time::kernel_timespec>,
         _sig: ForeignPtr<()>,
     ) -> Result<std::ffi::c_int, SyscallError> {
-        Ok(Self::legacy_syscall(c::syscallhandler_pselect6, ctx)?.into())
+        Self::legacy_syscall(c::syscallhandler_pselect6, ctx)
     }
 }

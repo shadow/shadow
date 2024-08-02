@@ -262,8 +262,8 @@ impl SyscallHandler {
         _oact: ForeignPtr<linux_api::signal::sigaction>,
         _sigsetsize: libc::size_t,
     ) -> Result<(), SyscallError> {
-        let rv = Self::legacy_syscall(c::syscallhandler_rt_sigaction, ctx)?;
-        assert_eq!(0, i32::from(rv));
+        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigaction, ctx)?;
+        assert_eq!(rv, 0);
         Ok(())
     }
 
@@ -282,8 +282,8 @@ impl SyscallHandler {
         _oset: ForeignPtr<linux_api::signal::sigset_t>,
         _sigsetsize: libc::size_t,
     ) -> Result<(), SyscallError> {
-        let rv = Self::legacy_syscall(c::syscallhandler_rt_sigprocmask, ctx)?;
-        assert_eq!(0, i32::from(rv));
+        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigprocmask, ctx)?;
+        assert_eq!(rv, 0);
         Ok(())
     }
 
@@ -298,8 +298,8 @@ impl SyscallHandler {
         _uss: ForeignPtr<linux_api::signal::stack_t>,
         _uoss: ForeignPtr<linux_api::signal::stack_t>,
     ) -> Result<(), SyscallError> {
-        let rv = Self::legacy_syscall(c::syscallhandler_sigaltstack, ctx)?;
-        assert_eq!(0, i32::from(rv));
+        let rv: i32 = Self::legacy_syscall(c::syscallhandler_sigaltstack, ctx)?;
+        assert_eq!(rv, 0);
         Ok(())
     }
 }

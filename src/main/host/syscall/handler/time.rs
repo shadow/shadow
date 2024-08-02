@@ -7,7 +7,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::types::{SyscallError, SyscallResult};
+use crate::host::syscall::types::SyscallError;
 use crate::host::timer::Timer;
 
 fn itimerval_from_timer(timer: &Timer) -> linux_api::time::itimerval {
@@ -36,7 +36,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         which: std::ffi::c_int,
         curr_value_ptr: ForeignPtr<linux_api::time::itimerval>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let Ok(which) = ITimerId::try_from(which) else {
             debug!("Bad itimerid {which}");
             return Err(Errno::EINVAL.into());
@@ -53,7 +53,7 @@ impl SyscallHandler {
             .memory_borrow_mut()
             .write(curr_value_ptr, &itimerval)?;
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -68,7 +68,7 @@ impl SyscallHandler {
         which: std::ffi::c_int,
         new_value_ptr: ForeignPtr<linux_api::time::itimerval>,
         old_value_ptr: ForeignPtr<linux_api::time::itimerval>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let Ok(which) = ITimerId::try_from(which) else {
             debug!("Bad itimerid {which}");
             return Err(Errno::EINVAL.into());
@@ -105,7 +105,7 @@ impl SyscallHandler {
             );
         }
 
-        Ok(0.into())
+        Ok(())
     }
 
     log_syscall!(
@@ -172,7 +172,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         clock_id: linux_api::time::linux___kernel_clockid_t,
         res_ptr: ForeignPtr<linux_api::time::timespec>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         // Make sure we have a valid clock id.
         ClockId::try_from(clock_id).map_err(|_| Errno::EINVAL)?;
 
@@ -185,7 +185,7 @@ impl SyscallHandler {
                 .write(res_ptr, &res_time)?;
         }
 
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(
@@ -202,7 +202,7 @@ impl SyscallHandler {
         flags: std::ffi::c_int,
         request_ptr: ForeignPtr<linux_api::time::timespec>,
         remain_ptr: ForeignPtr<linux_api::time::timespec>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let clock_id = ClockId::try_from(clock_id).map_err(|_| Errno::EINVAL)?;
 
         // Check for clock_ids that specifically support nanosleep.
@@ -254,7 +254,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         req: ForeignPtr<linux_api::time::timespec>,
         rem: ForeignPtr<linux_api::time::timespec>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         Self::nanosleep_helper(ctx, 0, req, rem, false)
     }
 
@@ -264,7 +264,7 @@ impl SyscallHandler {
         request_ptr: ForeignPtr<linux_api::time::timespec>,
         remain_ptr: ForeignPtr<linux_api::time::timespec>,
         allow_unspec_bitflags: bool,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let request = ctx.objs.process.memory_borrow().read(request_ptr)?;
         let request_time = SimulationTime::try_from(request).or(Err(Errno::EINVAL))?;
         let flags = if allow_unspec_bitflags {
@@ -284,7 +284,7 @@ impl SyscallHandler {
 
         // A wakeup time in the past means we return without sleeping.
         if abs_wakeup_time <= now {
-            return Ok(0);
+            return Ok(());
         }
 
         // Condition will exist after a wakeup.
@@ -298,7 +298,7 @@ impl SyscallHandler {
 
         if expected_wakeup_time <= now {
             // Successful sleep and wakeup!
-            Ok(0)
+            Ok(())
         } else {
             // Possibly write out the remaining time until the expected wakeup.
             if !remain_ptr.is_null() && !flags.contains(ClockNanosleepFlags::TIMER_ABSTIME) {

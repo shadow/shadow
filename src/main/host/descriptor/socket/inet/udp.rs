@@ -202,7 +202,7 @@ impl UdpSocket {
         !self.send_buffer.is_empty()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut addr = self
             .bound_addr
             .unwrap_or(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0));
@@ -218,7 +218,7 @@ impl UdpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         Ok(Some(self.peer_addr.ok_or(Errno::ENOTCONN)?.into()))
     }
 
@@ -244,7 +244,7 @@ impl UdpSocket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if the address pointer was NULL
         let Some(addr) = addr else {
             return Err(Errno::EFAULT.into());
@@ -293,7 +293,7 @@ impl UdpSocket {
             socket.association = Some(handle);
         }
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn readv(
@@ -658,8 +658,8 @@ impl UdpSocket {
         _net_ns: &NetworkNamespace,
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
-        Err(Errno::EOPNOTSUPP.into())
+    ) -> Result<(), Errno> {
+        Err(Errno::EOPNOTSUPP)
     }
 
     pub fn connect(

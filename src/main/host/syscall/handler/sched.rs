@@ -73,7 +73,7 @@ impl SyscallHandler {
         // > of type unsigned long *) impose no restriction on the size of the CPU
         // > mask
         mask_ptr: ForeignPtr<std::ffi::c_ulong>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let mask_ptr = mask_ptr.cast::<u8>();
         let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
 
@@ -96,7 +96,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(
@@ -113,7 +113,7 @@ impl SyscallHandler {
         rseq_len: u32,
         flags: std::ffi::c_int,
         sig: u32,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let rseq_len = usize::try_from(rseq_len).unwrap();
         if rseq_len != std::mem::size_of::<rseq>() {
             // Probably worth a warning; decent chance that the bug is in Shadow
@@ -133,7 +133,7 @@ impl SyscallHandler {
         rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,
         flags: i32,
         _sig: u32,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         if flags & (!RSEQ_FLAG_UNREGISTER) != 0 {
             warn!("Unrecognized rseq flags: {}", flags);
             return Err(Errno::EINVAL.into());
@@ -144,7 +144,7 @@ impl SyscallHandler {
             // * Validate that `sig` matches registration
             // * Set the cpu_id of the previously registerd rseq to the uninitialized
             //   state.
-            return Ok(0);
+            return Ok(());
         }
         let mut mem = ctx.objs.process.memory_borrow_mut();
         let mut rseq = mem.memory_ref_mut(ForeignArrayPtr::new(rseq_ptr, 1))?;
@@ -168,6 +168,6 @@ impl SyscallHandler {
         rseq[0].cpu_id_start = CURRENT_CPU;
         rseq.flush()?;
 
-        Ok(0)
+        Ok(())
     }
 }

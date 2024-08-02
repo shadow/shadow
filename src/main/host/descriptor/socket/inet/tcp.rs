@@ -288,7 +288,7 @@ impl TcpSocket {
         self.tcp_state.wants_to_send()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         // The socket state won't always have the local address. For example if the socket was bound
         // but connect() hasn't yet been called, the socket state will not have a local or remote
         // address. Instead we should get the local address from the association.
@@ -300,7 +300,7 @@ impl TcpSocket {
         ))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         // The association won't always have the peer address. For example if the socket was bound
         // before connect() was called, the association will have a peer of 0.0.0.0. Instead we
         // should get the peer address from the socket state.
@@ -344,7 +344,7 @@ impl TcpSocket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if the address pointer was NULL
         let Some(addr) = addr else {
             return Err(Errno::EFAULT.into());
@@ -379,7 +379,7 @@ impl TcpSocket {
 
         socket_ref.association = Some(handle);
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn readv(
@@ -555,7 +555,7 @@ impl TcpSocket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let socket_ref = &mut *socket.borrow_mut();
 
         // linux also makes this cast, so negative backlogs wrap around to large positive backlogs
@@ -588,14 +588,14 @@ impl TcpSocket {
                     rng,
                 )?;
 
-                Ok::<_, SyscallError>(Some(handle))
+                Ok::<_, Errno>(Some(handle))
             };
             socket_ref.with_tcp_state(cb_queue, |state| state.listen(backlog, associate_fn))
         };
 
         let handle = match rv {
             Ok(x) => x,
-            Err(tcp::ListenError::InvalidState) => return Err(Errno::EINVAL.into()),
+            Err(tcp::ListenError::InvalidState) => return Err(Errno::EINVAL),
             Err(tcp::ListenError::FailedAssociation(e)) => return Err(e),
         };
 

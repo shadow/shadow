@@ -110,7 +110,7 @@ impl SyscallHandler {
         addr: std::ffi::c_ulong,
         len: usize,
         prot: std::ffi::c_ulong,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         let addr: usize = addr.try_into().unwrap();
         let addr = ForeignPtr::<()>::from(addr).cast::<u8>();
 
@@ -268,10 +268,6 @@ impl SyscallHandler {
             offset,
         );
 
-        // we should have already run the mmap natively above, and it wouldn't make sense to return
-        // `SyscallError::Native` here
-        assert!(!matches!(mmap_result, Err(SyscallError::Native)));
-
         log::trace!(
             "Plugin-native mmap syscall at plugin addr {addr:p} with plugin fd {fd} for \
             {len} bytes returned {mmap_result:?}"
@@ -282,7 +278,7 @@ impl SyscallHandler {
             Self::close_plugin_file(ctx.objs, plugin_fd);
         }
 
-        mmap_result
+        Ok(mmap_result?)
     }
 
     fn open_plugin_file(

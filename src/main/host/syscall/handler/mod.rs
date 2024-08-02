@@ -672,7 +672,10 @@ impl SyscallHandler {
     }
 
     /// Run a legacy C syscall handler.
-    fn legacy_syscall(syscall: LegacySyscallFn, ctx: &mut SyscallContext) -> SyscallResult {
+    fn legacy_syscall<T: From<SyscallReg>>(
+        syscall: LegacySyscallFn,
+        ctx: &mut SyscallContext,
+    ) -> Result<T, SyscallError> {
         let rv: SyscallResult =
             unsafe { syscall(ctx.handler, std::ptr::from_ref(ctx.args)) }.into();
 
@@ -689,7 +692,7 @@ impl SyscallHandler {
                 .expect("flushing syscall ptrs");
         }
 
-        rv
+        rv.map(Into::into)
     }
 }
 

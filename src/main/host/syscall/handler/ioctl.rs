@@ -13,26 +13,20 @@ impl SyscallHandler {
     log_syscall!(
         ioctl,
         /* rv */ std::ffi::c_int,
-        /* fd */ std::ffi::c_int,
-        /* request */ std::ffi::c_ulong,
+        /* fd */ std::ffi::c_uint,
+        /* cmd */ std::ffi::c_uint,
+        /* arg */ std::ffi::c_ulong,
     );
     pub fn ioctl(
         ctx: &mut SyscallContext,
-        fd: std::ffi::c_int,
-        request: std::ffi::c_ulong,
+        fd: std::ffi::c_uint,
+        cmd: std::ffi::c_uint,
         arg_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        log::trace!("Called ioctl() on fd {} with request {}", fd, request);
+        log::trace!("Called ioctl() on fd {} with cmd {}", fd, cmd);
 
-        // ioctl(2):
-        // > Ioctl command values are 32-bit constants.
-        let Ok(request) = u32::try_from(request) else {
-            debug!("ioctl request {request} exceeds 32 bits");
-            return Err(Errno::EINVAL.into());
-        };
-
-        let Ok(request) = IoctlRequest::try_from(request) else {
-            debug!("Unrecognized ioctl request {request}");
+        let Ok(cmd) = IoctlRequest::try_from(cmd) else {
+            debug!("Unrecognized ioctl cmd {cmd}");
             return Err(Errno::EINVAL.into());
         };
 
@@ -42,7 +36,7 @@ impl SyscallHandler {
             let desc = Self::get_descriptor_mut(&mut desc_table, fd)?;
 
             // add the CLOEXEC flag
-            if request == IoctlRequest::FIOCLEX {
+            if cmd == IoctlRequest::FIOCLEX {
                 let mut flags = desc.flags();
                 flags.insert(DescriptorFlags::FD_CLOEXEC);
                 desc.set_flags(flags);
@@ -51,7 +45,7 @@ impl SyscallHandler {
             }
 
             // remove the CLOEXEC flag
-            if request == IoctlRequest::FIONCLEX {
+            if cmd == IoctlRequest::FIONCLEX {
                 let mut flags = desc.flags();
                 flags.remove(DescriptorFlags::FD_CLOEXEC);
                 desc.set_flags(flags);
@@ -76,7 +70,7 @@ impl SyscallHandler {
         let mut file = file.borrow_mut();
 
         // all file types that shadow implements should support non-blocking operation
-        if request == IoctlRequest::FIONBIO {
+        if cmd == IoctlRequest::FIONBIO {
             let arg_ptr = arg_ptr.cast::<std::ffi::c_int>();
             let arg = ctx.objs.process.memory_borrow_mut().read(arg_ptr)?;
 
@@ -88,6 +82,6 @@ impl SyscallHandler {
         }
 
         // handle file-specific ioctls
-        file.ioctl(request, arg_ptr, &mut ctx.objs.process.memory_borrow_mut())
+        file.ioctl(cmd, arg_ptr, &mut ctx.objs.process.memory_borrow_mut())
     }
 }

@@ -4,7 +4,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::types::SyscallResult;
+use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     log_syscall!(
@@ -15,7 +15,7 @@ impl SyscallHandler {
     pub fn sysinfo(
         ctx: &mut SyscallContext,
         info_ptr: ForeignPtr<linux_api::sysinfo::sysinfo>,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // Seconds are needed for uptime.
         let seconds = Worker::current_time()
             .unwrap()
@@ -49,6 +49,6 @@ impl SyscallHandler {
             .process
             .memory_borrow_mut()
             .write(info_ptr, &info)?;
-        Ok(0.into())
+        Ok(())
     }
 }

@@ -888,7 +888,7 @@ impl MemoryMapper {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: ProtFlags,
-    ) -> Result<i32, Errno> {
+    ) -> Result<(), Errno> {
         let (ctx, thread) = ctx.split_thread();
         trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
         thread.native_mprotect(&ctx, addr, size, prot)?;
@@ -1004,7 +1004,7 @@ impl MemoryMapper {
                 }
             }
         }
-        Ok(0)
+        Ok(())
     }
 
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.

@@ -185,7 +185,7 @@ impl LegacyTcpSocket {
         self.peek_packet().is_some()
     }
 
-    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut ip: libc::in_addr_t = 0;
         let mut port: libc::in_port_t = 0;
 
@@ -203,7 +203,7 @@ impl LegacyTcpSocket {
         Ok(Some(addr.into()))
     }
 
-    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<SockaddrIn>, Errno> {
         let mut ip: libc::in_addr_t = 0;
         let mut port: libc::in_port_t = 0;
 
@@ -211,7 +211,7 @@ impl LegacyTcpSocket {
         let okay =
             unsafe { c::legacysocket_getPeerName(self.as_legacy_socket(), &mut ip, &mut port) };
         if okay != 1 {
-            return Err(Errno::ENOTCONN.into());
+            return Err(Errno::ENOTCONN);
         }
 
         let ip = Ipv4Addr::from(u32::from_be(ip));
@@ -238,7 +238,7 @@ impl LegacyTcpSocket {
         addr: Option<&SockaddrStorage>,
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if the address pointer was NULL
         let Some(addr) = addr else {
             return Err(Errno::EFAULT.into());
@@ -299,7 +299,7 @@ impl LegacyTcpSocket {
             )
         };
 
-        Ok(0.into())
+        Ok(())
     }
 
     pub fn readv(
@@ -633,7 +633,7 @@ impl LegacyTcpSocket {
         net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let socket_ref = socket.borrow();
 
         // only listen on the socket if it is not used for other functions
@@ -641,7 +641,7 @@ impl LegacyTcpSocket {
             unsafe { c::tcp_isListeningAllowed(socket_ref.as_legacy_tcp()) } == 1;
         if !is_listening_allowed {
             log::debug!("Cannot listen on previously used socket");
-            return Err(Errno::EOPNOTSUPP.into());
+            return Err(Errno::EOPNOTSUPP);
         }
 
         // if we are already listening, just update the backlog and return 0

@@ -633,7 +633,7 @@ impl MemoryManager {
         flags: MapFlags,
         fd: i32,
         offset: i64,
-    ) -> Result<ForeignPtr<u8>, SyscallError> {
+    ) -> Result<ForeignPtr<u8>, Errno> {
         let addr = {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
@@ -699,7 +699,7 @@ impl MemoryManager {
         addr: ForeignPtr<u8>,
         size: usize,
         prot: ProtFlags,
-    ) -> Result<i32, SyscallError> {
+    ) -> Result<(), SyscallError> {
         match &mut self.memory_mapper {
             Some(mm) => Ok(mm.handle_mprotect(ctx, addr, size, prot)?),
             None => Err(SyscallError::Native),

@@ -129,15 +129,15 @@ impl NetlinkSocket {
         self.common.has_open_file = val;
     }
 
-    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+    pub fn getsockname(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, Errno> {
         self.protocol_state.bound_address()
     }
 
-    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, SyscallError> {
+    pub fn getpeername(&self) -> Result<Option<nix::sys::socket::NetlinkAddr>, Errno> {
         warn_once_then_debug!(
             "getpeername() syscall not yet supported for netlink sockets; Returning ENOSYS"
         );
-        Err(Errno::ENOSYS.into())
+        Err(Errno::ENOSYS)
     }
 
     pub fn address_family(&self) -> linux_api::socket::AddressFamily {
@@ -232,7 +232,7 @@ impl NetlinkSocket {
         addr: Option<&SockaddrStorage>,
         _net_ns: &NetworkNamespace,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         let socket_ref = &mut *socket.borrow_mut();
         socket_ref
             .protocol_state
@@ -299,9 +299,9 @@ impl NetlinkSocket {
         _net_ns: &NetworkNamespace,
         _rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         warn_once_then_debug!("We do not yet handle listen request on netlink sockets");
-        Err(Errno::EINVAL.into())
+        Err(Errno::EINVAL)
     }
 
     pub fn connect(
@@ -433,7 +433,7 @@ impl ProtocolState {
         }))
     }
 
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         match self {
             Self::Initial(x) => x.as_ref().unwrap().bound_address(),
             Self::Closed(x) => x.as_ref().unwrap().bound_address(),
@@ -478,7 +478,7 @@ impl ProtocolState {
         socket: &Arc<AtomicRefCell<NetlinkSocket>>,
         addr: Option<&SockaddrStorage>,
         rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         match self {
             Self::Initial(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
             Self::Closed(x) => x.as_mut().unwrap().bind(common, socket, addr, rng),
@@ -527,7 +527,7 @@ impl ProtocolState {
 }
 
 impl InitialState {
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         Ok(self.bound_addr)
     }
 
@@ -576,7 +576,7 @@ impl InitialState {
         _socket: &Arc<AtomicRefCell<NetlinkSocket>>,
         addr: Option<&SockaddrStorage>,
         _rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // if already bound
         if self.bound_addr.is_some() {
             return Err(Errno::EINVAL.into());
@@ -610,7 +610,7 @@ impl InitialState {
             return Err(Errno::EINVAL.into());
         }
 
-        Ok(0.into())
+        Ok(())
     }
 
     fn sendmsg(
@@ -952,7 +952,7 @@ impl InitialState {
 }
 
 impl ClosedState {
-    fn bound_address(&self) -> Result<Option<NetlinkAddr>, SyscallError> {
+    fn bound_address(&self) -> Result<Option<NetlinkAddr>, Errno> {
         Ok(None)
     }
 
@@ -985,7 +985,7 @@ impl ClosedState {
         _socket: &Arc<AtomicRefCell<NetlinkSocket>>,
         _addr: Option<&SockaddrStorage>,
         _rng: impl rand::Rng,
-    ) -> SyscallResult {
+    ) -> Result<(), SyscallError> {
         // We follow the same approach as UnixSocket
         log::warn!("bind() while in state {}", std::any::type_name::<Self>());
         Err(Errno::EOPNOTSUPP.into())

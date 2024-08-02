@@ -9,6 +9,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::cshadow;
+use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::epoll::Epoll;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, OpenFile};
 use crate::host::memory_manager::MemoryManager;
@@ -25,7 +26,7 @@ impl SyscallHandler {
     pub fn epoll_create(
         ctx: &mut SyscallContext,
         size: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // epoll_create(2): "Since Linux 2.6.8, the size argument is ignored, but must be greater
         // than zero"
         if size <= 0 {
@@ -43,14 +44,14 @@ impl SyscallHandler {
     pub fn epoll_create1(
         ctx: &mut SyscallContext,
         flags: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         Self::epoll_create_helper(ctx, flags)
     }
 
     fn epoll_create_helper(
         ctx: &mut SyscallContext,
         flags: std::ffi::c_int,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<DescriptorHandle, SyscallError> {
         // See here for the order that the input args are checked in Linux:
         // https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2030
         let Some(flags) = EpollCreateFlags::from_bits(flags) else {
@@ -77,7 +78,7 @@ impl SyscallHandler {
 
         log::trace!("Created epoll fd {fd}");
 
-        Ok(fd.val().try_into().unwrap())
+        Ok(fd)
     }
 
     log_syscall!(
@@ -94,7 +95,7 @@ impl SyscallHandler {
         op: std::ffi::c_int,
         fd: std::ffi::c_int,
         event_ptr: ForeignPtr<linux_api::epoll::epoll_event>,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         // See here for the order that the input args are checked in Linux:
         // https://github.com/torvalds/linux/blob/2cf0f715623872823a72e451243bbf555d10d032/fs/eventpoll.c#L2111
 
@@ -188,7 +189,7 @@ impl SyscallHandler {
                     .ctl(op, fd, target, events, data, weak_epoll, cb_queue)
             })
         })?;
-        Ok(0)
+        Ok(())
     }
 
     log_syscall!(

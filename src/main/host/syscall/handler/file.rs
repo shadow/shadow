@@ -122,8 +122,7 @@ impl SyscallHandler {
                 // if it's a legacy file, use the C syscall handler instead
                 CompatFile::Legacy(_) => {
                     drop(desc_table);
-                    return Self::legacy_syscall(cshadow::syscallhandler_lseek, ctx)
-                        .map(Into::into);
+                    return Self::legacy_syscall(cshadow::syscallhandler_lseek, ctx);
                 }
             }
         };

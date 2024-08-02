@@ -20,7 +20,7 @@ impl SyscallHandler {
         first: std::ffi::c_uint,
         last: std::ffi::c_uint,
         flags: std::ffi::c_uint,
-    ) -> Result<std::ffi::c_int, SyscallError> {
+    ) -> Result<(), SyscallError> {
         // close_range(2):
         // > EINVAL: [...], or first is greater than last.
         if first > last {
@@ -29,7 +29,7 @@ impl SyscallHandler {
 
         // if the start of the range is larger than the max possible fd, then do nothing
         if first > descriptor_table::FD_MAX {
-            return Ok(0);
+            return Ok(());
         }
 
         // restrict the end of the range to the max possible fd
@@ -80,6 +80,6 @@ impl SyscallHandler {
             });
         }
 
-        Ok(0)
+        Ok(())
     }
 }
