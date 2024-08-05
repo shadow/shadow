@@ -9,7 +9,6 @@ use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::eventfd;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileStatus, OpenFile};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
     log_syscall!(
@@ -20,7 +19,7 @@ impl SyscallHandler {
     pub fn eventfd(
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
-    ) -> Result<DescriptorHandle, SyscallError> {
+    ) -> Result<DescriptorHandle, Errno> {
         Self::eventfd_helper(ctx, init_val, 0)
     }
 
@@ -34,7 +33,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> Result<DescriptorHandle, SyscallError> {
+    ) -> Result<DescriptorHandle, Errno> {
         Self::eventfd_helper(ctx, init_val, flags)
     }
 
@@ -42,7 +41,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         init_val: std::ffi::c_uint,
         flags: std::ffi::c_int,
-    ) -> Result<DescriptorHandle, SyscallError> {
+    ) -> Result<DescriptorHandle, Errno> {
         log::trace!("eventfd() called with initval {init_val} and flags {flags}");
 
         // get the flags
@@ -50,7 +49,7 @@ impl SyscallHandler {
             Some(x) => x,
             None => {
                 log::warn!("Invalid eventfd flags: {}", flags);
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             }
         };
 

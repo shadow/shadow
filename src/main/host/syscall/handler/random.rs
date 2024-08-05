@@ -4,7 +4,7 @@ use rand::RngCore;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::types::{ForeignArrayPtr, SyscallResult};
+use crate::host::syscall::types::ForeignArrayPtr;
 
 impl SyscallHandler {
     log_syscall!(
@@ -19,11 +19,11 @@ impl SyscallHandler {
         buf_ptr: ForeignPtr<u8>,
         count: usize,
         _flags: std::ffi::c_uint,
-    ) -> SyscallResult {
+    ) -> Result<isize, Errno> {
         // We ignore the flags arg, because we use the same random source for both
         // random and urandom, and it never blocks anyway.
 
-        trace!("Trying to read {} random bytes.", count);
+        trace!("Trying to read {count} random bytes.");
 
         // Get a native-process mem buffer where we can copy the random bytes.
         let dst_ptr = ForeignArrayPtr::new(buf_ptr, count);
@@ -31,8 +31,8 @@ impl SyscallHandler {
         let mut mem_ref = match memory.memory_ref_mut_uninit(dst_ptr) {
             Ok(m) => m,
             Err(e) => {
-                warn!("Failed to get memory ref: {:?}", e);
-                return Err(Errno::EFAULT.into());
+                warn!("Failed to get memory ref: {e:?}");
+                return Err(Errno::EFAULT);
             }
         };
 
@@ -42,10 +42,10 @@ impl SyscallHandler {
 
         // We must flush the memory reference to write it back.
         match mem_ref.flush() {
-            Ok(()) => Ok(isize::try_from(count).unwrap().into()),
+            Ok(()) => Ok(isize::try_from(count).unwrap()),
             Err(e) => {
-                warn!("Failed to flush writes: {:?}", e);
-                Err(Errno::EFAULT.into())
+                warn!("Failed to flush writes: {e:?}");
+                Err(Errno::EFAULT)
             }
         }
     }

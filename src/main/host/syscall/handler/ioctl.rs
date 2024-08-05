@@ -23,7 +23,7 @@ impl SyscallHandler {
         cmd: std::ffi::c_uint,
         arg_ptr: ForeignPtr<()>,
     ) -> SyscallResult {
-        log::trace!("Called ioctl() on fd {} with cmd {}", fd, cmd);
+        log::trace!("Called ioctl() on fd {fd} with cmd {cmd}");
 
         let Ok(cmd) = IoctlRequest::try_from(cmd) else {
             debug!("Unrecognized ioctl cmd {cmd}");

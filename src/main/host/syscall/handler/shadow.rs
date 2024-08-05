@@ -3,17 +3,17 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
+use crate::host::syscall::types::ForeignArrayPtr;
 use crate::utility::case_insensitive_eq;
 
 impl SyscallHandler {
     log_syscall!(shadow_yield, /* rv */ std::ffi::c_int);
-    pub fn shadow_yield(_ctx: &mut SyscallContext) -> Result<(), SyscallError> {
+    pub fn shadow_yield(_ctx: &mut SyscallContext) -> Result<(), Errno> {
         Ok(())
     }
 
     log_syscall!(shadow_init_memory_manager, /* rv */ std::ffi::c_int);
-    pub fn shadow_init_memory_manager(ctx: &mut SyscallContext) -> Result<(), SyscallError> {
+    pub fn shadow_init_memory_manager(ctx: &mut SyscallContext) -> Result<(), Errno> {
         if !ctx.objs.host.params.use_mem_mapper {
             log::trace!("Not initializing memory mapper");
             return Ok(());
@@ -43,7 +43,7 @@ impl SyscallHandler {
         name_len: u64,
         addr_ptr: ForeignPtr<()>,
         addr_len: u64,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         log::trace!("Handling custom syscall shadow_hostname_to_addr_ipv4");
 
         let name_len: usize = name_len.try_into().unwrap();
@@ -51,7 +51,7 @@ impl SyscallHandler {
 
         if addr_len < std::mem::size_of::<u32>() {
             log::trace!("Invalid addr_len {addr_len}, returning EINVAL");
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         }
 
         // TODO: Don't add 1 byte to length (if the application gave us a length of X bytes, don't
@@ -96,7 +96,7 @@ impl SyscallHandler {
         let Some(addr) = addr else {
             log::trace!("Unable to find address for name {lookup_name:?}");
             // return EFAULT like gethostname
-            return Err(Errno::EFAULT.into());
+            return Err(Errno::EFAULT);
         };
 
         log::trace!("Found address {addr} for name {lookup_name:?}");

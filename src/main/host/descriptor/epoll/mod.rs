@@ -154,7 +154,7 @@ impl Epoll {
         data: u64,
         weak_self: Weak<AtomicRefCell<Epoll>>,
         cb_queue: &mut CallbackQueue,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         let state = target_file.borrow().state();
         let key = Key::new(target_fd, target_file);
 
@@ -170,7 +170,7 @@ impl Epoll {
                 // TODO change this to an assertion when legacy tcp is removed.
                 if state.contains(FileState::CLOSED) {
                     log::warn!("Attempted to add a closed file {target_fd} to epoll");
-                    return Err(Errno::EBADF.into());
+                    return Err(Errno::EBADF);
                 }
 
                 let mut entry = Entry::new(events, data, state);
@@ -186,7 +186,7 @@ impl Epoll {
                 // From epoll_ctl(2): Returns EEXIST when "op was EPOLL_CTL_ADD, and the supplied
                 // file descriptor fd is already registered with this epoll instance."
                 match self.monitoring.entry(key.clone()) {
-                    HashMapEntry::Occupied(_) => return Err(Errno::EEXIST.into()),
+                    HashMapEntry::Occupied(_) => return Err(Errno::EEXIST),
                     HashMapEntry::Vacant(x) => x.insert(entry),
                 };
             }

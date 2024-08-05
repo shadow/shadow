@@ -11,7 +11,6 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
-use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 use super::{SyscallContext, SyscallHandler};
@@ -25,7 +24,7 @@ impl SyscallHandler {
         ptid: ForeignPtr<kernel_pid_t>,
         ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
-    ) -> Result<kernel_pid_t, SyscallError> {
+    ) -> Result<kernel_pid_t, Errno> {
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
         let mut handled_flags = CloneFlags::empty();
@@ -50,16 +49,16 @@ impl SyscallHandler {
             // > CLONE_SIGHAND if CLONE_THREAD is specified
             if !flags.contains(CloneFlags::CLONE_SIGHAND) {
                 debug!("Missing CLONE_SIGHAND");
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             }
             if !flags.contains(CloneFlags::CLONE_SETTLS) {
                 // Legal in Linux, but the shim will be broken and behave unpredictably.
                 warn!("CLONE_THREAD without CLONE_TLS not supported by shadow");
-                return Err(Errno::ENOTSUP.into());
+                return Err(Errno::ENOTSUP);
             }
             if exit_signal.is_some() {
                 warn!("Exit signal is unimplemented");
-                return Err(Errno::ENOTSUP.into());
+                return Err(Errno::ENOTSUP);
             }
             // The native clone call will:
             // - create a thread.
@@ -77,7 +76,7 @@ impl SyscallHandler {
         } else {
             if ctx.objs.process.memory_borrow().has_mapper() {
                 warn!("Fork with memory mapper unimplemented");
-                return Err(Errno::ENOTSUP.into());
+                return Err(Errno::ENOTSUP);
             }
             // Make shadow the parent process
             native_flags.insert(CloneFlags::CLONE_PARENT);
@@ -89,7 +88,7 @@ impl SyscallHandler {
             // > CLONE_SIGHAND is specified
             if !flags.contains(CloneFlags::CLONE_VM) {
                 debug!("Missing CLONE_VM");
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             }
             // Currently a no-op since threads always share signal handlers,
             // and we don't yet support non-CLONE_THREAD.
@@ -153,7 +152,7 @@ impl SyscallHandler {
                 // exits) implies that this that the child may exist for more
                 // than a brief window before exec'ing.
                 warn!("CLONE_VM without CLONE_THREAD and without CLONE_VFORK unsupported");
-                return Err(Errno::ENOTSUP.into());
+                return Err(Errno::ENOTSUP);
             }
             handled_flags.insert(CloneFlags::CLONE_VM);
         }
@@ -179,7 +178,7 @@ impl SyscallHandler {
             // clone(2): Specifying this flag together with CLONE_SIGHAND is
             // nonsensical and disallowed.
             if flags.contains(CloneFlags::CLONE_SIGHAND) {
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             }
             false
         } else {
@@ -197,7 +196,7 @@ impl SyscallHandler {
         let unhandled_flags = flags.difference(handled_flags);
         if !unhandled_flags.is_empty() {
             warn!("Unhandled clone flags: {unhandled_flags:?}");
-            return Err(Errno::ENOTSUP.into());
+            return Err(Errno::ENOTSUP);
         }
 
         let child_mthread = ctx.objs.thread.mthread().native_clone(
@@ -321,13 +320,13 @@ impl SyscallHandler {
         ptid: ForeignPtr<kernel_pid_t>,
         ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
-    ) -> Result<kernel_pid_t, SyscallError> {
+    ) -> Result<kernel_pid_t, Errno> {
         let raw_flags = flags_and_exit_signal as u32 & !0xff;
         let raw_exit_signal = (flags_and_exit_signal as u32 & 0xff) as i32;
 
         let Some(flags) = CloneFlags::from_bits(raw_flags as u64) else {
             debug!("Couldn't parse clone flags: {raw_flags:x}");
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
 
         let exit_signal = if raw_exit_signal == 0 {
@@ -335,7 +334,7 @@ impl SyscallHandler {
         } else {
             let Ok(exit_signal) = Signal::try_from(raw_exit_signal) else {
                 debug!("Bad exit signal: {raw_exit_signal:?}");
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             };
             Some(exit_signal)
         };
@@ -353,24 +352,24 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         args: ForeignPtr<linux_api::sched::clone_args>,
         args_size: usize,
-    ) -> Result<kernel_pid_t, SyscallError> {
+    ) -> Result<kernel_pid_t, Errno> {
         if args_size != std::mem::size_of::<linux_api::sched::clone_args>() {
             // TODO: allow smaller size, and be careful to only read
             // as much as the caller specified, and zero-fill the rest.
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         }
         let args = ctx.objs.process.memory_borrow().read(args)?;
         trace!("clone3 args: {args:?}");
         let Some(flags) = CloneFlags::from_bits(args.flags) else {
             debug!("Couldn't parse clone flags: {:x}", args.flags);
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         };
         let exit_signal = if args.exit_signal == 0 {
             None
         } else {
             let Ok(exit_signal) = Signal::try_from(args.exit_signal as i32) else {
                 debug!("Bad signal number: {}", args.exit_signal);
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             };
             Some(exit_signal)
         };
@@ -386,7 +385,7 @@ impl SyscallHandler {
     }
 
     log_syscall!(fork, /* rv */ kernel_pid_t);
-    pub fn fork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+    pub fn fork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, Errno> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
         Self::clone_internal(
@@ -401,7 +400,7 @@ impl SyscallHandler {
     }
 
     log_syscall!(vfork, /* rv */ kernel_pid_t);
-    pub fn vfork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+    pub fn vfork(ctx: &mut SyscallContext) -> Result<kernel_pid_t, Errno> {
         // This should be the correct call to `clone_internal`, but `clone_internal`
         // will currently return an error.
         Self::clone_internal(
@@ -416,7 +415,7 @@ impl SyscallHandler {
     }
 
     log_syscall!(gettid, /* rv */ kernel_pid_t);
-    pub fn gettid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, SyscallError> {
+    pub fn gettid(ctx: &mut SyscallContext) -> Result<kernel_pid_t, Errno> {
         Ok(kernel_pid_t::from(ctx.objs.thread.id()))
     }
 
@@ -430,7 +429,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,
         datap: ForeignPtr<[user_cap_data; 2]>,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         // If the version is not 3, we return the error
         let hdrp = ctx.objs.process.memory_borrow().read(hdrp)?;
         if hdrp.version != LINUX_CAPABILITY_VERSION_3 {
@@ -438,7 +437,7 @@ impl SyscallHandler {
                 "The version of Linux capabilities is not supported ({})",
                 hdrp.version
             );
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         }
 
         if !datap.is_null() {
@@ -467,7 +466,7 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         hdrp: ForeignPtr<user_cap_header>,
         datap: ForeignPtr<[user_cap_data; 2]>,
-    ) -> Result<(), SyscallError> {
+    ) -> Result<(), Errno> {
         // If the version is not 3, we return the error
         let hdrp = ctx.objs.process.memory_borrow().read(hdrp)?;
         if hdrp.version != LINUX_CAPABILITY_VERSION_3 {
@@ -475,7 +474,7 @@ impl SyscallHandler {
                 "The version of Linux capabilities is not supported ({})",
                 hdrp.version
             );
-            return Err(Errno::EINVAL.into());
+            return Err(Errno::EINVAL);
         }
 
         let datap: [_; 2] = ctx.objs.process.memory_borrow().read(datap)?;
@@ -483,7 +482,7 @@ impl SyscallHandler {
             // We don't allow the plugin to set any capability
             if data.effective != 0 || data.permitted != 0 || data.inheritable != 0 {
                 warn_once_then_debug!("Setting Linux capabilities is not supported");
-                return Err(Errno::EINVAL.into());
+                return Err(Errno::EINVAL);
             }
         }
         Ok(())
