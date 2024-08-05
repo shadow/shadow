@@ -10,6 +10,7 @@
 
 SYSCALL_HANDLER(faccessat);
 SYSCALL_HANDLER(fchmodat);
+SYSCALL_HANDLER(fchmodat2);
 SYSCALL_HANDLER(fchownat);
 SYSCALL_HANDLER(futimesat);
 SYSCALL_HANDLER(linkat);

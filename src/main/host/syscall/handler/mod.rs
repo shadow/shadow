@@ -406,6 +406,7 @@ impl SyscallHandler {
             SyscallNum::NR_fallocate => handle!(fallocate),
             SyscallNum::NR_fchmod => handle!(fchmod),
             SyscallNum::NR_fchmodat => handle!(fchmodat),
+            SyscallNum::NR_fchmodat2 => handle!(fchmodat2),
             SyscallNum::NR_fchown => handle!(fchown),
             SyscallNum::NR_fchownat => handle!(fchownat),
             SyscallNum::NR_fcntl => handle!(fcntl),
