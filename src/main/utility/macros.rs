@@ -169,6 +169,43 @@ macro_rules! log_syscall {
     };
 }
 
+/// The pointer has no alignment or initialization guarantees. If converting the pointers to
+/// references, be sure to not violate stacked borrow rules and ensure that the references have the
+/// correct lifetime and not `'static`.
+macro_rules! field_ptr {
+    ($bytes:expr, $type:ty, $field:ident) => {{
+        // perform early type checking; we need `MaybeUninit<u8>` rather than just `u8`, otherwise
+        // this macro could be used to write uninitialized padding bytes to a `u8` slice
+        let bytes: &mut [std::mem::MaybeUninit<u8>] = $bytes;
+
+        const UNINIT: *const $type = std::mem::MaybeUninit::uninit().as_ptr();
+
+        // This function is used to:
+        // - ensure the type is `Pod`
+        // - return the correct type for the field, which afaik is only available through the
+        //   `addr_of` macro
+        fn foo<T: shadow_pod::Pod>(
+            bytes: &mut [std::mem::MaybeUninit<u8>],
+            _for_type_coercion: *const T,
+        ) -> Option<*mut T> {
+            const fn size_of_pointee<T>(_x: *const T) -> usize {
+                std::mem::size_of::<T>()
+            }
+            const OFFSET: usize = std::mem::offset_of!($type, $field);
+            const SIZE: usize = size_of_pointee(unsafe { std::ptr::addr_of!((*UNINIT).$field) });
+
+            // the `get_mut(range)` ensures that the type is within the bounds of the bytes
+            Some(bytes.get_mut(OFFSET..(OFFSET + SIZE))?.as_mut_ptr() as *mut T)
+        }
+
+        // there's no way to find the type of the field directly, so we need to get a value whose
+        // type contains the type of the field and let rust use type inference to cast to the
+        // correct type
+        let addr_of_field = const { unsafe { std::ptr::addr_of!((*UNINIT).$field) } };
+        foo(bytes, addr_of_field)
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     // will panic in debug mode
@@ -210,5 +247,43 @@ mod tests {
     fn warn_once() {
         warn_once_then_trace!("A");
         warn_once_then_debug!("A");
+    }
+
+    #[test]
+    fn field_ptr() {
+        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+        let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
+
+        let foo_nlmsg_type = field_ptr!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
+        unsafe { foo_nlmsg_type.write(10) };
+
+        assert_eq!(foo.nlmsg_type, 10);
+    }
+
+    #[test]
+    fn field_ptr_type_inference() {
+        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+        let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
+
+        // make sure field_ptr returns a u16 pointer (ideally we'd want a test that uses an
+        // incorrect type and makes sure that the code fails to build to make sure that rust's type
+        // inference isn't leading to incorrect code, but writing rust tests that check that code
+        // fails to compile isn't supported and the workarounds aren't very nice)
+        let _nlmsg_type: *mut u16 = field_ptr!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
+    }
+
+    #[test]
+    fn field_ptr_range() {
+        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+        let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
+
+        // #[repr(C)]
+        // pub struct nlmsghdr {
+        //     pub nlmsg_len: u32,
+        //     pub nlmsg_type: u16,
+        //     ...
+        assert!(field_ptr!(&mut foo_bytes[..0], libc::nlmsghdr, nlmsg_type).is_none());
+        assert!(field_ptr!(&mut foo_bytes[..5], libc::nlmsghdr, nlmsg_type).is_none());
+        assert!(field_ptr!(&mut foo_bytes[..6], libc::nlmsghdr, nlmsg_type).is_some());
     }
 }
