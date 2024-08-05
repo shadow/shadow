@@ -83,7 +83,18 @@ impl PrctlOp {
     pub const PR_SCHED_CORE: Self = Self::from_u32(bindings::LINUX_PR_SCHED_CORE);
     pub const PR_SME_SET_VL: Self = Self::from_u32(bindings::LINUX_PR_SME_SET_VL);
     pub const PR_SME_GET_VL: Self = Self::from_u32(bindings::LINUX_PR_SME_GET_VL);
+    pub const PR_SET_MDWE: Self = Self::from_u32(bindings::LINUX_PR_SET_MDWE);
+    pub const PR_GET_MDWE: Self = Self::from_u32(bindings::LINUX_PR_GET_MDWE);
     pub const PR_SET_VMA: Self = Self::from_u32(bindings::LINUX_PR_SET_VMA);
+    pub const PR_GET_AUXV: Self = Self::from_u32(bindings::LINUX_PR_GET_AUXV);
+    pub const PR_SET_MEMORY_MERGE: Self = Self::from_u32(bindings::LINUX_PR_SET_MEMORY_MERGE);
+    pub const PR_GET_MEMORY_MERGE: Self = Self::from_u32(bindings::LINUX_PR_GET_MEMORY_MERGE);
+    pub const PR_RISCV_V_SET_CONTROL: Self = Self::from_u32(bindings::LINUX_PR_RISCV_V_SET_CONTROL);
+    pub const PR_RISCV_V_GET_CONTROL: Self = Self::from_u32(bindings::LINUX_PR_RISCV_V_GET_CONTROL);
+    pub const PR_RISCV_SET_ICACHE_FLUSH_CTX: Self =
+        Self::from_u32(bindings::LINUX_PR_RISCV_SET_ICACHE_FLUSH_CTX);
+    pub const PR_PPC_GET_DEXCR: Self = Self::from_u32(bindings::LINUX_PR_PPC_GET_DEXCR);
+    pub const PR_PPC_SET_DEXCR: Self = Self::from_u32(bindings::LINUX_PR_PPC_SET_DEXCR);
     // NOTE: only add prctl options here (not prctl args), and add new entries to `to_str` below
 
     pub const fn new(val: i32) -> Self {
@@ -160,7 +171,17 @@ impl PrctlOp {
             Self::PR_SCHED_CORE => Some("PR_SCHED_CORE"),
             Self::PR_SME_SET_VL => Some("PR_SME_SET_VL"),
             Self::PR_SME_GET_VL => Some("PR_SME_GET_VL"),
+            Self::PR_SET_MDWE => Some("PR_SET_MDWE"),
+            Self::PR_GET_MDWE => Some("PR_GET_MDWE"),
             Self::PR_SET_VMA => Some("PR_SET_VMA"),
+            Self::PR_GET_AUXV => Some("PR_GET_AUXV"),
+            Self::PR_SET_MEMORY_MERGE => Some("PR_SET_MEMORY_MERGE"),
+            Self::PR_GET_MEMORY_MERGE => Some("PR_GET_MEMORY_MERGE"),
+            Self::PR_RISCV_V_SET_CONTROL => Some("PR_RISCV_V_SET_CONTROL"),
+            Self::PR_RISCV_V_GET_CONTROL => Some("PR_RISCV_V_GET_CONTROL"),
+            Self::PR_RISCV_SET_ICACHE_FLUSH_CTX => Some("PR_RISCV_SET_ICACHE_FLUSH_CTX"),
+            Self::PR_PPC_GET_DEXCR => Some("PR_PPC_GET_DEXCR"),
+            Self::PR_PPC_SET_DEXCR => Some("PR_PPC_SET_DEXCR"),
             _ => None,
         }
     }

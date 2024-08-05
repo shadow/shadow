@@ -374,6 +374,18 @@ impl SyscallNum {
     pub const NR_futex_waitv: Self = Self::new(bindings::LINUX___NR_futex_waitv);
     pub const NR_set_mempolicy_home_node: Self =
         Self::new(bindings::LINUX___NR_set_mempolicy_home_node);
+    pub const NR_cachestat: Self = Self::new(bindings::LINUX___NR_cachestat);
+    pub const NR_fchmodat2: Self = Self::new(bindings::LINUX___NR_fchmodat2);
+    pub const NR_map_shadow_stack: Self = Self::new(bindings::LINUX___NR_map_shadow_stack);
+    pub const NR_futex_wake: Self = Self::new(bindings::LINUX___NR_futex_wake);
+    pub const NR_futex_wait: Self = Self::new(bindings::LINUX___NR_futex_wait);
+    pub const NR_futex_requeue: Self = Self::new(bindings::LINUX___NR_futex_requeue);
+    pub const NR_statmount: Self = Self::new(bindings::LINUX___NR_statmount);
+    pub const NR_listmount: Self = Self::new(bindings::LINUX___NR_listmount);
+    pub const NR_lsm_get_self_attr: Self = Self::new(bindings::LINUX___NR_lsm_get_self_attr);
+    pub const NR_lsm_set_self_attr: Self = Self::new(bindings::LINUX___NR_lsm_set_self_attr);
+    pub const NR_lsm_list_modules: Self = Self::new(bindings::LINUX___NR_lsm_list_modules);
+    pub const NR_mseal: Self = Self::new(bindings::LINUX___NR_mseal);
     // NOTE: add new entries to `to_str` below
 
     pub const fn new(val: u32) -> Self {
@@ -748,6 +760,18 @@ impl SyscallNum {
             Self::NR_process_mrelease => "process_mrelease",
             Self::NR_futex_waitv => "futex_waitv",
             Self::NR_set_mempolicy_home_node => "set_mempolicy_home_node",
+            Self::NR_cachestat => "NR_cachestat",
+            Self::NR_fchmodat2 => "NR_fchmodat2",
+            Self::NR_map_shadow_stack => "NR_map_shadow_stack",
+            Self::NR_futex_wake => "NR_futex_wake",
+            Self::NR_futex_wait => "NR_futex_wait",
+            Self::NR_futex_requeue => "NR_futex_requeue",
+            Self::NR_statmount => "NR_statmount",
+            Self::NR_listmount => "NR_listmount",
+            Self::NR_lsm_get_self_attr => "NR_lsm_get_self_attr",
+            Self::NR_lsm_set_self_attr => "NR_lsm_set_self_attr",
+            Self::NR_lsm_list_modules => "NR_lsm_list_modules",
+            Self::NR_mseal => "NR_mseal",
             _ => return None,
         })
     }
