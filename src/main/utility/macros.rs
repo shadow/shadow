@@ -169,41 +169,130 @@ macro_rules! log_syscall {
     };
 }
 
-/// The pointer has no alignment or initialization guarantees. Be sure to not violate stacked borrow
-/// rules, which means you should only have a single field pointer at a time, and you should not
-/// access the bytes again until you've finished using the pointer. If converting the pointer to a
-/// reference, ensure that the reference has the correct lifetime and not `'static`.
-macro_rules! field_ptr {
-    ($bytes:expr, $type:ty, $field:ident) => {{
+/// Returns `None` if any field is not aligned, or if the bytes slice is too small to contain all
+/// fields.
+macro_rules! field_project {
+    ($bytes:expr, $type:ty, $field1:ident) => {
+        field_project!($bytes, $type, ($field1,)).map(|x| x.0)
+    };
+    ($bytes:expr, $type:ty, ($field1:ident,)) => {
+        field_project!(@ $bytes, $type, ($field1: A))
+    };
+    ($bytes:expr, $type:ty, ($field1:ident, $field2:ident)) => {
+        field_project!(@ $bytes, $type, ($field1: A), ($field2: B))
+    };
+    ($bytes:expr, $type:ty, ($field1:ident, $field2:ident, $field3:ident)) => {
+        field_project!(@ $bytes, $type, ($field1: A), ($field2: B), ($field3: C))
+    };
+    (@ $bytes:expr, $type:ty, $(($field:ident: $generic:ident)),*) => {{
         // perform early type checking; we need `MaybeUninit<u8>` rather than just `u8`, otherwise
         // this macro could be used to write uninitialized padding bytes to a `u8` slice
         let bytes: &mut [std::mem::MaybeUninit<u8>] = $bytes;
 
         const UNINIT: *const $type = std::mem::MaybeUninit::uninit().as_ptr();
 
-        // This function is used to:
-        // - ensure the type is `Pod`
-        // - return the correct type for the field, which afaik is only available through the
-        //   `addr_of` macro
-        fn foo<T: shadow_pod::Pod>(
-            bytes: &mut [std::mem::MaybeUninit<u8>],
-            _for_type_coercion: *const T,
-        ) -> Option<*mut T> {
-            const fn size_of_pointee<T>(_x: *const T) -> usize {
-                std::mem::size_of::<T>()
-            }
-            const OFFSET: usize = std::mem::offset_of!($type, $field);
-            const SIZE: usize = size_of_pointee(unsafe { std::ptr::addr_of!((*UNINIT).$field) });
-
-            // the `get_mut(range)` ensures that the type is within the bounds of the bytes
-            Some(bytes.get_mut(OFFSET..(OFFSET + SIZE))?.as_mut_ptr() as *mut T)
+        const fn size_of_pointee<T>(_x: *const T) -> usize {
+            std::mem::size_of::<T>()
         }
 
-        // there's no way to find the type of the field directly, so we need to get a value whose
-        // type contains the type of the field and let rust use type inference to cast to the
-        // correct type
-        let addr_of_field = const { unsafe { std::ptr::addr_of!((*UNINIT).$field) } };
-        foo(bytes, addr_of_field)
+        // This function is needed to:
+        // - ensure the type is `Pod`
+        // - link the lifetime of `bytes` to the return value's lifetime (we don't want to return a
+        //   'static lifetime by accident)
+        // - return the correct type for the field, which afaik is only available through the
+        //   `addr_of` macro
+        fn field_project<$( $generic: shadow_pod::Pod ),*>(
+            bytes: &mut [std::mem::MaybeUninit<u8>],
+            _for_type_coercion: ($( *const $generic ),*,)
+        ) -> Option<($( &mut std::mem::MaybeUninit<$generic> ),*,)> {
+            // the byte ranges of each field
+            const RANGES: &[std::ops::Range<usize>] = &[ $( {
+                const OFFSET: usize = std::mem::offset_of!($type, $field);
+                const SIZE: usize = size_of_pointee(unsafe { std::ptr::addr_of!((*UNINIT).$field) });
+                OFFSET..(OFFSET+SIZE)
+            } ),* ];
+
+            // check that no byte ranges are overlapping
+            const {
+                let mut i = 0;
+                while i < RANGES.len() {
+                    let mut j = i+1;
+                    while j < RANGES.len() {
+                        if RANGES[i].start < RANGES[j].end && RANGES[j].start < RANGES[i].end {
+                            panic!("Byte ranges overlap");
+                        }
+                        j += 1;
+                    }
+                    i += 1;
+                }
+            }
+
+            // check that no byte ranges have the same start (don't want two mutable references to
+            // the same ZST)
+            const {
+                let mut i = 0;
+                while i < RANGES.len() {
+                    let mut j = i+1;
+                    while j < RANGES.len() {
+                        assert!(RANGES[i].start != RANGES[j].start, "Byte ranges overlap (ZST)");
+                        j += 1;
+                    }
+                    i += 1;
+                }
+            }
+
+            // get the maximum of all byte ranges
+            const RANGE_MAX: usize = {
+                let mut max = 0;
+                let mut i = 0;
+                while i < RANGES.len() {
+                    if RANGES[i].end > max {
+                        max = RANGES[i].end;
+                    }
+                    i += 1;
+                }
+                max
+            };
+
+            // make sure a field does not exist outside of `bytes`
+            if RANGE_MAX > bytes.len() {
+                return None;
+            }
+
+            let bytes = bytes.as_mut_ptr();
+
+            // return the references to each field as a tuple
+            Some(( $( {
+                // NOTE: do not access the original 'bytes' slice within this block, otherwise it
+                // causes stacked borrows issues
+                const OFFSET: usize = std::mem::offset_of!($type, $field);
+
+                // SAFETY: we've already checked that the field offset is within the bounds of the
+                // bytes
+                let ptr = unsafe { bytes.add(OFFSET) } as *mut std::mem::MaybeUninit<$generic>;
+                if !ptr.is_aligned() {
+                    return None;
+                }
+                // SAFETY:
+                // - "The pointer must be properly aligned." - checked above
+                // - "It must be 'dereferenceable' in the sense defined in the module
+                //   documentation." - points to valid memory within a single allocated object, is
+                //   non-null
+                // - "The pointer must point to an initialized instance of T." - the pointer is a MaybeUninit
+                // - "You must enforce Rust’s aliasing rules, since the returned lifetime 'a is
+                //   arbitrarily chosen and does not necessarily reflect the actual lifetime of the
+                //   data. In particular, while this reference exists, the memory the pointer points
+                //   to must not get accessed (read or written) through any other pointer." - the
+                //   outer function makes sure that the returned reference has the correct lifetime
+                unsafe { ptr.as_mut() }.unwrap()
+            } ),*, ))
+        }
+
+        // there's no way to find the types of the fields directly, so we need to get values whose
+        // types contain the types of the fields and let rust use type inference to cast to the
+        // correct types
+        let addr_of_fields = ($( const { unsafe { std::ptr::addr_of!((*UNINIT).$field) } } ),*,);
+        field_project(bytes, addr_of_fields)
     }};
 }
 
@@ -251,31 +340,52 @@ mod tests {
     }
 
     #[test]
-    fn field_ptr() {
-        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+    fn field_project_1() {
+        let mut foo: libc::nlmsghdr = shadow_pod::zeroed();
         let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
 
-        let foo_nlmsg_type = field_ptr!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
-        unsafe { foo_nlmsg_type.write(10) };
+        let foo_nlmsg_type = field_project!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
+
+        foo_nlmsg_type.write(10);
 
         assert_eq!(foo.nlmsg_type, 10);
     }
 
     #[test]
-    fn field_ptr_type_inference() {
-        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+    fn field_project_2() {
+        let mut foo: libc::nlmsghdr = shadow_pod::zeroed();
         let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
 
-        // make sure field_ptr returns a u16 pointer (ideally we'd want a test that uses an
-        // incorrect type and makes sure that the code fails to build to make sure that rust's type
-        // inference isn't leading to incorrect code, but writing rust tests that check that code
-        // fails to compile isn't supported and the workarounds aren't very nice)
-        let _nlmsg_type: *mut u16 = field_ptr!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
+        let (foo_nlmsg_type, foo_nlmsg_flags) =
+            field_project!(foo_bytes, libc::nlmsghdr, (nlmsg_type, nlmsg_flags)).unwrap();
+
+        foo_nlmsg_type.write(10);
+        foo_nlmsg_flags.write(20);
+
+        // make sure the order we access the fields doesn't matter (no stacked borrows miri errors)
+        foo_nlmsg_flags.write(40);
+        foo_nlmsg_type.write(30);
+
+        assert_eq!(foo.nlmsg_type, 30);
+        assert_eq!(foo.nlmsg_flags, 40);
     }
 
     #[test]
-    fn field_ptr_range() {
-        let mut foo: libc::nlmsghdr = unsafe { std::mem::zeroed() };
+    fn field_project_type_inference() {
+        let mut foo: libc::nlmsghdr = shadow_pod::zeroed();
+        let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
+
+        // make sure field_project returns a u16 reference (ideally we'd want a test that uses an
+        // incorrect type and makes sure that the code fails to build to make sure that rust's type
+        // inference isn't leading to incorrect code, but writing rust tests that check that code
+        // fails to compile isn't supported and the workarounds aren't very nice)
+        let _nlmsg_type: &mut std::mem::MaybeUninit<u16> =
+            field_project!(foo_bytes, libc::nlmsghdr, nlmsg_type).unwrap();
+    }
+
+    #[test]
+    fn field_project_range() {
+        let mut foo: libc::nlmsghdr = shadow_pod::zeroed();
         let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
 
         // #[repr(C)]
@@ -283,8 +393,22 @@ mod tests {
         //     pub nlmsg_len: u32,
         //     pub nlmsg_type: u16,
         //     ...
-        assert!(field_ptr!(&mut foo_bytes[..0], libc::nlmsghdr, nlmsg_type).is_none());
-        assert!(field_ptr!(&mut foo_bytes[..5], libc::nlmsghdr, nlmsg_type).is_none());
-        assert!(field_ptr!(&mut foo_bytes[..6], libc::nlmsghdr, nlmsg_type).is_some());
+        assert!(field_project!(&mut foo_bytes[..0], libc::nlmsghdr, nlmsg_type).is_none());
+        assert!(field_project!(&mut foo_bytes[..5], libc::nlmsghdr, nlmsg_type).is_none());
+        assert!(field_project!(&mut foo_bytes[..6], libc::nlmsghdr, nlmsg_type).is_some());
+    }
+
+    #[test]
+    fn field_project_align() {
+        let mut foo: libc::nlmsghdr = shadow_pod::zeroed();
+        let foo_bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut foo) };
+
+        // #[repr(C)]
+        // pub struct nlmsghdr {
+        //     pub nlmsg_len: u32,
+        //     pub nlmsg_type: u16,
+        //     ...
+        assert!(field_project!(&mut foo_bytes[..], libc::nlmsghdr, nlmsg_type).is_some());
+        assert!(field_project!(&mut foo_bytes[1..], libc::nlmsghdr, nlmsg_type).is_none());
     }
 }
