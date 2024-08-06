@@ -169,9 +169,10 @@ macro_rules! log_syscall {
     };
 }
 
-/// The pointer has no alignment or initialization guarantees. If converting the pointers to
-/// references, be sure to not violate stacked borrow rules and ensure that the references have the
-/// correct lifetime and not `'static`.
+/// The pointer has no alignment or initialization guarantees. Be sure to not violate stacked borrow
+/// rules, which means you should only have a single field pointer at a time, and you should not
+/// access the bytes again until you've finished using the pointer. If converting the pointer to a
+/// reference, ensure that the reference has the correct lifetime and not `'static`.
 macro_rules! field_ptr {
     ($bytes:expr, $type:ty, $field:ident) => {{
         // perform early type checking; we need `MaybeUninit<u8>` rather than just `u8`, otherwise
