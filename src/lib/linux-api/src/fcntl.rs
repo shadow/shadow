@@ -26,7 +26,6 @@ bitflags::bitflags! {
         const O_SYNC = const_conversions::i32_from_u32(bindings::LINUX_O_SYNC);
         const O_PATH = const_conversions::i32_from_u32(bindings::LINUX_O_PATH);
         const O_TMPFILE = const_conversions::i32_from_u32(bindings::LINUX_O_TMPFILE);
-        const O_TMPFILE_MASK = const_conversions::i32_from_u32(bindings::LINUX_O_TMPFILE_MASK);
         const O_NDELAY = const_conversions::i32_from_u32(bindings::LINUX_O_NDELAY);
         const O_ASYNC = const_conversions::i32_from_u32(bindings::LINUX_FASYNC);
     }
@@ -57,8 +56,9 @@ pub enum FcntlCommand {
     F_OFD_SETLKW = bindings::LINUX_F_OFD_SETLKW,
     F_SETLEASE = bindings::LINUX_F_SETLEASE,
     F_GETLEASE = bindings::LINUX_F_GETLEASE,
-    F_DUPFD_CLOEXEC = bindings::LINUX_F_DUPFD_CLOEXEC,
     F_NOTIFY = bindings::LINUX_F_NOTIFY,
+    F_DUPFD_QUERY = bindings::LINUX_F_DUPFD_QUERY,
+    F_DUPFD_CLOEXEC = bindings::LINUX_F_DUPFD_CLOEXEC,
     F_SETPIPE_SZ = bindings::LINUX_F_SETPIPE_SZ,
     F_GETPIPE_SZ = bindings::LINUX_F_GETPIPE_SZ,
     F_ADD_SEALS = bindings::LINUX_F_ADD_SEALS,
@@ -102,6 +102,7 @@ pub enum FcntlSealType {
     F_SEAL_GROW = bindings::LINUX_F_SEAL_GROW,
     F_SEAL_WRITE = bindings::LINUX_F_SEAL_WRITE,
     F_SEAL_FUTURE_WRITE = bindings::LINUX_F_SEAL_FUTURE_WRITE,
+    F_SEAL_EXEC = bindings::LINUX_F_SEAL_EXEC,
 }
 
 /// Read-write hint, as used with [`FcntlCommand::F_GET_RW_HINT`] and [`FcntlCommand::F_SET_RW_HINT`].

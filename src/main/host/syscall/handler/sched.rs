@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::rseq;
@@ -109,31 +111,15 @@ impl SyscallHandler {
     );
     pub fn rseq(
         ctx: &mut SyscallContext,
-        rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,
+        rseq_ptr: ForeignPtr<MaybeUninit<u8>>,
         rseq_len: u32,
         flags: std::ffi::c_int,
-        sig: u32,
-    ) -> Result<(), Errno> {
-        let rseq_len = usize::try_from(rseq_len).unwrap();
-        if rseq_len != std::mem::size_of::<rseq>() {
-            // Probably worth a warning; decent chance that the bug is in Shadow
-            // rather than the calling code.
-            warn!(
-                "rseq_len {} instead of expected {}",
-                rseq_len,
-                std::mem::size_of::<rseq>()
-            );
-            return Err(Errno::EINVAL);
-        }
-        Self::rseq_impl(ctx, rseq_ptr, flags, sig)
-    }
-
-    fn rseq_impl(
-        ctx: &mut SyscallContext,
-        rseq_ptr: ForeignPtr<linux_api::rseq::rseq>,
-        flags: i32,
         _sig: u32,
     ) -> Result<(), Errno> {
+        // we won't need more bytes than the size of the `rseq` struct
+        let rseq_len = rseq_len.try_into().unwrap();
+        let rseq_len = std::cmp::min(rseq_len, std::mem::size_of::<rseq>());
+
         if flags & (!RSEQ_FLAG_UNREGISTER) != 0 {
             warn!("Unrecognized rseq flags: {flags}");
             return Err(Errno::EINVAL);
@@ -146,8 +132,18 @@ impl SyscallHandler {
             //   state.
             return Ok(());
         }
+
+        // The `rseq` struct is designed to grow as linux needs to add more features, so we can't
+        // assume that the application making the rseq syscall is using the exact same struct as we
+        // have available in the linux_api crate (the calling application's rseq struct may have
+        // more or fewer fields). Furthermore, the rseq struct ends with a "flexible array member",
+        // which means that the rseq struct cannot be `Copy` and therefore not `Pod`.
+        //
+        // Instead, we should treat the rseq struct as a bunch of bytes and write to individual
+        // fields if possible without making assumptions about the size of the data.
         let mut mem = ctx.objs.process.memory_borrow_mut();
-        let mut rseq = mem.memory_ref_mut(ForeignArrayPtr::new(rseq_ptr, 1))?;
+        let mut rseq_mem = mem.memory_ref_mut(ForeignArrayPtr::new(rseq_ptr, rseq_len))?;
+        let rseq_bytes = &mut *rseq_mem;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.
         // We'd only need to implement the "real" functionality if we ever implement
@@ -162,12 +158,63 @@ impl SyscallHandler {
         // invalid address, raising SIGSEGV, but then catching it and recovering
         // in a handler.
         // https://github.com/shadow/shadow/issues/2139
-
+        //
         // For now we just update to reflect that the thread is running on CPU 0.
-        rseq[0].cpu_id = CURRENT_CPU;
-        rseq[0].cpu_id_start = CURRENT_CPU;
-        rseq.flush()?;
+
+        Self::rseq_internal(rseq_bytes)?;
+
+        rseq_mem.flush()?;
 
         Ok(())
+    }
+
+    // this is its own function so that we can test it with miri below
+    // TODO: find a better way to do this
+    fn rseq_internal(rseq_bytes: &mut [MaybeUninit<u8>]) -> Result<(), Errno> {
+        // try accessing the 'cpu_id_start' field first since it's ordered after 'cpu_id', and we
+        // don't want to return EINVAL after partially writing to the struct
+        let Some(cpu_id_start_ptr) = field_ptr!(rseq_bytes, rseq, cpu_id_start) else {
+            return Err(Errno::EINVAL);
+        };
+        unsafe { cpu_id_start_ptr.write_unaligned(CURRENT_CPU) };
+
+        let Some(cpu_id_ptr) = field_ptr!(rseq_bytes, rseq, cpu_id) else {
+            return Err(Errno::EINVAL);
+        };
+        unsafe { cpu_id_ptr.write_unaligned(CURRENT_CPU) };
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rseq_internal() {
+        // don't use for anything outside of this test
+        unsafe fn to_bytes_mut(x: &mut rseq) -> &mut [MaybeUninit<u8>] {
+            unsafe {
+                std::slice::from_raw_parts_mut(
+                    std::ptr::from_mut(x).cast(),
+                    std::mem::size_of::<rseq>(),
+                )
+            }
+        }
+
+        let mut rseq_bytes: rseq = rseq {
+            cpu_id_start: 0,
+            cpu_id: 0,
+            rseq_cs: 0,
+            flags: 0,
+            node_id: 0,
+            mm_cid: 0,
+            end: Default::default(),
+        };
+        let rseq_bytes = unsafe { to_bytes_mut(&mut rseq_bytes) };
+
+        // has some unsafe code, so we want to test it under miri
+        SyscallHandler::rseq_internal(rseq_bytes).unwrap();
     }
 }

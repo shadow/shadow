@@ -15,7 +15,7 @@ set -euo pipefail
 # Generally it makes sense to use the most recent stable version of the kernel,
 # since the ABI is stable. i.e. managed programs compiled against an older
 # version of the kernel headers should still get ABI-compatible definitions.
-LINUX_TAG=v6.2
+LINUX_TAG=v6.10
 
 LINUX_REPO=https://github.com/torvalds/linux.git
 ARCH=x86_64
@@ -40,6 +40,12 @@ bindgen_flags=()
 
 # Use core instead of std, for no_std compatibility.
 bindgen_flags+=("--use-core")
+
+# rustdoc tries to interpret some of the comments from the C code as formatted
+# doc comments and thinks that some of the docs are rust code blocks, which
+# fail to compile when performing 'cargo test'.
+# See: https://github.com/rust-lang/rust-bindgen/issues/1313
+bindgen_flags+=("--no-doc-comments")
 
 # We seem to also need this to prevent using ctypes from std.
 bindgen_flags+=("--ctypes-prefix=::core::ffi")

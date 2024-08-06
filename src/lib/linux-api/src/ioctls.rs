@@ -79,6 +79,7 @@ pub enum IoctlRequest {
     SIOCGPGRP = bindings::LINUX_SIOCGPGRP,
     SIOCATMARK = bindings::LINUX_SIOCATMARK,
     SOCK_IOC_TYPE = bindings::LINUX_SOCK_IOC_TYPE,
+    EPOLL_IOC_TYPE = bindings::LINUX_EPOLL_IOC_TYPE,
     SIOCGSTAMP = bindings::LINUX_SIOCGSTAMP,
     SIOCGSTAMPNS = bindings::LINUX_SIOCGSTAMPNS,
     SIOCADDRT = bindings::LINUX_SIOCADDRT,
