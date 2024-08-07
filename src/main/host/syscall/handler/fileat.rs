@@ -35,6 +35,11 @@ impl SyscallHandler {
         Self::legacy_syscall(cshadow::syscallhandler_fchmodat, ctx)
     }
 
+    log_syscall!(fchmodat2, /* rv */ std::ffi::c_int);
+    pub fn fchmodat2(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_fchmodat2, ctx)
+    }
+
     log_syscall!(fchownat, /* rv */ std::ffi::c_int);
     pub fn fchownat(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_fchownat, ctx)

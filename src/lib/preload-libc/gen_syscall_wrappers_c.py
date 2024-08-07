@@ -90,6 +90,7 @@ skip.update([
 skip.update([
     'fchmod',
     'fchmodat',
+    'fchmodat2',
     'fsconfig',
     'fsmount',
     'fsopen',
