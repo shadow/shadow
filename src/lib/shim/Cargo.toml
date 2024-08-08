@@ -15,26 +15,26 @@ perf_timers = []
 formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
 linux-api = { path = "../linux-api", features = ["rustix"] }
-num_enum = { version = "0.7.1", default-features=false }
+num_enum = { version = "0.7.3", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
 shadow_tsc = { path = "../tsc" }
 logger = { path = "../logger" }
-log = { version = "0.4.20", default-features = false }
+log = { version = "0.4.22", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
-rustix = { version = "0.38.28", default-features = false, features = ["process", "thread", "time", "mm"] }
-linux-raw-sys = { version = "0.6.3" }
+rustix = { version = "0.38.34", default-features = false, features = ["process", "thread", "time", "mm"] }
+linux-raw-sys = { version = "0.6.4" }
 shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
 static_assertions = "1.1.0"
 va_list = { version = "0.2.0", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.11.1"
-test-log = "0.2.14"
+env_logger = "0.11.5"
+test-log = "0.2.16"
 
 [build-dependencies]
-bindgen = { version = "0.69.1" }
+bindgen = { version = "0.69.4" }
 cbindgen = { version = "0.26.0", default-features = false }
 cc = { version = "1.1", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }

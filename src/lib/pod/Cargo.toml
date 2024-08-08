@@ -6,4 +6,4 @@ publish.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = { version = "0.2.151", default-features = false }
+libc = { version = "0.2.155", default-features = false }

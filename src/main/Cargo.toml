@@ -10,16 +10,16 @@ path = "lib.rs"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-anyhow = "1.0.78"
+anyhow = "1.0.86"
 atomic_refcell = "0.1"
-backtrace = "0.3.69"
+backtrace = "0.3.73"
 bitflags = "2.6"
 # custom version of the bytes crate required to make the 'try_unsplit' method public
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513
 bytes = { git = "https://github.com/shadow/bytes", rev = "c48bd4439e7e043300521925524ecdcce7ff6bcc" }
-clap = { version = "4.5.0", features = ["derive", "wrap_help"] }
-crossbeam = "0.8.3"
+clap = { version = "4.5.14", features = ["derive", "wrap_help"] }
+crossbeam = "0.8.4"
 gml-parser = { path = "../lib/gml-parser" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["c_bindings", "libc", "rustix", "std"] }
@@ -30,7 +30,7 @@ logger = { path = "../lib/logger" }
 scheduler = { path = "../lib/scheduler" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
 lzma-rs = "0.3"
-memoffset = "0.9.0"
+memoffset = "0.9.1"
 merge = "0.1"
 neli = "0.6.4"
 nix = { version = "0.27.1", features = ["feature", "ioctl", "mman", "net", "personality", "resource", "sched", "signal", "socket", "time", "uio", "user"] }
@@ -46,7 +46,7 @@ rayon = "1.10.0"
 regex = "1"
 schemars = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.109"
+serde_json = "1.0.122"
 serde_yaml = "0.9"
 shadow-build-info = { path = "../lib/shadow-build-info" }
 shadow_shmem = { path = "../lib/shmem" }
@@ -64,8 +64,8 @@ vasi-sync = { path = "../lib/vasi-sync" }
 # `c_variadic` is stabilized, or if we decide to enable it anyway.
 # https://github.com/rust-lang/rust/issues/44930
 vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
-which = "6.0.0"
-bytemuck = "1.16.0"
+which = "6.0.2"
+bytemuck = "1.16.3"
 rustix = { version = "0.38.34", features = ["event", "mm", "pipe"] }
 
 [features]
@@ -73,7 +73,7 @@ perf_timers = []
 
 [build-dependencies]
 shadow-build-common = { path = "../lib/shadow-build-common", features = ["bindgen", "cbindgen"] }
-bindgen = { version = "0.69.1" }
+bindgen = { version = "0.69.4" }
 cbindgen = { version = "0.26.0", default-features = false }
 cc = { version = "1.1", features = ["parallel"] }
 system-deps = "7.0"

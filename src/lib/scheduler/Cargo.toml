@@ -5,7 +5,7 @@ publish.workspace = true
 
 [dependencies]
 atomic_refcell = "0.1"
-crossbeam = "0.8.3"
+crossbeam = "0.8.4"
 libc = "0.2"
 nix = { version = "0.27.1", features = ["process", "sched"] }
 
