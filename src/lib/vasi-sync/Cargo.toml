@@ -9,8 +9,8 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num_enum = { version = "0.7.1", default-features = false }
-rustix = { version = "0.38.28", default-features = false, features = ["fs", "thread", "process"] }
+num_enum = { version = "0.7.3", default-features = false }
+rustix = { version = "0.38.34", default-features = false, features = ["fs", "thread", "process"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 rustc-hash = { version = "2.0.0", default-features = false }
@@ -18,7 +18,7 @@ rustc-hash = { version = "2.0.0", default-features = false }
 [dev-dependencies]
 criterion = "0.5.1"
 rand = "0.8.5"
-rustix = { version = "0.38.28", default-features = false, features = ["process"] }
+rustix = { version = "0.38.34", default-features = false, features = ["process"] }
 libc = "0.2"
 nix = "0.27.1"
 

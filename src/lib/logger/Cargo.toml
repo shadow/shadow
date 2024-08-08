@@ -10,7 +10,7 @@ linux-api = { path = "../linux-api" }
 
 [build-dependencies]
 cc = { version = "1.1", features = ["parallel"] }
-bindgen = { version = "0.69.1" }
+bindgen = { version = "0.69.4" }
 # Needs to be a build-dependency as well for its generated header files
 # to be present, which our C build needs.
 linux-api = { path = "../linux-api", features = ["c_bindings"] }

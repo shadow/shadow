@@ -6,12 +6,12 @@ publish.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = { version = "0.2.151", default-features = false }
-rustix = { version = "0.38.28", default-features = false }
+libc = { version = "0.2.155", default-features = false }
+rustix = { version = "0.38.34", default-features = false }
 va_list = { version = "0.2.0", default-features = false }
 
 [dev-dependencies]
-rustix = { version = "0.38.28", default-features = false, features=["pipe"] }
+rustix = { version = "0.38.34", default-features = false, features=["pipe"] }
 
 [build-dependencies]
 cc = { version = "1.1", features = ["parallel"] }

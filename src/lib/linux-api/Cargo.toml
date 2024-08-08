@@ -13,22 +13,22 @@ c_bindings = ["dep:shadow-build-common", "dep:cbindgen"]
 
 [dependencies]
 bitflags = "2.6.0"
-log = { version = "0.4.20", default-features = false }
+log = { version = "0.4.22", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
-num_enum = { version = "0.7.1", default-features = false }
-memoffset = "0.9.0"
-bytemuck = "1.16.0"
+num_enum = { version = "0.7.3", default-features = false }
+memoffset = "0.9.1"
+bytemuck = "1.16.3"
 linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
-linux-raw-sys = "0.6.3"
-rustix = { optional = true, version = "0.38.28", default-features = false, features = ["process"] }
+linux-raw-sys = "0.6.4"
+rustix = { optional = true, version = "0.38.34", default-features = false, features = ["process"] }
 libc = { optional = true, default-features = false, version = "0.2.155" }
 
 [dev-dependencies]
-rustix = { version = "0.38.28", default-features=false, features = ["thread", "process", "time"] }
+rustix = { version = "0.38.34", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
 shadow-build-common = { optional = true, path = "../shadow-build-common", features = ["cbindgen"] }

@@ -9,7 +9,7 @@ publish.workspace = true
 logger = { path = "../logger" }
 
 [build-dependencies]
-bindgen = { version = "0.69.1" }
+bindgen = { version = "0.69.4" }
 cc = { version = "1.1", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }
 system-deps = "7.0"

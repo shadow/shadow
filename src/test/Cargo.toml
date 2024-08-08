@@ -227,14 +227,14 @@ name = "test_close_range"
 path = "close_range/test_close_range.rs"
 
 [dependencies]
-anyhow = "1.0.78"
+anyhow = "1.0.86"
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["rustix", "std", "libc"] }
 neli = "0.6.4"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
-rustix = { version = "0.38.28", default-features = false, features = ["fs", "mm", "pipe", "time", "thread"] }
+rustix = { version = "0.38.34", default-features = false, features = ["fs", "mm", "pipe", "time", "thread"] }
 signal-hook = "0.3.17"
 once_cell = "1.19.0"
 vasi-sync = { path = "../lib/vasi-sync" }
