@@ -161,60 +161,16 @@ impl SyscallHandler {
         //
         // For now we just update to reflect that the thread is running on CPU 0.
 
-        Self::rseq_internal(rseq_bytes)?;
+        let Some((cpu_id, cpu_id_start)) = field_project!(rseq_bytes, rseq, (cpu_id, cpu_id_start))
+        else {
+            return Err(Errno::EINVAL);
+        };
+
+        cpu_id.write(CURRENT_CPU);
+        cpu_id_start.write(CURRENT_CPU);
 
         rseq_mem.flush()?;
 
         Ok(())
-    }
-
-    // this is its own function so that we can test it with miri below
-    // TODO: find a better way to do this
-    fn rseq_internal(rseq_bytes: &mut [MaybeUninit<u8>]) -> Result<(), Errno> {
-        // try accessing the 'cpu_id_start' field first since it's ordered after 'cpu_id', and we
-        // don't want to return EINVAL after partially writing to the struct
-        let Some(cpu_id_start_ptr) = field_ptr!(rseq_bytes, rseq, cpu_id_start) else {
-            return Err(Errno::EINVAL);
-        };
-        unsafe { cpu_id_start_ptr.write_unaligned(CURRENT_CPU) };
-
-        let Some(cpu_id_ptr) = field_ptr!(rseq_bytes, rseq, cpu_id) else {
-            return Err(Errno::EINVAL);
-        };
-        unsafe { cpu_id_ptr.write_unaligned(CURRENT_CPU) };
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_rseq_internal() {
-        // don't use for anything outside of this test
-        unsafe fn to_bytes_mut(x: &mut rseq) -> &mut [MaybeUninit<u8>] {
-            unsafe {
-                std::slice::from_raw_parts_mut(
-                    std::ptr::from_mut(x).cast(),
-                    std::mem::size_of::<rseq>(),
-                )
-            }
-        }
-
-        let mut rseq_bytes: rseq = rseq {
-            cpu_id_start: 0,
-            cpu_id: 0,
-            rseq_cs: 0,
-            flags: 0,
-            node_id: 0,
-            mm_cid: 0,
-            end: Default::default(),
-        };
-        let rseq_bytes = unsafe { to_bytes_mut(&mut rseq_bytes) };
-
-        // has some unsafe code, so we want to test it under miri
-        SyscallHandler::rseq_internal(rseq_bytes).unwrap();
     }
 }
