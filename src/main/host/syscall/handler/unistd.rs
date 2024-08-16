@@ -109,7 +109,11 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.objs.host, cb_queue));
+            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                CallbackQueue::queue_and_run(|cb_queue| {
+                    replaced_desc.close(ctx.objs.host, cb_queue)
+                })
+            });
         }
 
         // return the new fd
@@ -169,7 +173,11 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            CallbackQueue::queue_and_run(|cb_queue| replaced_desc.close(ctx.objs.host, cb_queue));
+            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
+                CallbackQueue::queue_and_run(|cb_queue| {
+                    replaced_desc.close(ctx.objs.host, cb_queue)
+                })
+            });
         }
 
         // return the new fd
