@@ -20,10 +20,8 @@ thread_local! {
 /// `notify_listeners_with_global_cb_queue`. This is primarily for [`TCP`](crate::cshadow::TCP)
 /// objects, and should not be used with Rust file objects.
 ///
-/// Just like
-/// [`CallbackQueue::queue_and_run`](crate::utility::callback_queue::CallbackQueue::queue_and_run),
-/// the closure should make any borrows of the file object, rather than making any borrows outside
-/// of the closure.
+/// Just like [`CallbackQueue::queue_and_run`], the closure should make any borrows of the file
+/// object, rather than making any borrows outside of the closure.
 pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
     C_CALLBACK_QUEUE.with(|cb_queue| {
         if cb_queue.borrow().is_some() {
