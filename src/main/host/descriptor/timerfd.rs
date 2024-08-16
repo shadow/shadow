@@ -62,7 +62,7 @@ impl TimerFd {
         // The TimerFd may have become readable now that a timer expired. We use the CallbackQueue
         // here to make sure that any listeners that need to wake up and handle a readable TimerFd
         // are not invoked until after we release the borrow.
-        CallbackQueue::queue_and_run(|cb_queue| {
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             timerfd.borrow_mut().refresh_state(cb_queue);
         });
     }

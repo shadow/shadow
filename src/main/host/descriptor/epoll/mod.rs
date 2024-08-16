@@ -57,7 +57,7 @@ impl Epoll {
             _counter: ObjectCounter::new("Epoll"),
         };
 
-        CallbackQueue::queue_and_run(|cb_queue| epoll.refresh_state(cb_queue));
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| epoll.refresh_state(cb_queue));
 
         Arc::new(AtomicRefCell::new(epoll))
     }

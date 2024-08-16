@@ -141,19 +141,17 @@ impl Thread {
                 })
                 .collect();
 
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|q| {
-                    for handle in to_close {
-                        log::trace!("Unregistering FD_CLOEXEC descriptor {handle:?}");
-                        if let Some(Err(e)) = desc_table
-                            .deregister_descriptor(handle)
-                            .unwrap()
-                            .close(host, q)
-                        {
-                            log::debug!("Error closing {handle:?}: {e:?}");
-                        };
-                    }
-                })
+            CallbackQueue::queue_and_run_with_legacy(|q| {
+                for handle in to_close {
+                    log::trace!("Unregistering FD_CLOEXEC descriptor {handle:?}");
+                    if let Some(Err(e)) = desc_table
+                        .deregister_descriptor(handle)
+                        .unwrap()
+                        .close(host, q)
+                    {
+                        log::debug!("Error closing {handle:?}: {e:?}");
+                    };
+                }
             });
 
             self.desc_table = Some(RootedRc::new(

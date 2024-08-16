@@ -247,12 +247,10 @@ impl ExplicitDrop for DescriptorTable {
         // optimization so that all descriptors are closed before any of their
         // callbacks run.
         let descriptors = self.remove_all();
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                for desc in descriptors {
-                    desc.close(host, cb_queue);
-                }
-            })
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            for desc in descriptors {
+                desc.close(host, cb_queue);
+            }
         });
     }
 }

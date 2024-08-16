@@ -97,7 +97,7 @@ impl NetlinkSocket {
                 common,
                 protocol_state,
             };
-            CallbackQueue::queue_and_run(|cb_queue| {
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 socket.refresh_file_state(FileSignals::empty(), cb_queue)
             });
 

@@ -52,7 +52,7 @@ impl CallbackQueue {
 
     /// A convenience function to create a [CallbackQueue], allow the caller to add events, and
     /// process them all before returning.
-    pub fn queue_and_run<F, U>(f: F) -> U
+    fn queue_and_run<F, U>(f: F) -> U
     where
         F: FnOnce(&mut Self) -> U,
     {
@@ -60,6 +60,25 @@ impl CallbackQueue {
         let rv = (f)(&mut cb_queue);
         cb_queue.run();
         rv
+    }
+
+    /// A convenience function to create a [CallbackQueue], allow the caller to add events, and
+    /// process them all before returning.
+    ///
+    /// This also has the side-effect of ensuring that a global thread-local queue is configured for
+    /// C code using
+    /// [`with_global_cb_queue`](crate::utility::legacy_callback_queue::with_global_cb_queue). We do
+    /// this for convenience and to help prevent bugs where we forget to call
+    /// `with_global_cb_queue`. Ideally we'd like to remove this side-effect as we remove more C
+    /// code from Shadow.
+    ///
+    /// TODO: Once we have removed C file objects, remove this function and make
+    /// `Self::queue_and_run` public.
+    pub fn queue_and_run_with_legacy<F, U>(f: F) -> U
+    where
+        F: FnOnce(&mut Self) -> U,
+    {
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| Self::queue_and_run(f))
     }
 }
 

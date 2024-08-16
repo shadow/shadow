@@ -50,10 +50,8 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| desc.close(ctx.objs.host, cb_queue))
-                .unwrap_or(Ok(()))
-        })
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| desc.close(ctx.objs.host, cb_queue))
+            .unwrap_or(Ok(()))
     }
 
     log_syscall!(
@@ -109,10 +107,8 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|cb_queue| {
-                    replaced_desc.close(ctx.objs.host, cb_queue)
-                })
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+                replaced_desc.close(ctx.objs.host, cb_queue)
             });
         }
 
@@ -173,10 +169,8 @@ impl SyscallHandler {
         if let Some(replaced_desc) = replaced_desc {
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|cb_queue| {
-                    replaced_desc.close(ctx.objs.host, cb_queue)
-                })
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+                replaced_desc.close(ctx.objs.host, cb_queue)
             });
         }
 
@@ -497,7 +491,7 @@ impl SyscallHandler {
         let writer = Arc::new(AtomicRefCell::new(writer));
 
         // set the file objects to listen for events on the buffer
-        CallbackQueue::queue_and_run(|cb_queue| {
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             pipe::Pipe::connect_to_buffer(&reader, Arc::clone(&buffer), cb_queue);
             pipe::Pipe::connect_to_buffer(&writer, Arc::clone(&buffer), cb_queue);
         });
@@ -525,7 +519,7 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(()),
             Err(e) => {
-                CallbackQueue::queue_and_run(|cb_queue| {
+                CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                     // ignore any errors when closing
                     dt.deregister_descriptor(read_fd)
                         .unwrap()

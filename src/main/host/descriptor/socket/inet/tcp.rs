@@ -74,7 +74,7 @@ impl TcpSocket {
 
         // run a no-op function on the state, which will force the socket to update its file state
         // to match the tcp state
-        CallbackQueue::queue_and_run(|cb_queue| {
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             rv.borrow_mut().with_tcp_state(cb_queue, |_state| ())
         });
 
@@ -1103,7 +1103,7 @@ impl tcp::Dependencies for TcpDeps {
                 let f = f.borrow_mut().take().unwrap();
 
                 // run the original closure on the tcp state
-                CallbackQueue::queue_and_run(|cb_queue| {
+                CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                     socket.borrow_mut().with_tcp_state(cb_queue, |state| {
                         f(state, registered_by);
                     })

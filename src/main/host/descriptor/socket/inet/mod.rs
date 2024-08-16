@@ -659,12 +659,10 @@ mod export {
         unsafe { c::packet_ref(packet) };
         let packet = PacketRc::from_raw(packet);
 
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                socket
-                    .borrow_mut()
-                    .push_in_packet(packet, cb_queue, recv_time);
-            });
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            socket
+                .borrow_mut()
+                .push_in_packet(packet, cb_queue, recv_time);
         });
     }
 
@@ -672,14 +670,12 @@ mod export {
     pub extern "C-unwind" fn inetsocket_pullOutPacket(socket: *const InetSocket) -> *mut c::Packet {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                socket
-                    .borrow_mut()
-                    .pull_out_packet(cb_queue)
-                    .map(|p| p.into_inner())
-                    .unwrap_or(std::ptr::null_mut())
-            })
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            socket
+                .borrow_mut()
+                .pull_out_packet(cb_queue)
+                .map(|p| p.into_inner())
+                .unwrap_or(std::ptr::null_mut())
         })
     }
 
