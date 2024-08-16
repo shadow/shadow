@@ -42,9 +42,9 @@ impl CallbackQueue {
             (f)(self);
 
             count += 1;
-            if count == 200 {
+            if count == 10_000 {
                 log::trace!("Possible infinite loop of event callbacks.");
-            } else if count == 10_000 {
+            } else if count == 10_000_000 {
                 log::warn!("Very likely an infinite loop of event callbacks.");
             }
         }
