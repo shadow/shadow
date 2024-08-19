@@ -74,7 +74,7 @@ impl UdpSocket {
             _counter: ObjectCounter::new("UdpSocket"),
         };
 
-        CallbackQueue::queue_and_run(|cb_queue| {
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             socket.refresh_readable_writable(FileSignals::empty(), cb_queue)
         });
 

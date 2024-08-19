@@ -772,7 +772,7 @@ impl ZombieProcess {
             }
         };
         parent_runnable.signal(host, None, &siginfo);
-        CallbackQueue::queue_and_run(|q| {
+        CallbackQueue::queue_and_run_with_legacy(|q| {
             let mut parent_child_listeners =
                 parent_runnable.child_process_event_listeners.borrow_mut();
             parent_child_listeners.notify_listeners(

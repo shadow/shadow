@@ -256,10 +256,8 @@ impl SyscallHandler {
 
             // call the socket's recvmsg(), and run any resulting events
             let RecvmsgReturn { return_val, .. } =
-                crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                    CallbackQueue::queue_and_run(|cb_queue| {
-                        Socket::recvmsg(socket, args, &mut mem, cb_queue)
-                    })
+                CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+                    Socket::recvmsg(socket, args, &mut mem, cb_queue)
                 })?;
 
             return Ok(return_val);
@@ -269,7 +267,7 @@ impl SyscallHandler {
 
         let result =
             // call the file's read(), and run any resulting events
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {CallbackQueue::queue_and_run(|cb_queue| {
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 file.borrow_mut().readv(
                     iovs,
                     offset,
@@ -277,7 +275,7 @@ impl SyscallHandler {
                     &mut mem,
                     cb_queue,
                 )
-            })});
+            });
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
@@ -531,12 +529,9 @@ impl SyscallHandler {
             };
 
             // call the socket's sendmsg(), and run any resulting events
-            let bytes_written =
-                crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                    CallbackQueue::queue_and_run(|cb_queue| {
-                        Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
-                    })
-                })?;
+            let bytes_written = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
+            })?;
 
             return Ok(bytes_written);
         }
@@ -545,7 +540,7 @@ impl SyscallHandler {
 
         let result =
             // call the file's write(), and run any resulting events
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {CallbackQueue::queue_and_run(|cb_queue| {
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 file.borrow_mut().writev(
                     iovs,
                     offset,
@@ -553,7 +548,7 @@ impl SyscallHandler {
                     &mut mem,
                     cb_queue,
                 )
-            })});
+            });
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {

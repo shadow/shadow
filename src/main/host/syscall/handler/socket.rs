@@ -248,10 +248,8 @@ impl SyscallHandler {
         };
 
         // call the socket's sendmsg(), and run any resulting events
-        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
-            })
+        let mut result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -321,10 +319,8 @@ impl SyscallHandler {
         };
 
         // call the socket's sendmsg(), and run any resulting events
-        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
-            })
+        let mut result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::sendmsg(socket, args, &mut mem, &net_ns, &mut *rng, cb_queue)
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -400,10 +396,8 @@ impl SyscallHandler {
         };
 
         // call the socket's recvmsg(), and run any resulting events
-        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::recvmsg(socket, args, &mut mem, cb_queue)
-            })
+        let mut result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::recvmsg(socket, args, &mut mem, cb_queue)
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -478,10 +472,8 @@ impl SyscallHandler {
         };
 
         // call the socket's recvmsg(), and run any resulting events
-        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::recvmsg(socket, args, &mut mem, cb_queue)
-            })
+        let mut result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::recvmsg(socket, args, &mut mem, cb_queue)
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -635,10 +627,8 @@ impl SyscallHandler {
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
 
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::listen(socket, backlog, &net_ns, &mut *rng, cb_queue)
-            })
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::listen(socket, backlog, &net_ns, &mut *rng, cb_queue)
         })?;
 
         Ok(())
@@ -766,10 +756,8 @@ impl SyscallHandler {
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
 
-        let result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                socket.borrow_mut().accept(&net_ns, &mut *rng, cb_queue)
-            })
+        let result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            socket.borrow_mut().accept(&net_ns, &mut *rng, cb_queue)
         });
 
         let file_status = socket.borrow().status();
@@ -870,10 +858,8 @@ impl SyscallHandler {
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
 
-        let mut result = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                Socket::connect(socket, &addr, &net_ns, &mut *rng, cb_queue)
-            })
+        let mut result = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            Socket::connect(socket, &addr, &net_ns, &mut *rng, cb_queue)
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
@@ -914,8 +900,8 @@ impl SyscallHandler {
             return Err(Errno::ENOTSOCK.into());
         };
 
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| socket.borrow_mut().shutdown(how, cb_queue))
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            socket.borrow_mut().shutdown(how, cb_queue)
         })?;
 
         Ok(())
@@ -971,7 +957,7 @@ impl SyscallHandler {
             descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC);
         }
 
-        let (socket_1, socket_2) = CallbackQueue::queue_and_run(|cb_queue| {
+        let (socket_1, socket_2) = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             UnixSocket::pair(
                 file_flags,
                 socket_type,
@@ -1007,7 +993,7 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(()),
             Err(e) => {
-                CallbackQueue::queue_and_run(|cb_queue| {
+                CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                     // ignore any errors when closing
                     dt.deregister_descriptor(fd_1)
                         .unwrap()
@@ -1056,12 +1042,10 @@ impl SyscallHandler {
         // get the provided optlen
         let optlen = mem.read(optlen_ptr)?;
 
-        let mut optlen_new = crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                socket
-                    .borrow_mut()
-                    .getsockopt(level, optname, optval_ptr, optlen, &mut mem, cb_queue)
-            })
+        let mut optlen_new = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            socket
+                .borrow_mut()
+                .getsockopt(level, optname, optval_ptr, optlen, &mut mem, cb_queue)
         })?;
 
         if optlen_new > optlen {

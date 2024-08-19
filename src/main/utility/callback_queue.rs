@@ -3,20 +3,21 @@
 //! mutate the same state simultaneously, an event queue is used to defer new events until the
 //! current event has finished running.
 
+use std::collections::VecDeque;
+use std::num::Wrapping;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
-use log::*;
 
 /// A queue of events (functions/closures) which when run can add their own events to the queue.
 /// This allows events to be deferred and run later.
 #[allow(clippy::type_complexity)]
-pub struct CallbackQueue(std::collections::VecDeque<Box<dyn FnOnce(&mut Self)>>);
+pub struct CallbackQueue(VecDeque<Box<dyn FnOnce(&mut Self)>>);
 
 impl CallbackQueue {
     /// Create an empty event queue.
     pub fn new() -> Self {
-        Self(std::collections::VecDeque::new())
+        Self(VecDeque::new())
     }
 
     pub fn len(&self) -> usize {
@@ -41,17 +42,17 @@ impl CallbackQueue {
             (f)(self);
 
             count += 1;
-            if count == 200 {
-                trace!("Possible infinite loop of event callbacks.");
-            } else if count == 10_000 {
-                warn!("Very likely an infinite loop of event callbacks.");
+            if count == 10_000 {
+                log::trace!("Possible infinite loop of event callbacks.");
+            } else if count == 10_000_000 {
+                log::warn!("Very likely an infinite loop of event callbacks.");
             }
         }
     }
 
-    /// A convenience function to create an EventQueue, allow the caller to add events,
-    /// and process them all before returning.
-    pub fn queue_and_run<F, U>(f: F) -> U
+    /// A convenience function to create a [CallbackQueue], allow the caller to add events, and
+    /// process them all before returning.
+    fn queue_and_run<F, U>(f: F) -> U
     where
         F: FnOnce(&mut Self) -> U,
     {
@@ -59,6 +60,25 @@ impl CallbackQueue {
         let rv = (f)(&mut cb_queue);
         cb_queue.run();
         rv
+    }
+
+    /// A convenience function to create a [CallbackQueue], allow the caller to add events, and
+    /// process them all before returning.
+    ///
+    /// This also has the side-effect of ensuring that a global thread-local queue is configured for
+    /// C code using
+    /// [`with_global_cb_queue`](crate::utility::legacy_callback_queue::with_global_cb_queue). We do
+    /// this for convenience and to help prevent bugs where we forget to call
+    /// `with_global_cb_queue`. Ideally we'd like to remove this side-effect as we remove more C
+    /// code from Shadow.
+    ///
+    /// TODO: Once we have removed C file objects, remove this function and make
+    /// `Self::queue_and_run` public.
+    pub fn queue_and_run_with_legacy<F, U>(f: F) -> U
+    where
+        F: FnOnce(&mut Self) -> U,
+    {
+        crate::utility::legacy_callback_queue::with_global_cb_queue(|| Self::queue_and_run(f))
     }
 }
 
@@ -68,7 +88,7 @@ impl Default for CallbackQueue {
     }
 }
 
-impl std::ops::Drop for CallbackQueue {
+impl Drop for CallbackQueue {
     fn drop(&mut self) {
         // don't show the following warning message if panicking
         if std::thread::panicking() {
@@ -149,15 +169,15 @@ impl<T: Clone + Copy + 'static> Default for EventSource<T> {
 type Listener<T> = Arc<dyn Fn(T, &mut CallbackQueue) + Send + Sync>;
 
 struct EventSourceInner<T> {
-    listeners: std::vec::Vec<(HandleId, Listener<T>)>,
-    next_id: std::num::Wrapping<u32>,
+    listeners: Vec<(HandleId, Listener<T>)>,
+    next_id: Wrapping<u32>,
 }
 
 impl<T> EventSourceInner<T> {
     pub fn new() -> Self {
         Self {
-            listeners: std::vec::Vec::new(),
-            next_id: std::num::Wrapping(0),
+            listeners: Vec::new(),
+            next_id: Wrapping(0),
         }
     }
 
@@ -166,7 +186,7 @@ impl<T> EventSourceInner<T> {
         // don't care about worst-case performance here
         loop {
             let id = HandleId(self.next_id.0);
-            self.next_id += std::num::Wrapping(1);
+            self.next_id += Wrapping(1);
 
             if !self.listeners.iter().any(|x| x.0 == id) {
                 break id;

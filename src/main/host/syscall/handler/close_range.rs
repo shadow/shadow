@@ -68,14 +68,12 @@ impl SyscallHandler {
             let descriptors = desc_table.remove_range(range);
 
             // close the removed descriptors
-            crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-                CallbackQueue::queue_and_run(|cb_queue| {
-                    for desc in descriptors {
-                        // close_range(2):
-                        // > Errors closing a given file descriptor are currently ignored.
-                        let _ = desc.close(ctx.objs.host, cb_queue);
-                    }
-                })
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+                for desc in descriptors {
+                    // close_range(2):
+                    // > Errors closing a given file descriptor are currently ignored.
+                    let _ = desc.close(ctx.objs.host, cb_queue);
+                }
             });
         }
 

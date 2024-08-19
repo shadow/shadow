@@ -174,7 +174,7 @@ impl SyscallHandler {
         // Now we can adjust the timer with the new_value.
         if value.is_zero() {
             // A value of 0 disarms the timer; it_interval is ignored.
-            CallbackQueue::queue_and_run(|cb_queue| {
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 timerfd.borrow_mut().disarm_timer(cb_queue);
             });
             log::trace!("TimerFd {fd} disarmed");
@@ -192,7 +192,7 @@ impl SyscallHandler {
                 EmulatedTime::max(base + value, now)
             };
 
-            CallbackQueue::queue_and_run(|cb_queue| {
+            CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 timerfd.borrow_mut().arm_timer(
                     ctx.objs.host,
                     expire_time,

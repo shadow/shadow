@@ -181,13 +181,11 @@ impl SyscallHandler {
 
         log::trace!("Calling epoll_ctl on epoll {epfd} with child {fd}");
 
-        crate::utility::legacy_callback_queue::with_global_cb_queue(|| {
-            CallbackQueue::queue_and_run(|cb_queue| {
-                let weak_epoll = Arc::downgrade(epoll);
-                epoll
-                    .borrow_mut()
-                    .ctl(op, fd, target, events, data, weak_epoll, cb_queue)
-            })
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            let weak_epoll = Arc::downgrade(epoll);
+            epoll
+                .borrow_mut()
+                .ctl(op, fd, target, events, data, weak_epoll, cb_queue)
         })?;
         Ok(())
     }
@@ -351,7 +349,7 @@ impl SyscallHandler {
             // After we collect the events here, failing to write them out to the events_ptr
             // ForeignPointer below will leave our event state inconsistent with the managed
             // process's understanding of the available events.
-            let ready = CallbackQueue::queue_and_run(|cb_queue| {
+            let ready = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 epoll
                     .borrow_mut()
                     .collect_ready_events(cb_queue, max_events)
