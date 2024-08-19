@@ -94,3 +94,10 @@ add_shadow_tests(
       # This test can take a bit longer in debug builds
       TIMEOUT 40
       LABELS golang)
+
+add_golang_test_exe(BASENAME test_sigterm)
+add_shadow_tests(
+    BASENAME sigterm
+    CONFIGURATIONS extra
+    PROPERTIES
+      LABELS golang)

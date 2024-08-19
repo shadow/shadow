@@ -21,6 +21,7 @@ PATCH changes (bugfixes):
 * Log messages about unrecognized sockopt values are now only logged at level WARN once for each distinct value (and at DEBUG afterwards) (#3353).
 * Fixed rust/clippy warnings for rust 1.80. (#3354, #3355)
 * Fixed a build error on rust nightly (and future stable rust versions) by upgrading dependencies. (#3334)
+* Fixed a shim panic (which causes shadow to hang) when golang's default SIGTERM handler runs in a managed program (and potentially other cases where a signal handler stack is legitimately reused). (#3396)
 
 Full changelog since v3.2.0:
 

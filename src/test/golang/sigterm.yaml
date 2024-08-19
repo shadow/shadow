@@ -1,0 +1,21 @@
+# Regression test for handling golang's default SIGTERM handler.
+# See https://github.com/shadow/shadow/issues/3395.
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    # The test program just sleeps.
+    - path: ./test_sigterm
+      start_time: 1s
+      # Should be killed by the `kill` below.
+      expected_final_state: { signaled: SIGTERM }
+    - path: kill
+      args: "-s SIGTERM 1000"
+      start_time: 5s
