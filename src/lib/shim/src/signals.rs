@@ -190,9 +190,15 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
             {
                 // The specified stack is already in use.
                 //
-                // Documentation is unclear what should happen, but switching to
-                // the already-in-use stack would almost certainly go badly.
-                panic!("Alternate stack already in use.")
+                // This *could* be ok, e.g. if the stack is in use by the
+                // current thread, and never unwound back to the earlier use;
+                // e.g. if the handler exits the process. golang appears to do
+                // this in its default SIGTERM handling. (See
+                // https://github.com/shadow/shadow/issues/3395).
+                //
+                // In other cases things could go horribly, but it'd be a bug in
+                // the managed process rather than in shadow itself.
+                log::debug!("Signal handler configured to switch to a stack that's already in use. This could go badly.")
             }
 
             // Update the signal-stack configuration while the handler is being run.
