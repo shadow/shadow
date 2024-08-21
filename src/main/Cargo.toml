@@ -73,7 +73,7 @@ perf_timers = []
 
 [build-dependencies]
 shadow-build-common = { path = "../lib/shadow-build-common", features = ["bindgen", "cbindgen"] }
-bindgen = { version = "0.69.4" }
+bindgen = { version = "0.70.1" }
 cbindgen = { version = "0.27.0", default-features = false }
 cc = { version = "1.1", features = ["parallel"] }
 system-deps = "7.0"
