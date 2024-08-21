@@ -103,6 +103,12 @@ impl From<ProcessId> for u32 {
     }
 }
 
+impl From<ProcessId> for u64 {
+    fn from(val: ProcessId) -> Self {
+        val.0.into()
+    }
+}
+
 impl From<ProcessId> for libc::pid_t {
     fn from(val: ProcessId) -> Self {
         val.0.try_into().unwrap()

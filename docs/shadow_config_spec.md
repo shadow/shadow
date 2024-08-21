@@ -85,6 +85,7 @@ hosts:
 - [`experimental.socket_send_autotune`](#experimentalsocket_send_autotune)
 - [`experimental.socket_send_buffer`](#experimentalsocket_send_buffer)
 - [`experimental.strace_logging_mode`](#experimentalstrace_logging_mode)
+- [`experimental.syscall_override`](#experimentalsyscall_override)
 - [`experimental.unblocked_syscall_latency`](#experimentalunblocked_syscall_latency)
 - [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
@@ -424,6 +425,54 @@ Limitations:
   example, the log may show `syscall(...) = -1 (EINTR)`, but the managed
   process may not actually see this return value. Instead the syscall may be
   restarted.
+
+#### `experimental.syscall_overrides`
+
+Default: {}
+Type: Object
+
+Override the behaviour of emulated syscalls.
+
+A map of syscall numbers to lists of [Lua expressions][lua]. For each syscall
+number listed, a list of expressions will be evaluated before running Shadow's
+syscall handler. If an expression returns a non-nil signed integer result, that
+result will be used as the return value for the syscall. Otherwise if all
+expressions return nil, Shadow will perform the syscall as usual. Note that not
+all syscalls can be overridden. Specifically, syscalls that are handled by
+Shadow's shim (for example `gettimeofday`) cannot currently be overridden.
+
+[lua]: https://www.lua.org/
+
+The following variables are available in expressions:
+
+- `args`: Array of syscall arguments cast as integers.
+- `host`: The hostname of the current host.
+- `process`: The name of the current process.
+- `pid`: The pid of the current process.
+- `tid`: The tid of the current thread.
+
+Example:
+
+```yaml
+experimental:
+  syscall_overrides:
+    # SYS_SETSOCKOPT = 54, SOL_IP = 0, IP_BIND_ADDRESS_NO_PORT = 24, IP_TTL = 2
+    54:
+    - # setsockopt(_, SOL_IP, IP_BIND_ADDRESS_NO_PORT, ...) -> 0
+      "(args[1] == 0 and args[2] == 24) and 0 or nil"
+    - # setsockopt(_, SOL_IP, IP_TTL, ...) -> 0
+      "(args[1] == 0 and args[2] == 2) and 0 or nil"
+```
+
+You must not modify global state or do anything weird within an expression. In
+other words, there should be no side effects. The Lua interpreter may be reused.
+
+To easily find the integer value for a given libc constant, you can search for
+the constant name within the libc crate's documentation. For example to find
+the integer value of `SO_REUSEADDR`, you can [search for
+`SO_REUSEADDR`][so_reuseaddr] at https://docs.rs/libc/latest/libc/.
+
+[so_reuseaddr]: https://docs.rs/libc/latest/libc/constant.SO_REUSEADDR.html
 
 #### `experimental.unblocked_syscall_latency`
 
