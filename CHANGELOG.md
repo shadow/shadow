@@ -15,6 +15,12 @@ MINOR changes (backwards-compatible):
 * Implemented the `chdir` syscall. (#3368)
 * Implemented the `close_range` syscall. (#3364)
 * Added partial support the `fstat` syscall with pipes. (#3361)
+* We now support direct execution of scripts in shadow's config file.
+Instead of specifying `{path: '/usr/bin/python3', args:
+'/path/to/my/script.py'}`, you can now use `{path: '/path/to/my/script.py'}`
+provided it has an appropriate "shebang" line (e.g. `#!/usr/bin/env python3`).
+Likewise execution of such scripts is now supported inside the simulation when
+spawning processes via `execve`.
 
 PATCH changes (bugfixes):
 

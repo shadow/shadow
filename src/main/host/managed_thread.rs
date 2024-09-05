@@ -560,8 +560,7 @@ impl ManagedThread {
         //
         // This is also helpful since we can't retrieve specific `execve` errors
         // through `posix_spawn`.
-        verify_plugin_path(std::ffi::OsStr::from_bytes(plugin_path.to_bytes())).map_err(|e| {
-            debug!("Failed to verify path {plugin_path:?}");
+        fn map_verify_err(e: VerifyPluginPathError) -> Errno {
             match e {
                 // execve(2): ENOENT The file pathname [...] does not exist.
                 VerifyPluginPathError::NotFound => Errno::ENOENT,
@@ -572,7 +571,9 @@ impl ManagedThread {
                 // execve(2): ENOEXEC An executable is not in a recognized
                 // format, is for the wrong architecture, or has some other
                 // format error that means it cannot be executed.
+                VerifyPluginPathError::UnknownFileType => Errno::ENOEXEC,
                 VerifyPluginPathError::NotDynamicallyLinkedElf => Errno::ENOEXEC,
+                VerifyPluginPathError::IncompatibleInterpreter(e) => map_verify_err(*e),
                 // execve(2): EACCES Search permission is denied on a component
                 // of the path prefix of pathname or the name of a script
                 // interpreter.
@@ -582,7 +583,9 @@ impl ManagedThread {
                     Errno::ENOEXEC
                 }
             }
-        })?;
+        }
+        verify_plugin_path(std::ffi::OsStr::from_bytes(plugin_path.to_bytes()))
+            .map_err(map_verify_err)?;
 
         // posix_spawn is documented as taking pointers to *mutable* char for argv and
         // envv. It *probably* doesn't actually mutate them, but we

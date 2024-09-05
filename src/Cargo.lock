@@ -1583,6 +1583,7 @@ dependencies = [
  "rustix",
  "signal-hook",
  "static_assertions",
+ "tempfile",
  "vasi-sync",
 ]
 

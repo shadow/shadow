@@ -239,3 +239,4 @@ signal-hook = "0.3.17"
 once_cell = "1.19.0"
 vasi-sync = { path = "../lib/vasi-sync" }
 static_assertions = "1.1.0"
+tempfile = "3.12.0"
