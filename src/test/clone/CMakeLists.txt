@@ -27,7 +27,11 @@ add_shadow_tests(
     ARGS --strace-logging-mode=off --use-memory-manager=false
 )
 
-add_linux_tests(BASENAME clone COMMAND sh -c "../../target/debug/test_clone --libc-passing")
+# FIXME: Currently broken, probably because this test
+# doesn't set up thread local storage properly in new threads.
+# https://github.com/shadow/shadow/issues/3403
+# add_linux_tests(BASENAME clone COMMAND sh -c "../../target/debug/test_clone --libc-passing")
+
 add_shadow_tests(
     BASENAME clone
     # Shim-side strace-logging use libc functions that assume native
