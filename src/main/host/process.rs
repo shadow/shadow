@@ -407,10 +407,9 @@ impl RunnableProcess {
     #[track_caller]
     fn first_live_thread(&self, root: &Root) -> Option<Ref<RootedRc<RootedRefCell<Thread>>>> {
         Ref::filter_map(self.threads.borrow(), |threads| {
-            threads.values().next().map(|thread| {
+            threads.values().next().inspect(|thread| {
                 // There shouldn't be any non-running threads in the table.
                 assert!(thread.borrow(root).is_running());
-                thread
             })
         })
         .ok()
