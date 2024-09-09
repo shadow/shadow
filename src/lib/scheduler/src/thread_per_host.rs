@@ -36,8 +36,7 @@ impl<HostType: Host> ThreadPerHostSched<HostType> {
         hosts: T,
     ) -> Self
     where
-        T: IntoIterator<Item = HostType>,
-        <T as IntoIterator>::IntoIter: ExactSizeIterator,
+        T: IntoIterator<Item = HostType, IntoIter: ExactSizeIterator>,
     {
         let hosts = hosts.into_iter();
 

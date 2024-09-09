@@ -28,8 +28,7 @@ impl<HostType: Host> ThreadPerCoreSched<HostType> {
     /// threads created will be the length of `cpu_ids`.
     pub fn new<T>(cpu_ids: &[Option<u32>], hosts: T, yield_spin: bool) -> Self
     where
-        T: IntoIterator<Item = HostType>,
-        <T as IntoIterator>::IntoIter: ExactSizeIterator,
+        T: IntoIterator<Item = HostType, IntoIter: ExactSizeIterator>,
     {
         let hosts = hosts.into_iter();
 
