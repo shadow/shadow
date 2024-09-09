@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::ffi::{CStr, CString, OsString};
+use std::io::Write as _;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
 use std::str::FromStr;
@@ -986,6 +988,46 @@ os._exit({exit_code}) "#
     })
 }
 
+/// Test exec'ing a script
+fn test_fork_exec_interpreter(
+    spawn_fn: impl FnOnce(&Path, &[&str]) -> Pid,
+    python_path: &Path,
+    exit_code: i32,
+    add_spaces_after_shebang: bool,
+) -> anyhow::Result<()> {
+    run_test_in_subprocess(|| {
+        let python_path_display = python_path.display();
+
+        // Resolve extra spaces after shebang
+        let shebang_spaces = if add_spaces_after_shebang { "  " } else { "" };
+
+        let mut script_file = tempfile::NamedTempFile::new().unwrap();
+        script_file
+            .write_all(
+                format!(
+                    r#"#!{shebang_spaces}{python_path_display}
+import os
+import sys
+os._exit(int(sys.argv[1]))
+"#
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        // execve fails if the file has any open writers, so close it.
+        let script_path = script_file.into_temp_path();
+        // Make executable.
+        std::fs::set_permissions(&script_path, PermissionsExt::from_mode(0o770)).unwrap();
+
+        let child_pid = spawn_fn(&script_path, &[&format!("{exit_code}")]);
+        let child_pid = nix::unistd::Pid::from_raw(child_pid.as_raw_nonzero().get());
+        assert_eq!(
+            nix::sys::wait::waitpid(Some(child_pid), None).unwrap(),
+            nix::sys::wait::WaitStatus::Exited(child_pid, exit_code)
+        );
+    })
+}
+
 /// If `exec` is performed from a non-thread-group-leader, that thread becomes the
 /// new thread-group-leader. Its thread-id is updated to match the pid.
 fn test_fork_exec_from_thread_reassigns_tid(python_path: &Path) -> anyhow::Result<()> {
@@ -1837,13 +1879,35 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for (spawn_fn_name, spawn_fn) in &spawn_fns {
         for exit_code in [0, 1].into_iter() {
-            let python_path = python_path.to_path_buf();
-            let spawn_fn = spawn_fn.clone();
             tests.push(ShadowTest::new(
                 &format!("test_spawn-{spawn_fn_name}-{exit_code}"),
-                move || test_fork_exec_and_reap(&*spawn_fn, &python_path, exit_code),
+                {
+                    let python_path = python_path.to_path_buf();
+                    let spawn_fn = spawn_fn.clone();
+                    move || test_fork_exec_and_reap(&*spawn_fn, &python_path, exit_code)
+                },
                 all_envs.clone(),
             ));
+            for spaces_after_shebang in [false, true].into_iter() {
+                tests.push(ShadowTest::new(
+                    &format!(
+                        "test_spawn-script-{spawn_fn_name}-{exit_code}-{spaces_after_shebang}"
+                    ),
+                    {
+                        let python_path = python_path.to_path_buf();
+                        let spawn_fn = spawn_fn.clone();
+                        move || {
+                            test_fork_exec_interpreter(
+                                &*spawn_fn,
+                                &python_path,
+                                exit_code,
+                                spaces_after_shebang,
+                            )
+                        }
+                    },
+                    all_envs.clone(),
+                ));
+            }
         }
     }
 
