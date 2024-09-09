@@ -299,7 +299,7 @@ fn test_clone_files_dup(use_clone_files_flag: bool) -> Result<(), Box<dyn Error>
         // We had to wrap `orig_tmpfile` in an `OwnedFd` for use with
         // rustix's dup2 API, but the parent thread actually owns it.
         // Leak it so that we don't incorrectly close it when this thread exits.
-        orig_tmpfile.into_raw_fd();
+        let _ = orig_tmpfile.into_raw_fd();
 
         0
     }
