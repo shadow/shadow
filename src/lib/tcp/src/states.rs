@@ -176,6 +176,10 @@ impl<X: Dependencies> Common<X> {
 
                     let rv = parent_listen_state.with_child(child_key, |state| (f(state), ()));
 
+                    // in practice we want to ignore the error, but by doing a match here we make
+                    // sure that if the return type of `with_child` changes in the future, this code
+                    // will break and we can update it
+                    #[allow(clippy::single_match)]
                     match rv {
                         Ok(()) => {}
                         // we ignore this since the child may have been closed
