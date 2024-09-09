@@ -10,11 +10,12 @@ use crate::host::syscall::types::ForeignArrayPtr;
 use crate::utility::sockaddr::SockaddrStorage;
 
 /// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`, and
-/// writes the socket address length into `plugin_addr_len`. The `plugin_addr_len` pointer is a
-/// value-result argument, so it should be initialized with the size of the `plugin_addr` buffer. If
-/// the original value of `plugin_addr_len` is smaller than the socket address' length, then the
-/// written socket address will be truncated. In this case the value written to `plugin_addr_len`
-/// will be larger than its original value.
+/// writes the socket address length into `plugin_addr_len`.
+///
+/// The `plugin_addr_len` pointer is a value-result argument, so it should be initialized with the
+/// size of the `plugin_addr` buffer. If the original value of `plugin_addr_len` is smaller than the
+/// socket address' length, then the written socket address will be truncated. In this case the
+/// value written to `plugin_addr_len` will be larger than its original value.
 pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
@@ -60,9 +61,10 @@ pub fn write_sockaddr_and_len(
     Ok(())
 }
 
-/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`. If the
-/// buffer length is smaller than the socket address length, the written address will be truncated.
-/// The length of the socket address is returned.
+/// Writes the socket address into a buffer at `plugin_addr` with length `plugin_addr_len`.
+///
+/// If the buffer length is smaller than the socket address length, the written address will be
+/// truncated. The length of the socket address is returned.
 pub fn write_sockaddr(
     mem: &mut MemoryManager,
     addr: &SockaddrStorage,
@@ -190,10 +192,12 @@ impl From<ForeignArrayPtr<u8>> for IoVec {
     }
 }
 
-/// A reader which reads data from [`IoVec`] buffers of plugin memory. If an error occurs while
-/// reading (for example if an `IoVec` points to an invalid memory address), the error will be
-/// returned only if no bytes have yet been read. If an error occurs after some bytes have already
-/// been read, the [`Read::read`](std::io::Read::read) will return how many bytes have been read.
+/// A reader which reads data from [`IoVec`] buffers of plugin memory.
+///
+/// If an error occurs while reading (for example if an `IoVec` points to an invalid memory
+/// address), the error will be returned only if no bytes have yet been read. If an error occurs
+/// after some bytes have already been read, the [`Read::read`](std::io::Read::read) will return how
+/// many bytes have been read.
 ///
 /// In the future we may want to merge this with
 /// [`MemoryReaderCursor`](crate::host::memory_manager::MemoryReaderCursor).
@@ -263,11 +267,12 @@ impl<'a, I: Iterator<Item = &'a IoVec>> std::io::Read for IoVecReader<'a, I> {
     }
 }
 
-/// A writer which writes data to [`IoVec`] buffers of plugin memory. If an error occurs while
-/// writing (for example if an `IoVec` points to an invalid memory address), the error will be
-/// returned only if no bytes have yet been written. If an error occurs after some bytes have
-/// already been written, the [`Write::write`](std::io::Write::write) will return how many bytes
-/// have been written.
+/// A writer which writes data to [`IoVec`] buffers of plugin memory.
+///
+/// If an error occurs while writing (for example if an `IoVec` points to an invalid memory
+/// address), the error will be returned only if no bytes have yet been written. If an error occurs
+/// after some bytes have already been written, the [`Write::write`](std::io::Write::write) will
+/// return how many bytes have been written.
 ///
 /// In the future we may want to merge this with
 /// [`MemoryWriterCursor`](crate::host::memory_manager::MemoryWriterCursor).

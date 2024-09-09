@@ -2,9 +2,11 @@ use vasi::VirtualAddressSpaceIndependent;
 
 use crate::util::{DebugFormatter, NoTypeInference, SyncSendPointer};
 
-/// Used to indicate an untyped `ForeignPtr` in C code. We use the unit type as the generic rather
-/// than `libc::c_void` since the unit type is zero-sized and `libc::c_void` has a size of 1 byte,
-/// and this prevents us from accidentally accessing an "untyped" pointer.
+/// Used to indicate an untyped `ForeignPtr` in C code.
+///
+/// We use the unit type as the generic rather than `libc::c_void` since the unit type is zero-sized
+/// and `libc::c_void` has a size of 1 byte, and this prevents us from accidentally accessing an
+/// "untyped" pointer.
 pub type UntypedForeignPtr = ForeignPtr<()>;
 
 /// Represents a pointer to a virtual address in plugin memory. The pointer is not guaranteed to be

@@ -143,9 +143,11 @@ pub trait Dependencies: Debug + Sized {
     fn fork(&self) -> Self;
 }
 
-/// Specifies whether the callback is meant to run on the parent state or a child state. For example
-/// if a child state registers a timer, a value of `TimerRegisteredBy::Child` will be given to the
-/// callback so that it knows to apply the callback to a child state, not the parent state.
+/// Specifies whether the callback is meant to run on the parent state or a child state.
+///
+/// For example if a child state registers a timer, a value of `TimerRegisteredBy::Child` will be
+/// given to the callback so that it knows to apply the callback to a child state, not the parent
+/// state.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TimerRegisteredBy {
     Parent,
@@ -703,9 +705,10 @@ pub struct Ipv4Header {
     pub dst: Ipv4Addr,
 }
 
-/// A packet payload containing a list of [byte](Bytes) chunks. The sum of the lengths of each chunk
-/// must be at most [`u32::MAX`], otherwise operations on the payload or other code using the
-/// payload may panic.
+/// A packet payload containing a list of [byte](Bytes) chunks.
+///
+/// The sum of the lengths of each chunk must be at most [`u32::MAX`], otherwise operations on the
+/// payload or other code using the payload may panic.
 // TODO: Intuitively this seems like a good place to use a `SmallVec` to optimize the common case
 // where there are a small number of chunks per packet. But I'm leaving this until we can test `Vec`
 // vs `SmallVec` in a benchmark to see if there's any performance improvement in practice.

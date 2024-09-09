@@ -1,6 +1,7 @@
-//! This module provides a simple interface to make system calls without relying on libc or nix,
-//! which are not no-std. The goal of this module is to be as no-std as possible to be compatible
-//! with Shadow's shim preload library.
+//! A simple interface to make system calls without relying on libc or nix, which are not no-std.
+//!
+//! The goal of this module is to be as no-std as possible to be compatible with Shadow's shim
+//! preload library.
 //!
 //! Public functions for system calls are named according to their standard names found in man(2).
 //! The public function accept have parameters with types that are natural for Rust.

@@ -506,9 +506,10 @@ where
         .collect()
 }
 
-/// Encodes the order in which Linux checks the syscall args. When fuzzing syscalls and passing
-/// invalid values for multiple syscall args, this ordering enables us to determine which invalid
-/// arg's associated error code is expected to be returned.
+/// Encodes the order in which Linux checks the syscall args.
+///
+/// When fuzzing syscalls and passing invalid values for multiple syscall args, this ordering
+/// enables us to determine which invalid arg's associated error code is expected to be returned.
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum FuzzOrder {
     First,

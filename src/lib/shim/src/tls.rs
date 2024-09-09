@@ -161,6 +161,7 @@ impl TlsOneThreadStorage {
 }
 
 /// This is a "proxy" type to `TlsOneThreadStorage` with the same size and alignment.
+///
 /// Unlike `TlsOneThreadStorage`, it is exposed to C, that C code can provide
 /// a "thread-local allocator" that we delegate to in [`Mode::Native`].
 #[repr(C, align(16))]

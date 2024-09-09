@@ -20,10 +20,12 @@ use crate::host::network::interface::{NetworkInterface, PcapOptions};
 // specify the port it wants to bind to, and for client connections.
 const MIN_RANDOM_PORT: u16 = 10000;
 
-/// Represents a network namespace. Can be thought of as roughly equivalent to a Linux `struct net`.
-/// Shadow doesn't support multiple network namespaces, but this `NetworkNamespace` allows us to
-/// consolidate the host's networking objects, and hopefully might make it easier to support
-/// multiple network namespaces if we want to in the future.
+/// Represents a network namespace.
+///
+/// Can be thought of as roughly equivalent to a Linux `struct net`. Shadow doesn't support multiple
+/// network namespaces, but this `NetworkNamespace` allows us to consolidate the host's networking
+/// objects, and hopefully might make it easier to support multiple network namespaces if we want to
+/// in the future.
 pub struct NetworkNamespace {
     // map abstract socket addresses to unix sockets
     pub unix: Arc<AtomicRefCell<AbstractUnixNamespace>>,
@@ -362,8 +364,9 @@ impl std::fmt::Display for NoInterface {
 
 impl std::error::Error for NoInterface {}
 
-/// A handle for a socket association with a network interface(s). The network association will be
-/// dissolved when this handle is dropped (similar to
+/// A handle for a socket association with a network interface(s).
+///
+/// The network association will be dissolved when this handle is dropped (similar to
 /// [`callback_queue::Handle`](crate::utility::callback_queue::Handle)).
 #[derive(Debug)]
 pub struct AssociationHandle {

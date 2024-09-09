@@ -6,10 +6,11 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use crate::sync::atomic;
 use crate::sync::{self, ConstPtr, UnsafeCell};
 
-/// For use with `LazyLock`. This trait is implemented for `FnOnce` closures, so
-/// most users can just use that directly.  However in case they need to name a
-/// type in the `LazyLock`, they can create a type that implements this trait
-/// instead.
+/// For use with `LazyLock`.
+///
+/// This trait is implemented for `FnOnce` closures, so most users can just use
+/// that directly.  However in case they need to name a type in the `LazyLock`,
+/// they can create a type that implements this trait instead.
 pub trait Producer<T> {
     fn initialize(self) -> T;
 }

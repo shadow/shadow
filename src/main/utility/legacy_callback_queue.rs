@@ -15,10 +15,11 @@ thread_local! {
     static C_CALLBACK_QUEUE: RefCell<Option<CallbackQueue>> = const { RefCell::new(None) };
 }
 
-/// Helper function to initialize and run a global thread-local callback queue. This is a hack so
-/// that C [`LegacyFile`](crate::cshadow::LegacyFile)s can queue listener callbacks using
-/// `notify_listeners_with_global_cb_queue`. This is primarily for [`TCP`](crate::cshadow::TCP)
-/// objects, and should not be used with Rust file objects.
+/// Helper function to initialize and run a global thread-local callback queue.
+///
+/// This is a hack so that C [`LegacyFile`](crate::cshadow::LegacyFile)s can queue listener
+/// callbacks using `notify_listeners_with_global_cb_queue`. This is primarily for
+/// [`TCP`](crate::cshadow::TCP) objects, and should not be used with Rust file objects.
 ///
 /// The closure should make any borrows of the file object, rather than making any borrows outside
 /// of the closure.

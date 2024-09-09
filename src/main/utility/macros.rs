@@ -8,8 +8,10 @@ macro_rules! debug_panic {
 }
 
 /// Log a message once at level `lvl_once`, and any later log messages from this line at level
-/// `lvl_remaining`. A log target is not supported. The string "(LOG_ONCE)" will be prepended to the
-/// message to indicate that future messages won't be logged at `lvl_once`.
+/// `lvl_remaining`.
+///
+/// A log target is not supported. The string "(LOG_ONCE)" will be prepended to the message to
+/// indicate that future messages won't be logged at `lvl_once`.
 ///
 /// ```
 /// # use log::Level;
@@ -42,9 +44,10 @@ macro_rules! log_once_at_level {
 
 /// Log a message once at level `lvl_once` for each distinct value, and any
 /// later log messages from this line with an already-logged value at level
-/// `lvl_remaining`. A log target is not supported. The string "(LOG_ONCE)" will
-/// be prepended to the message to indicate that future messages won't be logged
-/// at `lvl_once`.
+/// `lvl_remaining`.
+///
+/// A log target is not supported. The string "(LOG_ONCE)" will be prepended to
+/// the message to indicate that future messages won't be logged at `lvl_once`.
 ///
 /// The fast-path (where the given value has already been logged) aquires a
 /// read-lock and looks up the value in a hash table.

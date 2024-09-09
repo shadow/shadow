@@ -143,8 +143,10 @@ pub(crate) struct Common<X: Dependencies> {
 }
 
 impl<X: Dependencies> Common<X> {
-    /// Register a timer for this state. This method will make sure that the callback gets run on
-    /// the correct state, even if called by a child state.
+    /// Register a timer for this state.
+    ///
+    /// This method will make sure that the callback gets run on the correct state, even if called
+    /// by a child state.
     pub fn register_timer(
         &self,
         time: X::Instant,

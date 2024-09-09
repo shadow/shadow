@@ -44,6 +44,7 @@ pub mod scchannel;
 pub mod scmutex;
 
 /// This is public primarily for the integration tests in `tests/*`, which is the
-/// recommended way of writing loom tests. Not actually intended for usage by
-/// other crates.
+/// recommended way of writing loom tests.
+///
+/// Not actually intended for usage by other crates.
 pub mod sync;
