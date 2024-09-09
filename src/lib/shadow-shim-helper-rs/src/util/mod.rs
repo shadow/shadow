@@ -1,8 +1,10 @@
 pub mod time;
 
-/// A trait to prevent type inference during function calls. Useful when you have a type that wraps
-/// a pointer (like `ForeignArrayPtr`) and you don't want Rust to infer the type of pointer
-/// during creation.  Instead, the caller must specify the generic type.
+/// A trait to prevent type inference during function calls.
+///
+/// Useful when you have a type that wraps a pointer (like `ForeignArrayPtr`) and you don't want
+/// Rust to infer the type of pointer during creation.  Instead, the caller must specify the generic
+/// type.
 ///
 /// Example:
 ///

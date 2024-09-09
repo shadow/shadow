@@ -301,10 +301,11 @@ impl From<nix::sys::socket::NetlinkAddr> for SockaddrStorage {
     }
 }
 
-/// A Unix socket address. Typically will be used as an owned address
-/// `SockaddrUnix<libc::sockaddr_un>` or a borrowed address `SockaddrUnix<&libc::sockaddr_un>`, and
-/// you can convert between them using methods such as [`as_ref`](Self::as_ref) or
-/// [`into_owned`](Self::into_owned).
+/// A Unix socket address.
+///
+/// Typically will be used as an owned address `SockaddrUnix<libc::sockaddr_un>` or a borrowed
+/// address `SockaddrUnix<&libc::sockaddr_un>`, and you can convert between them using methods such
+/// as [`as_ref`](Self::as_ref) or [`into_owned`](Self::into_owned).
 #[derive(Clone, Copy)]
 pub struct SockaddrUnix<T>
 where

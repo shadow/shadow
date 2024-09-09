@@ -2,13 +2,14 @@ use std::sync::RwLock;
 
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
-/// Decides on the runahead for the next simulation round (the duration of the round). Having a
-/// larger runahead improves performance since more hosts and more events can be run in parallel
-/// during a simulation round, but if the runahead is too large then packets will be delayed until
-/// the next simulation round which is beyond their intended latency. This uses a fixed runahead of
-/// the provided minimum possible latency when dynamic runahead is disabled, and otherwise uses a
-/// dynamic runahead of the minimum used latency. Both runahead calculations have a static lower
-/// bound.
+/// Decides on the runahead for the next simulation round (the duration of the round).
+///
+/// Having a larger runahead improves performance since more hosts and more events can be run in
+/// parallel during a simulation round, but if the runahead is too large then packets will be
+/// delayed until the next simulation round which is beyond their intended latency. This uses a
+/// fixed runahead of the provided minimum possible latency when dynamic runahead is disabled, and
+/// otherwise uses a dynamic runahead of the minimum used latency. Both runahead calculations have a
+/// static lower bound.
 #[derive(Debug)]
 pub struct Runahead {
     /// The lowest packet latency that shadow has used so far in the simulation. For performance, is

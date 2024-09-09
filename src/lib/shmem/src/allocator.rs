@@ -96,12 +96,11 @@ lazy_static! {
     };
 }
 
-/// This struct exists as the intended singleton destructor for the global singleton shared memory
-/// allocator. Because the global allocator has static lifetime, drop() will never be called on it.
-/// Therefore, necessary cleanup routines are not called.
+/// The intended singleton destructor for the global singleton shared memory allocator.
 ///
-/// Instead, this object can be instantiated once, eg at the start of main(), and then when it is
-/// dropped at program exit the cleanup routine is called.
+/// Because the global allocator has static lifetime, drop() will never be called on it. Therefore,
+/// necessary cleanup routines are not called. Instead, this object can be instantiated once, eg at
+/// the start of main(), and then when it is dropped at program exit the cleanup routine is called.
 pub struct SharedMemAllocatorDropGuard(());
 
 impl SharedMemAllocatorDropGuard {
@@ -119,9 +118,10 @@ impl Drop for SharedMemAllocatorDropGuard {
     }
 }
 
-/// A smart pointer class that holds a `Sync` and `VirtualAddressSpaceIndependent` object. The pointer
-/// is obtained by a call to a shared memory allocator's `alloc()` function (or the global
-/// `shalloc()` function. The memory is freed when the block is dropped.
+/// A smart pointer class that holds a `Sync` and `VirtualAddressSpaceIndependent` object.
+///
+/// The pointer is obtained by a call to a shared memory allocator's `alloc()` function (or the
+/// global `shalloc()` function. The memory is freed when the block is dropped.
 ///
 /// This smart pointer is unique in that it may be serialized to a string, passed across process
 /// boundaries, and deserialized in a (potentially) separate process to obtain a view of the
@@ -184,10 +184,11 @@ where
 }
 
 /// This struct is analogous to the `ShMemBlock` smart pointer, except it does not assume ownership
-/// of the underlying memory and thus does not free the memory when dropped. An alias of a block is
-/// obtained with a call to `deserialize()` on a `SharedMemDeserializer` object (or likely by using
-/// the `shdeserialize()` to make this call on the global shared memory deserializer.
+/// of the underlying memory and thus does not free the memory when dropped.
 ///
+/// An alias of a block is obtained with a call to `deserialize()` on a `SharedMemDeserializer`
+/// object (or likely by using the `shdeserialize()` to make this call on the global shared memory
+/// deserializer.
 #[derive(Debug)]
 pub struct ShMemBlockAlias<'deserializer, T>
 where
@@ -271,9 +272,10 @@ impl core::str::FromStr for ShMemBlockSerialized {
     }
 }
 
-/// Safe wrapper around our low-level, unsafe, nostd shared memory allocator. This allocator type
-/// is not meant to be used directly, but can be accessed indirectly via calls made to `shmalloc()`
-/// and `shfree()`.
+/// Safe wrapper around our low-level, unsafe, nostd shared memory allocator.
+///
+/// This allocator type is not meant to be used directly, but can be accessed indirectly via calls
+/// made to `shmalloc()` and `shfree()`.
 pub struct SharedMemAllocator<'alloc> {
     internal: crate::shmalloc_impl::FreelistAllocator,
     nallocs: isize,

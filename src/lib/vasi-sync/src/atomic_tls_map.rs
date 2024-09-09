@@ -6,10 +6,12 @@ use core::mem::MaybeUninit;
 use core::num::NonZeroUsize;
 use core::ops::Deref;
 
-/// A lockless, no_std, no-alloc hash table. Allows insertion and removal from
-/// an immutable reference, but does not support getting mutable references to
-/// internal values, and requires that a particular key is only ever accessed
-/// from the thread that inserted it, until that thread removes it.
+/// A lockless, no_std, no-alloc hash table.
+///
+/// Allows insertion and removal from an immutable reference, but does not
+/// support getting mutable references to internal values, and requires that a
+/// particular key is only ever accessed from the thread that inserted it, until
+/// that thread removes it.
 ///
 /// Uses linear probing, and doesn't support resizing.  Lookup is `Θ(1)`
 /// (average case) if the key is present and the key hasn't been forced far away

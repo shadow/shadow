@@ -61,9 +61,11 @@ pub fn init(max_log_level: LevelFilter, log_errors_to_stderr: bool) -> Result<()
     Ok(())
 }
 
-/// A logger specialized for Shadow. It attaches simulation context to log
-/// entries (e.g. sim time, running process, etc.). It's also designed for
-/// high performance to accomodate heavy logging from multiple threads.
+/// A logger specialized for Shadow.
+///
+/// It attaches simulation context to log entries (e.g. sim time, running
+/// process, etc.). It's also designed for high performance to accomodate heavy
+/// logging from multiple threads.
 pub struct ShadowLogger {
     // Channel used to send commands to the logger's thread.
     //

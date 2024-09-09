@@ -3,9 +3,11 @@ use core::ptr::NonNull;
 use rustix::mm::{MapFlags, ProtFlags};
 
 /// Analogous to `alloc::boxed::Box`, but directly uses `mmap` instead of a
-/// global allocator. Useful since we don't currently have a global allocator in
-/// the shim, and probably don't want to install one that makes direct `mmap`
-/// calls for every allocation, since that would be a performance footgun.
+/// global allocator.
+///
+/// Useful since we don't currently have a global allocator in the shim, and
+/// probably don't want to install one that makes direct `mmap` calls for every
+/// allocation, since that would be a performance footgun.
 ///
 /// We should be able to replace this with `alloc::boxed::Box<T>` if and when we
 /// implement a global allocator suitable for the shim.  (Or with

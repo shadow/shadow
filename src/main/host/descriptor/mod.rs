@@ -363,11 +363,13 @@ impl std::fmt::Debug for FileRefMut<'_> {
     }
 }
 
-/// Represents a POSIX file description, or a Linux `struct file`. An `OpenFile` wraps a reference
-/// to a [`File`]. Once there are no more `OpenFile` objects for a given `File`, the `File` will be
-/// closed. Typically this means that holding an `OpenFile` will ensure that the file remains open
-/// (the file's status will not become [`FileState::CLOSED`]), but the underlying file may close
-/// itself in extenuating circumstances (for example if the file has an internal error).
+/// Represents a POSIX file description, or a Linux `struct file`.
+///
+/// An `OpenFile` wraps a reference to a [`File`]. Once there are no more `OpenFile` objects for a
+/// given `File`, the `File` will be closed. Typically this means that holding an `OpenFile` will
+/// ensure that the file remains open (the file's status will not become [`FileState::CLOSED`]), but
+/// the underlying file may close itself in extenuating circumstances (for example if the file has
+/// an internal error).
 ///
 /// **Warning:** If an `OpenFile` for a specific file already exists, it is an error to create a new
 /// `OpenFile` for that file. You must clone the existing `OpenFile` object. A new `OpenFile` object
@@ -600,10 +602,11 @@ impl Drop for CountedLegacyFileRef {
     }
 }
 
-/// Used to track how many descriptors are open for a [`LegacyFile`][c::LegacyFile]. When the
-/// `close()` method is called, the legacy file's `legacyfile_close()` will only be called if this
-/// is the last descriptor for that legacy file. This is similar to an [`OpenFile`] object, but for
-/// C files.
+/// Used to track how many descriptors are open for a [`LegacyFile`][c::LegacyFile].
+///
+/// When the `close()` method is called, the legacy file's `legacyfile_close()` will only be called
+/// if this is the last descriptor for that legacy file. This is similar to an [`OpenFile`] object,
+/// but for C files.
 #[derive(Clone, Debug)]
 pub struct LegacyFileCounter {
     file: Option<CountedLegacyFileRef>,

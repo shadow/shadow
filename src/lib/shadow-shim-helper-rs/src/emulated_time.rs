@@ -17,10 +17,11 @@ use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 #[repr(C)]
 pub struct EmulatedTime(CEmulatedTime);
 
-/// Emulation time in nanoseconds. Allows for a consistent representation
-/// of time throughput the simulator. Emulation time is the simulation time
-/// plus the EMULATION_TIME_OFFSET. This type allows us to explicitly
-/// distinguish each type of time in the code.
+/// Emulation time in nanoseconds.
+///
+/// Allows for a consistent representation of time throughput the simulator.
+/// Emulation time is the simulation time plus the EMULATION_TIME_OFFSET. This
+/// type allows us to explicitly distinguish each type of time in the code.
 pub type CEmulatedTime = u64;
 
 // Duplicated from the EMULATED_TIME_OFFSET macro in definitions.h.

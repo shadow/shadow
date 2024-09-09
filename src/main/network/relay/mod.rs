@@ -18,6 +18,7 @@ mod token_bucket;
 
 /// A `Relay` forwards `PacketRc`s between `PacketDevice`s, optionally enforcing a
 /// bandwidth limit on the rate at which we forward `PacketRc`s between devices.
+///
 /// The `Relay` is considered the "active" part of the `PacketRc` forwarding
 /// process: it initiates `PacketRc` forwarding and internally schedules tasks to
 /// ensure that `PacketRc`s are continually forwarded over time without exceeding

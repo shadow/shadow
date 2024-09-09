@@ -50,9 +50,11 @@ impl Drop for ShimLoggerWriter {
     }
 }
 
-/// Implementation of `log::Log` for use in the shim. Includes some shim related
-/// metadata (such as simulation time), is no_std, and is careful to only make
-/// inlined syscalls to avoid getting intercepted by the shim's seccomp filter.
+/// Implementation of `log::Log` for use in the shim.
+///
+/// Includes some shim related metadata (such as simulation time), is no_std,
+/// and is careful to only make inlined syscalls to avoid getting intercepted by
+/// the shim's seccomp filter.
 pub struct ShimLogger {}
 
 impl ShimLogger {

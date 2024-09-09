@@ -1,7 +1,8 @@
-//! An event/listener framework to allow listeners to subscribe to event sources. To prevent
-//! recursive events (events which trigger new events) from leading to two listeners attempting to
-//! mutate the same state simultaneously, an event queue is used to defer new events until the
-//! current event has finished running.
+//! An event/listener framework to allow listeners to subscribe to event sources.
+//!
+//! To prevent recursive events (events which trigger new events) from leading to two listeners
+//! attempting to mutate the same state simultaneously, an event queue is used to defer new events
+//! until the current event has finished running.
 
 use std::collections::VecDeque;
 use std::num::Wrapping;

@@ -327,9 +327,10 @@ pub fn autobind_helper(fd: libc::c_int, domain: libc::c_int) -> (SockAddr, libc:
     (server_addr, server_addr_len)
 }
 
-/// A helper function to get the peername of `fd_peer` and connect `fd_client` to it. This does not
-/// call `accept()`, so you must do that manually if using a connection-oriented socket. Returns the
-/// return value of the `connect()`.
+/// A helper function to get the peername of `fd_peer` and connect `fd_client` to it.
+///
+/// This does not call `accept()`, so you must do that manually if using a connection-oriented
+/// socket. Returns the return value of the `connect()`.
 pub fn connect_to_peername(fd_client: libc::c_int, fd_peer: libc::c_int) -> libc::c_int {
     let mut addr: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
     let mut addr_len: libc::socklen_t = std::mem::size_of_val(&addr).try_into().unwrap();

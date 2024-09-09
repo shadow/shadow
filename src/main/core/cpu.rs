@@ -55,8 +55,10 @@ impl Iterator for RangeListIter<'_> {
 }
 
 /// Take an input of a list of ranges like '1-3,5,7-10' and return an iterator of integers like
-/// \[1,2,3,5,7,8,9,10\]. The returned iterator will panic if the input is not nicely formatted (no
-/// whitespace, etc) or contains invalid characters.
+/// \[1,2,3,5,7,8,9,10\].
+///
+/// The returned iterator will panic if the input is not nicely formatted (no whitespace, etc) or
+/// contains invalid characters.
 ///
 /// The iterator will return items in the order of the list, meaning that they are not guaranteed to
 /// be returned in increasing order and there may be duplicates. For example "1,2,3,3,2" would

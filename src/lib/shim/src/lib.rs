@@ -522,8 +522,10 @@ pub mod export {
     }
 
     /// Sets the flag determining whether syscalls are passed through natively, and
-    /// returns the old value. Typical usage is to set this to the desired value at
-    /// the beginning of an operation, and restore the old value afterwards.
+    /// returns the old value.
+    ///
+    /// Typical usage is to set this to the desired value at the beginning of an
+    /// operation, and restore the old value afterwards.
     #[no_mangle]
     pub extern "C-unwind" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
         tls_allow_native_syscalls::swap(new)
@@ -535,9 +537,10 @@ pub mod export {
         !tls_allow_native_syscalls::get()
     }
 
-    /// Allocates and installs a signal stack. This is to ensure that our
-    /// signal handlers have enough stack space; otherwise we can run out in managed
-    /// processes that use small stacks.
+    /// Allocates and installs a signal stack.
+    ///
+    /// This is to ensure that our signal handlers have enough stack space;
+    /// otherwise we can run out in managed processes that use small stacks.
     ///
     /// This should be called once per thread before any signal handlers run.
     /// Panics if already called on the current thread.
