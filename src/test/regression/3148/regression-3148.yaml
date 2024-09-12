@@ -1,0 +1,14 @@
+general:
+  stop_time: 10 seconds
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args:
+        - -c
+        # send a packet to an unused IP address to make sure shadow doesn't crash
+        - 'import socket, time; socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(b"hello", ("13.62.123.22", 80)); time.sleep(1)'

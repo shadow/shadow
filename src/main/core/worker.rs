@@ -320,6 +320,9 @@ impl Worker {
         .unwrap();
     }
 
+    /// The packet will be dropped if the packet's destination IP is not part of the simulation (no
+    /// host has been configured for the IP).
+    ///
     /// # Safety
     ///
     /// `packet` must be valid and not accessed by another thread while this function is
@@ -346,12 +349,23 @@ impl Worker {
         let src_ip: std::net::Ipv4Addr = u32::from_be(src_ip).into();
         let dst_ip: std::net::Ipv4Addr = u32::from_be(dst_ip).into();
 
-        let dst_host_id = Worker::with(|w| {
-            w.shared
-                .resolve_ip_to_host_id(dst_ip)
-                .expect("No host ID for dest address {dst_ip}")
-        })
-        .unwrap();
+        let Some(dst_host_id) = Worker::with(|w| w.shared.resolve_ip_to_host_id(dst_ip)).unwrap()
+        else {
+            log_once_per_value_at_level!(
+                dst_ip,
+                std::net::Ipv4Addr,
+                log::Level::Warn,
+                log::Level::Debug,
+                "Packet has destination {dst_ip} which doesn't exist in the simulation. Dropping the packet.",
+            );
+            unsafe {
+                cshadow::packet_addDeliveryStatus(
+                    packet,
+                    cshadow::_PacketDeliveryStatusFlags_PDS_INET_DROPPED,
+                )
+            };
+            return;
+        };
 
         let src_ip = std::net::IpAddr::V4(src_ip);
         let dst_ip = std::net::IpAddr::V4(dst_ip);
