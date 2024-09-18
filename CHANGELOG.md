@@ -21,6 +21,9 @@ Instead of specifying `{path: '/usr/bin/python3', args:
 provided it has an appropriate "shebang" line (e.g. `#!/usr/bin/env python3`).
 Likewise execution of such scripts is now supported inside the simulation when
 spawning processes via `execve`.
+* Relaxed restriction on assigning restricted IPs (such as 192.168.0.*).
+Within the simulation these are treated as fully routable IPs, so are required
+to be unique as with any other IP address assignment. (#3414)
 
 PATCH changes (bugfixes):
 

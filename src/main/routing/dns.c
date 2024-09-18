@@ -120,10 +120,11 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
 
     gboolean isLocal = FALSE;
 
-    /* restricted is OK if this is a localhost address, otherwise it must be unique */
+    /* non-unique are OK only if this is a localhost address */
+    /* TODO: Support other localhost addresses; e.g. 127.0.0.2? */
     if (requestedIP == address_stringToIP("127.0.0.1")) {
         isLocal = TRUE;
-    } else if (_dns_isRestricted(dns, requestedIP) || !_dns_isIPUnique(dns, requestedIP)) {
+    } else if (!_dns_isIPUnique(dns, requestedIP)) {
         gchar* ipStr = address_ipToNewString(requestedIP);
         warning("Invalid IP %s (restricted: %s, unique: %s)", ipStr,
                 _dns_isRestricted(dns, requestedIP) ? "true" : "false",
