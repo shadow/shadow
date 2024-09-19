@@ -37,50 +37,6 @@ struct _DNS {
 };
 
 /* Address must be in network byte order. */
-static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
-    utility_debugAssert(cidrStr);
-
-    gchar** cidrParts = g_strsplit(cidrStr, "/", 0);
-    gchar* cidrIPStr = cidrParts[0];
-    gint cidrBits = atoi(cidrParts[1]);
-    utility_debugAssert(cidrBits >= 0 && cidrBits <= 32);
-
-    /* first create the mask in host order */
-    in_addr_t netmask = 0;
-    for(gint i = 0; i < 32; i++) {
-        /* move one so LSB is 0 */
-        netmask = netmask << 1;
-        if(cidrBits > i) {
-            /* flip the LSB */
-            netmask++;
-        }
-    }
-
-    /* flip to network order */
-    netmask = htonl(netmask);
-
-    /* get the subnet ip in network order */
-    in_addr_t subnetIP = address_stringToIP(cidrIPStr);
-
-    g_strfreev(cidrParts);
-
-    /* all non-subnet bits should be flipped */
-    if((netIP & netmask) == (subnetIP & netmask)) {
-        gchar* ipStr = address_ipToNewString(netIP);
-        gchar* subnetIPStr = address_ipToNewString(subnetIP);
-        gchar* netmaskStr = address_ipToNewString(netmask);
-        trace("ip '%s' is in range '%s' using subnet '%s' and mask '%s'",
-                ipStr, cidrStr, subnetIPStr, netmaskStr);
-        g_free(ipStr);
-        g_free(subnetIPStr);
-        g_free(netmaskStr);
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-}
-
-/* Address must be in network byte order. */
 static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     gboolean exists = g_hash_table_lookup_extended(dns->addressByIP, GUINT_TO_POINTER(ip), NULL, NULL);
     return exists ? FALSE : TRUE;
