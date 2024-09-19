@@ -81,31 +81,6 @@ static gboolean _dns_isIPInRange(const in_addr_t netIP, const gchar* cidrStr) {
 }
 
 /* Address must be in network byte order. */
-static gboolean _dns_isRestricted(DNS* dns, in_addr_t netIP) {
-    /* http://en.wikipedia.org/wiki/Reserved_IP_addresses#Reserved_IPv4_addresses */
-    if(_dns_isIPInRange(netIP, "0.0.0.0/8") ||
-            _dns_isIPInRange(netIP, "10.0.0.0/8") ||
-            _dns_isIPInRange(netIP, "100.64.0.0/10") ||
-            _dns_isIPInRange(netIP, "127.0.0.0/8") ||
-            _dns_isIPInRange(netIP, "169.254.0.0/16") ||
-            _dns_isIPInRange(netIP, "172.16.0.0/12") ||
-            _dns_isIPInRange(netIP, "192.0.0.0/29") ||
-            _dns_isIPInRange(netIP, "192.0.2.0/24") ||
-            _dns_isIPInRange(netIP, "192.88.99.0/24") ||
-            _dns_isIPInRange(netIP, "192.168.0.0/16") ||
-            _dns_isIPInRange(netIP, "198.18.0.0/15") ||
-            _dns_isIPInRange(netIP, "198.51.100.0/24") ||
-            _dns_isIPInRange(netIP, "203.0.113.0/24") ||
-            _dns_isIPInRange(netIP, "224.0.0.0/4") ||
-            _dns_isIPInRange(netIP, "240.0.0.0/4") ||
-            _dns_isIPInRange(netIP, "255.255.255.255/32")) {
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-}
-
-/* Address must be in network byte order. */
 static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     gboolean exists = g_hash_table_lookup_extended(dns->addressByIP, GUINT_TO_POINTER(ip), NULL, NULL);
     return exists ? FALSE : TRUE;
@@ -126,9 +101,7 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
         isLocal = TRUE;
     } else if (!_dns_isIPUnique(dns, requestedIP)) {
         gchar* ipStr = address_ipToNewString(requestedIP);
-        warning("Invalid IP %s (restricted: %s, unique: %s)", ipStr,
-                _dns_isRestricted(dns, requestedIP) ? "true" : "false",
-                _dns_isIPUnique(dns, requestedIP) ? "true" : "false");
+        warning("Non-unique IP assignment: %s", ipStr);
         g_free(ipStr);
         g_mutex_unlock(&dns->lock);
         return NULL;
