@@ -1,27 +1,47 @@
 "Component: Build":
-- "**/CMakeLists.txt"
-- "**/Cargo.toml"
-- "**/Cargo.lock"
+- changed-files:
+  - any-glob-to-any-file:
+    - "**/CMakeLists.txt"
+    - "**/Cargo.toml"
+    - "**/Cargo.lock"
 
 "Component: Documentation":
-- "**/*.md"
-- "docs/**/*"
+- changed-files:
+  - any-glob-to-any-file:
+    - "**/*.md"
+    - "docs/**/*"
 
 "Component: Libraries":
-- "src/lib/**/*"
+- changed-files:
+  - any-glob-to-any-file:
+    - "src/lib/**/*"
 
 "Component: Main":
-- "src/main/**/*"
+- changed-files:
+  - any-glob-to-any-file:
+    - "src/main/**/*"
 
 # Any change in src/test or any yml file changed in .github except pr labeler.
 # From https://github.com/actions/labeler:
-#  From a boolean logic perspective, top-level match objects are OR-ed together
-#  and individual match rules within an object are AND-ed. Combined with !
-#  negation, you can write complex matching rules.
+#  From a boolean logic perspective, top-level match objects, and options
+#  within all are AND-ed together and individual match rules within the any
+#  object are OR-ed.
+#
+#  [...]
+#
+#  If a base option is provided without a top-level key, then it will default
+#  to any.
 "Component: Testing":
-- any: ["src/test/**/*"]
-- any: [".github/**/*.yml", "!.github/pr_labeler_conf.yml",
-        "!.github/workflows/pr_metadata.yml"]
+- changed-files:
+  - any-glob-to-any-file:
+    - "src/test/**/*"
+- changed-files:
+  - any-glob-to-any-file:
+    - ".github/**/*.yml"
+    - "!.github/pr_labeler_conf.yml"
+    - "!.github/workflows/pr_metadata.yml"
 
 "Component: Tools":
-- "src/tools/**/*"
+- changed-files:
+  - any-glob-to-any-file:
+    - "src/tools/**/*"
