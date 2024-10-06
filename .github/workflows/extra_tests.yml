@@ -226,7 +226,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
@@ -237,7 +237,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-tgen
           path: .
@@ -358,7 +358,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
@@ -369,7 +369,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-tgen
           path: .
@@ -440,7 +440,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
