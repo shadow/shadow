@@ -132,7 +132,7 @@ jobs:
           tar --no-recursion --append -f $TARFILE \
             shadow/build/src/shim/target/*/libshadow_shim.so
           gzip $TARFILE
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: build-shadow
           path: shadow.tar.gz
@@ -191,7 +191,7 @@ jobs:
       # We need to wrap in a tarball to preserve permissions.
       - name: Archive tgen
         run: tar -czf tgen.tar.gz opt/tgen
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: build-tgen
           path: tgen.tar.gz
@@ -324,14 +324,14 @@ jobs:
           for f in shadow/build/src/test/tor/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ${{ matrix.tor }}-shadow-data-dir
           path: shadow/build/src/test/tor/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ${{ matrix.tor }}-shadow-log-file
@@ -407,14 +407,14 @@ jobs:
           for f in shadow/build/src/test/tgen/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: tgen-shadow-data-dir
           path: shadow/build/src/test/tgen/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: tgen-shadow-log-file
@@ -495,14 +495,14 @@ jobs:
           for f in shadow/build/examples/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: examples-shadow-data-dir
           path: shadow/build/examples/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: examples-shadow-log-file
