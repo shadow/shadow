@@ -42,7 +42,7 @@ fn take_verify<'a, E: GmlParseError<'a>>(
 }
 
 /// Parse a GML key.
-pub fn key<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, &str, E> {
+pub fn key<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     // a key starts with the a character [a-zA-Z_], and has remaining characters [a-zA-Z0-9_]
     let take_first = take_verify(1, |chr| is_alphabetic(chr as u8) || chr == '_');
     let take_remaining = take_while(|chr| is_alphanumeric(chr as u8) || chr == '_');
@@ -51,7 +51,7 @@ pub fn key<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, &str, E> {
 }
 
 /// Parse a GML item (a key + value).
-pub fn item<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, GmlItem, E> {
+pub fn item<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, GmlItem<'a>, E> {
     match key(input)? {
         (input, "node") => node(input).map(|(input, node)| (input, GmlItem::Node(node))),
         (input, "edge") => edge(input).map(|(input, edge)| (input, GmlItem::Edge(edge))),
@@ -65,7 +65,7 @@ pub fn item<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, GmlItem, 
 }
 
 /// Parse a GML graph.
-pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Gml, E> {
+pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Gml<'a>, E> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("graph")(input)?;
     let (input, _) = space0(input)?;
@@ -150,7 +150,7 @@ pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Gml, E> {
 }
 
 /// Parse a GML node.
-fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Node, E> {
+fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Node<'a>, E> {
     let (input, _) = space0(input)?;
     let (input, _) = tag("[")(input)?;
     let (input, _) = newline(input)?;
@@ -178,7 +178,7 @@ fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Node, E> {
 }
 
 /// Parse a GML edge.
-fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Edge, E> {
+fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Edge<'a>, E> {
     let (input, _) = space0(input)?;
     let (input, _) = tag("[")(input)?;
     let (input, _) = newline(input)?;
@@ -223,18 +223,18 @@ fn value<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>
     Ok((input, value))
 }
 
-fn int<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Value<'a>, E> {
+fn int<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
     let (input, value) = map_res(recognize(digit1), str::parse)(input)?;
     Ok((input, Value::Int(value)))
 }
 
-fn float<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Value<'a>, E> {
+fn float<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
     let (input, value) = map_res(nom::number::complete::recognize_float, str::parse)(input)?;
     Ok((input, Value::Float(value)))
 }
 
 /// Parse a GML string.
-fn string<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Value<'a>, E> {
+fn string<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
     let (input, _) = tag("\"")(input)?;
     let (input, value) = escaped_transform(
         is_not("\""),
@@ -249,7 +249,7 @@ fn string<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, Value<'a>, 
     Ok((input, Value::Str(value.into())))
 }
 
-fn newline<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, &str, E> {
+fn newline<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     recognize(tuple((space0, multispace1, space0)))(input)
 }
 
@@ -261,7 +261,7 @@ fn int_to_bool(x: i32) -> Result<bool, &'static str> {
     }
 }
 
-fn int_as_bool<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&str, bool, E> {
+fn int_as_bool<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, bool, E> {
     let (input, value) = value(input)?;
 
     let value = match value {
