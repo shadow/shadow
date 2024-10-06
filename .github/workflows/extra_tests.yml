@@ -50,7 +50,7 @@ jobs:
     steps:
       - run: apt-get update
       - name: Checkout shadow
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: shadow
           # Run on PR head instead of merge result. Running on the merge
@@ -156,7 +156,7 @@ jobs:
           key: tgen-build-key-${{ env.CONTAINER }}-816d68cd3d0ff7d0ec71e8bbbae24ecd6a636117
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: tgen
           repository: shadow/tgen

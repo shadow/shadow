@@ -16,7 +16,7 @@ jobs:
   lint-python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -33,7 +33,7 @@ jobs:
   lint-shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -47,7 +47,7 @@ jobs:
   lint-rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
@@ -66,7 +66,7 @@ jobs:
   lint-clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
@@ -89,7 +89,7 @@ jobs:
   lint-cargo-lock:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Cargo update check
         run: |
           # This will return an error if any versions of local crates in the Cargo.lock
@@ -100,7 +100,7 @@ jobs:
   lint-cargo-doc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
