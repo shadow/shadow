@@ -140,10 +140,13 @@ macro_rules! log_syscall {
         paste::paste! { log_syscall!([< _syscall_logger_ $name >]; $name, $rv, $($args),*); }
     };
     ($const_name:ident; $name:ident, $rv:ty, $($args:ty),*) => {
-        // we use a constant as a hack so that we can do "impl SyscallLogger { ... }" while
-        // already inside a "impl SyscallHandler { ... }" block
+        // We use a constant as a hack so that we can do "impl SyscallLogger { ... }" while already
+        // inside a "impl SyscallHandler { ... }" block. Apparently they may make this a hard error
+        // (with no way to opt-out with an `allow`) in the future:
+        // https://github.com/rust-lang/rust/issues/120363
         #[doc(hidden)]
         #[allow(non_upper_case_globals)]
+        #[allow(non_local_definitions)]
         const $const_name : () = {
             impl crate::utility::macros::SyscallLogger {
                 pub fn $name(
