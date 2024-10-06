@@ -72,7 +72,7 @@ jobs:
         run: |
           echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
       - name: Restore cargo registry cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -85,7 +85,7 @@ jobs:
         run: |
           echo rustv=\"$(rustc --version)\" >> $GITHUB_OUTPUT
       - name: Restore sccache cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -149,7 +149,7 @@ jobs:
     steps:
       - name: Restore cache
         id: restore-tgen-build-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
@@ -256,7 +256,7 @@ jobs:
 
       - name: Restore tor build cache
         id: restore-tor-build-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: opt/tor
           # sync with env.CONTAINER
