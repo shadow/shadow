@@ -1161,7 +1161,7 @@ fn test_validate_context() -> Result<(), Box<dyn Error>> {
         assert_eq!(rv, 0);
         // The signal handler sees the syscall return value stored in RAX.
         assert_eq!(
-            unsafe { DO_SETCONTEXT_RES.take() },
+            unsafe { std::ptr::replace(std::ptr::addr_of_mut!(DO_SETCONTEXT_RES), None) },
             Some(DoSetcontextHandlerResult {
                 ctx_rax: -(libc::EINTR as i64)
             })
@@ -1190,7 +1190,7 @@ fn test_validate_context() -> Result<(), Box<dyn Error>> {
         // context, but it's unclear that just "fixing" that register without
         // fixing the others would have much point. Don't assert anything about it;
         // just clear it.
-        unsafe { DO_SETCONTEXT_RES.take() };
+        unsafe { std::ptr::replace(std::ptr::addr_of_mut!(DO_SETCONTEXT_RES), None) };
     }
 
     // Same thing again, but sleep using a direct syscall, which will be
@@ -1208,7 +1208,7 @@ fn test_validate_context() -> Result<(), Box<dyn Error>> {
     assert!(matches!(res, NanosleepRelativeResult::Ok));
     // The signal handler sees the original syscall return value stored in RAX.
     assert_eq!(
-        unsafe { DO_SETCONTEXT_RES.take() },
+        unsafe { std::ptr::replace(std::ptr::addr_of_mut!(DO_SETCONTEXT_RES), None) },
         Some(DoSetcontextHandlerResult {
             ctx_rax: -(libc::EINTR as i64)
         })
