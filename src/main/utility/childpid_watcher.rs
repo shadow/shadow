@@ -363,6 +363,7 @@ impl std::fmt::Debug for PidData {
 mod tests {
     use std::sync::{Arc, Condvar};
 
+    use nix::sys::eventfd::EventFd;
     use rustix::fd::AsRawFd;
     use rustix::process::{waitpid, WaitOptions};
 
@@ -378,7 +379,7 @@ mod tests {
     // can't call foreign function: pipe
     #[cfg_attr(miri, ignore)]
     fn register_before_exit() {
-        let notifier = nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::empty()).unwrap();
+        let notifier = EventFd::new().unwrap();
 
         let watcher = ChildPidWatcher::new();
         let child = unsafe {
@@ -417,7 +418,7 @@ mod tests {
         assert!(!*callback_ran.0.lock().unwrap());
 
         // Let the child exit.
-        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(&notifier, &1u64.to_ne_bytes()).unwrap();
 
         // Wait for our callback to run.
         let mut callback_ran_lock = callback_ran.0.lock().unwrap();
@@ -553,7 +554,7 @@ mod tests {
         let cb1_ran = Arc::new((Mutex::new(false), Condvar::new()));
         let cb2_ran = Arc::new((Mutex::new(false), Condvar::new()));
 
-        let notifier = nix::sys::eventfd::eventfd(0, nix::sys::eventfd::EfdFlags::empty()).unwrap();
+        let notifier = EventFd::new().unwrap();
 
         let watcher = ChildPidWatcher::new();
         let child = unsafe {
@@ -590,7 +591,7 @@ mod tests {
         watcher.unregister_callback(child, handles[0]);
 
         // Let the child exit.
-        nix::unistd::write(notifier.as_raw_fd(), &1u64.to_ne_bytes()).unwrap();
+        nix::unistd::write(&notifier, &1u64.to_ne_bytes()).unwrap();
 
         // Wait for the still-registered callback to run.
         let mut cb_ran_lock = cb2_ran.0.lock().unwrap();

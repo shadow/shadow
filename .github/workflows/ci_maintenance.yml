@@ -29,6 +29,7 @@ jobs:
           - rust default nightly version (\`ci/rust-toolchain-nightly.toml\`)
           - python version for the python lint (\`.github/workflows/lint.yml\`)
           - tor and tgen versions for the tor tests (\`.github/workflows/extra_tests.yml\`)
+          - versions of github actions (\`uses: <action-name@version>\` in \`.github/workflows/*.yml\`)
 
           Shadow's dependencies may also need to be updated.
 

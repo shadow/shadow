@@ -50,7 +50,7 @@ jobs:
     steps:
       - run: apt-get update
       - name: Checkout shadow
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: shadow
           # Run on PR head instead of merge result. Running on the merge
@@ -72,7 +72,7 @@ jobs:
         run: |
           echo "month=$(/bin/date -u "+%Y%m")" >> $GITHUB_OUTPUT
       - name: Restore cargo registry cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -85,7 +85,7 @@ jobs:
         run: |
           echo rustv=\"$(rustc --version)\" >> $GITHUB_OUTPUT
       - name: Restore sccache cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -132,7 +132,7 @@ jobs:
           tar --no-recursion --append -f $TARFILE \
             shadow/build/src/shim/target/*/libshadow_shim.so
           gzip $TARFILE
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: build-shadow
           path: shadow.tar.gz
@@ -149,14 +149,14 @@ jobs:
     steps:
       - name: Restore cache
         id: restore-tgen-build-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: opt/tgen
           # Sync with env.CONTAINER, and with checkout ref below.
           key: tgen-build-key-${{ env.CONTAINER }}-816d68cd3d0ff7d0ec71e8bbbae24ecd6a636117
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: tgen
           repository: shadow/tgen
@@ -191,7 +191,7 @@ jobs:
       # We need to wrap in a tarball to preserve permissions.
       - name: Archive tgen
         run: tar -czf tgen.tar.gz opt/tgen
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: build-tgen
           path: tgen.tar.gz
@@ -226,7 +226,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
@@ -237,7 +237,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-tgen
           path: .
@@ -256,7 +256,7 @@ jobs:
 
       - name: Restore tor build cache
         id: restore-tor-build-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: opt/tor
           # sync with env.CONTAINER
@@ -324,14 +324,14 @@ jobs:
           for f in shadow/build/src/test/tor/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ${{ matrix.tor }}-shadow-data-dir
           path: shadow/build/src/test/tor/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ${{ matrix.tor }}-shadow-log-file
@@ -358,7 +358,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
@@ -369,7 +369,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-tgen
           path: .
@@ -407,14 +407,14 @@ jobs:
           for f in shadow/build/src/test/tgen/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: tgen-shadow-data-dir
           path: shadow/build/src/test/tgen/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: tgen-shadow-log-file
@@ -440,7 +440,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-shadow
 
@@ -495,14 +495,14 @@ jobs:
           for f in shadow/build/examples/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directory
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: examples-shadow-data-dir
           path: shadow/build/examples/**/*.data.tar.xz
 
       - name: Upload shadow log file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: examples-shadow-log-file

@@ -117,7 +117,12 @@ fn get_thread_name() -> String {
         )
     };
     // The most likely cause of failure is a bug in the caller.
-    debug_assert_eq!(res, 0, "pthread_getname_np: {}", nix::errno::from_i32(res));
+    debug_assert_eq!(
+        res,
+        0,
+        "pthread_getname_np: {}",
+        nix::errno::Errno::from_raw(res),
+    );
     if res == 0 {
         // SAFETY: We just initialized the input buffer `thread_name`, and
         // `thread_name_cstr` won't outlive it.

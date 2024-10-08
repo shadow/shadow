@@ -553,6 +553,8 @@ fn i8_to_u8_slice(s: &[i8]) -> &[u8] {
 mod tests {
     use super::*;
 
+    use std::net::Ipv4Addr;
+
     /// Convert from a `sockaddr_in` to a `SockaddrStorage`.
     #[test]
     fn storage_from_inet_ptr() {
@@ -634,7 +636,10 @@ mod tests {
         let addr = addr.as_inet().unwrap();
 
         assert_eq!(addr.port(), u16::from_be(addr_in.sin_port));
-        assert_eq!(addr.ip(), u32::from_be(addr_in.sin_addr.s_addr));
+        assert_eq!(
+            addr.ip(),
+            Ipv4Addr::from(u32::from_be(addr_in.sin_addr.s_addr)),
+        );
     }
 
     /// Convert from a `SockaddrIn` to a `SockaddrStorage` to a `sockaddr_in`.
@@ -651,7 +656,10 @@ mod tests {
 
         assert_eq!(addr.sin_family, libc::AF_INET as u16);
         assert_eq!(u16::from_be(addr.sin_port), addr_original.port());
-        assert_eq!(u32::from_be(addr.sin_addr.s_addr), addr_original.ip());
+        assert_eq!(
+            Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr)),
+            addr_original.ip(),
+        );
     }
 
     /// Convert from a `sockaddr_nl` to a `SockaddrStorage` to a `NetlinkAddr`.

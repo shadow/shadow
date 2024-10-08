@@ -7,7 +7,7 @@ publish.workspace = true
 atomic_refcell = "0.1"
 crossbeam = "0.8.4"
 libc = "0.2"
-nix = { version = "0.27.1", features = ["process", "sched"] }
+nix = { version = "0.29.0", features = ["process", "sched"] }
 
 [dev-dependencies]
 rand = "0.8.5"
