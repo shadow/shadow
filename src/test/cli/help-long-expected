@@ -95,9 +95,8 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
       --interface-qdisc <mode>
           The queueing discipline to use at the network interface [default: "fifo"]
 
-      --log-errors-to-tty <bool>
-          When true, log error-level messages to stderr in addition to stdout when stdout is not a
-          tty but stderr is. [default: true]
+      --log-errors-to-stderr <bool>
+          When true, log error-level messages to stderr in addition to stdout. [default: true]
 
       --max-unapplied-cpu-latency <seconds>
           Max amount of execution-time latency allowed to accumulate before the clock is moved

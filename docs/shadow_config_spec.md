@@ -540,13 +540,12 @@ if not using the thread-per-core scheduler.
 
 This may improve runtime performance in some environments.
 
-#### `experimental.log_errors_to_tty`
+#### `experimental.log_errors_to_stderr`
 
 Default: true  
 Type: Bool
 
-Log `Error`-level log lines to shadow's `stderr` in addition to `stdout`, if
-`stdout` is not a tty but `stderr` is.
+Log `Error`-level log lines to shadow's `stderr` in addition to `stdout`.
 
 #### `host_option_defaults`
 
