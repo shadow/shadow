@@ -218,8 +218,17 @@ impl ShadowLogger {
                 let stderr_locked = stderr_unlocked.lock();
                 let mut stderr = std::io::BufWriter::new(stderr_locked);
                 writeln!(stderr, "Error: {}", record.message)?;
+
+                // Explicitly flush before dropping to detect errors.
+                stderr.flush()?;
+                drop(stderr);
             }
         }
+
+        // Explicitly flush before dropping to detect errors.
+        stdout.flush()?;
+        drop(stdout);
+
         if let Some(done_sender) = done_sender {
             // We can't log from this thread without risking deadlock, so in the
             // unlikely case that the calling thread has gone away, just print
