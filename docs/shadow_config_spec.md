@@ -76,8 +76,8 @@ hosts:
 - [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
 - [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
-- [`experimental.log_errors_to_tty`](#experimentallog_errors_to_tty)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
+- [`experimental.report_errors_to_stderr`](#experimentalreport_errors_to_stderr)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler`](#experimentalscheduler)
 - [`experimental.socket_recv_autotune`](#experimentalsocket_recv_autotune)
@@ -355,6 +355,14 @@ Ignored when
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
 
+#### `experimental.report_errors_to_stderr`
+
+Default: true  
+Type: Bool
+
+Report `Error`-level log messages to shadow's `stderr` in addition to logging
+them to `stdout`.
+
 #### `experimental.runahead`
 
 Default: "1 ms"  
@@ -539,13 +547,6 @@ Each worker thread will spin in a `sched_yield` loop while waiting for a new tas
 if not using the thread-per-core scheduler.
 
 This may improve runtime performance in some environments.
-
-#### `experimental.log_errors_to_stderr`
-
-Default: true  
-Type: Bool
-
-Log `Error`-level log lines to shadow's `stderr` in addition to `stdout`.
 
 #### `host_option_defaults`
 

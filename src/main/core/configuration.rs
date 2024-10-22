@@ -471,11 +471,11 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("scheduler").unwrap().as_str())]
     pub scheduler: Option<Scheduler>,
 
-    /// When true, log error-level messages to stderr in addition to stdout.
+    /// When true, report error-level messages to stderr in addition to logging to stdout.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "bool")]
-    #[clap(help = EXP_HELP.get("log_errors_to_stderr").unwrap().as_str())]
-    pub log_errors_to_stderr: Option<bool>,
+    #[clap(help = EXP_HELP.get("report_errors_to_stderr").unwrap().as_str())]
+    pub report_errors_to_stderr: Option<bool>,
 
     /// Use the rust TCP implementation
     #[clap(hide_short_help = true)]
@@ -530,7 +530,7 @@ impl Default for ExperimentalOptions {
             ))),
             strace_logging_mode: Some(StraceLoggingMode::Off),
             scheduler: Some(Scheduler::ThreadPerCore),
-            log_errors_to_stderr: Some(true),
+            report_errors_to_stderr: Some(true),
             use_new_tcp: Some(false),
         }
     }

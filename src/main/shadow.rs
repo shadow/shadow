@@ -114,7 +114,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // start up the logging subsystem to handle all future messages
     shadow_logger::init(
         log_level.to_level_filter(),
-        shadow_config.experimental.log_errors_to_stderr.unwrap(),
+        shadow_config.experimental.report_errors_to_stderr.unwrap(),
     )
     .unwrap();
 
