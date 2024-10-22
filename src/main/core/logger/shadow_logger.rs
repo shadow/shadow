@@ -202,14 +202,23 @@ impl ShadowLogger {
             };
             toflush -= 1;
 
+            write!(stdout, "{record}")?;
+
             if record.level <= Level::Error && *self.report_errors_to_stderr.get().unwrap() {
-                // Summarize on stderr.
+                // *also* summarize on stderr.
+
+                // First flush stdout to avoid confusing interleaving if stdout and stderr are merged.
+                stdout.flush()?;
+
+                // Summarize on stderr. We use a `BufWriter` to try to help
+                // ensure we ultimately make a single `write` syscall, though
+                // the flushes above and below *should* already prevent any
+                // interleaving with stdout.
                 let stderr_unlocked = std::io::stderr();
                 let stderr_locked = stderr_unlocked.lock();
                 let mut stderr = std::io::BufWriter::new(stderr_locked);
                 writeln!(stderr, "Error: {}", record.message)?;
             }
-            write!(stdout, "{record}")?;
         }
         if let Some(done_sender) = done_sender {
             // We can't log from this thread without risking deadlock, so in the
