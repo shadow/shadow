@@ -26,6 +26,21 @@ simulation and network configuration.
 
 [bootstrap_end_time]: https://shadow.github.io/docs/guide/shadow_config_spec.html#generalbootstrap_end_time
 
+### [`log_level`][log_level]
+
+Using lower log levels such as `debug` or `trace` will lead to a much greater
+volume of log messages. Writing these messages to disk can significantly impact
+the simulation run time performance, even if you're writing to an SSD. Unless
+you're actively debugging an issue in Shadow, you should use `info` level or
+higher.
+
+Along these same lines, you should try to reduce the amount of disk I/O of the
+managed applications running within Shadow. Even if they each write a
+reasonably small amount, it can add up to a lot of disk I/O when running
+simulations with thousands of processes.
+
+[log_level]: https://shadow.github.io/docs/guide/shadow_config_spec.html#generallog_level
+
 ### [`heartbeat_interval`][heartbeat_interval] and [`host_heartbeat_interval`][host_heartbeat_interval]
 
 Shadow logs simulation statistics at given simulation time intervals. If any of
