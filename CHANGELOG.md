@@ -31,6 +31,11 @@ PATCH changes (bugfixes):
 * Fixed rust/clippy warnings for rust 1.80. (#3354, #3355)
 * Fixed a build error on rust nightly (and future stable rust versions) by upgrading dependencies. (#3334)
 * Fixed a shim panic (which causes shadow to hang) when golang's default SIGTERM handler runs in a managed program (and potentially other cases where a signal handler stack is legitimately reused). (#3396)
+* Replaced the experimental option `--log-errors-to-tty` with the (still experimental) option
+`--report-errors-to-stderr`. The new option no longer tries to detect whether
+`stdout` or `stderr` are terminals (or the same destination), and instead
+reports errors in a different format on `stderr` to make the duplication easier
+to sort out in the case that `stdout` and `stderr` are merged. (#3428)
 
 Full changelog since v3.2.0:
 
