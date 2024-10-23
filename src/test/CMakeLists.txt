@@ -103,6 +103,13 @@ macro(add_shadow_tests)
       list(APPEND SHADOW_TEST_ARGS "--parallelism" "1")
    endif()
 
+   # If mirroring errors to stderr is not explicitly set, we disable it, since
+   # tests are normally run with stdout and stderr merged into one stream,
+   # causing duplication.
+   if(NOT "${SHADOW_TEST_ARGS}" MATCHES ".*--report-errors-to-stderr.*")
+      list(APPEND SHADOW_TEST_ARGS "--report-errors-to-stderr" "false")
+   endif()
+
    string(REPLACE ";" " " SHADOW_TEST_ARGS "${SHADOW_TEST_ARGS}")
 
    set(SHADOW_TEST_NAME ${SHADOW_TEST_BASENAME}-shadow)

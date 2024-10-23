@@ -30,9 +30,12 @@ const MIN_FLUSH_FREQUENCY: Duration = Duration::from_secs(10);
 static SHADOW_LOGGER: Lazy<ShadowLogger> = Lazy::new(ShadowLogger::new);
 
 /// Initialize the Shadow logger.
-pub fn init(max_log_level: LevelFilter, log_errors_to_stderr: bool) -> Result<(), SetLoggerError> {
+pub fn init(
+    max_log_level: LevelFilter,
+    report_errors_to_stderr: bool,
+) -> Result<(), SetLoggerError> {
     SHADOW_LOGGER.set_max_level(max_log_level);
-    SHADOW_LOGGER.set_log_errors_to_stderr(log_errors_to_stderr);
+    SHADOW_LOGGER.set_report_errors_to_stderr(report_errors_to_stderr);
 
     log::set_logger(&*SHADOW_LOGGER)?;
 
@@ -97,8 +100,8 @@ pub struct ShadowLogger {
     // The maximum log level, unless overridden by a host-specific log level.
     max_log_level: OnceCell<LevelFilter>,
 
-    // Whether to log errors to stderr in addition to stdout.
-    log_errors_to_stderr: OnceCell<bool>,
+    // Whether to report errors to stderr in addition to logging to stdout.
+    report_errors_to_stderr: OnceCell<bool>,
 }
 
 thread_local!(static SENDER: RefCell<Option<Sender<LoggerCommand>>> = const{ RefCell::new(None)});
@@ -148,7 +151,7 @@ impl ShadowLogger {
             command_receiver: Mutex::new(receiver),
             buffering_enabled: RwLock::new(false),
             max_log_level: OnceCell::new(),
-            log_errors_to_stderr: OnceCell::new(),
+            report_errors_to_stderr: OnceCell::new(),
         }
     }
 
@@ -199,19 +202,33 @@ impl ShadowLogger {
             };
             toflush -= 1;
 
-            if record.level <= Level::Error && *self.log_errors_to_stderr.get().unwrap() {
-                // Send to both stdout and stderr.
+            write!(stdout, "{record}")?;
+
+            if record.level <= Level::Error && *self.report_errors_to_stderr.get().unwrap() {
+                // *also* summarize on stderr.
+
+                // First flush stdout to avoid confusing interleaving if stdout and stderr are merged.
+                stdout.flush()?;
+
+                // Summarize on stderr. We use a `BufWriter` to try to help
+                // ensure we ultimately make a single `write` syscall, though
+                // the flushes above and below *should* already prevent any
+                // interleaving with stdout.
                 let stderr_unlocked = std::io::stderr();
                 let stderr_locked = stderr_unlocked.lock();
                 let mut stderr = std::io::BufWriter::new(stderr_locked);
+                writeln!(stderr, "Error: {}", record.message)?;
 
-                let line = format!("{record}");
-                write!(stdout, "{line}")?;
-                write!(stderr, "{line}")?;
-            } else {
-                write!(stdout, "{record}")?;
+                // Explicitly flush before dropping to detect errors.
+                stderr.flush()?;
+                drop(stderr);
             }
         }
+
+        // Explicitly flush before dropping to detect errors.
+        stdout.flush()?;
+        drop(stdout);
+
         if let Some(done_sender) = done_sender {
             // We can't log from this thread without risking deadlock, so in the
             // unlikely case that the calling thread has gone away, just print
@@ -249,12 +266,12 @@ impl ShadowLogger {
         self.max_log_level.set(level).unwrap()
     }
 
-    /// Set whether to log errors to stderr in addition to stdout.
+    /// Set whether to report errors to stderr in addition to logging on stdout.
     ///
     /// Is only intended to be called from `init()`. Will panic if called more
     /// than once.
-    fn set_log_errors_to_stderr(&self, val: bool) {
-        self.log_errors_to_stderr.set(val).unwrap()
+    fn set_report_errors_to_stderr(&self, val: bool) {
+        self.report_errors_to_stderr.set(val).unwrap()
     }
 
     // Send a flush command to the logger thread.

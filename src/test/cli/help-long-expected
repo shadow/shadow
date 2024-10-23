@@ -95,16 +95,16 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
       --interface-qdisc <mode>
           The queueing discipline to use at the network interface [default: "fifo"]
 
-      --log-errors-to-tty <bool>
-          When true, log error-level messages to stderr in addition to stdout when stdout is not a
-          tty but stderr is. [default: true]
-
       --max-unapplied-cpu-latency <seconds>
           Max amount of execution-time latency allowed to accumulate before the clock is moved
           forward. Moving the clock forward is a potentially expensive operation, so larger values
           reduce simulation overhead, at the cost of coarser time jumps. Note also that
           accumulated-but-unapplied latency is discarded when a thread is blocked on a syscall.
           [default: "1 μs"]
+
+      --report-errors-to-stderr <bool>
+          When true, report error-level messages to stderr in addition to logging to stdout.
+          [default: true]
 
       --runahead <seconds>
           If set, overrides the automatically calculated minimum time workers may run ahead when
