@@ -856,6 +856,12 @@ impl UdpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_BROADCAST) => {
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                let bytes_written = write_partial(mem, &0, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, _) => {
                 log_once_per_value_at_level!(
                     (level, optname),
@@ -943,12 +949,10 @@ impl UdpSocket {
             (libc::SOL_SOCKET, libc::SO_REUSEADDR) => {
                 // TODO: implement this
                 warn_once_then_debug!("setsockopt SO_REUSEADDR not yet implemented for udp");
-                return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_REUSEPORT) => {
                 // TODO: implement this
                 warn_once_then_debug!("setsockopt SO_REUSEPORT not yet implemented for udp");
-                return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_KEEPALIVE) => {
                 // TODO: implement this
