@@ -65,7 +65,7 @@ vasi-sync = { path = "../lib/vasi-sync" }
 # https://github.com/rust-lang/rust/issues/44930
 vsprintf = { git = "https://github.com/shadow/vsprintf", rev = "fa9a307e3043a972501b3157323ed8a9973ad45a" }
 which = "6.0.3"
-bytemuck = "1.18.0"
+bytemuck = "1.19.0"
 rustix = { version = "0.38.37", features = ["event", "mm", "pipe"] }
 
 [features]
