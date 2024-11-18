@@ -13,3 +13,13 @@ add_linux_tests(
     BASENAME netlink-send-limit
     COMMAND ../../target/debug/test_netlink_send_limit --libc-passing)
 add_shadow_tests(BASENAME netlink-send-limit)
+
+add_linux_tests(
+    BASENAME netlink-ifaddrmsg
+    COMMAND ../../target/debug/test_netlink_ifaddrmsg --libc-passing)
+add_shadow_tests(BASENAME netlink-ifaddrmsg)
+
+add_linux_tests(
+    BASENAME netlink-ifinfomsg
+    COMMAND ../../target/debug/test_netlink_ifinfomsg --libc-passing)
+add_shadow_tests(BASENAME netlink-ifinfomsg)

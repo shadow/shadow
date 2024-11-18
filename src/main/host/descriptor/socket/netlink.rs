@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
-use linux_api::netlink::nlmsghdr;
+use linux_api::netlink::{ifaddrmsg, ifinfomsg, nlmsghdr};
 use linux_api::rtnetlink::{RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR, RTM_GETADDR, RTM_GETLINK};
 use linux_api::socket::Shutdown;
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
@@ -679,18 +679,56 @@ impl InitialState {
         // We set the source address as the netlink address of the kernel
         let src_addr = SockaddrStorage::from_netlink(&NetlinkAddr::new(0, 0));
 
-        let buffer = (|| {
-            if packet_buffer.len() < std::mem::size_of::<nlmsghdr>() {
-                log::warn!("The processed packet is too short");
-                return self.handle_error(&packet_buffer[..]);
-            }
+        if packet_buffer.len() < std::mem::size_of::<nlmsghdr>() {
+            log::warn!("The processed packet is too short");
+            return Err(Errno::EINVAL.into());
+        }
 
+        let buffer = {
             let nlmsg_type = &packet_buffer[memoffset::span_of!(nlmsghdr, nlmsg_type)];
             let nlmsg_type = u16::from_ne_bytes(nlmsg_type.try_into().unwrap());
 
             match nlmsg_type {
-                RTM_GETLINK => self.handle_ifinfomsg(common, &packet_buffer[..]),
-                RTM_GETADDR => self.handle_ifaddrmsg(common, &packet_buffer[..]),
+                RTM_GETLINK => {
+                    let nlmsghdr_len = std::mem::size_of::<nlmsghdr>();
+                    let ifinfomsg_len = std::mem::size_of::<ifinfomsg>();
+                    let header_len = nlmsghdr_len + ifinfomsg_len;
+
+                    // Pad the message if it's too short and update the len field
+                    //
+                    // We typically try not to zero-fill structs when the bytes are missing,
+                    // but it should be okay here since we don't yet support most of the fields
+                    // of ifinfomsg
+                    if (nlmsghdr_len..header_len).contains(&packet_buffer.len()) {
+                        log::debug!(
+                            "Padding the RTM_GETLINK with zeroes to meet the minimum length"
+                        );
+                        packet_buffer.resize(header_len, 0);
+                        packet_buffer[memoffset::span_of!(nlmsghdr, nlmsg_len)]
+                            .copy_from_slice(&(header_len as u32).to_ne_bytes()[..]);
+                    }
+                    self.handle_ifinfomsg(common, &packet_buffer[..])
+                }
+                RTM_GETADDR => {
+                    let nlmsghdr_len = std::mem::size_of::<nlmsghdr>();
+                    let ifaddrmsg_len = std::mem::size_of::<ifaddrmsg>();
+                    let header_len = nlmsghdr_len + ifaddrmsg_len;
+
+                    // Pad the message if it's too short and update the len field
+                    //
+                    // We typically try not to zero-fill structs when the bytes are missing,
+                    // but it should be okay here since we don't yet support most of the fields
+                    // of ifaddrmsg
+                    if (nlmsghdr_len..header_len).contains(&packet_buffer.len()) {
+                        log::debug!(
+                            "Padding the RTM_GETADDR with zeroes to meet the minimum length"
+                        );
+                        packet_buffer.resize(header_len, 0);
+                        packet_buffer[memoffset::span_of!(nlmsghdr, nlmsg_len)]
+                            .copy_from_slice(&(header_len as u32).to_ne_bytes()[..]);
+                    }
+                    self.handle_ifaddrmsg(common, &packet_buffer[..])
+                }
                 _ => {
                     warn_once_then_debug!(
                         "Found unsupported nlmsg_type: {nlmsg_type} (only RTM_GETLINK
@@ -699,7 +737,7 @@ impl InitialState {
                     self.handle_error(&packet_buffer[..])
                 }
             }
-        })();
+        };
 
         // Try to write as much as we can. If the buffer is too small, just discard the rest
         let mut total_copied = 0;
