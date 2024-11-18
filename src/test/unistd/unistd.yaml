@@ -8,5 +8,5 @@ hosts:
     network_node_id: 0
     processes:
     - path: ../../target/debug/test_unistd
-      args: shadowsys testnode shadowrelease shadowversion shadowmachine
+      args: Linux testnode 6.1.0-25-amd64 "#1 SMP PREEMPT_DYNAMIC Debian 6.1.106-3 (2024-08-26)" x86_64
       start_time: 1

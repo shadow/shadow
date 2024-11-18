@@ -933,10 +933,11 @@ impl SyscallHandler {
 
         let nodename = u8_to_i8_slice(ctx.objs.host.info().name.as_bytes());
 
-        let sysname = u8_to_i8_slice(&b"shadowsys"[..]);
-        let release = u8_to_i8_slice(&b"shadowrelease"[..]);
-        let version = u8_to_i8_slice(&b"shadowversion"[..]);
-        let machine = u8_to_i8_slice(&b"shadowmachine"[..]);
+        // Currently hardcoded with values reported in Debian 12
+        let sysname = u8_to_i8_slice(&b"Linux"[..]);
+        let release = u8_to_i8_slice(&b"6.1.0-25-amd64"[..]);
+        let version = u8_to_i8_slice(&b"#1 SMP PREEMPT_DYNAMIC Debian 6.1.106-3 (2024-08-26)"[..]);
+        let machine = u8_to_i8_slice(&b"x86_64"[..]);
 
         name.sysname[..sysname.len()].copy_from_slice(sysname);
         name.nodename[..nodename.len()].copy_from_slice(nodename);
