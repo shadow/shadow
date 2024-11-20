@@ -19,7 +19,7 @@ static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 num_enum = { version = "0.7.3", default-features = false }
 memoffset = "0.9.1"
-bytemuck = "1.19.0"
+bytemuck = "1.20.0"
 linux-syscall = "1.0.0"
 linux-errno = "1.0.1"
 naked-function = "0.1.5"
