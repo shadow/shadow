@@ -41,7 +41,7 @@ simulations with thousands of processes.
 
 [log_level]: https://shadow.github.io/docs/guide/shadow_config_spec.html#generallog_level
 
-### [`heartbeat_interval`][heartbeat_interval] and [`host_heartbeat_interval`][host_heartbeat_interval]
+### [`heartbeat_interval`][heartbeat_interval]
 
 Shadow logs simulation statistics at given simulation time intervals. If any of
 these time intervals are small relative to the [total time][stop_time] of the
@@ -50,7 +50,6 @@ written to disk, this increased disk I/O may slow down the simulation
 dramatically.
 
 [heartbeat_interval]: https://shadow.github.io/docs/guide/shadow_config_spec.html#generalheartbeat_interval
-[host_heartbeat_interval]: https://shadow.github.io/docs/guide/shadow_config_spec.html#experimentalhost_heartbeat_interval
 [stop_time]: https://shadow.github.io/docs/guide/shadow_config_spec.html#generalstop_time
 
 ### [`parallelism`][parallelism]

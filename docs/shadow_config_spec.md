@@ -72,9 +72,6 @@ hosts:
 - [`network.graph.file.compression`](#networkgraphfilecompression)
 - [`network.use_shortest_path`](#networkuse_shortest_path)
 - [`experimental`](#experimental)
-- [`experimental.host_heartbeat_interval`](#experimentalhost_heartbeat_interval)
-- [`experimental.host_heartbeat_log_info`](#experimentalhost_heartbeat_log_info)
-- [`experimental.host_heartbeat_log_level`](#experimentalhost_heartbeat_log_level)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.report_errors_to_stderr`](#experimentalreport_errors_to_stderr)
@@ -310,27 +307,6 @@ nodes.
 
 Experimental experiment settings. Unstable and may change or be removed at any
 time, regardless of Shadow version.
-
-#### `experimental.host_heartbeat_interval`
-
-Default: "1 sec"  
-Type: String OR Integer OR null
-
-Amount of time between host heartbeat messages.
-
-#### `experimental.host_heartbeat_log_info`
-
-Default: ["node"]  
-Type: Array of ("node" OR "socket" OR "ram")
-
-List of information to show in the host's heartbeat message.
-
-#### `experimental.host_heartbeat_log_level`
-
-Default: "info"  
-Type: "error" OR "warning" OR "info" OR "debug" OR "trace"
-
-Log level at which to print host heartbeat messages.
 
 #### `experimental.interface_qdisc`
 
