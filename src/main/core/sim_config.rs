@@ -18,8 +18,8 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::core::configuration::{
-    parse_string_as_args, ConfigOptions, EnvName, Flatten, HostOptions, LogInfoFlag, LogLevel,
-    ProcessArgs, ProcessFinalState, ProcessOptions, QDiscMode,
+    parse_string_as_args, ConfigOptions, EnvName, Flatten, HostOptions, LogLevel, ProcessArgs,
+    ProcessFinalState, ProcessOptions, QDiscMode,
 };
 use crate::network::graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
 use crate::utility::units::{self, Unit};
@@ -178,9 +178,6 @@ pub struct HostInfo {
     pub ip_addr: Option<std::net::IpAddr>,
     pub log_level: Option<LogLevel>,
     pub pcap_config: Option<PcapConfig>,
-    pub heartbeat_log_level: Option<LogLevel>,
-    pub heartbeat_log_info: HashSet<LogInfoFlag>,
-    pub heartbeat_interval: Option<SimulationTime>,
     pub send_buf_size: u64,
     pub recv_buf_size: u64,
     pub autotune_send_buf: bool,
@@ -273,17 +270,6 @@ fn build_host(
             }),
 
         // some options come from the config options and not the host options
-        heartbeat_log_level: config.experimental.host_heartbeat_log_level,
-        heartbeat_log_info: config
-            .experimental
-            .host_heartbeat_log_info
-            .clone()
-            .unwrap_or_default(),
-        heartbeat_interval: config
-            .experimental
-            .host_heartbeat_interval
-            .flatten()
-            .map(|x| Duration::from(x).try_into().unwrap()),
         send_buf_size: config
             .experimental
             .socket_send_buffer

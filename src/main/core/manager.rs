@@ -353,19 +353,6 @@ impl<'a> Manager<'a> {
                 });
             });
 
-            // boot each host
-            scheduler.scope(|s| {
-                s.run_with_hosts(move |_, hosts| {
-                    for_each_host(hosts, |host| {
-                        worker::Worker::set_current_time(EmulatedTime::SIMULATION_START);
-                        host.lock_shmem();
-                        host.boot();
-                        host.unlock_shmem();
-                        worker::Worker::clear_current_time();
-                    });
-                });
-            });
-
             // the current simulation interval
             let mut window = Some((
                 EmulatedTime::SIMULATION_START,
@@ -576,21 +563,10 @@ impl<'a> Manager<'a> {
                 requested_bw_up_bits: host_info.bandwidth_up_bits.unwrap(),
                 cpu_threshold: host_info.cpu_threshold,
                 cpu_precision: host_info.cpu_precision,
-                heartbeat_interval: host_info.heartbeat_interval,
-                heartbeat_log_level: host_info
-                    .heartbeat_log_level
-                    .map(|x| x.to_c_loglevel())
-                    .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
-                heartbeat_log_info: host_info
-                    .heartbeat_log_info
-                    .iter()
-                    .map(|x| x.to_c_loginfoflag())
-                    .reduce(|x, y| x | y)
-                    .unwrap_or(c::_LogInfoFlags_LOG_INFO_FLAGS_NONE),
                 log_level: host_info
                     .log_level
                     .map(|x| x.to_c_loglevel())
-                    .unwrap_or(c::_LogLevel_LOGLEVEL_UNSET),
+                    .unwrap_or(logger::_LogLevel_LOGLEVEL_UNSET),
                 pcap_config: host_info.pcap_config,
                 qdisc: host_info.qdisc,
                 init_sock_recv_buf_size: host_info.recv_buf_size,

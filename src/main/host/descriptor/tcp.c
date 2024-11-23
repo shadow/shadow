@@ -29,7 +29,6 @@
 #include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/tcp_retransmit_tally.h"
 #include "main/host/protocol.h"
-#include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
@@ -1408,19 +1407,6 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         break;
     }
 
-    /* update the tracker input/output buffer stats */
-    Tracker* tracker = host_getTracker(host);
-    LegacySocket* socket = (LegacySocket*)tcp;
-    gsize inSize = legacysocket_getInputBufferSize(&(tcp->super));
-    gsize outSize = legacysocket_getOutputBufferSize(&(tcp->super));
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_updateSocketInputBuffer(
-            tracker, &compatSocket, inSize - _tcp_getBufferSpaceIn(tcp), inSize);
-        tracker_updateSocketOutputBuffer(
-            tracker, &compatSocket, outSize - _tcp_getBufferSpaceOut(tcp), outSize);
-    }
-
     /* should we send a fin after clearing the output buffer */
     if((tcp->flags & TCPF_SHOULD_SEND_WR_FIN) && tcp_getOutputBufferLength(tcp) == 0) {
         _tcp_sendShutdownFin(tcp, host);
@@ -1775,12 +1761,6 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
     *ip = tcpChild->super.peerIP;
     utility_debugAssert(port);
     *port = tcpChild->super.peerPort;
-
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(&tcpChild->child->parent->super);
-        tracker_updateSocketPeer(tracker, &compatSocket, *ip, ntohs(tcpChild->super.peerPort));
-    }
 
     return 0;
 }

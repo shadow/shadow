@@ -25,7 +25,6 @@ use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ManagerShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
@@ -66,9 +65,6 @@ pub struct HostParameters {
     pub cpu_frequency: u64,
     pub cpu_threshold: Option<SimulationTime>,
     pub cpu_precision: Option<SimulationTime>,
-    pub heartbeat_interval: Option<SimulationTime>,
-    pub heartbeat_log_level: LogLevel,
-    pub heartbeat_log_info: cshadow::LogInfoFlags,
     pub log_level: LogLevel,
     pub pcap_config: Option<PcapConfig>,
     pub qdisc: QDiscMode,
@@ -132,9 +128,6 @@ pub struct Host {
     relay_inet_in: Arc<Relay>,
     // Forwards packets from the localhost interface back to itself.
     relay_loopback: Arc<Relay>,
-
-    // a statistics tracker for in/out bytes, CPU, memory, etc.
-    tracker: RefCell<Option<SyncSendPointer<cshadow::Tracker>>>,
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
@@ -320,7 +313,6 @@ impl Host {
             relay_inet_out: Arc::new(relay_inet_out),
             relay_inet_in: Arc::new(relay_inet_in),
             relay_loopback: Arc::new(relay_loopback),
-            tracker: RefCell::new(None),
             futex_table: RefCell::new(FutexTable::new()),
             random,
             shim_shmem,
@@ -631,18 +623,6 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn tracker_borrow_mut(&self) -> Option<impl DerefMut<Target = cshadow::Tracker> + '_> {
-        let tracker = self.tracker.borrow_mut();
-        if let Some(tracker) = &*tracker {
-            debug_assert!(!tracker.ptr().is_null());
-            let tracker = unsafe { &mut *tracker.ptr() };
-            Some(tracker)
-        } else {
-            None
-        }
-    }
-
-    #[track_caller]
     pub fn futextable_borrow(&self) -> impl Deref<Target = FutexTable> + '_ {
         self.futex_table.borrow()
     }
@@ -749,25 +729,6 @@ impl Host {
         true
     }
 
-    pub fn boot(&self) {
-        // must be done after the default IP exists so tracker_heartbeat works
-        if let Some(heartbeat_interval) = self.params.heartbeat_interval {
-            let heartbeat_interval = SimulationTime::to_c_simtime(Some(heartbeat_interval));
-            let tracker = unsafe {
-                cshadow::tracker_new(
-                    self,
-                    heartbeat_interval,
-                    self.params.heartbeat_log_level,
-                    self.params.heartbeat_log_info,
-                )
-            };
-            // SAFETY: we synchronize access to the Host's tracker using a RefCell.
-            self.tracker
-                .borrow_mut()
-                .replace(unsafe { SyncSendPointer::new(tracker) });
-        }
-    }
-
     /// Shut down the host. This should be called while `Worker` has the active host set.
     pub fn shutdown(&self) {
         self.continue_execution_timer();
@@ -826,17 +787,6 @@ impl Host {
                         "event blocked on CPU, rescheduled for {:?} from now",
                         cpu_delay
                     );
-
-                    // track the event delay time
-                    let tracker = self.tracker.borrow_mut();
-                    if let Some(tracker) = &*tracker {
-                        unsafe {
-                            cshadow::tracker_addVirtualProcessingDelay(
-                                tracker.ptr(),
-                                SimulationTime::to_c_simtime(Some(cpu_delay)),
-                            )
-                        };
-                    }
 
                     // reschedule the event after the CPU delay time
                     event.set_time(event.time() + cpu_delay);
@@ -1036,11 +986,6 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
-        if let Some(tracker) = self.tracker.borrow_mut().take() {
-            debug_assert!(!tracker.ptr().is_null());
-            unsafe { cshadow::tracker_free(tracker.ptr()) };
-        };
-
         // Validate that the shmem lock isn't held, which would potentially
         // violate the SAFETY argument in `lock_shmem`. (AFAIK Rust makes no formal
         // guarantee about the order in which fields are dropped)
@@ -1168,22 +1113,6 @@ mod export {
     pub unsafe extern "C-unwind" fn host_get_bw_up_kiBps(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.bw_up_kiBps()
-    }
-
-    /// Returns a pointer to the Host's Tracker, if there is one, otherwise
-    /// NULL.
-    ///
-    /// SAFETY: The returned pointer belongs to and is synchronized by the Host,
-    /// and is invalidated when the Host is no longer accessible to the current
-    /// thread, or something else accesses its Tracker.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn host_getTracker(hostrc: *const Host) -> *mut cshadow::Tracker {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        if let Some(mut tracker) = hostrc.tracker_borrow_mut() {
-            &mut *tracker
-        } else {
-            std::ptr::null_mut()
-        }
     }
 
     /// SAFETY: The returned pointer is owned by the Host, and will be invalidated when
@@ -1406,26 +1335,6 @@ mod export {
         let host = unsafe { host.as_ref().unwrap() };
         let delay = Duration::from_nanos(delay_nanos);
         host.cpu.borrow_mut().add_delay(delay);
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn host_paramsHeartbeatInterval(host: *const Host) -> CSimulationTime {
-        let host = unsafe { host.as_ref().unwrap() };
-        SimulationTime::to_c_simtime(host.params.heartbeat_interval)
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn host_paramsHeartbeatLogLevel(host: *const Host) -> LogLevel {
-        let host = unsafe { host.as_ref().unwrap() };
-        host.params.heartbeat_log_level
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn host_paramsHeartbeatLogInfo(
-        host: *const Host,
-    ) -> cshadow::LogInfoFlags {
-        let host = unsafe { host.as_ref().unwrap() };
-        host.params.heartbeat_log_info
     }
 
     #[no_mangle]

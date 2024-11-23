@@ -413,25 +413,6 @@ pub struct ExperimentalOptions {
     #[clap(help = EXP_HELP.get("interface_qdisc").unwrap().as_str())]
     pub interface_qdisc: Option<QDiscMode>,
 
-    /// Log level at which to print host statistics
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "level")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_log_level").unwrap().as_str())]
-    pub host_heartbeat_log_level: Option<LogLevel>,
-
-    /// List of information to show in the host's heartbeat message
-    #[clap(hide_short_help = true)]
-    #[clap(value_parser = parse_set_log_info_flags)]
-    #[clap(long, value_name = "options")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_log_info").unwrap().as_str())]
-    pub host_heartbeat_log_info: Option<HashSet<LogInfoFlag>>,
-
-    /// Amount of time between heartbeat messages for this host
-    #[clap(hide_short_help = true)]
-    #[clap(long, value_name = "seconds")]
-    #[clap(help = EXP_HELP.get("host_heartbeat_interval").unwrap().as_str())]
-    pub host_heartbeat_interval: Option<NullableOption<units::Time<units::TimePrefix>>>,
-
     /// Log the syscalls for each process to individual "strace" files
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "mode")]
@@ -522,12 +503,6 @@ impl Default for ExperimentalOptions {
             socket_recv_buffer: Some(units::Bytes::new(174_760, units::SiPrefixUpper::Base)),
             socket_recv_autotune: Some(true),
             interface_qdisc: Some(QDiscMode::Fifo),
-            host_heartbeat_log_level: Some(LogLevel::Info),
-            host_heartbeat_log_info: Some(IntoIterator::into_iter([LogInfoFlag::Node]).collect()),
-            host_heartbeat_interval: Some(NullableOption::Value(units::Time::new(
-                1,
-                units::TimePrefix::Sec,
-            ))),
             strace_logging_mode: Some(StraceLoggingMode::Off),
             scheduler: Some(Scheduler::ThreadPerCore),
             report_errors_to_stderr: Some(true),
@@ -908,45 +883,12 @@ fn default_data_directory() -> Option<String> {
     Some("shadow.data".into())
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum LogInfoFlag {
-    Node,
-    Socket,
-    Ram,
-}
-
-impl LogInfoFlag {
-    pub fn to_c_loginfoflag(&self) -> c::LogInfoFlags {
-        match self {
-            Self::Node => c::_LogInfoFlags_LOG_INFO_FLAGS_NODE,
-            Self::Socket => c::_LogInfoFlags_LOG_INFO_FLAGS_SOCKET,
-            Self::Ram => c::_LogInfoFlags_LOG_INFO_FLAGS_RAM,
-        }
-    }
-}
-
-impl FromStr for LogInfoFlag {
-    type Err = serde_yaml::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_yaml::from_str(s)
-    }
-}
-
 /// Parse a string as a comma-delimited set of `T` values.
 fn parse_set<T>(s: &str) -> Result<HashSet<T>, <T as FromStr>::Err>
 where
     T: std::cmp::Eq + std::hash::Hash + FromStr,
 {
     s.split(',').map(|x| x.trim().parse()).collect()
-}
-
-/// Parse a string as a comma-delimited set of `LogInfoFlag` values.
-fn parse_set_log_info_flags(
-    s: &str,
-) -> Result<HashSet<LogInfoFlag>, <LogInfoFlag as FromStr>::Err> {
-    parse_set(s)
 }
 
 /// Parse a string as a comma-delimited set of `String` values.

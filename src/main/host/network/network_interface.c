@@ -19,7 +19,6 @@
 #include "main/host/network/network_interface.h"
 #include "main/host/network/network_queuing_disciplines.h"
 #include "main/host/protocol.h"
-#include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
@@ -189,13 +188,6 @@ void networkinterface_push(NetworkInterface* interface, Packet* packet, CEmulate
         packet_addDeliveryStatus(packet, PDS_RCV_INTERFACE_DROPPED);
     }
 
-    /* count our bandwidth usage by interface, and by socket if possible */
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL && socket != NULL) {
-        CompatSocket compatSocket = compatsocket_fromInetSocket(socket);
-        tracker_addInputBytes(tracker, packet, &compatSocket);
-    }
-
     if (socket != NULL) {
         inetsocket_drop(socket);
     }
@@ -322,13 +314,6 @@ Packet* networkinterface_pop(NetworkInterface* interface) {
         /* record the packet early before we do anything else */
         if(interface->pcap) {
             _networkinterface_capturePacket(interface, packet);
-        }
-
-        const Host* src = worker_getCurrentHost();
-        Tracker* tracker = host_getTracker(src);
-        if (tracker != NULL && socket != NULL) {
-            CompatSocket compatSocket = compatsocket_fromInetSocket(socket);
-            tracker_addOutputBytes(tracker, packet, &compatSocket);
         }
     }
 
