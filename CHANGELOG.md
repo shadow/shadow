@@ -36,6 +36,7 @@ PATCH changes (bugfixes):
 `stdout` or `stderr` are terminals (or the same destination), and instead
 reports errors in a different format on `stderr` to make the duplication easier
 to sort out in the case that `stdout` and `stderr` are merged. (#3428)
+* Fixed a link error for rust 1.82. (#3445)
 
 Full changelog since v3.2.0:
 

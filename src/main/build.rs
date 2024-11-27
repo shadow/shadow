@@ -430,8 +430,11 @@ fn main() {
     run_cbindgen(&build_common);
     run_bindgen(&build_common);
 
-    build_remora(&build_common);
+    // The order here controls the link order linking this crate. Since
+    // libshadow-c depends on remora, remora must appear *after* it to avoid
+    // getting dropped in the link step.
     build_shadow_c(&build_common);
+    build_remora(&build_common);
 
     println!("cargo:rustc-env=SHADOW_BUILD_INFO={}", build_info());
 }
