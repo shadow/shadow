@@ -18,6 +18,7 @@ APT_PACKAGES=(
   pkg-config
   python3
   python3-networkx
+  python3-yaml
   xz-utils
   util-linux
   )
@@ -40,6 +41,7 @@ RPM_PACKAGES=(
   pkg-config
   python3
   python3-networkx
+  python3-yaml
   xz
   xz-devel
   yum-utils

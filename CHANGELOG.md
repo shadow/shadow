@@ -26,6 +26,7 @@ Within the simulation these are treated as fully routable IPs, so are required
 to be unique as with any other IP address assignment. (#3414)
 * Removed the experimental tracker feature that logged heartbeat messages for every host every second. Also removed the corresponding python scripts for parsing and plotting tracker log messages and data. (#3446)
 * Removed support for Debian 10 (Buster), which has [passed EOL](https://wiki.debian.org/LTS).
+* Added a python package `shadowtools` with auxiliary tools. It currently contains a python module for facilitating dynamic generation of shadow config files, and a command-line tool `shadow-exec` for streamlining single-host simulations. (#3449)
 
 PATCH changes (bugfixes):
 
