@@ -15,7 +15,6 @@
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/protocol.h"
-#include "main/host/tracker.h"
 #include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
@@ -79,13 +78,6 @@ static void _legacysocket_close(LegacyFile* descriptor, const Host* host) {
     LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
-
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_removeSocket(tracker, &compatSocket);
-    }
-
     socket->vtable->close((LegacyFile*)socket, host);
 }
 
@@ -126,13 +118,6 @@ void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTab
     socket->outputBuffer = g_queue_new();
     socket->outputControlBuffer = g_queue_new();
     socket->outputBufferSize = sendBufferSize;
-
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_addSocket(tracker, &compatSocket, socket->protocol, socket->inputBufferSize,
-                          socket->outputBufferSize);
-    }
 }
 
 ProtocolType legacysocket_getProtocol(LegacySocket* socket) {
@@ -152,13 +137,6 @@ gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_
                                 in_port_t port, sa_family_t family) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
-
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_updateSocketPeer(tracker, &compatSocket, ip, ntohs(port));
-    }
-
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
 }
 
@@ -371,14 +349,6 @@ gboolean legacysocket_addToInputBuffer(LegacySocket* socket, const Host* host, P
     socket->inputBufferLength += length;
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_BUFFERED);
 
-    /* update the tracker input buffer stats */
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_updateSocketInputBuffer(
-            tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
-    }
-
     return TRUE;
 }
 
@@ -395,14 +365,6 @@ Packet* legacysocket_removeFromInputBuffer(LegacySocket* socket, const Host* hos
         /* check if we need to reduce the buffer size */
         if(socket->inputBufferSizePending > 0) {
             legacysocket_setInputBufferSize(socket, socket->inputBufferSizePending);
-        }
-
-        /* update the tracker input buffer stats */
-        Tracker* tracker = host_getTracker(host);
-        if (tracker != NULL) {
-            CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-            tracker_updateSocketInputBuffer(
-                tracker, &compatSocket, socket->inputBufferLength, socket->inputBufferSize);
         }
     }
 
@@ -444,14 +406,6 @@ gboolean legacysocket_addToOutputBuffer(LegacySocket* socket, InetSocket* inetSo
     socket->outputBufferLength += length;
     packet_addDeliveryStatus(packet, PDS_SND_SOCKET_BUFFERED);
 
-    /* update the tracker input buffer stats */
-    Tracker* tracker = host_getTracker(host);
-    if (tracker != NULL) {
-        CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-        tracker_updateSocketOutputBuffer(
-            tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
-    }
-
     /* tell the interface to include us when sending out to the network */
     in_addr_t ip = packet_getSourceIP(packet);
     socket_wants_to_send_with_global_cb_queue(host, inetSocket, ip);
@@ -474,14 +428,6 @@ Packet* legacysocket_removeFromOutputBuffer(LegacySocket* socket, const Host* ho
         /* check if we need to reduce the buffer size */
         if(socket->outputBufferSizePending > 0) {
             legacysocket_setOutputBufferSize(socket, socket->outputBufferSizePending);
-        }
-
-        /* update the tracker input buffer stats */
-        Tracker* tracker = host_getTracker(host);
-        if (tracker != NULL) {
-            CompatSocket compatSocket = compatsocket_fromLegacySocket(socket);
-            tracker_updateSocketOutputBuffer(
-                tracker, &compatSocket, socket->outputBufferLength, socket->outputBufferSize);
         }
     }
 

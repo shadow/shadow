@@ -467,15 +467,8 @@ impl RunnableProcess {
         let prev_total = self.total_run_time.replace(total_elapsed);
         let delta = total_elapsed - prev_total;
 
-        if let Some(mut tracker) = host.tracker_borrow_mut() {
-            unsafe {
-                cshadow::tracker_addProcessingTimeNanos(
-                    &mut *tracker,
-                    delta.as_nanos().try_into().unwrap(),
-                )
-            };
-            host.cpu_borrow_mut().add_delay(delta);
-        }
+        host.cpu_borrow_mut().add_delay(delta);
+
         delta
     }
 

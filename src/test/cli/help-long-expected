@@ -83,15 +83,6 @@ Host Defaults (Default options for hosts):
           Should shadow generate pcap files? [default: false]
 
 Experimental (Unstable and may change or be removed at any time, regardless of Shadow version):
-      --host-heartbeat-interval <seconds>
-          Amount of time between heartbeat messages for this host [default: "1 sec"]
-
-      --host-heartbeat-log-info <options>
-          List of information to show in the host's heartbeat message [default: ["node"]]
-
-      --host-heartbeat-log-level <level>
-          Log level at which to print host statistics [default: "info"]
-
       --interface-qdisc <mode>
           The queueing discipline to use at the network interface [default: "fifo"]
 

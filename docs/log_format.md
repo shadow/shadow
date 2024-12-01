@@ -53,36 +53,6 @@ file).
 
 ## Heartbeat Messages
 
-Shadow logs simulator heartbeat messages that contain useful system information
-for each virtual node in the experiment, in messages containing the string
-`shadow-heartbeat`. By default, these heartbeats are logged once per second, but
-the frequency can be changed using the `--heartbeat-frequency` option to Shadow
-(see `shadow --help`).
-
-There are currently three [heartbeat statistic
-subsystems](shadow_config_spec.md#experimentalhost_heartbeat_log_info): `node`,
-`socket`, and `ram`. For each subsystem that is enabled, Shadow will print a
-'header' message followed by regular message every frequency interval. The
-'header' messages generally describe the statistics that are printed in the
-regular messages for that subsystem.
-
-The following are examples of the statistics that are available for each
-subsystem:
-
-Node:
-
-```
-[node-header] interval-seconds,recv-bytes,send-bytes,cpu-percent,delayed-count,avgdelay-milliseconds;inbound-localhost-counters;outbound-localhost-counters;inbound-remote-counters;outbound-remote-counters where counters are: packets-total,bytes-total,packets-control,bytes-control-header,packets-control-retrans,bytes-control-header-retrans,packets-data,bytes-data-header,bytes-data-payload,packets-data-retrans,bytes-data-header-retrans,bytes-data-payload-retrans
-```
-
-Socket:
-
-```
-[socket-header] descriptor-number,protocol-string,hostname:port-peer;inbuflen-bytes,inbufsize-bytes,outbuflen-bytes,outbufsize-bytes;recv-bytes,send-bytes;inbound-localhost-counters;outbound-localhost-counters;inbound-remote-counters;outbound-remote-counters|...where counters are: packets-total,bytes-total,packets-control,bytes-control-header,packets-control-retrans,bytes-control-header-retrans,packets-data,bytes-data-header,bytes-data-payload,packets-data-retrans,bytes-data-header-retrans,bytes-data-payload-retrans
-```
-
-Ram:
-
-```
-[ram-header] interval-seconds,alloc-bytes,dealloc-bytes,total-bytes,pointers-count,failfree-count
-```
+Shadow logs simulator heartbeat messages that contain useful system information.
+By default, these heartbeats are logged once per second, but the frequency can be
+changed using the `--heartbeat-frequency` option to Shadow (see `shadow --help`).

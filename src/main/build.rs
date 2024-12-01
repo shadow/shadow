@@ -63,7 +63,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/network/network_interface.h".into(),
             "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
-            "main/host/tracker_types.h".into(),
             "main/routing/dns.h".into(),
             "main/routing/packet.minimal.h".into(),
         ];
@@ -163,7 +162,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/protected.h")
         .header("host/syscall/syscall_condition.h")
         .header("host/syscall_numbers.h")
-        .header("host/tracker.h")
         .header("routing/packet.h")
         .header("utility/rpath.h")
         .header("utility/utility.h")
@@ -194,7 +192,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("hostc_.*")
         // used by shadow's main function
         .allowlist_function("main_.*")
-        .allowlist_function("tracker_.*")
         .allowlist_function("futex_.*")
         .allowlist_function("shmemcleanup_tryCleanup")
         .allowlist_function("scanRpathForLib")
@@ -214,7 +211,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("syscallcondition_.*")
         .allowlist_function("syscallhandler_.*")
         .allowlist_function("_syscallhandler_.*")
-        .allowlist_function("tracker_*")
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
         .allowlist_function("packet_.*")
@@ -235,7 +231,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("FileType")
         .allowlist_type("Trigger")
         .allowlist_type("TriggerType")
-        .allowlist_type("LogInfoFlags")
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
         .allowlist_type("PacketDeliveryStatusFlags")
@@ -373,7 +368,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/syscall_condition.c",
         "host/network/network_interface.c",
         "host/network/network_queuing_disciplines.c",
-        "host/tracker.c",
         "routing/payload.c",
         "routing/packet.c",
         "routing/address.c",
