@@ -10,6 +10,7 @@ APT_PACKAGES=(
   golang-go
   iproute2
   libc-dbg
+  libclang-dev
   libglib2.0-0
   libglib2.0-dev
   make
@@ -20,18 +21,6 @@ APT_PACKAGES=(
   xz-utils
   util-linux
   )
-
-case "$CONTAINER" in
-  # We need to force a newer-than-default version of libclang
-  # on some platforms. Some older versions have trouble finding
-  # compiler header files in bindgen, when compiling with gcc.
-  debian:10*)
-    APT_PACKAGES+=(libclang-13-dev)
-    ;;
-  *)
-    APT_PACKAGES+=(libclang-dev)
-    ;;
-esac
 
 # packages that are only required for our CI environment
 APT_CI_PACKAGES=(
