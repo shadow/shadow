@@ -25,6 +25,7 @@ spawning processes via `execve`.
 Within the simulation these are treated as fully routable IPs, so are required
 to be unique as with any other IP address assignment. (#3414)
 * Removed the experimental tracker feature that logged heartbeat messages for every host every second. Also removed the corresponding python scripts for parsing and plotting tracker log messages and data. (#3446)
+* Removed support for Debian 10 (Buster), which has [passed EOL](https://wiki.debian.org/LTS).
 
 PATCH changes (bugfixes):
 
