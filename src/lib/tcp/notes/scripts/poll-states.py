@@ -79,7 +79,7 @@ flags = test_socket(test)
 print("Listening socket with incoming connection:", select_flag_to_str(flags))
 
 
-def test(s):
+def test(s):  # type: ignore[no-redef]
     try:
         s.connect(("127.0.0.1", 23427))
     except BlockingIOError as e:
@@ -90,7 +90,7 @@ flags = test_socket(test)
 print("Connecting socket to non-existent localhost:", select_flag_to_str(flags))
 
 
-def test(s):
+def test(s):  # type: ignore[no-redef]
     try:
         s.connect(("1.2.3.4", 23427))
     except BlockingIOError as e:
