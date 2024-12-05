@@ -36,3 +36,10 @@ Issues = "https://github.com/shadow/shadow/issues"
 
 [project.scripts]
 shadow-exec = "shadowtools.shadow_exec:__main__"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# Mark package as having type annotations (PEP 561)
+"shadowtools" = ["py.typed"]
