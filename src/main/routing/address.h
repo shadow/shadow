@@ -25,7 +25,6 @@ typedef struct _Address Address;
  * Create a new Address structure with the given IP and Hostname. The hostname
  * is copied and stored internally, so the caller retains its ownership.
  *
- * @param mac the mac address to associate with this Address structure
  * @param ip the IP address to associate with this Address structure,
  * in network order
  * @param name the name to associate with this Address structure
@@ -33,24 +32,12 @@ typedef struct _Address Address;
  *
  * @see address_free()
  */
-Address* address_new(HostId hostID, guint mac, guint32 ip, const gchar* name, gboolean isLocal);
+Address* address_new(HostId hostID, guint32 ip, const gchar* name, gboolean isLocal);
 
 HostId address_getID(const Address* address);
 void address_ref(Address* address);
 void address_unref(Address* address);
 gboolean address_isLocal(const Address* address);
-
-/**
- * Checks if the given addresses are equal. This function is NULL safe, so
- * so either or both addresses may be NULL.
- * @param a a valid, non-NULL Address structure previously created
- * with address_new()
- * @param b a valid, non-NULL Address structure previously created
- * with address_new()
- * @return TRUE if both addresses are NULL or if the IP associated with both
- * addresses are equal, FALSE otherwise
- */
-gboolean address_isEqual(Address* a, Address* b);
 
 /**
  * Retrieve the host-order integer version of this address
@@ -95,7 +82,5 @@ gchar* address_ipToNewString(in_addr_t ip);
 
 /* Returned address will be in network byte order. */
 in_addr_t address_stringToIP(const gchar* ipString);
-
-const gchar* address_toString(const Address* address);
 
 #endif /* SHD_ADDRESS_H_ */

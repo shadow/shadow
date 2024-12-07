@@ -25,7 +25,6 @@ struct _DNS {
 
     /* address in network byte order */
     in_addr_t ipAddressCounter;
-    guint macAddressCounter;
 
     /* address mappings */
     GHashTable* addressByIP;
@@ -63,8 +62,7 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
         return NULL;
     }
 
-    guint mac = ++dns->macAddressCounter;
-    Address* address = address_new(id, mac, (guint32)requestedIP, name, isLocal);
+    Address* address = address_new(id, (guint32)requestedIP, name, isLocal);
 
     /* store the ip/name mappings */
     if (!isLocal) {
