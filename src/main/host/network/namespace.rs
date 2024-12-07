@@ -106,20 +106,23 @@ impl NetworkNamespace {
         let hostname: CString = options.hostname.clone().into();
         let hostname = hostname.as_ptr();
 
-        let addr = unsafe { cshadow::dns_register(dns, options.host_id, hostname, ip) };
-        assert!(!addr.is_null());
+        let address = unsafe { cshadow::dns_register(dns, options.host_id, hostname, ip) };
+        assert!(!address.is_null());
 
-        let interface = unsafe {
-            NetworkInterface::new(
-                options.host_id,
-                addr,
-                name,
-                options.pcap.clone(),
-                options.qdisc,
-            )
+        let addr: Ipv4Addr = {
+            let addr = unsafe { cshadow::address_toNetworkIP(address) };
+            u32::from_be(addr).into()
         };
 
-        (interface, addr)
+        let interface = NetworkInterface::new(
+            options.host_id,
+            addr,
+            name,
+            options.pcap.clone(),
+            options.qdisc,
+        );
+
+        (interface, address)
     }
 
     /// Clean up the network namespace. This should be called while `Worker` has the active host

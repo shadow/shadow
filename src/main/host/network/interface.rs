@@ -32,16 +32,9 @@ pub struct NetworkInterface {
 
 impl NetworkInterface {
     /// Create a new network interface for `host_id` with the assigned `addr`.
-    ///
-    /// # Safety
-    ///
-    /// This function will trigger undefined behavior if `addr` is
-    /// invalid. The reference count of `addr` will be increased by one using
-    /// `address_ref()`, so the caller should call `address_unref()` on it to
-    /// drop their reference when they no longer need it.
-    pub unsafe fn new(
+    pub fn new(
         host_id: HostId,
-        addr: *mut c::Address,
+        addr: Ipv4Addr,
         name: &OsStr,
         pcap_options: Option<PcapOptions>,
         qdisc: QDiscMode,
@@ -62,18 +55,21 @@ impl NetworkInterface {
         name.push(0);
         let name = CString::from_vec_with_nul(name).unwrap();
 
-        let c_ptr = unsafe {
-            c::networkinterface_new(addr, name.as_ptr(), pcap_dir_cptr, pcap_capture_size, qdisc)
-        };
+        let net_addr = u32::from(addr).to_be();
 
-        let ipv4_addr: Ipv4Addr = {
-            let addr = unsafe { c::address_toNetworkIP(addr) };
-            u32::from_be(addr).into()
+        let c_ptr = unsafe {
+            c::networkinterface_new(
+                net_addr,
+                name.as_ptr(),
+                pcap_dir_cptr,
+                pcap_capture_size,
+                qdisc,
+            )
         };
 
         NetworkInterface {
             c_ptr: HostTreePointer::new_for_host(host_id, c_ptr),
-            addr: ipv4_addr,
+            addr,
         }
     }
 

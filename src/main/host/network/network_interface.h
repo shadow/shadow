@@ -16,10 +16,9 @@ typedef struct _NetworkInterface NetworkInterface;
 #include "main/core/definitions.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/protocol.h"
-#include "main/routing/address.h"
 #include "main/routing/packet.minimal.h"
 
-NetworkInterface* networkinterface_new(Address* address, const char* name, const gchar* pcapDir,
+NetworkInterface* networkinterface_new(in_addr_t addr, const char* name, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc);
 void networkinterface_free(NetworkInterface* interface);
 
