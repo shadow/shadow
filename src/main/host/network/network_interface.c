@@ -19,7 +19,6 @@
 #include "main/host/network/network_interface.h"
 #include "main/host/network/network_queuing_disciplines.h"
 #include "main/host/protocol.h"
-#include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
@@ -29,7 +28,7 @@ struct _NetworkInterface {
      * sending of packets from sockets. */
     QDiscMode qdisc;
     /* The address associated with this interface */
-    Address* address;
+    in_addr_t addr;
 
     /* (protocol,port)-to-socket bindings. Stores pointers to InetSocket objects. */
     GHashTable* boundSockets;
@@ -51,10 +50,9 @@ static gchar* _networkinterface_getAssociationKey(NetworkInterface* interface,
 
     GString* strBuffer = g_string_new(NULL);
     g_string_printf(strBuffer,
-            "%s|%"G_GUINT32_FORMAT":%"G_GUINT16_FORMAT"|%"G_GUINT32_FORMAT":%"G_GUINT16_FORMAT,
-            protocol_toString(type),
-            (guint)address_toNetworkIP(interface->address),
-            port, peerAddr, peerPort);
+                    "%s|%" G_GUINT32_FORMAT ":%" G_GUINT16_FORMAT "|%" G_GUINT32_FORMAT
+                    ":%" G_GUINT16_FORMAT,
+                    protocol_toString(type), (guint)interface->addr, port, peerAddr, peerPort);
 
     return g_string_free(strBuffer, FALSE);
 }
@@ -366,13 +364,12 @@ void networkinterface_removeAllSockets(NetworkInterface* interface) {
     g_hash_table_remove_all(interface->boundSockets);
 }
 
-NetworkInterface* networkinterface_new(Address* address, const char* name, const gchar* pcapDir,
+NetworkInterface* networkinterface_new(in_addr_t addr, const char* name, const gchar* pcapDir,
                                        guint32 pcapCaptureSize, QDiscMode qdisc) {
     NetworkInterface* interface = g_new0(NetworkInterface, 1);
     MAGIC_INIT(interface);
 
-    interface->address = address;
-    address_ref(interface->address);
+    interface->addr = addr;
 
     /* incoming packets get passed along to sockets */
     interface->boundSockets =
@@ -400,8 +397,7 @@ NetworkInterface* networkinterface_new(Address* address, const char* name, const
         g_string_free(filename, TRUE);
     }
 
-    debug("bringing up network interface '%s' for host '%s' at '%s' using queuing discipline %s",
-          name, address_toHostName(interface->address), address_toHostIPString(interface->address),
+    debug("bringing up network interface '%s' using queuing discipline %s", name,
           interface->qdisc == Q_DISC_MODE_ROUND_ROBIN ? "rr" : "fifo");
 
     worker_count_allocation(NetworkInterface);
@@ -416,8 +412,6 @@ void networkinterface_free(NetworkInterface* interface) {
     fifosocketqueue_destroy(&interface->fifoQueue, inetsocket_drop);
 
     g_hash_table_destroy(interface->boundSockets);
-
-    address_unref(interface->address);
 
     if(interface->pcap) {
         pcapwriter_free(interface->pcap);
