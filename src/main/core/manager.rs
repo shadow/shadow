@@ -255,30 +255,41 @@ impl<'a> Manager<'a> {
         let dns = unsafe { c::dns_new() };
         assert!(!dns.is_null());
 
-        for (i, info) in manager_config.hosts.iter().enumerate() {
-            let id = HostId::from(u32::try_from(i).unwrap());
-            let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
-                unreachable!("IPv6 not supported");
-            };
+        // Assign the host id only once to guarantee it stays associated with its host.
+        let host_init: Vec<(&HostInfo, HostId)> = manager_config
+            .hosts
+            .iter()
+            .enumerate()
+            .map(|(i, info)| {
+                // Set up the host identity.
+                let id = HostId::from(u32::try_from(i).unwrap());
+                let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
+                    unreachable!("IPv6 not supported");
+                };
+                let name = info.name.clone();
 
-            let hostname = info.name.clone();
-            let chostname = CString::new(&*hostname).unwrap();
-            let caddr = u32::from(addr).to_be();
+                // Register in the global DNS.
+                {
+                    let chostname = CString::new(&*name).unwrap();
+                    let caddr = u32::from(addr).to_be();
+                    unsafe { c::dns_register(dns, id, chostname.as_ptr(), caddr) };
+                }
 
-            unsafe { c::dns_register(dns, id, chostname.as_ptr(), caddr) };
-        }
+                // Return the association for building the host itself next.
+                (info, id)
+            })
+            .collect();
 
+        // Now build the hosts using the assigned host ids.
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
         // will go away when we move the hosts to rust, and if we don't add them to the scheduler
         // then it means there was an error and we're going to exit anyways
-        let mut hosts: Vec<_> = manager_config
-            .hosts
+        let mut hosts: Vec<_> = host_init
             .iter()
-            .enumerate()
-            .map(|(i, x)| {
-                self.build_host(HostId::from(u32::try_from(i).unwrap()), x)
-                    .with_context(|| format!("Failed to build host '{}'", x.name))
+            .map(|(info, id)| {
+                self.build_host(*id, info)
+                    .with_context(|| format!("Failed to build host '{}'", info.name))
             })
             .collect::<anyhow::Result<_>>()?;
 
