@@ -172,7 +172,7 @@ impl Worker {
     /// Run `f` with a reference to the global DNS.
     ///
     /// Panics if the Worker or its DNS hasn't yet been initialized.
-    pub fn with_dns<F, R>(f: F) -> R
+    fn with_dns<F, R>(f: F) -> R
     where
         F: FnOnce(&cshadow::DNS) -> R,
     {
