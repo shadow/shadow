@@ -677,8 +677,10 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C-unwind" fn worker_getDNS() -> *mut cshadow::DNS {
-        Worker::with_dns(std::ptr::from_ref).cast_mut()
+    pub extern "C-unwind" fn worker_getHostsFilePath() -> *mut std::ffi::c_char {
+        Worker::with_dns(|dns| unsafe {
+            cshadow::dns_getHostsFilePath(std::ptr::from_ref(dns).cast_mut())
+        })
     }
 
     /// Addresses must be provided in network byte order.
