@@ -349,8 +349,7 @@ impl Worker {
         let src_ip: std::net::Ipv4Addr = u32::from_be(src_ip).into();
         let dst_ip: std::net::Ipv4Addr = u32::from_be(dst_ip).into();
 
-        let Some(dst_host_id) = Worker::with(|w| w.shared.resolve_ip_to_host_id(dst_ip)).unwrap()
-        else {
+        let Some(dst_host_id) = Worker::resolve_ip_to_host_id(dst_ip) else {
             log_once_per_value_at_level!(
                 dst_ip,
                 std::net::Ipv4Addr,
@@ -517,6 +516,18 @@ impl Worker {
             Some(u32::from_be(addr).into())
         })
     }
+
+    fn resolve_ip_to_host_id(ip: std::net::Ipv4Addr) -> Option<HostId> {
+        Worker::with_dns(|dns| {
+            let ip = u32::from(ip).to_be();
+            let addr =
+                unsafe { cshadow::dns_resolveIPToAddress(std::ptr::from_ref(dns).cast_mut(), ip) };
+            if addr.is_null() {
+                return None;
+            }
+            Some(unsafe { cshadow::address_getID(addr) })
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -589,16 +600,6 @@ impl WorkerShared {
 
         // the network graph is required to be a connected graph, so they must be routable
         true
-    }
-
-    pub fn resolve_ip_to_host_id(&self, ip: std::net::Ipv4Addr) -> Option<HostId> {
-        let dns = self.dns.ptr();
-        let ip = u32::from(ip).to_be();
-        let addr = unsafe { cshadow::dns_resolveIPToAddress(dns, ip) };
-        if addr.is_null() {
-            return None;
-        }
-        Some(unsafe { cshadow::address_getID(addr) })
     }
 
     pub fn increment_plugin_error_count(&self) {
