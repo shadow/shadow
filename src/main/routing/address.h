@@ -74,13 +74,4 @@ guint32 address_toNetworkIP(const Address* address);
  */
 const gchar* address_toHostName(const Address* address);
 
-/**
- * Turns the IPv4 address into a newly allocated string that should be freed by the caller.
- * Address must be in network byte order.
- */
-gchar* address_ipToNewString(in_addr_t ip);
-
-/* Returned address will be in network byte order. */
-in_addr_t address_stringToIP(const gchar* ipString);
-
 #endif /* SHD_ADDRESS_H_ */
