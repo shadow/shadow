@@ -42,7 +42,7 @@ static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
 }
 
 /* Address must be in network byte order. */
-Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP) {
+void dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP) {
     MAGIC_ASSERT(dns);
     utility_debugAssert(name);
 
@@ -59,18 +59,17 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
         warning("Non-unique IP assignment: %s", ipStr);
         g_free(ipStr);
         g_mutex_unlock(&dns->lock);
-        return NULL;
+        utility_panic("Non-unique IP assignment: %s", ipStr);
     }
-
-    Address* address = address_new(id, (guint32)requestedIP, name, isLocal);
 
     /* store the ip/name mappings */
     if (!isLocal) {
+        Address* address = address_new(id, (guint32)requestedIP, name, isLocal);
         g_hash_table_replace(
             dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)), address);
-        address_ref(address);
         /* cast the const pointer to non-const */
         g_hash_table_replace(dns->addressByName, (gchar*)address_toHostName(address), address);
+        // Need a ref for each table: address_new counts for one, but we need on more.
         address_ref(address);
     }
 
@@ -81,27 +80,27 @@ Address* dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requeste
     }
 
     g_mutex_unlock(&dns->lock);
-
-    return address;
 }
 
-void dns_deregister(DNS* dns, Address* address) {
+void dns_deregister(DNS* dns, in_addr_t ip) {
     MAGIC_ASSERT(dns);
-    if(!address_isLocal(address)) {
-        g_mutex_lock(&dns->lock);
+    g_mutex_lock(&dns->lock);
 
+    Address* address = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
+
+    if(address != NULL && !address_isLocal(address)) {
         /* these remove functions will call address_unref as necessary */
-        g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(address_toNetworkIP(address)));
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
+        g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(ip));
 
         /* Any existing hosts file needs to be (lazily) updated. */
         if (dns->hosts_file_fd >= 0) {
             close(dns->hosts_file_fd);
             dns->hosts_file_fd = -1;
         }
-
-        g_mutex_unlock(&dns->lock);
     }
+
+    g_mutex_unlock(&dns->lock);
 }
 
 /* Address must be in network byte order. */
