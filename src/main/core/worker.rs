@@ -772,17 +772,6 @@ mod export {
         EmulatedTime::to_c_emutime(Worker::current_time())
     }
 
-    #[no_mangle]
-    pub extern "C-unwind" fn worker_resolveIPToAddress(
-        ip: libc::in_addr_t,
-    ) -> *const cshadow::Address {
-        Worker::with(|w| {
-            let dns = w.shared.dns.ptr();
-            unsafe { cshadow::dns_resolveIPToAddress(dns, ip) }
-        })
-        .unwrap()
-    }
-
     /// Returns a pointer to the current running host. The returned pointer is
     /// invalidated the next time the worker switches hosts.
     #[no_mangle]
