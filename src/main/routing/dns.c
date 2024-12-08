@@ -4,6 +4,7 @@
  * See LICENSE for licensing information
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <glib.h>
 #include <netinet/in.h>
@@ -35,6 +36,16 @@ struct _DNS {
     MAGIC_DECLARE;
 };
 
+// Returned address will be in network byte order.
+static in_addr_t _dns_stringToIP(const gchar* ipString) {
+    struct in_addr inaddr;
+    if (1 == inet_pton(AF_INET, ipString, &inaddr)) {
+        return inaddr.s_addr;
+    } else {
+        return INADDR_NONE;
+    }
+}
+
 /* Address must be in network byte order. */
 static gboolean _dns_isIPUnique(DNS* dns, in_addr_t ip) {
     gboolean exists = g_hash_table_lookup_extended(dns->addressByIP, GUINT_TO_POINTER(ip), NULL, NULL);
@@ -52,10 +63,10 @@ void dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP)
 
     /* non-unique are OK only if this is a localhost address */
     /* TODO: Support other localhost addresses; e.g. 127.0.0.2? */
-    if (requestedIP == address_stringToIP("127.0.0.1")) {
+    if (requestedIP == _dns_stringToIP("127.0.0.1")) {
         isLocal = TRUE;
     } else if (!_dns_isIPUnique(dns, requestedIP)) {
-        gchar* ipStr = address_ipToNewString(requestedIP);
+        gchar* ipStr = util_ipToNewString(requestedIP);
         warning("Non-unique IP assignment: %s", ipStr);
         g_free(ipStr);
         g_mutex_unlock(&dns->lock);
@@ -88,7 +99,7 @@ void dns_deregister(DNS* dns, in_addr_t ip) {
 
     Address* address = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
 
-    if(address != NULL && !address_isLocal(address)) {
+    if (address != NULL && !address_isLocal(address)) {
         /* these remove functions will call address_unref as necessary */
         g_hash_table_remove(dns->addressByName, address_toHostName(address));
         g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(ip));
@@ -108,7 +119,7 @@ Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     MAGIC_ASSERT(dns);
     Address* result = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
     if(!result) {
-        gchar* ipStr = address_ipToNewString(ip);
+        gchar* ipStr = util_ipToNewString(ip);
         debug("address for '%s' does not yet exist", ipStr);
         g_free(ipStr);
     }
@@ -202,7 +213,7 @@ DNS* dns_new() {
     dns->addressByName = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, (GDestroyNotify) address_unref);
 
     /* 11.0.0.0 -- 100.0.0.0 is the longest available unrestricted range */
-    dns->ipAddressCounter = ntohl(address_stringToIP("11.0.0.0"));
+    dns->ipAddressCounter = ntohl(_dns_stringToIP("11.0.0.0"));
 
     dns->hosts_file_fd = -1;
 
