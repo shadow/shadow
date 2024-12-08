@@ -242,9 +242,6 @@ impl<'a> Manager<'a> {
                 .unwrap(),
         );
 
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
-
         let parallelism: usize = match self.config.general.parallelism.unwrap() {
             0 => {
                 let cores = cpu::count_physical_cores().try_into().unwrap();
@@ -253,6 +250,23 @@ impl<'a> Manager<'a> {
             }
             x => x.try_into().unwrap(),
         };
+
+        // Set up the global DNS before building the hosts
+        let dns = unsafe { c::dns_new() };
+        assert!(!dns.is_null());
+
+        for (i, info) in manager_config.hosts.iter().enumerate() {
+            let id = HostId::from(u32::try_from(i).unwrap());
+            let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
+                unreachable!("IPv6 not supported");
+            };
+
+            let hostname = info.name.clone();
+            let chostname = CString::new(&*hostname).unwrap();
+            let caddr = u32::from(addr).to_be();
+
+            unsafe { c::dns_register(dns, id, chostname.as_ptr(), caddr) };
+        }
 
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
@@ -263,7 +277,7 @@ impl<'a> Manager<'a> {
             .iter()
             .enumerate()
             .map(|(i, x)| {
-                self.build_host(HostId::from(u32::try_from(i).unwrap()), x, dns)
+                self.build_host(HostId::from(u32::try_from(i).unwrap()), x)
                     .with_context(|| format!("Failed to build host '{}'", x.name))
             })
             .collect::<anyhow::Result<_>>()?;
@@ -535,12 +549,7 @@ impl<'a> Manager<'a> {
         Ok(num_plugin_errors)
     }
 
-    fn build_host(
-        &self,
-        host_id: HostId,
-        host_info: &HostInfo,
-        dns: *mut c::DNS,
-    ) -> anyhow::Result<Box<Host>> {
+    fn build_host(&self, host_id: HostId, host_info: &HostInfo) -> anyhow::Result<Box<Host>> {
         let hostname = CString::new(&*host_info.name).unwrap();
 
         // scope used to enforce drop order for pointers
@@ -588,16 +597,13 @@ impl<'a> Manager<'a> {
                 use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
             };
 
-            Box::new(unsafe {
-                Host::new(
-                    params,
-                    &self.hosts_path,
-                    self.raw_frequency,
-                    dns,
-                    self.shmem(),
-                    self.preload_paths.clone(),
-                )
-            })
+            Box::new(Host::new(
+                params,
+                &self.hosts_path,
+                self.raw_frequency,
+                self.shmem(),
+                self.preload_paths.clone(),
+            ))
         };
 
         host.lock_shmem();
