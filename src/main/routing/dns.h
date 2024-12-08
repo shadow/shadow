@@ -20,7 +20,6 @@ void dns_free(DNS* dns);
 
 /* Address must be in network byte order. */
 void dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP);
-void dns_deregister(DNS* dns, in_addr_t ip);
 
 /* Address must be in network byte order. */
 Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip);
