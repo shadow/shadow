@@ -119,7 +119,9 @@ impl NetworkNamespace {
         let dns = std::ptr::from_ref(dns);
         // deregistering localhost is a no-op, so we skip it
         let ip = u32::from(self.default_ip).to_be();
-        unsafe { cshadow::dns_deregister(dns.cast_mut(), ip); }
+        unsafe {
+            cshadow::dns_deregister(dns.cast_mut(), ip);
+        }
 
         // we need to unref all sockets and free them before we drop the host, otherwise they'll try
         // to access the global host and panic since there is no host

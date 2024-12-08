@@ -10,11 +10,8 @@
  */
 
 /* IP must be first so we can cast an Address to an in_addr_t */
-#include <arpa/inet.h>
 #include <glib.h>
-#include <netinet/in.h>
 #include <stddef.h>
-#include <sys/socket.h>
 
 #include "main/routing/address.h"
 
@@ -44,7 +41,7 @@ Address* address_new(HostId hostID, guint32 ip, const gchar* name, gboolean isLo
 
     address->hostID = hostID;
     address->ip = ip;
-    address->ipString = address_ipToNewString((in_addr_t)ip);
+    address->ipString = util_ipToNewString((in_addr_t)ip);
     address->isLocal = isLocal;
     address->name = g_strdup(name);
     address->referenceCount = 1;
@@ -103,24 +100,4 @@ guint32 address_toNetworkIP(const Address* address) {
 const gchar* address_toHostName(const Address* address) {
     MAGIC_ASSERT(address);
     return address->name;
-}
-
-// Address must be in network byte order.
-gchar* address_ipToNewString(in_addr_t ip) {
-    gchar* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
-    struct in_addr addr = {.s_addr = ip};
-    const gchar* ipString = inet_ntop(AF_INET, &addr, ipStringBuffer, INET6_ADDRSTRLEN);
-    GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
-    g_free(ipStringBuffer);
-    return g_string_free(result, FALSE);
-}
-
-// Returned address will be in network byte order.
-in_addr_t address_stringToIP(const gchar* ipString) {
-    struct in_addr inaddr;
-    if(1 == inet_pton(AF_INET, ipString, &inaddr)) {
-        return inaddr.s_addr;
-    } else {
-        return INADDR_NONE;
-    }
 }
