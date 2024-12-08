@@ -93,27 +93,6 @@ void dns_register(DNS* dns, HostId id, const gchar* name, in_addr_t requestedIP)
     g_mutex_unlock(&dns->lock);
 }
 
-void dns_deregister(DNS* dns, in_addr_t ip) {
-    MAGIC_ASSERT(dns);
-    g_mutex_lock(&dns->lock);
-
-    Address* address = g_hash_table_lookup(dns->addressByIP, GUINT_TO_POINTER(ip));
-
-    if (address != NULL && !address_isLocal(address)) {
-        /* these remove functions will call address_unref as necessary */
-        g_hash_table_remove(dns->addressByName, address_toHostName(address));
-        g_hash_table_remove(dns->addressByIP, GUINT_TO_POINTER(ip));
-
-        /* Any existing hosts file needs to be (lazily) updated. */
-        if (dns->hosts_file_fd >= 0) {
-            close(dns->hosts_file_fd);
-            dns->hosts_file_fd = -1;
-        }
-    }
-
-    g_mutex_unlock(&dns->lock);
-}
-
 /* Address must be in network byte order. */
 Address* dns_resolveIPToAddress(DNS* dns, in_addr_t ip) {
     MAGIC_ASSERT(dns);
