@@ -1,6 +1,7 @@
 add_test(
     NAME shadowtools-tests
     COMMAND python3 -m unittest discover ${CMAKE_CURRENT_SOURCE_DIR}
+    CONFIGURATIONS extra
 )
 # Set PYTHONPATH so that the modules can be loaded.
 set_property(
