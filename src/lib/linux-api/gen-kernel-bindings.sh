@@ -118,6 +118,10 @@ bindgen_flags+=("--allowlist-type=__kernel_fd_set")
 # netlink.h
 bindgen_flags+=("--allowlist-type=nlmsghdr")
 
+# rtnetlink.h
+bindgen_flags+=("--allowlist-type=ifaddrmsg")
+bindgen_flags+=("--allowlist-type=ifinfomsg")
+
 # select.h
 bindgen_flags+=("--allowlist-type=stat")
 
