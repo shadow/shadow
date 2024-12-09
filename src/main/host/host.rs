@@ -596,9 +596,7 @@ impl Host {
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
-        let addr = self.net_ns.default_address.ptr();
-        let addr = unsafe { cshadow::address_toNetworkIP(addr) };
-        u32::from_be(addr).into()
+        self.net_ns.default_ip
     }
 
     pub fn abstract_unix_namespace(
@@ -1046,16 +1044,6 @@ mod export {
     pub unsafe extern "C-unwind" fn host_getName(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.hostname.as_ptr()
-    }
-
-    /// SAFETY: Returned pointer belongs to Host, and is only safe to access
-    /// while no other threads are accessing Host.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn host_getDefaultAddress(
-        hostrc: *const Host,
-    ) -> *mut cshadow::Address {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.net_ns.default_address.ptr()
     }
 
     #[no_mangle]
