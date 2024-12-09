@@ -59,6 +59,7 @@ bitflags::bitflags! {
         const MAP_EXECUTABLE = const_conversions::u64_from_u32(bindings::LINUX_MAP_EXECUTABLE);
         const MAP_LOCKED = const_conversions::u64_from_u32(bindings::LINUX_MAP_LOCKED);
         const MAP_NORESERVE = const_conversions::u64_from_u32(bindings::LINUX_MAP_NORESERVE);
+        const MAP_DROPPABLE = const_conversions::u64_from_u32(bindings::LINUX_MAP_DROPPABLE);
     }
 }
 

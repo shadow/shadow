@@ -58,6 +58,7 @@ pub enum FcntlCommand {
     F_GETLEASE = bindings::LINUX_F_GETLEASE,
     F_NOTIFY = bindings::LINUX_F_NOTIFY,
     F_DUPFD_QUERY = bindings::LINUX_F_DUPFD_QUERY,
+    F_CREATED_QUERY = bindings::LINUX_F_CREATED_QUERY,
     F_DUPFD_CLOEXEC = bindings::LINUX_F_DUPFD_CLOEXEC,
     F_SETPIPE_SZ = bindings::LINUX_F_SETPIPE_SZ,
     F_GETPIPE_SZ = bindings::LINUX_F_GETPIPE_SZ,
