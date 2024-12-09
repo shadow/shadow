@@ -14,7 +14,7 @@ env:
 jobs:
 
   lint-python:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +31,7 @@ jobs:
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude src/external
 
   lint-python-mypy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,7 +57,7 @@ jobs:
       - run: mypy --strict shadowtools
 
   lint-shell:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,7 +71,7 @@ jobs:
       - run: find . -name '*.sh' | xargs shellcheck
 
   lint-rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,7 +90,7 @@ jobs:
         run: (cd src && cargo fmt -- --check)
 
   lint-clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,7 +113,7 @@ jobs:
         run: (cd src && cargo clippy -- -Dwarnings)
 
   lint-cargo-lock:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Cargo update check
@@ -124,7 +124,7 @@ jobs:
           (cd src && cargo update --locked --workspace)
 
   lint-cargo-doc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
