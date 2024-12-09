@@ -15,7 +15,7 @@ set -euo pipefail
 # Generally it makes sense to use the most recent stable version of the kernel,
 # since the ABI is stable. i.e. managed programs compiled against an older
 # version of the kernel headers should still get ABI-compatible definitions.
-LINUX_TAG=v6.10
+LINUX_TAG=v6.12
 
 LINUX_REPO=https://github.com/torvalds/linux.git
 ARCH=x86_64
