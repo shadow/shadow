@@ -232,7 +232,7 @@ formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["rustix", "std", "libc"] }
 neli = "0.6.4"
-nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
+nix = { version = "0.29.0", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 rustix = { version = "0.38.37", default-features = false, features = ["fs", "mm", "pipe", "time", "thread"] }
 signal-hook = "0.3.17"
