@@ -344,6 +344,7 @@ impl SyscallNum {
     pub const NR_statx: Self = Self::new(bindings::LINUX___NR_statx);
     pub const NR_io_pgetevents: Self = Self::new(bindings::LINUX___NR_io_pgetevents);
     pub const NR_rseq: Self = Self::new(bindings::LINUX___NR_rseq);
+    pub const NR_uretprobe: Self = Self::new(bindings::LINUX___NR_uretprobe);
     pub const NR_pidfd_send_signal: Self = Self::new(bindings::LINUX___NR_pidfd_send_signal);
     pub const NR_io_uring_setup: Self = Self::new(bindings::LINUX___NR_io_uring_setup);
     pub const NR_io_uring_enter: Self = Self::new(bindings::LINUX___NR_io_uring_enter);
@@ -733,6 +734,7 @@ impl SyscallNum {
             Self::NR_statx => "statx",
             Self::NR_io_pgetevents => "io_pgetevents",
             Self::NR_rseq => "rseq",
+            Self::NR_uretprobe => "uretprobe",
             Self::NR_pidfd_send_signal => "pidfd_send_signal",
             Self::NR_io_uring_setup => "io_uring_setup",
             Self::NR_io_uring_enter => "io_uring_enter",
