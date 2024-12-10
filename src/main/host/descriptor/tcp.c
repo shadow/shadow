@@ -29,7 +29,6 @@
 #include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/tcp_retransmit_tally.h"
 #include "main/host/protocol.h"
-#include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"

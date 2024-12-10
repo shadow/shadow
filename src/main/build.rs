@@ -63,7 +63,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/network/network_interface.h".into(),
             "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
-            "main/routing/dns.h".into(),
             "main/routing/packet.minimal.h".into(),
         ];
         config.sys_includes = vec![
@@ -197,9 +196,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("scanRpathForLib")
         .allowlist_function("runConfigHandlers")
         .allowlist_function("rustlogger_new")
-        .allowlist_function("dns_.*")
-        .allowlist_function("address_getID")
-        .allowlist_function("address_toNetworkIP")
         .allowlist_function("compatsocket_.*")
         .allowlist_function("workerpool_updateMinHostRunahead")
         .allowlist_function("process_.*")
@@ -298,7 +294,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::thread::Thread;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
-        .raw_line("use shadow_shim_helper_rs::HostId;")
         .raw_line("use shadow_shim_helper_rs::syscall_types::{ManagedPhysicalMemoryAddr, SyscallArgs, UntypedForeignPtr};")
         .raw_line("#[allow(unused)]")
         .raw_line("use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ProcessShmem, ThreadShmem};")
@@ -371,8 +366,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/network/network_queuing_disciplines.c",
         "routing/payload.c",
         "routing/packet.c",
-        "routing/address.c",
-        "routing/dns.c",
         "utility/priority_queue.c",
         "utility/rpath.c",
         "utility/utility.c",
