@@ -27,7 +27,6 @@
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/syscall/kernel_types.h"
-#include "main/routing/dns.h"
 #include "main/utility/utility.h"
 
 #define OSFILE_INVALID -1
