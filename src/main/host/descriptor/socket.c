@@ -15,7 +15,6 @@
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
 #include "main/host/protocol.h"
-#include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/utility/utility.h"
 
