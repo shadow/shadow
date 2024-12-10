@@ -296,11 +296,12 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         file->type = FILE_TYPE_RANDOM;
     } else if (!strcmp("/etc/hosts", abspath)) {
         file->type = FILE_TYPE_HOSTS;
-        char* hostspath = worker_getHostsFilePath();
+        const char* hostspath = worker_getHostsFilePath();
         if (hostspath && abspath) {
             free(abspath);
-            abspath = hostspath;
+            abspath = strdup(hostspath);
         }
+        worker_freeHostsFilePath(hostspath);
     } else if (!strcmp("/etc/localtime", abspath)) {
         file->type = FILE_TYPE_LOCALTIME;
         if (abspath) {

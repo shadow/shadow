@@ -7,6 +7,7 @@ use std::net::Ipv4Addr;
 
 use crate::network::packet::PacketRc;
 
+pub mod dns;
 pub mod graph;
 pub mod packet;
 pub mod relay;
