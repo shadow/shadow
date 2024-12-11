@@ -23,6 +23,10 @@ jobs:
         # See https://github.com/shadow/shadow/issues/2166
         ref: ${{ github.event.pull_request.head.sha }}
 
+    # Our rust build scripts require libglib.
+    - name: Install system dependencies
+      run: sudo apt-get install -y libglib2.0-dev
+
     - name: Set Rust toolchain
       run: ln -s ci/rust-toolchain-nightly.toml rust-toolchain.toml
 
