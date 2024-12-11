@@ -11,7 +11,7 @@ on:
 
 jobs:
   miri:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
 
   # See <https://docs.rs/loom/latest/loom/>
   loom:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
