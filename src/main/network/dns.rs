@@ -53,8 +53,11 @@ impl DnsBuilder {
         let pid = std::process::id();
         let name = format!("shadow_dns_hosts_file_{pid}");
 
-        let memfd = rustix::fs::memfd_create(name, MemfdFlags::CLOEXEC)?;
-        let mut file = File::from(memfd);
+        // The memfd syscall is not supported in our miri test environment.
+        #[cfg(miri)]
+        let mut file = tempfile::tempfile()?;
+        #[cfg(not(miri))]
+        let mut file = File::from(rustix::fs::memfd_create(name, MemfdFlags::CLOEXEC)?);
 
         // Sort the records to produce deterministic ordering in the hosts file.
         let mut records: Vec<&Arc<Record>> = self.db.addr_index.values().collect();
