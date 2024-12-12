@@ -4,7 +4,6 @@ use std::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString, OsString};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::num::NonZeroU8;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -208,14 +207,10 @@ impl std::fmt::Debug for Host {
 }
 
 impl Host {
-    /// # Safety
-    ///
-    /// `dns` must be a valid pointer, and must outlive the returned Host.
-    pub unsafe fn new(
+    pub fn new(
         params: HostParameters,
         host_root_path: &Path,
         raw_cpu_freq_khz: u64,
-        dns: *mut cshadow::DNS,
         manager_shmem: &ShMemBlock<ManagerShmem>,
         preload_paths: Arc<Vec<PathBuf>>,
     ) -> Self {
@@ -262,28 +257,12 @@ impl Host {
 
         let public_ip: Ipv4Addr = u32::from_be(params.ip_addr).into();
 
-        let hostname: Vec<NonZeroU8> = params
-            .hostname
-            .as_bytes()
-            .iter()
-            .map(|x| (*x).try_into().unwrap())
-            .collect();
-
         let pcap_options = params.pcap_config.as_ref().map(|x| PcapOptions {
             path: data_dir_path.clone(),
             capture_size_bytes: x.capture_size.try_into().unwrap(),
         });
 
-        let net_ns = unsafe {
-            NetworkNamespace::new(
-                params.id,
-                hostname,
-                public_ip,
-                pcap_options,
-                params.qdisc,
-                dns,
-            )
-        };
+        let net_ns = NetworkNamespace::new(params.id, public_ip, pcap_options, params.qdisc);
 
         // Packets that are not for localhost or our public ip go to the router.
         // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
@@ -596,9 +575,7 @@ impl Host {
     }
 
     pub fn default_ip(&self) -> Ipv4Addr {
-        let addr = self.net_ns.default_address.ptr();
-        let addr = unsafe { cshadow::address_toNetworkIP(addr) };
-        u32::from_be(addr).into()
+        self.net_ns.default_ip
     }
 
     pub fn abstract_unix_namespace(
@@ -736,7 +713,7 @@ impl Host {
         debug!("shutting down host {}", self.name());
 
         // the network namespace object needs to be cleaned up before it's dropped
-        Worker::with_dns(|dns| self.net_ns.cleanup(dns));
+        self.net_ns.cleanup();
 
         assert!(self.processes.borrow().is_empty());
 
@@ -1046,16 +1023,6 @@ mod export {
     pub unsafe extern "C-unwind" fn host_getName(hostrc: *const Host) -> *const c_char {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.hostname.as_ptr()
-    }
-
-    /// SAFETY: Returned pointer belongs to Host, and is only safe to access
-    /// while no other threads are accessing Host.
-    #[no_mangle]
-    pub unsafe extern "C-unwind" fn host_getDefaultAddress(
-        hostrc: *const Host,
-    ) -> *mut cshadow::Address {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        hostrc.net_ns.default_address.ptr()
     }
 
     #[no_mangle]
