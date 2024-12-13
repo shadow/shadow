@@ -161,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn hosts_file() {
         let (id_a, addr_a, name_a) = host_a();
         let (id_b, addr_b, name_b) = host_b();
