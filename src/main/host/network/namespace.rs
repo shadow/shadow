@@ -1,12 +1,10 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::{CString, OsStr};
+use std::ffi::OsStr;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::num::NonZeroU8;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
-use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 
 use crate::core::configuration::QDiscMode;
@@ -33,8 +31,6 @@ pub struct NetworkNamespace {
     pub localhost: RefCell<NetworkInterface>,
     pub internet: RefCell<NetworkInterface>,
 
-    // TODO: use a Rust address type
-    pub default_address: SyncSendPointer<cshadow::Address>,
     pub default_ip: Ipv4Addr,
 
     // used for debugging to make sure we've cleaned up before being dropped
@@ -42,97 +38,35 @@ pub struct NetworkNamespace {
 }
 
 impl NetworkNamespace {
-    /// # Safety
-    ///
-    /// `dns` must be a valid pointer.
-    pub unsafe fn new(
+    pub fn new(
         host_id: HostId,
-        hostname: Vec<NonZeroU8>,
         public_ip: Ipv4Addr,
         pcap: Option<PcapOptions>,
         qdisc: QDiscMode,
-        dns: *mut cshadow::DNS,
     ) -> Self {
-        let (localhost, local_addr) = unsafe {
-            Self::setup_net_interface(
-                OsStr::new("lo"),
-                &InterfaceOptions {
-                    host_id,
-                    hostname: hostname.clone(),
-                    ip: Ipv4Addr::LOCALHOST,
-                    pcap: pcap.clone(),
-                    qdisc,
-                },
-                dns,
-            )
-        };
+        let localhost = NetworkInterface::new(
+            host_id,
+            Ipv4Addr::LOCALHOST,
+            OsStr::new("lo"),
+            pcap.clone(),
+            qdisc,
+        );
 
-        unsafe { cshadow::address_unref(local_addr) };
-
-        let (internet, public_addr) = unsafe {
-            Self::setup_net_interface(
-                OsStr::new("eth0"),
-                &InterfaceOptions {
-                    host_id,
-                    hostname,
-                    ip: public_ip,
-                    pcap,
-                    qdisc,
-                },
-                dns,
-            )
-        };
+        let internet = NetworkInterface::new(host_id, public_ip, OsStr::new("eth0"), pcap, qdisc);
 
         Self {
             unix: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
             localhost: RefCell::new(localhost),
             internet: RefCell::new(internet),
-            default_address: unsafe { SyncSendPointer::new(public_addr) },
             default_ip: public_ip,
             has_run_cleanup: Cell::new(false),
         }
     }
 
-    /// Must free the returned `*mut cshadow::Address` using [`cshadow::address_unref`].
-    unsafe fn setup_net_interface(
-        name: &OsStr,
-        options: &InterfaceOptions,
-        dns: *mut cshadow::DNS,
-    ) -> (NetworkInterface, *mut cshadow::Address) {
-        let ip = u32::from(options.ip).to_be();
-
-        // hostname is shadowed so that we can't accidentally drop the CString before the end of the
-        // scope
-        let hostname: CString = options.hostname.clone().into();
-        let hostname = hostname.as_ptr();
-
-        let addr = unsafe { cshadow::dns_register(dns, options.host_id, hostname, ip) };
-        assert!(!addr.is_null());
-
-        let interface = unsafe {
-            NetworkInterface::new(
-                options.host_id,
-                addr,
-                name,
-                options.pcap.clone(),
-                options.qdisc,
-            )
-        };
-
-        (interface, addr)
-    }
-
     /// Clean up the network namespace. This should be called while `Worker` has the active host
-    /// set. The `dns` object should be the same object that was originally provided to
-    /// [`Self::new`].
-    pub fn cleanup(&self, dns: &cshadow::DNS) {
+    /// set.
+    pub fn cleanup(&self) {
         assert!(!self.has_run_cleanup.get());
-
-        let dns = std::ptr::from_ref(dns);
-        // deregistering localhost is a no-op, so we skip it
-        unsafe {
-            cshadow::dns_deregister(dns.cast_mut(), self.default_address.ptr());
-        }
 
         // we need to unref all sockets and free them before we drop the host, otherwise they'll try
         // to access the global host and panic since there is no host
@@ -337,20 +271,10 @@ impl NetworkNamespace {
 
 impl std::ops::Drop for NetworkNamespace {
     fn drop(&mut self) {
-        unsafe { cshadow::address_unref(self.default_address.ptr()) };
-
         if !self.has_run_cleanup.get() && !std::thread::panicking() {
             debug_panic!("Dropped the network namespace before it has been cleaned up");
         }
     }
-}
-
-struct InterfaceOptions {
-    pub host_id: HostId,
-    pub hostname: Vec<NonZeroU8>,
-    pub ip: Ipv4Addr,
-    pub pcap: Option<PcapOptions>,
-    pub qdisc: QDiscMode,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

@@ -18,7 +18,6 @@ use scheduler::{HostIter, Scheduler};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -32,6 +31,7 @@ use crate::core::sim_stats;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
+use crate::network::dns::DnsBuilder;
 use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility;
 use crate::utility::childpid_watcher::ChildPidWatcher;
@@ -242,9 +242,6 @@ impl<'a> Manager<'a> {
                 .unwrap(),
         );
 
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
-
         let parallelism: usize = match self.config.general.parallelism.unwrap() {
             0 => {
                 let cores = cpu::count_physical_cores().try_into().unwrap();
@@ -254,17 +251,43 @@ impl<'a> Manager<'a> {
             x => x.try_into().unwrap(),
         };
 
+        // Set up the global DNS before building the hosts
+        let mut dns_builder = DnsBuilder::new();
+
+        // Assign the host id only once to guarantee it stays associated with its host.
+        let host_init: Vec<(&HostInfo, HostId)> = manager_config
+            .hosts
+            .iter()
+            .enumerate()
+            .map(|(i, info)| {
+                // Set up the host identity.
+                let id = HostId::from(u32::try_from(i).unwrap());
+                let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
+                    unreachable!("IPv6 not supported");
+                };
+                let name = info.name.clone();
+
+                // Register in the global DNS.
+                dns_builder.register(id, addr, name);
+
+                // Return the association for building the host itself next.
+                (info, id)
+            })
+            .collect();
+
+        // Convert to a global read-only DNS struct.
+        let dns = dns_builder.into_dns()?;
+
+        // Now build the hosts using the assigned host ids.
         // note: there are several return points before we add these hosts to the scheduler and we
         // would leak memory if we return before then, but not worrying about that since the issues
         // will go away when we move the hosts to rust, and if we don't add them to the scheduler
         // then it means there was an error and we're going to exit anyways
-        let mut hosts: Vec<_> = manager_config
-            .hosts
+        let mut hosts: Vec<_> = host_init
             .iter()
-            .enumerate()
-            .map(|(i, x)| {
-                self.build_host(HostId::from(u32::try_from(i).unwrap()), x, dns)
-                    .with_context(|| format!("Failed to build host '{}'", x.name))
+            .map(|(info, id)| {
+                self.build_host(*id, info)
+                    .with_context(|| format!("Failed to build host '{}'", info.name))
             })
             .collect::<anyhow::Result<_>>()?;
 
@@ -305,7 +328,7 @@ impl<'a> Manager<'a> {
                 routing_info: manager_config.routing_info,
                 host_bandwidths: manager_config.host_bandwidths,
                 // safe since the DNS type has an internal mutex
-                dns: unsafe { SyncSendPointer::new(dns) },
+                dns,
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
                 status_logger_state: status_logger_state.map(Arc::clone),
@@ -535,12 +558,7 @@ impl<'a> Manager<'a> {
         Ok(num_plugin_errors)
     }
 
-    fn build_host(
-        &self,
-        host_id: HostId,
-        host_info: &HostInfo,
-        dns: *mut c::DNS,
-    ) -> anyhow::Result<Box<Host>> {
+    fn build_host(&self, host_id: HostId, host_info: &HostInfo) -> anyhow::Result<Box<Host>> {
         let hostname = CString::new(&*host_info.name).unwrap();
 
         // scope used to enforce drop order for pointers
@@ -588,16 +606,13 @@ impl<'a> Manager<'a> {
                 use_syscall_counters: self.config.experimental.use_syscall_counters.unwrap(),
             };
 
-            Box::new(unsafe {
-                Host::new(
-                    params,
-                    &self.hosts_path,
-                    self.raw_frequency,
-                    dns,
-                    self.shmem(),
-                    self.preload_paths.clone(),
-                )
-            })
+            Box::new(Host::new(
+                params,
+                &self.hosts_path,
+                self.raw_frequency,
+                self.shmem(),
+                self.preload_paths.clone(),
+            ))
         };
 
         host.lock_shmem();

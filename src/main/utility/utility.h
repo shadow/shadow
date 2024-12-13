@@ -7,6 +7,7 @@
 #ifndef SHD_UTILITY_H_
 #define SHD_UTILITY_H_
 
+#include <netinet/in.h>
 #include <stdint.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
@@ -93,5 +94,7 @@ char* utility_strvToNewStr(char** strv);
 
 __attribute__((__format__(__printf__, 4, 5))) _Noreturn void
 utility_handleError(const char* file, int line, const char* funtcion, const char* message, ...);
+
+char* util_ipToNewString(in_addr_t ip);
 
 #endif /* SHD_UTILITY_H_ */
