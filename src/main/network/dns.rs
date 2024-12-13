@@ -72,12 +72,10 @@ impl DnsBuilder {
             writeln!(file, "{} {}", record.addr, record.name)?;
         }
 
-        let path = PathBuf::from(format!("/proc/{pid}/fd/{}", file.as_raw_fd()));
-
         Ok(Dns {
             db: self.db,
-            _hosts_file: file,
-            hosts_path: path,
+            hosts_file: file,
+            hosts_file_pid: pid,
         })
     }
 }
@@ -91,10 +89,11 @@ impl Default for DnsBuilder {
 #[derive(Debug)]
 pub struct Dns {
     db: Database,
-    // Keep this handle while Dns is valid to prevent closing the memfd
+    // Keep this handle while Dns is valid to prevent closing the file
     // containing the hosts database in /etc/hosts format.
-    _hosts_file: File,
-    hosts_path: PathBuf,
+    hosts_file: File,
+    // The pid of the process where the hosts file was created.
+    hosts_file_pid: u32,
 }
 
 impl Dns {
@@ -110,8 +109,12 @@ impl Dns {
         self.db.name_index.get(name).map(|record| record.addr)
     }
 
-    pub fn hosts_path(&self) -> &PathBuf {
-        &self.hosts_path
+    pub fn hosts_path(&self) -> PathBuf {
+        PathBuf::from(format!(
+            "/proc/{}/fd/{}",
+            self.hosts_file_pid,
+            self.hosts_file.as_raw_fd()
+        ))
     }
 }
 

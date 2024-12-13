@@ -656,7 +656,7 @@ mod export {
     /// `worker_freeHostsFilePath()`.
     #[no_mangle]
     pub extern "C-unwind" fn worker_getHostsFilePath() -> *const std::ffi::c_char {
-        let pathbuf = Worker::with_dns(|dns| dns.hosts_path().clone());
+        let pathbuf = Worker::with_dns(|dns| dns.hosts_path());
         let pathstr = CString::new(pathbuf.to_str().unwrap()).unwrap();
         // Move ownership to C.
         pathstr.into_raw()
