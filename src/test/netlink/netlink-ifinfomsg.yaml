@@ -1,0 +1,13 @@
+general:
+  stop_time: 3s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  node:
+    network_node_id: 0
+    processes:
+    - path: ../../target/debug/test_netlink_ifinfomsg
+      args: --shadow-passing
