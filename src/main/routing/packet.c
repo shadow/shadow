@@ -626,8 +626,8 @@ gchar* packet_toString(Packet* packet) {
     switch (packet->protocol) {
         case PUDP: {
             PacketUDPHeader* header = packet->header;
-            gchar* sourceIPString = address_ipToNewString(header->sourceIP);
-            gchar* destinationIPString = address_ipToNewString(header->destinationIP);
+            gchar* sourceIPString = util_ipToNewString(header->sourceIP);
+            gchar* destinationIPString = util_ipToNewString(header->destinationIP);
 
             g_string_append_printf(packetString, "%s:%u -> ",
                     sourceIPString, ntohs(header->sourcePort));
@@ -642,8 +642,8 @@ gchar* packet_toString(Packet* packet) {
 
         case PTCP: {
             PacketTCPHeader* header = packet->header;
-            gchar* sourceIPString = address_ipToNewString(header->sourceIP);
-            gchar* destinationIPString = address_ipToNewString(header->destinationIP);
+            gchar* sourceIPString = util_ipToNewString(header->sourceIP);
+            gchar* destinationIPString = util_ipToNewString(header->destinationIP);
 
             g_string_append_printf(packetString, "%s:%u -> ",
                     sourceIPString, ntohs(header->sourcePort));

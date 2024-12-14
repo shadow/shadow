@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -50,4 +51,14 @@ char* utility_strvToNewStr(char** strv) {
     }
 
     return g_string_free(strBuffer, FALSE);
+}
+
+// Address must be in network byte order.
+char* util_ipToNewString(in_addr_t ip) {
+    char* ipStringBuffer = g_malloc0(INET6_ADDRSTRLEN + 1);
+    struct in_addr addr = {.s_addr = ip};
+    const char* ipString = inet_ntop(AF_INET, &addr, ipStringBuffer, INET6_ADDRSTRLEN);
+    GString* result = ipString ? g_string_new(ipString) : g_string_new("NULL");
+    g_free(ipStringBuffer);
+    return g_string_free(result, FALSE);
 }
