@@ -260,25 +260,23 @@ impl<'a> Manager<'a> {
             .hosts
             .iter()
             .enumerate()
-            .map(|(i, info)| {
-                // Set up the host identity.
-                let id = HostId::from(u32::try_from(i).unwrap());
-                let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
-                    unreachable!("IPv6 not supported");
-                };
-                let name = info.name.clone();
-
-                // Register in the global DNS.
-                {
-                    let chostname = CString::new(&*name).unwrap();
-                    let caddr = u32::from(addr).to_be();
-                    unsafe { c::dns_register(dns, id, chostname.as_ptr(), caddr) };
-                }
-
-                // Return the association for building the host itself next.
-                (info, id)
-            })
+            .map(|(i, info)| (info, HostId::from(u32::try_from(i).unwrap())))
             .collect();
+
+        for (info, id) in &host_init {
+            // Set up the host identity.
+            let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
+                unreachable!("IPv6 not supported");
+            };
+            let name = info.name.clone();
+
+            // Register in the global DNS.
+            {
+                let chostname = CString::new(&*name).unwrap();
+                let caddr = u32::from(addr).to_be();
+                unsafe { c::dns_register(dns, *id, chostname.as_ptr(), caddr) };
+            }
+        }
 
         // Now build the hosts using the assigned host ids.
         // note: there are several return points before we add these hosts to the scheduler and we
