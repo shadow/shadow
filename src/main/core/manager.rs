@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
@@ -270,7 +270,9 @@ impl<'a> Manager<'a> {
             let name = info.name.clone();
 
             // Register in the global DNS.
-            dns_builder.register(*id, addr, name);
+            if let Err(e) = dns_builder.register(*id, addr, name) {
+                bail!(e);
+            }
         }
 
         // Convert to a global read-only DNS struct.
