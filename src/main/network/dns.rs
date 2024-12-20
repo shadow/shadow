@@ -1,4 +1,6 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::net::Ipv4Addr;
@@ -26,6 +28,29 @@ struct Record {
     name: String,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RegistrationError {
+    InvalidAddr,
+    InvalidName,
+    AddrExists,
+    NameExists,
+}
+
+impl Display for RegistrationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RegistrationError::InvalidAddr => write!(f, "address is invalid for registration"),
+            RegistrationError::InvalidName => write!(f, "name is invalid for registration"),
+            RegistrationError::NameExists => {
+                write!(f, "a registration record already exists for name")
+            }
+            RegistrationError::AddrExists => {
+                write!(f, "a registration record already exists for address")
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DnsBuilder {
     db: Database,
@@ -41,27 +66,42 @@ impl DnsBuilder {
         }
     }
 
-    pub fn register(&mut self, id: HostId, addr: Ipv4Addr, name: String) {
-        if !addr.is_loopback() && !addr.is_unspecified() {
-            let record = Arc::new(Record {
-                id,
-                addr,
-                name: name.clone(),
-            });
-            self.db.name_index.insert(name, record.clone());
-            self.db.addr_index.insert(addr, record);
+    pub fn register(
+        &mut self,
+        id: HostId,
+        addr: Ipv4Addr,
+        name: String,
+    ) -> Result<(), RegistrationError> {
+        // Make sure we don't register reserved addresses or names.
+        if addr.is_loopback() || addr.is_unspecified() {
+            return Err(RegistrationError::InvalidAddr);
+        } else if name.eq_ignore_ascii_case("localhost") {
+            return Err(RegistrationError::InvalidName);
+        }
+
+        // A single HostId is allowed to register multiple name/addr mappings,
+        // but only vacant addresses and names are allowed.
+        match self.db.addr_index.entry(addr) {
+            Entry::Occupied(_) => Err(RegistrationError::AddrExists),
+            Entry::Vacant(addr_entry) => match self.db.name_index.entry(name.clone()) {
+                Entry::Occupied(_) => Err(RegistrationError::NameExists),
+                Entry::Vacant(name_entry) => {
+                    let record = Arc::new(Record { id, addr, name });
+                    addr_entry.insert(record.clone());
+                    name_entry.insert(record);
+                    Ok(())
+                }
+            },
         }
     }
 
-    pub fn into_dns(self) -> anyhow::Result<Dns> {
-        let pid = std::process::id();
-
+    pub fn into_dns(self) -> std::io::Result<Dns> {
         // The memfd syscall is not supported in our miri test environment.
         #[cfg(miri)]
         let mut file = tempfile::tempfile()?;
         #[cfg(not(miri))]
         let mut file = {
-            let name = format!("shadow_dns_hosts_file_{pid}");
+            let name = format!("shadow_dns_hosts_file_{}", std::process::id());
             File::from(rustix::fs::memfd_create(name, MemfdFlags::CLOEXEC)?)
         };
 
@@ -139,13 +179,42 @@ mod tests {
     }
 
     #[test]
+    fn register() {
+        let (id_a, addr_a, name_a) = host_a();
+        let (id_b, addr_b, name_b) = host_b();
+
+        let mut builder = DnsBuilder::new();
+
+        assert!(builder.register(id_a, addr_a, name_a.clone()).is_ok());
+
+        assert_eq!(
+            builder.register(id_b, Ipv4Addr::LOCALHOST, name_b.clone()),
+            Err(RegistrationError::InvalidAddr)
+        );
+        assert_eq!(
+            builder.register(id_b, addr_b, String::from("localhost")),
+            Err(RegistrationError::InvalidName)
+        );
+        assert_eq!(
+            builder.register(id_b, addr_a, name_b.clone()),
+            Err(RegistrationError::AddrExists)
+        );
+        assert_eq!(
+            builder.register(id_b, addr_b, name_a.clone()),
+            Err(RegistrationError::NameExists)
+        );
+
+        assert!(builder.register(id_b, addr_b, name_b.clone()).is_ok());
+    }
+
+    #[test]
     fn lookups() {
         let (id_a, addr_a, name_a) = host_a();
         let (id_b, addr_b, name_b) = host_b();
 
         let mut builder = DnsBuilder::new();
-        builder.register(id_a, addr_a, name_a.clone());
-        builder.register(id_b, addr_b, name_b.clone());
+        builder.register(id_a, addr_a, name_a.clone()).unwrap();
+        builder.register(id_b, addr_b, name_b.clone()).unwrap();
         let dns = builder.into_dns().unwrap();
 
         assert_eq!(dns.addr_to_host_id(addr_a), Some(id_a));
@@ -169,8 +238,8 @@ mod tests {
         let (id_b, addr_b, name_b) = host_b();
 
         let mut builder = DnsBuilder::new();
-        builder.register(id_a, addr_a, name_a.clone());
-        builder.register(id_b, addr_b, name_b.clone());
+        builder.register(id_a, addr_a, name_a.clone()).unwrap();
+        builder.register(id_b, addr_b, name_b.clone()).unwrap();
         let dns = builder.into_dns().unwrap();
 
         let contents = std::fs::read_to_string(dns.hosts_path()).unwrap();
