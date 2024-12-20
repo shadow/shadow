@@ -13,7 +13,6 @@
 #include "lib/logger/logger.h"
 #include "main/bindings/c/bindings.h"
 #include "main/core/worker.h"
-#include "main/routing/address.h"
 #include "main/routing/packet.h"
 #include "main/routing/payload.h"
 #include "main/utility/utility.h"
