@@ -91,9 +91,30 @@ fn test_shorter_than_nlmsghdr() -> anyhow::Result<()> {
         )
     };
 
+    let ifaddrmsg = Ifaddrmsg {
+        ifa_family: RtAddrFamily::Unspecified,
+        ifa_prefixlen: 0,
+        ifa_flags: IfaFFlags::empty(),
+        ifa_scope: RtScope::Universe.into(),
+        ifa_index: 0,
+        rtattrs: RtBuffer::new(),
+    };
+    let nlmsg = {
+        let len = None;
+        let nl_type = Rtm::Getaddr;
+        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
+        let seq = Some(0xfe182ab9); // Random number
+        let pid = None;
+        let payload = NlPayload::Payload(ifaddrmsg);
+        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
+    };
+
+    let mut buffer = Cursor::new(Vec::new());
+    nlmsg.to_bytes(&mut buffer).unwrap();
+    let mut buffer = buffer.into_inner();
     // buffer is 15 bytes long which is shorter than nlmsghdr which is 16 bytes long
-    // 22 is RTM_GETADDR
-    let buffer: Vec<u8> = vec![15, 0, 0, 0, 22, 0, 1, 3, 185, 42, 24, 254, 0, 0, 0];
+    buffer[0] = 15;
+    buffer.truncate(15);
 
     let ret = unsafe {
         libc::sendto(
@@ -135,9 +156,30 @@ fn test_shorter_than_ifaddrmsg() -> anyhow::Result<()> {
         )
     };
 
+    let ifaddrmsg = Ifaddrmsg {
+        ifa_family: RtAddrFamily::Unspecified,
+        ifa_prefixlen: 0,
+        ifa_flags: IfaFFlags::empty(),
+        ifa_scope: RtScope::Universe.into(),
+        ifa_index: 0,
+        rtattrs: RtBuffer::new(),
+    };
+    let nlmsg = {
+        let len = None;
+        let nl_type = Rtm::Getaddr;
+        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
+        let seq = Some(0xfe182ab9); // Random number
+        let pid = None;
+        let payload = NlPayload::Payload(ifaddrmsg);
+        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
+    };
+
+    let mut buffer = Cursor::new(Vec::new());
+    nlmsg.to_bytes(&mut buffer).unwrap();
+    let mut buffer = buffer.into_inner();
     // buffer is 17 bytes long which is shorter than nlmsghdr+ifaddrmsg which is 24 bytes long
-    // 22 is RTM_GETADDR
-    let buffer: Vec<u8> = vec![17, 0, 0, 0, 22, 0, 1, 3, 185, 42, 24, 254, 0, 0, 0, 0, 0];
+    buffer[0] = 17;
+    buffer.truncate(17);
 
     let ret = unsafe {
         libc::sendto(
