@@ -159,6 +159,14 @@ name = "test_exit_after_signal_sched"
 path = "regression/test_exit_after_signal_sched.rs"
 
 [[bin]]
+name = "test_netlink_ifaddrmsg"
+path = "netlink/test_ifaddrmsg.rs"
+
+[[bin]]
+name = "test_netlink_ifinfomsg"
+path = "netlink/test_ifinfomsg.rs"
+
+[[bin]]
 name = "test_netlink_send_limit"
 path = "netlink/test_send_limit.rs"
 
