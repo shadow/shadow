@@ -1974,6 +1974,7 @@ pub const LINUX_AF_QIPCRTR: u32 = 42;
 pub const LINUX_AF_SMC: u32 = 43;
 pub const LINUX_AF_XDP: u32 = 44;
 pub const LINUX_AF_MCTP: u32 = 45;
+pub type linux___u8 = ::core::ffi::c_uchar;
 pub type linux___u16 = ::core::ffi::c_ushort;
 pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___u64 = ::core::ffi::c_ulonglong;
@@ -3607,6 +3608,80 @@ pub const LINUX_IFLA_DSA_CONDUIT: linux__bindgen_ty_55 = 1;
 pub const LINUX_IFLA_DSA_MASTER: linux__bindgen_ty_55 = 1;
 pub const LINUX___IFLA_DSA_MAX: linux__bindgen_ty_55 = 2;
 pub type linux__bindgen_ty_55 = ::core::ffi::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_ifaddrmsg {
+    pub ifa_family: linux___u8,
+    pub ifa_prefixlen: linux___u8,
+    pub ifa_flags: linux___u8,
+    pub ifa_scope: linux___u8,
+    pub ifa_index: linux___u32,
+}
+#[test]
+fn bindgen_test_layout_ifaddrmsg() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_ifaddrmsg> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_ifaddrmsg>(),
+        8usize,
+        concat!("Size of: ", stringify!(linux_ifaddrmsg))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_ifaddrmsg>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_ifaddrmsg))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifa_family) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifaddrmsg),
+            "::",
+            stringify!(ifa_family)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifa_prefixlen) as usize - ptr as usize },
+        1usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifaddrmsg),
+            "::",
+            stringify!(ifa_prefixlen)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifa_flags) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifaddrmsg),
+            "::",
+            stringify!(ifa_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifa_scope) as usize - ptr as usize },
+        3usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifaddrmsg),
+            "::",
+            stringify!(ifa_scope)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifa_index) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifaddrmsg),
+            "::",
+            stringify!(ifa_index)
+        )
+    );
+}
 pub const LINUX_IFA_UNSPEC: linux__bindgen_ty_56 = 0;
 pub const LINUX_IFA_ADDRESS: linux__bindgen_ty_56 = 1;
 pub const LINUX_IFA_LOCAL: linux__bindgen_ty_56 = 2;
@@ -3791,6 +3866,91 @@ pub const LINUX_RTAX_CC_ALGO: linux__bindgen_ty_64 = 16;
 pub const LINUX_RTAX_FASTOPEN_NO_COOKIE: linux__bindgen_ty_64 = 17;
 pub const LINUX___RTAX_MAX: linux__bindgen_ty_64 = 18;
 pub type linux__bindgen_ty_64 = ::core::ffi::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_ifinfomsg {
+    pub ifi_family: ::core::ffi::c_uchar,
+    pub l__ifi_pad: ::core::ffi::c_uchar,
+    pub ifi_type: ::core::ffi::c_ushort,
+    pub ifi_index: ::core::ffi::c_int,
+    pub ifi_flags: ::core::ffi::c_uint,
+    pub ifi_change: ::core::ffi::c_uint,
+}
+#[test]
+fn bindgen_test_layout_ifinfomsg() {
+    const UNINIT: ::core::mem::MaybeUninit<linux_ifinfomsg> = ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux_ifinfomsg>(),
+        16usize,
+        concat!("Size of: ", stringify!(linux_ifinfomsg))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux_ifinfomsg>(),
+        4usize,
+        concat!("Alignment of ", stringify!(linux_ifinfomsg))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifi_family) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(ifi_family)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).l__ifi_pad) as usize - ptr as usize },
+        1usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(l__ifi_pad)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifi_type) as usize - ptr as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(ifi_type)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifi_index) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(ifi_index)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifi_flags) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(ifi_flags)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).ifi_change) as usize - ptr as usize },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux_ifinfomsg),
+            "::",
+            stringify!(ifi_change)
+        )
+    );
+}
 pub const LINUX_PREFIX_UNSPEC: linux__bindgen_ty_65 = 0;
 pub const LINUX_PREFIX_ADDRESS: linux__bindgen_ty_65 = 1;
 pub const LINUX_PREFIX_CACHEINFO: linux__bindgen_ty_65 = 2;

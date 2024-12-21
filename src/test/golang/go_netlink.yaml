@@ -1,0 +1,13 @@
+general:
+  stop_time: 10s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: ./test_netlink
+      start_time: 1s

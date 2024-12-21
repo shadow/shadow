@@ -101,3 +101,17 @@ add_shadow_tests(
     CONFIGURATIONS extra
     PROPERTIES
       LABELS golang)
+
+add_golang_test_exe(BASENAME test_netlink)
+add_linux_tests(
+    BASENAME go_netlink
+    COMMAND ./test_netlink
+    CONFIGURATIONS extra
+    PROPERTIES
+      LABELS golang)
+add_shadow_tests(
+    BASENAME go_netlink
+    POST_CMD "diff hosts/host/*.stdout ${CMAKE_CURRENT_SOURCE_DIR}/go_netlink.stdout"
+    CONFIGURATIONS extra
+    PROPERTIES
+      LABELS golang)
