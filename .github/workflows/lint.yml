@@ -114,7 +114,7 @@ jobs:
         run: rustup component add clippy
 
       - name: clippy
-        run: (cd src && cargo clippy -- -Dwarnings)
+        run: (cd src && cargo clippy --all-targets -- -Dwarnings)
 
   lint-cargo-lock:
     runs-on: ubuntu-24.04
