@@ -27,6 +27,7 @@ to be unique as with any other IP address assignment. (#3414)
 * Removed the experimental tracker feature that logged heartbeat messages for every host every second. Also removed the corresponding python scripts for parsing and plotting tracker log messages and data. (#3446)
 * Removed support for Debian 10 (Buster), which has [passed EOL](https://wiki.debian.org/LTS).
 * Added a python package `shadowtools` with auxiliary tools. It currently contains a python module for facilitating dynamic generation of shadow config files, and a command-line tool `shadow-exec` for streamlining single-host simulations. (#3449)
+* Improved support for netlink sockets with Go. (#3441)
 
 PATCH changes (bugfixes):
 
@@ -40,6 +41,7 @@ PATCH changes (bugfixes):
 reports errors in a different format on `stderr` to make the duplication easier
 to sort out in the case that `stdout` and `stderr` are merged. (#3428)
 * Fixed a link error for rust 1.82. (#3445)
+* Sending a packet to an unknown IP address no longer causes Shadow to panic. (#3411)
 
 Full changelog since v3.2.0:
 
