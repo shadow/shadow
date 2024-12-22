@@ -70,7 +70,7 @@ impl MemoryCopier {
         let ptr = src.cast_u8();
 
         // Split at page boundaries to allow partial reads.
-        let mut slices = Vec::with_capacity((buf.len() + page_size() - 1) / page_size() + 1);
+        let mut slices = Vec::with_capacity(buf.len().div_ceil(page_size()) + 1);
         let mut total_bytes_toread = std::cmp::min(buf.len(), ptr.len());
 
         // First chunk to read is from pointer to beginning of next page.
