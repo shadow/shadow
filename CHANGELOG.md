@@ -30,6 +30,9 @@ to be unique as with any other IP address assignment. (#3414)
 * Added a python package `shadowtools` with auxiliary tools. It currently contains a python module for facilitating dynamic generation of shadow config files, and a command-line tool `shadow-exec` for streamlining single-host simulations. (#3449)
 * Improved support for netlink sockets with Go. (#3441)
 * Replaced C DNS module with a Rust implementation. Also removed the C Address type. (#3464)
+* Added support for `SO_BROADCAST` with `getsockopt` for TCP and UDP,
+  which always returns 0 as Shadow doesn't support broadcast sockets.
+  (#3471)
 
 PATCH changes (bugfixes):
 

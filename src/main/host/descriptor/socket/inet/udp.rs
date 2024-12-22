@@ -856,6 +856,13 @@ impl UdpSocket {
 
                 Ok(bytes_written as libc::socklen_t)
             }
+            (libc::SOL_SOCKET, libc::SO_BROADCAST) => {
+                let optval_ptr = optval_ptr.cast::<libc::c_int>();
+                // we don't support broadcast sockets, so just just return the default 0
+                let bytes_written = write_partial(mem, &0, optval_ptr, optlen as usize)?;
+
+                Ok(bytes_written as libc::socklen_t)
+            }
             (libc::SOL_SOCKET, _) => {
                 log_once_per_value_at_level!(
                     (level, optname),
@@ -956,10 +963,23 @@ impl UdpSocket {
                 return Err(Errno::ENOPROTOOPT.into());
             }
             (libc::SOL_SOCKET, libc::SO_BROADCAST) => {
-                // TODO: implement this, pkg.go.dev/net uses it
-                warn_once_then_debug!(
-                    "setsockopt SO_BROADCAST not yet implemented for udp; ignoring and returning 0"
-                );
+                type OptType = libc::c_int;
+
+                if usize::try_from(optlen).unwrap() < std::mem::size_of::<OptType>() {
+                    return Err(Errno::EINVAL.into());
+                }
+
+                let optval_ptr = optval_ptr.cast::<OptType>();
+                let val = mem.read(optval_ptr)?;
+
+                if val == 0 {
+                    // we don't support broadcast sockets, so an attempt to disable is okay
+                } else {
+                    // TODO: implement this, pkg.go.dev/net uses it
+                    warn_once_then_debug!(
+                        "setsockopt SO_BROADCAST not yet implemented for udp; ignoring and returning 0"
+                    );
+                }
             }
             _ => {
                 log_once_per_value_at_level!(
