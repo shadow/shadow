@@ -355,7 +355,7 @@ impl<'a, T> SelfContainedMutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> Drop for SelfContainedMutexGuard<'a, T> {
+impl<T> Drop for SelfContainedMutexGuard<'_, T> {
     fn drop(&mut self) {
         if let Some(mutex) = self.mutex {
             // We have to drop this pointer before unlocking when running
@@ -369,7 +369,7 @@ impl<'a, T> Drop for SelfContainedMutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> core::ops::Deref for SelfContainedMutexGuard<'a, T> {
+impl<T> core::ops::Deref for SelfContainedMutexGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -383,7 +383,7 @@ impl<'a, T> core::ops::Deref for SelfContainedMutexGuard<'a, T> {
 
 /// When T is Unpin, we can implement DerefMut. Otherwise it's unsafe
 /// to do so, since SelfContainedMutex is an Archive type.
-impl<'a, T> core::ops::DerefMut for SelfContainedMutexGuard<'a, T>
+impl<T> core::ops::DerefMut for SelfContainedMutexGuard<'_, T>
 where
     T: Unpin,
 {

@@ -30,7 +30,7 @@ impl<'fd> BorrowedFdWriter<'fd> {
     }
 }
 
-impl<'fd> core::fmt::Write for BorrowedFdWriter<'fd> {
+impl core::fmt::Write for BorrowedFdWriter<'_> {
     fn write_str(&mut self, s: &str) -> Result<(), core::fmt::Error> {
         let mut bytes_slice = s.as_bytes();
         while !bytes_slice.is_empty() {
