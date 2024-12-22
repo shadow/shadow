@@ -425,8 +425,9 @@ fn raise_rlimit(resource: resource::Resource) -> anyhow::Result<()> {
 }
 
 fn disable_aslr() -> anyhow::Result<()> {
-    let pers = personality::get()?;
-    personality::set(pers | personality::Persona::ADDR_NO_RANDOMIZE)?;
+    let pers = personality::get().context("Could not get personality")?;
+    personality::set(pers | personality::Persona::ADDR_NO_RANDOMIZE)
+        .context("Could not set personality")?;
     Ok(())
 }
 
