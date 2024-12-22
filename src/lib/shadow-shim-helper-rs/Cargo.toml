@@ -23,7 +23,7 @@ vasi = { path = "../vasi" }
 vasi-sync = { path = "../vasi-sync" }
 linux-api = { path = "../linux-api" }
 tcp = { path = "../tcp" }
-bytemuck = "1.20.0"
+bytemuck = "1.21.0"
 
 [build-dependencies]
 cc = { version = "1.2", features = ["parallel"] }
