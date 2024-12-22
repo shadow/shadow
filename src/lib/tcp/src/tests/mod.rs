@@ -56,6 +56,10 @@ impl std::fmt::Debug for Event {
     }
 }
 
+// `Ord` and `PartialEq` must be consistent, which they are here (except for the panic condition in
+// `<Event as Ord>::cmp`) because `<Event as Ord>::cmp` depends on the output of
+// `<Event as PartialOrd>::partial_cmp`
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for Event {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if std::ptr::eq(self, other) {
