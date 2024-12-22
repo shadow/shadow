@@ -63,7 +63,6 @@ enum_passthrough_into!(self, (cb_queue), Pipe, Socket;
 );
 ```
 **/
-
 macro_rules! enum_passthrough_into {
     ($self:ident, $args2:tt, $($variant:ident),+; $(#[$($mac:tt)+])? $v:vis fn $name:ident $args:tt $(-> $($rv:tt)+)?) => {
         $(#[$($mac)+])?
