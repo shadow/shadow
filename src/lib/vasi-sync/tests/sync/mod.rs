@@ -22,9 +22,9 @@ where
 /// Overrides the default preemption bound. Useful for tests that
 /// are otherwise too slow.
 ///
-/// >  In practice, setting the thread pre-emption bound to 2 or 3 is enough to
-/// catch most bugs while significantly reducing the number of possible
-/// executions.
+/// > In practice, setting the thread pre-emption bound to 2 or 3 is enough to
+/// > catch most bugs while significantly reducing the number of possible
+/// > executions.
 ///
 /// <https://docs.rs/loom/latest/loom/#large-models>
 pub fn model_with_max_preemptions<F>(max_preemptions: usize, f: F)
