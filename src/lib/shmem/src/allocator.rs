@@ -489,6 +489,9 @@ mod tests {
         let block_addr = &original_block as *const ShMemBlock<T>;
         let data_addr = *original_block as *const T;
 
+        // Use an `Option` to move the `ShMemBlock`. We have no guarantee here that it actually
+        // moves and that the compiler doesn't optimize the move away, so the before/after addresses
+        // are compared below.
         let block = Some(original_block);
 
         // Validate that the block itself actually moved.
@@ -499,6 +502,7 @@ mod tests {
         let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
 
+        #[allow(clippy::unnecessary_literal_unwrap)]
         shfree(block.unwrap());
     }
 
