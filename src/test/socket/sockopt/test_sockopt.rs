@@ -186,6 +186,18 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
                 test_utils::ShadowTest::new(
+                    &append_args("test_so_broadcast_0"),
+                    move || test_so_broadcast_0(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_so_broadcast"),
+                    move || test_so_broadcast(domain, sock_type),
+                    // TODO: enable if/when we support broadcast sockets in shadow, and remove the
+                    // above test
+                    set![TestEnv::Libc],
+                ),
+                test_utils::ShadowTest::new(
                     &append_args("test_tcp_info"),
                     move || test_tcp_info(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
@@ -771,6 +783,86 @@ fn test_so_acceptconn(domain: libc::c_int, sock_type: libc::c_int) -> Result<(),
             expected_optval,
             "Wrong value returned for SO_ACCEPTCONN after listen()",
         )?;
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the SO_BROADCAST option with the value 0.
+fn test_so_broadcast_0(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_SOCKET;
+    let optname = libc::SO_BROADCAST;
+    let zero = 0i32.to_ne_bytes();
+
+    let mut get_args = GetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+    let mut set_args = SetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        check_getsockopt_call(&mut get_args, &[])?;
+        check_setsockopt_call(&mut set_args, &[])?;
+
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+
+        test_utils::result_assert_eq(returned_optval, 0, "expected SO_BROADCAST to return 0")?;
+
+        Ok(())
+    })
+}
+
+/// Test getsockopt() and setsockopt() using the SO_BROADCAST option.
+fn test_so_broadcast(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(domain, sock_type | libc::SOCK_NONBLOCK, 0) };
+    assert!(fd >= 0);
+
+    let level = libc::SOL_SOCKET;
+    let optname = libc::SO_BROADCAST;
+    let zero = 0i32.to_ne_bytes();
+    let one = 1i32.to_ne_bytes();
+    let ten = 10i32.to_ne_bytes();
+
+    let mut get_args = GetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+
+    let mut set_args_1 = SetsockoptArguments::new(fd, level, optname, Some(one.into()));
+    let mut set_args_2 = SetsockoptArguments::new(fd, level, optname, Some(zero.into()));
+    let mut set_args_3 = SetsockoptArguments::new(fd, level, optname, Some(ten.into()));
+
+    test_utils::run_and_close_fds(&[fd], || {
+        // initially should be 0
+        check_getsockopt_call(&mut get_args, &[])?;
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+        test_utils::result_assert_eq(returned_optval, 0, "unexpected value from SO_BROADCAST")?;
+
+        // set to 1
+        check_setsockopt_call(&mut set_args_1, &[])?;
+
+        // should now be 1
+        check_getsockopt_call(&mut get_args, &[])?;
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+        test_utils::result_assert_eq(returned_optval, 1, "unexpected value from SO_BROADCAST")?;
+
+        // set to 0
+        check_setsockopt_call(&mut set_args_2, &[])?;
+
+        // should now be 0
+        check_getsockopt_call(&mut get_args, &[])?;
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+        test_utils::result_assert_eq(returned_optval, 0, "unexpected value from SO_BROADCAST")?;
+
+        // set to 10
+        check_setsockopt_call(&mut set_args_3, &[])?;
+
+        // should now be 1
+        check_getsockopt_call(&mut get_args, &[])?;
+        let returned_optval =
+            i32::from_ne_bytes(get_args.optval.as_ref().unwrap()[..].try_into().unwrap());
+        test_utils::result_assert_eq(returned_optval, 1, "unexpected value from SO_BROADCAST")?;
 
         Ok(())
     })
