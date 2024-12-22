@@ -177,7 +177,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // branch on memory addresses.
     match disable_aslr() {
         Ok(()) => log::debug!("ASLR disabled for processes forked from this parent process"),
-        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {:?}", e),
+        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {e:#}"),
     };
 
     // check sidechannel mitigations
