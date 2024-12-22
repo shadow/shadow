@@ -17,8 +17,10 @@ fn test_peer_no_window_scaling() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -78,8 +80,10 @@ fn test_local_no_window_scaling() {
     }
 
     // make sure it has window scaling disabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = false;
+    let config = TcpConfig {
+        window_scaling_enabled: false,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -139,8 +143,10 @@ fn test_both_without_window_scaling() {
     }
 
     // make sure it has window scaling disabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = false;
+    let config = TcpConfig {
+        window_scaling_enabled: false,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -200,8 +206,10 @@ fn test_both_with_window_scaling() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -264,8 +272,10 @@ fn test_large_window_scale() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -326,8 +336,10 @@ fn test_window_scale_after_receiving_syn_without() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -407,8 +419,10 @@ fn test_window_scale_after_receiving_syn_with() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
@@ -489,8 +503,10 @@ fn test_duplicate_syn_with_different_window_scale() {
     }
 
     // make sure it has window scaling enabled
-    let mut config = TcpConfig::default();
-    config.window_scaling_enabled = true;
+    let config = TcpConfig {
+        window_scaling_enabled: true,
+        ..Default::default()
+    };
 
     let tcp = TcpSocket::new(&scheduler, config);
     assert!(s(&tcp).as_init().is_some());
