@@ -96,7 +96,7 @@ pub struct RootedRefCellRef<'a, T> {
     guard: &'a RootedRefCell<T>,
 }
 
-impl<'a, T> std::ops::Deref for RootedRefCellRef<'a, T> {
+impl<T> std::ops::Deref for RootedRefCellRef<'_, T> {
     type Target = T;
 
     #[inline]
@@ -105,7 +105,7 @@ impl<'a, T> std::ops::Deref for RootedRefCellRef<'a, T> {
     }
 }
 
-impl<'a, T> Drop for RootedRefCellRef<'a, T> {
+impl<T> Drop for RootedRefCellRef<'_, T> {
     #[inline]
     fn drop(&mut self) {
         self.guard
@@ -118,7 +118,7 @@ pub struct RootedRefCellRefMut<'a, T> {
     guard: &'a RootedRefCell<T>,
 }
 
-impl<'a, T> std::ops::Deref for RootedRefCellRefMut<'a, T> {
+impl<T> std::ops::Deref for RootedRefCellRefMut<'_, T> {
     type Target = T;
 
     #[inline]
@@ -127,14 +127,14 @@ impl<'a, T> std::ops::Deref for RootedRefCellRefMut<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for RootedRefCellRefMut<'a, T> {
+impl<T> std::ops::DerefMut for RootedRefCellRefMut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.guard.val.get().as_mut().unwrap() }
     }
 }
 
-impl<'a, T> Drop for RootedRefCellRefMut<'a, T> {
+impl<T> Drop for RootedRefCellRefMut<'_, T> {
     #[inline]
     fn drop(&mut self) {
         self.guard.writer.set(false);

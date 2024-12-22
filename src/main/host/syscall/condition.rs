@@ -17,7 +17,7 @@ pub struct SyscallConditionRef<'a> {
 }
 
 // do not define any mutable methods for this type
-impl<'a> SyscallConditionRef<'a> {
+impl SyscallConditionRef<'_> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
     ///
@@ -55,7 +55,7 @@ pub struct SyscallConditionRefMut<'a> {
 }
 
 // any immutable methods should be implemented on SyscallConditionRef instead
-impl<'a> SyscallConditionRefMut<'a> {
+impl SyscallConditionRefMut<'_> {
     /// Borrows from a C pointer. i.e. doesn't increase the ref count, nor decrease the ref count
     /// when dropped.
     ///
