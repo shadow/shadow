@@ -73,7 +73,8 @@ impl DnsBuilder {
         name: String,
     ) -> Result<(), RegistrationError> {
         // Make sure we don't register reserved addresses or names.
-        if addr.is_loopback() || addr.is_unspecified() {
+        if addr.is_loopback() || addr.is_unspecified() || addr.is_broadcast() || addr.is_multicast()
+        {
             return Err(RegistrationError::InvalidAddr);
         } else if name.eq_ignore_ascii_case("localhost") {
             return Err(RegistrationError::InvalidName);
@@ -187,6 +188,19 @@ mod tests {
 
         assert!(builder.register(id_a, addr_a, name_a.clone()).is_ok());
 
+        assert_eq!(
+            builder.register(id_b, Ipv4Addr::UNSPECIFIED, name_b.clone()),
+            Err(RegistrationError::InvalidAddr)
+        );
+        assert_eq!(
+            builder.register(id_b, Ipv4Addr::BROADCAST, name_b.clone()),
+            Err(RegistrationError::InvalidAddr)
+        );
+        assert_eq!(
+            // Multicast addresses not allowed.
+            builder.register(id_b, Ipv4Addr::new(224, 0, 0, 1), name_b.clone()),
+            Err(RegistrationError::InvalidAddr)
+        );
         assert_eq!(
             builder.register(id_b, Ipv4Addr::LOCALHOST, name_b.clone()),
             Err(RegistrationError::InvalidAddr)
