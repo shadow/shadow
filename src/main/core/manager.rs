@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
@@ -18,7 +18,6 @@ use scheduler::{HostIter, Scheduler};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::util::SyncSendPointer;
 use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -32,6 +31,7 @@ use crate::core::sim_stats;
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::host::{Host, HostParameters};
+use crate::network::dns::DnsBuilder;
 use crate::network::graph::{IpAssignment, RoutingInfo};
 use crate::utility;
 use crate::utility::childpid_watcher::ChildPidWatcher;
@@ -252,8 +252,7 @@ impl<'a> Manager<'a> {
         };
 
         // Set up the global DNS before building the hosts
-        let dns = unsafe { c::dns_new() };
-        assert!(!dns.is_null());
+        let mut dns_builder = DnsBuilder::new();
 
         // Assign the host id only once to guarantee it stays associated with its host.
         let host_init: Vec<(&HostInfo, HostId)> = manager_config
@@ -271,12 +270,13 @@ impl<'a> Manager<'a> {
             let name = info.name.clone();
 
             // Register in the global DNS.
-            {
-                let chostname = CString::new(&*name).unwrap();
-                let caddr = u32::from(addr).to_be();
-                unsafe { c::dns_register(dns, *id, chostname.as_ptr(), caddr) };
+            if let Err(e) = dns_builder.register(*id, addr, name) {
+                bail!(e);
             }
         }
+
+        // Convert to a global read-only DNS struct.
+        let dns = dns_builder.into_dns()?;
 
         // Now build the hosts using the assigned host ids.
         // note: there are several return points before we add these hosts to the scheduler and we
@@ -328,7 +328,7 @@ impl<'a> Manager<'a> {
                 routing_info: manager_config.routing_info,
                 host_bandwidths: manager_config.host_bandwidths,
                 // safe since the DNS type has an internal mutex
-                dns: unsafe { SyncSendPointer::new(dns) },
+                dns,
                 num_plugin_errors: AtomicU32::new(0),
                 // allow the status logger's state to be updated from anywhere
                 status_logger_state: status_logger_state.map(Arc::clone),
