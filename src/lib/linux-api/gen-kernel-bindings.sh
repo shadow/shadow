@@ -10,7 +10,7 @@
 # results. While the kernel ABI is stable, there are source-level changes across
 # versions that can change the generated bindings.
 
-set -euo pipefail
+set -xeuo pipefail
 
 # Generally it makes sense to use the most recent stable version of the kernel,
 # since the ABI is stable. i.e. managed programs compiled against an older
@@ -36,23 +36,65 @@ git -C "$LINUX_SRC_DIR" checkout "$LINUX_TAG"
 # https://www.kernel.org/doc/html/latest/kbuild/headers_install.html
 make -C "$LINUX_SRC_DIR" headers_install ARCH="$ARCH" INSTALL_HDR_PATH="$LINUX_INSTALL_DIR"
 
+# Helper for generating a rust wrapper file from C header file(s) using
+# bindgen.
+do_bindgen() {
+  local input_hdr_file="$1"; shift
+  local output_basename="$1"; shift
+
+  local bindgen_flags
+  bindgen_flags=()
+
+  # Use core instead of std, for no_std compatibility.
+  bindgen_flags+=("--use-core")
+
+  # rustdoc tries to interpret some of the comments from the C code as formatted
+  # doc comments and thinks that some of the docs are rust code blocks, which
+  # fail to compile when performing 'cargo test'.
+  # See: https://github.com/rust-lang/rust-bindgen/issues/1313
+  bindgen_flags+=("--no-doc-comments")
+
+  # We seem to also need this to prevent using ctypes from std.
+  bindgen_flags+=("--ctypes-prefix=::core::ffi")
+
+  # Metadata about how we're generating the file
+  bindgen_flags+=("--raw-line=/* Build script: $0 */")
+  bindgen_flags+=("--raw-line=/* Kernel tag: $LINUX_TAG */")
+
+  # Derive Eq and PartialEq when possible
+  bindgen_flags+=("--with-derive-eq" "--with-derive-partialeq")
+
+  # Create a Debug impl if it can't be derived
+  bindgen_flags+=("--impl-debug")
+
+  # Output
+  bindgen_flags+=("-o" "$BUILDDIR/$output_basename")
+
+  # Add caller's additional flags
+  for value in "$@"; do
+    bindgen_flags+=("$value")
+  done
+
+  # --- Begin positional params ---
+
+  # Input (positional)
+  bindgen_flags+=("$input_hdr_file")
+
+  # Following flags are passed to clang
+  bindgen_flags+=("--")
+
+  # Override the system's linux headers (if any) with our own.
+  bindgen_flags+=("-I" "$LINUX_INSTALL_DIR/include")
+
+  bindgen "${bindgen_flags[@]}"
+  ./rename.py < "$BUILDDIR/$output_basename" > src/"$output_basename"
+  rustfmt src/"$output_basename"
+}
+
+# The first invocation is for bindings-wrapper.h, which includes most
+# of the Linux headers we want to handle.
+
 bindgen_flags=()
-
-# Use core instead of std, for no_std compatibility.
-bindgen_flags+=("--use-core")
-
-# rustdoc tries to interpret some of the comments from the C code as formatted
-# doc comments and thinks that some of the docs are rust code blocks, which
-# fail to compile when performing 'cargo test'.
-# See: https://github.com/rust-lang/rust-bindgen/issues/1313
-bindgen_flags+=("--no-doc-comments")
-
-# We seem to also need this to prevent using ctypes from std.
-bindgen_flags+=("--ctypes-prefix=::core::ffi")
-
-# Metadata about how we're generating the file
-bindgen_flags+=("--raw-line=/* Build script: $0 */")
-bindgen_flags+=("--raw-line=/* Kernel tag: $LINUX_TAG */")
 
 # Allow variables by default. We end up pulling in most of them anyway,
 # and pulling in some extra ones shouldn't hurt anything.
@@ -128,26 +170,13 @@ bindgen_flags+=("--allowlist-type=stat")
 # non-exposed socket types
 bindgen_flags+=("--allowlist-type=sock_shutdown_cmd")
 
-# Output
-bindgen_flags+=("-o" "$BUILDDIR/bindings.rs")
+do_bindgen ./bindings-wrapper.h bindings.rs "${bindgen_flags[@]}"
 
-# Derive Eq and PartialEq when possible
-bindgen_flags+=("--with-derive-eq" "--with-derive-partialeq")
+# We use a separate invocation and wrapper for `linux/if.h`, since it includes some
+# system header files, which are incompatible with other Linux header files.
+# See https://github.com/shadow/shadow/issues/3475
 
-# Create a Debug impl if it can't be derived
-bindgen_flags+=("--impl-debug")
+bindgen_flags=()
+bindgen_flags+=("--allowlist-type=if.*")
 
-# --- Begin positional params ---
-
-# Input (positional)
-bindgen_flags+=("./bindings-wrapper.h")
-
-# Following flags are passed to clang
-bindgen_flags+=("--")
-
-# Override the system's linux headers (if any) with our own.
-bindgen_flags+=("-I" "$LINUX_INSTALL_DIR/include")
-
-bindgen "${bindgen_flags[@]}"
-./rename.py < "$BUILDDIR/bindings.rs" > src/bindings.rs
-rustfmt src/bindings.rs
+do_bindgen ./bindings-wrapper-if.h bindings-if.rs "${bindgen_flags[@]}"
