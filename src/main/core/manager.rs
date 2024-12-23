@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
 use log::warn;
 use rand::seq::SliceRandom;
@@ -263,16 +263,20 @@ impl<'a> Manager<'a> {
             .collect();
 
         for (info, id) in &host_init {
-            // Set up the host identity.
+            // Extract the host address.
             let std::net::IpAddr::V4(addr) = info.ip_addr.unwrap() else {
                 unreachable!("IPv6 not supported");
             };
-            let name = info.name.clone();
 
             // Register in the global DNS.
-            if let Err(e) = dns_builder.register(*id, addr, name) {
-                bail!(e);
-            }
+            dns_builder
+                .register(*id, addr, info.name.clone())
+                .with_context(|| {
+                    format!(
+                        "Failed to register a host with id='{:?}', addr='{}', and name='{}' in the DNS module",
+                        *id, addr, info.name
+                    )
+                })?;
         }
 
         // Convert to a global read-only DNS struct.
