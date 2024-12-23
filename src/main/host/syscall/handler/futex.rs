@@ -3,6 +3,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow as c;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
@@ -14,7 +15,7 @@ impl SyscallHandler {
         /* val */ u32,
         /* utime */ *const std::ffi::c_void,
         /* uaddr2 */ *const u32,
-        /* val3 */ u32,
+        /* val3 */ SyscallNonDeterministicArg<u32>,
     );
     pub fn futex(
         ctx: &mut SyscallContext,

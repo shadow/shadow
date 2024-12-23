@@ -7,6 +7,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow as c;
 use crate::host::descriptor::{CompatFile, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::SyscallResult;
 
 impl SyscallHandler {
@@ -15,7 +16,7 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_uint,
         /* cmd */ std::ffi::c_uint,
-        /* arg */ std::ffi::c_ulong,
+        /* arg */ SyscallNonDeterministicArg<std::ffi::c_ulong>,
     );
     pub fn ioctl(
         ctx: &mut SyscallContext,
