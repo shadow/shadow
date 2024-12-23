@@ -81,6 +81,17 @@ impl<'a, T> SyscallVal<'a, T> {
             _phantom: PhantomData,
         }
     }
+
+    /// Cast a syscall argument or return value to another type.
+    pub fn cast<V>(&self) -> SyscallVal<'a, V> {
+        SyscallVal {
+            reg: self.reg,
+            args: self.args,
+            options: self.options,
+            mem: self.mem,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, T> Display for SyscallVal<'a, T>
