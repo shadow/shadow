@@ -33,6 +33,9 @@ to be unique as with any other IP address assignment. (#3414)
 * Added support for `SO_BROADCAST` with `getsockopt` for TCP and UDP,
   which always returns 0 as Shadow doesn't support broadcast sockets.
   (#3471)
+* Removed the `--coverage` option from the setup script. While this is
+  technically a breaking change to the setup script, we don't expect anyone was
+  using this option. (#3478)
 
 PATCH changes (bugfixes):
 

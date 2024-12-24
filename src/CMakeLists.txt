@@ -25,28 +25,9 @@ endforeach()
 # don't build unit tests since they'll have to be rebuilt when we run the 'rust-unit-tests' test anyways
 set(RUST_TARGETS "--lib --bins")
 
-if(SHADOW_COVERAGE STREQUAL ON)
-    # https://github.com/shadow/shadow/issues/1236
-    set(RUSTFLAGS "${RUSTFLAGS} --remap-path-prefix \"=${CMAKE_CURRENT_SOURCE_DIR}/\"")
-
-    ## from https://github.com/mozilla/grcov
-    set(RUSTFLAGS "${RUSTFLAGS} -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code \
-                -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort")
-    set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CARGO_INCREMENTAL=0 RUSTDOCFLAGS=\"-Cpanic=abort\"")
-
-    # Use an explicit target to workaround incompatibility of -Cpanic=abort with
-    # procmacro crates. See
-    # https://github.com/intellij-rust/intellij-rust/issues/5973#issuecomment-684867383
-    #
-    # Avoid using in non-coverage builds in case it inadvertently disables
-    # native CPU features, though we haven't confirmed whether it does or not.
-    set(RUST_TARGET "x86_64-unknown-linux-gnu")
-    set(RUST_TARGET_FLAG "--target=${RUST_TARGET}")
-else()
-    # With no explicit target, cargo will build for the host platform.
-    set(RUST_TARGET "")
-    set(RUST_TARGET_FLAG "")
-endif()
+# With no explicit target, cargo will build for the host platform.
+set(RUST_TARGET "")
+set(RUST_TARGET_FLAG "")
 
 ## build the rust library
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} RUSTFLAGS=\"${RUSTFLAGS}\"")

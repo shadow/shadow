@@ -62,11 +62,6 @@ def main():
         action="store_true", dest="do_debug",
         default=False)
 
-    parser_build.add_argument('--coverage',
-        help="Enable profiling data for code coverage reporting.",
-        action="store_true", dest="do_coverage",
-        default=False)
-
     parser_build.add_argument('--use-perf-timers',
         help="Compile in timers for tracking the run time of various internal operations.",
         action="store_true", dest="do_use_perf_timers",
@@ -204,12 +199,6 @@ def build(args, remaining):
     if args.do_werror: cmake_cmd.extend(["-D", "SHADOW_WERROR=ON"])
     if args.do_extra_test: cmake_cmd.extend(["-D", "SHADOW_EXTRA_TESTS=ON"])
     if args.do_use_perf_timers: cmake_cmd.extend(["-D", "SHADOW_USE_PERF_TIMERS=ON"])
-
-    if args.do_coverage:
-        if not args.do_debug:
-            logging.warning("You usually want to enable --debug for coverage"
-                    + " builds")
-        cmake_cmd.extend(["-D", "SHADOW_COVERAGE=ON"])
 
     # add extra search directories as absolution paths
     make_paths_absolute(args.search_prefix)
