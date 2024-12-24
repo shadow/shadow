@@ -15,7 +15,7 @@ pub enum GmlItem<'a> {
     KeyValue((Cow<'a, str>, Value<'a>)),
 }
 
-impl<'a> GmlItem<'a> {
+impl GmlItem<'_> {
     /// Convert any borrowed references to owned values.
     pub fn upgrade_to_owned(&self) -> GmlItem<'static> {
         match self {
@@ -138,7 +138,7 @@ pub struct Gml<'a> {
     pub other: HashMap<Cow<'a, str>, Value<'a>>,
 }
 
-impl<'a> Gml<'a> {
+impl Gml<'_> {
     /// Convert any borrowed references to owned values.
     pub fn upgrade_to_owned(&self) -> Gml<'static> {
         Gml {

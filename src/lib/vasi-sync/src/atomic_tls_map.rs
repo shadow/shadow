@@ -304,7 +304,7 @@ impl<'a, V> Ref<'a, V> {
     }
 }
 
-impl<'a, V> Deref for Ref<'a, V> {
+impl<V> Deref for Ref<'_, V> {
     type Target = V;
 
     fn deref(&self) -> &Self::Target {
@@ -317,7 +317,7 @@ impl<'a, V> Deref for Ref<'a, V> {
     }
 }
 
-impl<'a, V> Drop for Ref<'a, V> {
+impl<V> Drop for Ref<'_, V> {
     fn drop(&mut self) {
         self.refcount.set(self.refcount.get() - 1)
     }
