@@ -30,26 +30,52 @@ struct Record {
 
 #[derive(Debug, PartialEq)]
 pub enum RegistrationError {
-    InvalidAddr,
-    InvalidName,
-    AddrExists,
-    NameExists,
+    BroadcastAddrInvalid,
+    LoopbackAddrInvalid(Ipv4Addr),
+    MulticastAddrInvalid(Ipv4Addr),
+    UnspecifiedAddrInvalid,
+    NameInvalid(String),
+    AddrExists(Ipv4Addr),
+    NameExists(String),
 }
 
 impl Display for RegistrationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegistrationError::InvalidAddr => write!(f, "address is invalid for registration"),
-            RegistrationError::InvalidName => write!(f, "name is invalid for registration"),
-            RegistrationError::NameExists => {
-                write!(f, "a registration record already exists for name")
+            RegistrationError::BroadcastAddrInvalid => write!(
+                f,
+                "broadcast address '{}' is invalid in DNS",
+                Ipv4Addr::BROADCAST
+            ),
+            RegistrationError::LoopbackAddrInvalid(addr) => {
+                write!(f, "loopback address '{addr}' is invalid in DNS",)
             }
-            RegistrationError::AddrExists => {
-                write!(f, "a registration record already exists for address")
+            RegistrationError::MulticastAddrInvalid(addr) => {
+                write!(f, "multicast address '{addr}' is invalid in DNS")
+            }
+            RegistrationError::UnspecifiedAddrInvalid => write!(
+                f,
+                "unspecified address '{}' is invalid in DNS",
+                Ipv4Addr::UNSPECIFIED
+            ),
+            RegistrationError::NameInvalid(name) => write!(f, "name '{name}' is invalid in DNS"),
+            RegistrationError::NameExists(name) => {
+                write!(
+                    f,
+                    "a DNS registration record already exists for name '{name}'"
+                )
+            }
+            RegistrationError::AddrExists(addr) => {
+                write!(
+                    f,
+                    "a DNS registration record already exists for address '{addr}'"
+                )
             }
         }
     }
 }
+
+impl std::error::Error for RegistrationError {}
 
 #[derive(Debug)]
 pub struct DnsBuilder {
@@ -73,18 +99,24 @@ impl DnsBuilder {
         name: String,
     ) -> Result<(), RegistrationError> {
         // Make sure we don't register reserved addresses or names.
-        if addr.is_loopback() || addr.is_unspecified() {
-            return Err(RegistrationError::InvalidAddr);
+        if addr.is_unspecified() {
+            return Err(RegistrationError::UnspecifiedAddrInvalid);
+        } else if addr.is_loopback() {
+            return Err(RegistrationError::LoopbackAddrInvalid(addr));
+        } else if addr.is_broadcast() {
+            return Err(RegistrationError::BroadcastAddrInvalid);
+        } else if addr.is_multicast() {
+            return Err(RegistrationError::MulticastAddrInvalid(addr));
         } else if name.eq_ignore_ascii_case("localhost") {
-            return Err(RegistrationError::InvalidName);
+            return Err(RegistrationError::NameInvalid(name));
         }
 
         // A single HostId is allowed to register multiple name/addr mappings,
         // but only vacant addresses and names are allowed.
         match self.db.addr_index.entry(addr) {
-            Entry::Occupied(_) => Err(RegistrationError::AddrExists),
+            Entry::Occupied(_) => Err(RegistrationError::AddrExists(addr)),
             Entry::Vacant(addr_entry) => match self.db.name_index.entry(name.clone()) {
-                Entry::Occupied(_) => Err(RegistrationError::NameExists),
+                Entry::Occupied(_) => Err(RegistrationError::NameExists(name)),
                 Entry::Vacant(name_entry) => {
                     let record = Arc::new(Record { id, addr, name });
                     addr_entry.insert(record.clone());
@@ -188,20 +220,37 @@ mod tests {
         assert!(builder.register(id_a, addr_a, name_a.clone()).is_ok());
 
         assert_eq!(
-            builder.register(id_b, Ipv4Addr::LOCALHOST, name_b.clone()),
-            Err(RegistrationError::InvalidAddr)
+            builder.register(id_b, Ipv4Addr::UNSPECIFIED, name_b.clone()),
+            Err(RegistrationError::UnspecifiedAddrInvalid)
         );
         assert_eq!(
-            builder.register(id_b, addr_b, String::from("localhost")),
-            Err(RegistrationError::InvalidName)
+            builder.register(id_b, Ipv4Addr::BROADCAST, name_b.clone()),
+            Err(RegistrationError::BroadcastAddrInvalid)
+        );
+        let multicast_example_addr = Ipv4Addr::new(224, 0, 0, 1);
+        assert_eq!(
+            // Multicast addresses not allowed.
+            builder.register(id_b, multicast_example_addr, name_b.clone()),
+            Err(RegistrationError::MulticastAddrInvalid(
+                multicast_example_addr
+            ))
+        );
+        assert_eq!(
+            builder.register(id_b, Ipv4Addr::LOCALHOST, name_b.clone()),
+            Err(RegistrationError::LoopbackAddrInvalid(Ipv4Addr::LOCALHOST))
+        );
+        let localhost_string = String::from("localhost");
+        assert_eq!(
+            builder.register(id_b, addr_b, localhost_string.clone()),
+            Err(RegistrationError::NameInvalid(localhost_string))
         );
         assert_eq!(
             builder.register(id_b, addr_a, name_b.clone()),
-            Err(RegistrationError::AddrExists)
+            Err(RegistrationError::AddrExists(addr_a))
         );
         assert_eq!(
             builder.register(id_b, addr_b, name_a.clone()),
-            Err(RegistrationError::NameExists)
+            Err(RegistrationError::NameExists(name_a))
         );
 
         assert!(builder.register(id_b, addr_b, name_b.clone()).is_ok());
