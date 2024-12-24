@@ -5,17 +5,7 @@ set -euo pipefail
 # Array of flags to be passed on to setup script
 FLAGS=()
 
-if [ "$BUILDTYPE" = "coverage" ]
-then
-    # Some tests are broken in coverage builds:
-    # https://github.com/shadow/shadow/issues/867
-    # Determinism tests are broken in coverage builds.
-    EXCLUDE="determinism.*|phold-parallel-shadow"
-    # Tests can take substantially longer in coverage builds.
-    FLAGS+=("--timeout" "60")
-else
-    EXCLUDE=""
-fi
+EXCLUDE=""
 
 # Run as many tests in parallel as we have cores.
 FLAGS+=("-j$(nproc)")
