@@ -129,6 +129,7 @@ where
     runner: TaskRunner<'pool, 'scope>,
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
     /// See [`crate::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {
@@ -189,7 +190,7 @@ pub struct HostIter<'a, HostType: Host> {
     this_thread_index: usize,
 }
 
-impl<'a, HostType: Host> HostIter<'a, HostType> {
+impl<HostType: Host> HostIter<'_, HostType> {
     /// See [`crate::HostIter::for_each`].
     pub fn for_each<F>(&mut self, mut f: F)
     where

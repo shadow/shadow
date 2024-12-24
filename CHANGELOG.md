@@ -34,7 +34,7 @@ to be unique as with any other IP address assignment. (#3414)
 PATCH changes (bugfixes):
 
 * Log messages about unrecognized sockopt values are now only logged at level WARN once for each distinct value (and at DEBUG afterwards) (#3353).
-* Fixed rust/clippy errors and warnings for rust 1.82. (#3334, #3354, #3355, #3405, #3406, #3421)
+* Fixed rust/clippy errors and warnings for rust 1.83. (#3334, #3354, #3355, #3405, #3406, #3421, #3467)
 * Fixed a link error for rust 1.82. (#3445)
 * Fixed a shim panic (which causes shadow to hang) when golang's default SIGTERM handler runs in a managed program (and potentially other cases where a signal handler stack is legitimately reused). (#3396)
 * Replaced the experimental option `--log-errors-to-tty` with the (still experimental) option

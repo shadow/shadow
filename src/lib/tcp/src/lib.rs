@@ -642,6 +642,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[non_exhaustive]
 pub struct TcpConfig {
     pub(crate) window_scaling_enabled: bool,
 }

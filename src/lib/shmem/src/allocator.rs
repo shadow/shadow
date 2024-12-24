@@ -135,7 +135,7 @@ where
     phantom: core::marker::PhantomData<&'allocator T>,
 }
 
-impl<'allocator, T> ShMemBlock<'allocator, T>
+impl<T> ShMemBlock<'_, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -149,16 +149,10 @@ where
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
 // immutable references to the underlying data.
-unsafe impl<'allocator, T> Sync for ShMemBlock<'allocator, T> where
-    T: Sync + VirtualAddressSpaceIndependent
-{
-}
-unsafe impl<'allocator, T> Send for ShMemBlock<'allocator, T> where
-    T: Send + Sync + VirtualAddressSpaceIndependent
-{
-}
+unsafe impl<T> Sync for ShMemBlock<'_, T> where T: Sync + VirtualAddressSpaceIndependent {}
+unsafe impl<T> Send for ShMemBlock<'_, T> where T: Send + Sync + VirtualAddressSpaceIndependent {}
 
-impl<'allocator, T> core::ops::Deref for ShMemBlock<'allocator, T>
+impl<T> core::ops::Deref for ShMemBlock<'_, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -170,7 +164,7 @@ where
     }
 }
 
-impl<'allocator, T> core::ops::Drop for ShMemBlock<'allocator, T>
+impl<T> core::ops::Drop for ShMemBlock<'_, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -200,16 +194,10 @@ where
 
 // SAFETY: T is already required to be Sync, and ShMemBlock only exposes
 // immutable references to the underlying data.
-unsafe impl<'deserializer, T> Sync for ShMemBlockAlias<'deserializer, T> where
-    T: Sync + VirtualAddressSpaceIndependent
-{
-}
-unsafe impl<'deserializer, T> Send for ShMemBlockAlias<'deserializer, T> where
-    T: Send + Sync + VirtualAddressSpaceIndependent
-{
-}
+unsafe impl<T> Sync for ShMemBlockAlias<'_, T> where T: Sync + VirtualAddressSpaceIndependent {}
+unsafe impl<T> Send for ShMemBlockAlias<'_, T> where T: Send + Sync + VirtualAddressSpaceIndependent {}
 
-impl<'deserializer, T> core::ops::Deref for ShMemBlockAlias<'deserializer, T>
+impl<T> core::ops::Deref for ShMemBlockAlias<'_, T>
 where
     T: Sync + VirtualAddressSpaceIndependent,
 {
@@ -501,6 +489,9 @@ mod tests {
         let block_addr = &original_block as *const ShMemBlock<T>;
         let data_addr = *original_block as *const T;
 
+        // Use an `Option` to move the `ShMemBlock`. We have no guarantee here that it actually
+        // moves and that the compiler doesn't optimize the move away, so the before/after addresses
+        // are compared below.
         let block = Some(original_block);
 
         // Validate that the block itself actually moved.
@@ -511,6 +502,7 @@ mod tests {
         let new_data_addr = **(block.as_ref().unwrap()) as *const T;
         assert_eq!(data_addr, new_data_addr);
 
+        #[allow(clippy::unnecessary_literal_unwrap)]
         shfree(block.unwrap());
     }
 

@@ -108,6 +108,7 @@ pub struct SchedulerScope<'pool, 'scope, HostType: Host> {
     host_storage: &'static LocalKey<RefCell<Option<HostType>>>,
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'pool, 'scope, HostType: Host> SchedulerScope<'pool, 'scope, HostType> {
     /// See [`crate::SchedulerScope::run`].
     pub fn run(self, f: impl Fn(usize) + Sync + Send + 'scope) {

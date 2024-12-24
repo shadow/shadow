@@ -235,7 +235,7 @@ pub struct Ref<'a, T> {
     _phantom: PhantomData<&'a T>,
 }
 
-impl<'a, T> core::ops::Deref for Ref<'a, T> {
+impl<T> core::ops::Deref for Ref<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

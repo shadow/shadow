@@ -56,7 +56,7 @@ We use [Clippy](https://doc.rust-lang.org/stable/clippy/index.html) to help
 detect errors and non-idiomatic Rust code. You can run `clippy` locally with:
 
 ```bash
-(cd src && cargo clippy)
+(cd src && cargo clippy --all-targets)
 ```
 
 ## Including headers

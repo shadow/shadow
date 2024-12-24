@@ -67,7 +67,7 @@ pub struct KeyIter<'a, V> {
     i: usize,
 }
 
-impl<'a, V> Iterator for KeyIter<'a, V> {
+impl<V> Iterator for KeyIter<'_, V> {
     type Item = Interval;
 
     fn next(&mut self) -> Option<Self::Item> {

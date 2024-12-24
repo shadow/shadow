@@ -749,7 +749,7 @@ mod tests {
             timeval::try_from(SimulationTime::MAX),
             Ok(timeval {
                 tv_sec: SimulationTime::MAX.as_secs().try_into().unwrap(),
-                tv_usec: SimulationTime::MAX.subsec_micros().try_into().unwrap(),
+                tv_usec: SimulationTime::MAX.subsec_micros().into(),
             })
         );
     }
@@ -788,7 +788,7 @@ mod tests {
                 tv,
                 timeval {
                     tv_sec: d.as_secs().try_into().unwrap(),
-                    tv_usec: d.subsec_micros().try_into().unwrap()
+                    tv_usec: d.subsec_micros().into(),
                 }
             );
         }
@@ -984,7 +984,7 @@ mod tests {
                 ts,
                 timespec {
                     tv_sec: d.as_secs().try_into().unwrap(),
-                    tv_nsec: d.subsec_nanos().try_into().unwrap()
+                    tv_nsec: d.subsec_nanos().into(),
                 }
             );
         }
