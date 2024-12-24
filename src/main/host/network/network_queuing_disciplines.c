@@ -9,7 +9,6 @@
 #include <stdbool.h>
 
 #include "main/bindings/c/bindings.h"
-#include "main/host/descriptor/compat_socket.h"
 #include "main/routing/packet.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"

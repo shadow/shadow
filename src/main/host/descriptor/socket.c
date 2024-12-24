@@ -10,7 +10,6 @@
 
 #include "main/core/definitions.h"
 #include "main/core/worker.h"
-#include "main/host/descriptor/compat_socket.h"
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
