@@ -154,9 +154,6 @@ if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
 
-set(RUSTFLAGS "-C force-frame-pointers=y")
-set(CARGO_ENV_VARS "")
-
 if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
     message(STATUS "Perf timers enabled")
     add_definitions(-DUSE_PERF_TIMERS)
