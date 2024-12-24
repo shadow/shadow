@@ -603,7 +603,15 @@ Type: String OR null
 IP address to assign to the host.
 
 This IP address must not conflict with the address of any other host (two hosts
-must not have the same IP address).
+must not have the same IP address). The address must also not be 0.0.0.0, a
+loopback address, a multicast address, or a broadcast address.
+
+If set to null, an address will be chosen for the host automatically. Automatic
+addresses begin at 11.0.0.1, assigned to hosts in alphabetical order according
+to their hostname. Shadow's automatic IP address assignment is meant for hosts
+where their specific IP is unimportant. It's recommended to not rely on
+Shadow's specific IP assignment behaviour, and to specify IP addresses
+explicitly when a fixed IP address is needed.
 
 #### `hosts.<hostname>.network_node_id`
 
