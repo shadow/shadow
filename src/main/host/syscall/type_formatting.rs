@@ -437,6 +437,35 @@ impl<const LEN_INDEX: usize> SyscallDisplay for SyscallVal<'_, SyscallSockAddrAr
     }
 }
 
+/// A wrapper type to indicate that the value is non-deterministic.
+///
+/// For example, the last argument to futex() may be optional depending on the futex operation, so
+/// the value given by the application may have been uninitialized, which Shadow sees as some
+/// arbitrary value.
+pub struct SyscallNonDeterministicArg<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T> SyscallDisplay for SyscallVal<'a, SyscallNonDeterministicArg<T>>
+where
+    SyscallVal<'a, T>: SyscallDisplay,
+{
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        // if the user wants deterministic strace output, then we can't show the value
+        if options == FmtOptions::Deterministic {
+            return write!(f, "<non-deterministic>");
+        }
+
+        // otherwise format as per the inner type
+        self.cast::<T>().fmt(f, options, mem)
+    }
+}
+
 impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
     fn fmt(
         &self,

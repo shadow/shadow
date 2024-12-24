@@ -5,6 +5,7 @@ use log::debug;
 use crate::cshadow;
 use crate::host::descriptor::{CompatFile, File, FileStatus};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::SyscallError;
 
 impl SyscallHandler {
@@ -13,7 +14,7 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_long,
         /* fd */ std::ffi::c_uint,
         /* cmd */ std::ffi::c_uint,
-        /* arg */ std::ffi::c_ulong,
+        /* arg */ SyscallNonDeterministicArg<std::ffi::c_ulong>,
     );
     pub fn fcntl(
         ctx: &mut SyscallContext,

@@ -43,6 +43,7 @@ PATCH changes (bugfixes):
 reports errors in a different format on `stderr` to make the duplication easier
 to sort out in the case that `stdout` and `stderr` are merged. (#3428)
 * Sending a packet to an unknown IP address no longer causes Shadow to panic. (#3411)
+* Improved the "deterministic" strace logging mode by hiding some non-deterministic syscall arguments. (#3473)
 
 Full changelog since v3.2.0:
 
