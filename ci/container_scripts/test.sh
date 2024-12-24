@@ -5,8 +5,6 @@ set -euo pipefail
 # Array of flags to be passed on to setup script
 FLAGS=()
 
-EXCLUDE=""
-
 # Run as many tests in parallel as we have cores.
 FLAGS+=("-j$(nproc)")
 
@@ -16,9 +14,6 @@ FLAGS+=("--extra")
 
 # Following flags passed through to ctest
 FLAGS+=("--")
-
-# We exclude some tests in some configurations.
-FLAGS+=("--exclude-regex" "$EXCLUDE")
 
 # * Exclude tgen and tor tests as we test them in a different workflow.
 # * Exclude examples as we don't have all the required dependencies.
