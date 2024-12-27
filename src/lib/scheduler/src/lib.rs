@@ -166,6 +166,8 @@ pub enum SchedulerScope<'sched, 'pool, 'scope, HostType: Host> {
     ThreadPerCore(thread_per_core::SchedulerScope<'sched, 'pool, 'scope, HostType>),
 }
 
+// there are multiple named lifetimes, so let's just be explicit about them rather than hide them
+#[allow(clippy::needless_lifetimes)]
 impl<'sched, 'pool, 'scope, HostType: Host> SchedulerScope<'sched, 'pool, 'scope, HostType> {
     /// Run the closure on all threads. The closure is given an index of the currently running
     /// thread.
@@ -235,7 +237,7 @@ pub enum HostIter<'a, 'b, HostType: Host> {
     ThreadPerCore(&'a mut thread_per_core::HostIter<'b, HostType>),
 }
 
-impl<'a, 'b, HostType: Host> HostIter<'a, 'b, HostType> {
+impl<HostType: Host> HostIter<'_, '_, HostType> {
     /// For each [`Host`], calls `f` with the host. The `Host` must be returned by the closure. The
     /// ownership of the `Host` is transferred in and out of the closure rather than using a mutable
     /// reference since Shadow needs to put the host in a global with `'static` lifetime (the

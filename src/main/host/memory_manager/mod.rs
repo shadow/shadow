@@ -43,7 +43,7 @@ pub struct MemoryReaderCursor<'a> {
     offset: usize,
 }
 
-impl<'a> std::io::Read for MemoryReaderCursor<'a> {
+impl std::io::Read for MemoryReaderCursor<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let ptr = self.ptr.slice(self.offset..);
         let toread = std::cmp::min(buf.len(), ptr.len());
@@ -74,7 +74,7 @@ fn seek_helper(offset: &mut usize, len: usize, pos: std::io::SeekFrom) -> std::i
     Ok(new_offset as u64)
 }
 
-impl<'a> std::io::Seek for MemoryReaderCursor<'a> {
+impl std::io::Seek for MemoryReaderCursor<'_> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         seek_helper(&mut self.offset, self.ptr.len(), pos)
     }
@@ -88,7 +88,7 @@ pub struct MemoryWriterCursor<'a> {
     offset: usize,
 }
 
-impl<'a> std::io::Write for MemoryWriterCursor<'a> {
+impl std::io::Write for MemoryWriterCursor<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let ptr = self.ptr.slice(self.offset..);
         let towrite = std::cmp::min(buf.len(), ptr.len());
@@ -106,7 +106,7 @@ impl<'a> std::io::Write for MemoryWriterCursor<'a> {
     }
 }
 
-impl<'a> std::io::Seek for MemoryWriterCursor<'a> {
+impl std::io::Seek for MemoryWriterCursor<'_> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         seek_helper(&mut self.offset, self.ptr.len(), pos)
     }
@@ -140,7 +140,7 @@ impl<'a, T: Debug + Pod> ProcessMemoryRef<'a, T> {
     }
 }
 
-impl<'a> ProcessMemoryRef<'a, u8> {
+impl ProcessMemoryRef<'_, u8> {
     /// Get a `cstr` from the reference. Fails with `ENAMETOOLONG` if there is no
     /// NULL byte.
     pub fn get_cstr(&self) -> Result<&std::ffi::CStr, Errno> {
@@ -148,7 +148,7 @@ impl<'a> ProcessMemoryRef<'a, u8> {
     }
 }
 
-impl<'a, T> Deref for ProcessMemoryRef<'a, T>
+impl<T> Deref for ProcessMemoryRef<'_, T>
 where
     T: Debug + Pod,
 {
@@ -237,14 +237,14 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
     }
 }
 
-impl<'a, T: Debug + Pod> Drop for ProcessMemoryRefMut<'a, T> {
+impl<T: Debug + Pod> Drop for ProcessMemoryRefMut<'_, T> {
     fn drop(&mut self) {
         // Dropping without flushing is a bug.
         assert!(!self.dirty);
     }
 }
 
-impl<'a, T> Deref for ProcessMemoryRefMut<'a, T>
+impl<T> Deref for ProcessMemoryRefMut<'_, T>
 where
     T: Debug + Pod,
 {
@@ -258,7 +258,7 @@ where
     }
 }
 
-impl<'a, T> DerefMut for ProcessMemoryRefMut<'a, T>
+impl<T> DerefMut for ProcessMemoryRefMut<'_, T>
 where
     T: Debug + Pod,
 {

@@ -717,7 +717,7 @@ impl<'de> serde::Deserialize<'de> for HostName {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct HostNameVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for HostNameVisitor {
+        impl serde::de::Visitor<'_> for HostNameVisitor {
             type Value = HostName;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -811,7 +811,7 @@ impl<'de> serde::Deserialize<'de> for EnvName {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct EnvNameVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for EnvNameVisitor {
+        impl serde::de::Visitor<'_> for EnvNameVisitor {
             type Value = EnvName;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1027,7 +1027,7 @@ impl<'de> serde::Deserialize<'de> for Signal {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct SignalVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for SignalVisitor {
+        impl serde::de::Visitor<'_> for SignalVisitor {
             type Value = Signal;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

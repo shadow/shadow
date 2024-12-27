@@ -460,7 +460,7 @@ enum TlsOneThreadBackingStoreRef<'tls> {
     Mapped(atomic_tls_map::Ref<'tls, MmapBox<TlsOneThreadStorage>>),
 }
 
-impl<'tls> Deref for TlsOneThreadBackingStoreRef<'tls> {
+impl Deref for TlsOneThreadBackingStoreRef<'_> {
     type Target = TlsOneThreadStorage;
 
     fn deref(&self) -> &Self::Target {
@@ -541,7 +541,7 @@ impl<'tls> OffsetInitializer<'tls> {
     }
 }
 
-impl<'tls> lazy_lock::Producer<usize> for OffsetInitializer<'tls> {
+impl lazy_lock::Producer<usize> for OffsetInitializer<'_> {
     // Finds and assigns the next free and suitably aligned offset within
     // thread-local-storage for a value of type `T`, initialized with function
     // `F`.
@@ -575,7 +575,7 @@ where
 // SAFETY: Still `Sync` even if T is `!Sync`, since each thread gets its own
 // instance of the value. `F` must still be `Sync`, though, since that *is*
 // shared across threads.
-unsafe impl<'tls, T, F> Sync for ShimTlsVar<'tls, T, F> where F: Sync + Fn() -> T {}
+unsafe impl<T, F> Sync for ShimTlsVar<'_, T, F> where F: Sync + Fn() -> T {}
 
 impl<'tls, T, F> ShimTlsVar<'tls, T, F>
 where
@@ -665,6 +665,8 @@ impl<'tls, 'var, T, F: Fn() -> T> TlsVarRef<'tls, 'var, T, F> {
     }
 }
 
+// there are multiple named lifetimes, so let's just be explicit about them rather than hide them
+#[allow(clippy::needless_lifetimes)]
 impl<'tls, 'var, T, F: Fn() -> T> Deref for TlsVarRef<'tls, 'var, T, F> {
     type Target = T;
 

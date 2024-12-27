@@ -65,7 +65,7 @@ where
         })
     }
 }
-impl<'a, Inner, Outer> std::ops::Deref for NestedRef<'a, Inner, Outer>
+impl<Inner, Outer> std::ops::Deref for NestedRef<'_, Inner, Outer>
 where
     Inner: 'static,
 {
@@ -116,7 +116,7 @@ where
         })
     }
 }
-impl<'a, Inner, Outer> std::ops::Deref for NestedRefMut<'a, Inner, Outer>
+impl<Inner, Outer> std::ops::Deref for NestedRefMut<'_, Inner, Outer>
 where
     Inner: 'static,
 {
@@ -126,7 +126,7 @@ where
         self.inner.deref()
     }
 }
-impl<'a, Inner, Outer> std::ops::DerefMut for NestedRefMut<'a, Inner, Outer>
+impl<Inner, Outer> std::ops::DerefMut for NestedRefMut<'_, Inner, Outer>
 where
     Inner: 'static,
 {

@@ -171,7 +171,7 @@ struct WorkerScope<'scope> {
     _phantom: PhantomData<Box<dyn TaskFn + 'scope>>,
 }
 
-impl<'a> std::ops::Drop for WorkerScope<'a> {
+impl std::ops::Drop for WorkerScope<'_> {
     fn drop(&mut self) {
         // if the task was set (if `TaskRunner::run` was called)
         if self.pool.shared_state.task.borrow().is_some() {
@@ -203,7 +203,7 @@ pub struct TaskRunner<'a, 'scope> {
     scope: &'a mut WorkerScope<'scope>,
 }
 
-impl<'a, 'scope> TaskRunner<'a, 'scope> {
+impl<'scope> TaskRunner<'_, 'scope> {
     /// Run a task on the pool's threads.
     pub fn run(self, f: impl TaskFn + 'scope) {
         let f = Box::new(f);
@@ -247,7 +247,7 @@ fn work_loop(
     // this will poison the workpool when it's dropped
     struct PoisonWhenDropped<'a>(&'a SharedState);
 
-    impl<'a> std::ops::Drop for PoisonWhenDropped<'a> {
+    impl std::ops::Drop for PoisonWhenDropped<'_> {
         fn drop(&mut self) {
             // if we panicked, then inform other threads that we panicked and allow them to exit
             // gracefully
