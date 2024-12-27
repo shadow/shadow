@@ -130,6 +130,7 @@ mod tests {
     fn touch(path: impl AsRef<Path>) -> io::Result<()> {
         OpenOptions::new()
             .create(true)
+            .truncate(false)
             .write(true)
             .open(path.as_ref())?;
         Ok(())

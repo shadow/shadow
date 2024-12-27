@@ -441,7 +441,7 @@ fn test_incoming_payload_after_close() {
     // try to recv on the socket, but there should be no data and we should receive an EOF
     // (typically on linux we'd receive an ECONNRESET for the first read, but we don't use the error
     // state in our test socket wrapper)
-    let mut recv_buf = vec![0; 5];
+    let mut recv_buf = [0; 5];
     assert_eq!(TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 5), Ok(0));
 }
 
@@ -499,6 +499,6 @@ fn test_incoming_payload_after_shutdown_read() {
     // try to recv on the socket, but there should be no data and we should receive an EOF
     // (typically on linux we'd receive an ECONNRESET for the first read, but we don't use the error
     // state in our test socket wrapper)
-    let mut recv_buf = vec![0; 5];
+    let mut recv_buf = [0; 5];
     assert_eq!(TcpSocket::recvmsg(&tcp, &mut recv_buf[..], 5), Ok(0));
 }
