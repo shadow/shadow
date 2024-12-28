@@ -177,7 +177,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // branch on memory addresses.
     match disable_aslr() {
         Ok(()) => log::debug!("ASLR disabled for processes forked from this parent process"),
-        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {:?}", e),
+        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {e:#}"),
     };
 
     // check sidechannel mitigations
@@ -425,8 +425,9 @@ fn raise_rlimit(resource: resource::Resource) -> anyhow::Result<()> {
 }
 
 fn disable_aslr() -> anyhow::Result<()> {
-    let pers = personality::get()?;
-    personality::set(pers | personality::Persona::ADDR_NO_RANDOMIZE)?;
+    let pers = personality::get().context("Could not get personality")?;
+    personality::set(pers | personality::Persona::ADDR_NO_RANDOMIZE)
+        .context("Could not set personality")?;
     Ok(())
 }
 
