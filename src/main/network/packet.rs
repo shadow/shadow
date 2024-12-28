@@ -332,6 +332,10 @@ impl PacketRc {
         unsafe { c::packet_getPriority(self.c_ptr.ptr()) }
     }
 
+    pub fn protocol(&self) -> c::ProtocolType {
+        unsafe { c::packet_getProtocol(self.c_ptr.ptr()) }
+    }
+
     /// Transfers ownership of the given c_ptr reference into a new rust packet
     /// object.
     pub fn from_raw(c_ptr: *mut c::Packet) -> Self {
