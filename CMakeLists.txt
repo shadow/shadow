@@ -102,7 +102,6 @@ message(STATUS "SHADOW_VERSION_PATCH=${SHADOW_VERSION_PATCH}")
 ## setup shadow options
 option(SHADOW_TEST "build tests (default: OFF)" OFF)
 option(SHADOW_WERROR "turn compiler warnings into errors. (default: OFF)" OFF)
-option(SHADOW_COVERAGE "enable code-coverage instrumentation. (default: OFF)" OFF)
 option(SHADOW_USE_PERF_TIMERS "compile in timers for tracking the run time of various internal operations. (default: OFF)" OFF)
 
 ## display selected user options
@@ -111,7 +110,6 @@ MESSAGE(STATUS "----------------------------------------------------------------
 MESSAGE(STATUS "Current settings: (change with '$ cmake -D<OPTION>=<ON|OFF>')")
 MESSAGE(STATUS "SHADOW_TEST=${SHADOW_TEST}")
 MESSAGE(STATUS "SHADOW_WERROR=${SHADOW_WERROR}")
-MESSAGE(STATUS "SHADOW_COVERAGE=${SHADOW_COVERAGE}")
 MESSAGE(STATUS "SHADOW_EXTRA_TESTS=${SHADOW_EXTRA_TESTS}")
 MESSAGE(STATUS "SHADOW_USE_PERF_TIMERS=${SHADOW_USE_PERF_TIMERS}")
 MESSAGE(STATUS "-------------------------------------------------------------------------------")
@@ -155,15 +153,6 @@ add_compile_options(
 if(SHADOW_WERROR STREQUAL ON)
     add_compile_options(-Werror)
 endif(SHADOW_WERROR STREQUAL ON)
-
-if(SHADOW_COVERAGE STREQUAL ON)
-    add_compile_options(--coverage)
-    add_definitions(-DSHADOW_COVERAGE)
-    add_ldflags(--coverage)
-else()
-    set(RUSTFLAGS "-C force-frame-pointers=y")
-    set(CARGO_ENV_VARS "")
-endif(SHADOW_COVERAGE STREQUAL ON)
 
 if(SHADOW_USE_PERF_TIMERS STREQUAL ON)
     message(STATUS "Perf timers enabled")

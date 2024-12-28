@@ -25,9 +25,6 @@ case "$BUILDTYPE" in
     "debug")
         OPTIONS=(--debug)
         ;;
-    "coverage")
-        OPTIONS=(--debug --coverage)
-        ;;
     *)
         echo "Unknown BUILDTYPE $BUILDTYPE"
         exit 1

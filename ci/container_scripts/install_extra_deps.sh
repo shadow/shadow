@@ -61,13 +61,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-mod
 # shellcheck disable=1091
 source "$HOME/.cargo/env"
 
-# Pin the Rust toolchain to either our pinned nightly or stable version.
-if [ "${BUILDTYPE:-}" = coverage ]
-then
-  ln -s ci/rust-toolchain-nightly.toml rust-toolchain.toml
-else
-  ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
-fi
+# Pin the Rust toolchain to our pinned stable version.
+ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
 
 # This forces installation of the toolchain required in Shadow's
 # "rust-toolchain.toml" (if this script is run from the shadow directory). When
