@@ -262,7 +262,7 @@ impl Host {
             capture_size_bytes: x.capture_size.try_into().unwrap(),
         });
 
-        let net_ns = NetworkNamespace::new(params.id, public_ip, pcap_options, params.qdisc);
+        let net_ns = NetworkNamespace::new(public_ip, pcap_options, params.qdisc);
 
         // Packets that are not for localhost or our public ip go to the router.
         // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
