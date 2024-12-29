@@ -573,8 +573,6 @@ fn associate_socket(
 mod export {
     use super::*;
 
-    use shadow_shim_helper_rs::emulated_time::CEmulatedTime;
-
     /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
     /// calling this function.
     #[no_mangle]
@@ -587,117 +585,6 @@ mod export {
     #[no_mangle]
     pub extern "C-unwind" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
         inetsocket_drop(socket.cast_const().cast())
-    }
-
-    /// Increment the ref count of the `InetSocket` object. The returned pointer will not be the
-    /// same as the given pointer (they are distinct references), and they both must be dropped
-    /// with `inetsocket_drop` separately later.
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_cloneRef(socket: *const InetSocket) -> *const InetSocket {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        Box::into_raw(Box::new(socket.clone()))
-    }
-
-    /// Compare two `InetSocket` objects by the addresses of the socket objects they point to. The
-    /// pointers must be valid (and non-null).
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_eq(a: *const InetSocket, b: *const InetSocket) -> bool {
-        let a = unsafe { a.as_ref() }.unwrap();
-        let b = unsafe { b.as_ref() }.unwrap();
-
-        a == b
-    }
-
-    /// Helper for GLib functions that take a `GCompareFunc`. See [`inetsocket_eq`].
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_eqVoid(
-        a: *const libc::c_void,
-        b: *const libc::c_void,
-    ) -> bool {
-        inetsocket_eq(a.cast(), b.cast())
-    }
-
-    /// Generate a hash identifying the `InetSocket`. The hash is generated from the socket's
-    /// address.
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_hash(socket: *const InetSocket) -> u64 {
-        use std::hash::{Hash, Hasher};
-
-        let socket = unsafe { socket.as_ref() }.unwrap();
-
-        let mut s = std::hash::DefaultHasher::new();
-        socket.hash(&mut s);
-        s.finish()
-    }
-
-    /// Helper for GLib functions that take a `GHashFunc`. See [`inetsocket_hash`].
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_hashVoid(socket: *const libc::c_void) -> libc::c_uint {
-        // disregard some bytes of the hash
-        inetsocket_hash(socket.cast()) as libc::c_uint
-    }
-
-    /// Returns a handle uniquely identifying the socket. There can be many `InetSocket`s that point
-    /// to a single socket object (an `InetSocket` is just an enum that contains an `Arc` of the
-    /// socket object), so the address of an `InetSocket` *does not* uniquely identify a socket.
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_getCanonicalHandle(socket: *const InetSocket) -> usize {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        socket.canonical_handle()
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_pushInPacket(
-        socket: *const InetSocket,
-        packet: *mut c::Packet,
-        recv_time: CEmulatedTime,
-    ) {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        let recv_time = EmulatedTime::from_c_emutime(recv_time).unwrap();
-
-        // we don't own the reference to the packet, so we need our own reference
-        unsafe { c::packet_ref(packet) };
-        let packet = PacketRc::from_raw(packet);
-
-        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
-            socket
-                .borrow_mut()
-                .push_in_packet(packet, cb_queue, recv_time);
-        });
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_pullOutPacket(socket: *const InetSocket) -> *mut c::Packet {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-
-        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
-            socket
-                .borrow_mut()
-                .pull_out_packet(cb_queue)
-                .map(|p| p.into_inner())
-                .unwrap_or(std::ptr::null_mut())
-        })
-    }
-
-    /// Will return non-zero if socket doesn't have data to send (there is no priority).
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_peekNextPacketPriority(
-        socket: *const InetSocket,
-        priority_out: *mut u64,
-    ) -> libc::c_int {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        let priority_out = unsafe { priority_out.as_mut() }.unwrap();
-        if let Some(priority) = socket.borrow().peek_next_packet_priority() {
-            *priority_out = priority;
-            return 0;
-        }
-        -1
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn inetsocket_hasDataToSend(socket: *const InetSocket) -> bool {
-        let socket = unsafe { socket.as_ref() }.unwrap();
-        socket.borrow().has_data_to_send()
     }
 
     /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
