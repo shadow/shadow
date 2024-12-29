@@ -35,6 +35,8 @@ const CANARY: CanaryBuf = [];
 
 trait Canary {
     fn canary_init(&mut self);
+
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     fn canary_check(&self) -> bool;
 
     #[cfg(debug_assertions)]
