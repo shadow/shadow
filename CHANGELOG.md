@@ -36,6 +36,7 @@ to be unique as with any other IP address assignment. (#3414)
 * Removed the `--coverage` option from the setup script. While this is
   technically a breaking change to the setup script, we don't expect anyone was
   using this option. (#3478)
+* Converted the network interface and queuing disciplines to Rust and removed the legacy C implementations. (#3480)
 
 PATCH changes (bugfixes):
 
