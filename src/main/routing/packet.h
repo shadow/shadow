@@ -40,11 +40,7 @@ struct _PacketTCPHeader {
     CSimulationTime timestampEcho;
 };
 
-const gchar* protocol_toString(ProtocolType type);
-
 Packet* packet_new(const Host* host);
-void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr payload,
-                       gsize payloadLength, uint64_t packetPriority);
 void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
                                         gsize payloadLength, const MemoryManager* mem,
                                         uint64_t packetPriority);
@@ -59,7 +55,6 @@ void packet_setMock(Packet* packet);
 
 void packet_ref(Packet* packet);
 void packet_unref(Packet* packet);
-static inline void packet_unrefTaskFreeFunc(gpointer packet) { packet_unref(packet); }
 
 void packet_setPriority(Packet *packet, uint64_t value);
 uint64_t packet_getPriority(const Packet* packet);
@@ -94,8 +89,6 @@ in_port_t packet_getSourcePort(const Packet* packet);
 
 ProtocolType packet_getProtocol(const Packet* packet);
 
-gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
-                          UntypedForeignPtr buffer, gsize bufferLength);
 gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
                                            UntypedForeignPtr buffer, gsize bufferLength,
                                            MemoryManager* mem);
@@ -106,8 +99,5 @@ PacketTCPHeader* packet_getTCPHeader(const Packet* packet);
 gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);
-PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet);
-
-gchar* packet_toString(Packet* packet);
 
 #endif /* SHD_PACKET_H_ */

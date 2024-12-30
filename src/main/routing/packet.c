@@ -83,15 +83,6 @@ struct _Packet {
     MAGIC_DECLARE;
 };
 
-const gchar* protocol_toString(ProtocolType type) {
-    switch (type) {
-        case PUDP: return "UDP";
-        case PTCP: return "TCP";
-        case PMOCK: return "MOCK";
-        default: return "UNKNOWN";
-    }
-}
-
 // Exposed for unit testing only. Use `packet_new` outside of tests.
 Packet* packet_new_inner(guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
@@ -113,22 +104,6 @@ Packet* packet_new(const Host* host) {
     Packet* packet = packet_new_inner(hostID, packetID);
     worker_count_allocation(Packet);
     return packet;
-}
-
-/* If modifying this function, you should also modify `packet_setPayloadWithMemoryManager` below.
- */
-void packet_setPayload(Packet* packet, const Thread* thread, UntypedForeignPtr payload,
-                       gsize payloadLength, uint64_t packetPriority) {
-    MAGIC_ASSERT(packet);
-    utility_debugAssert(thread);
-    utility_debugAssert(payload.val);
-    utility_debugAssert(!packet->payload);
-
-    /* the payload starts with 1 ref, which we hold */
-    packet->payload = payload_new(thread, payload, payloadLength);
-    utility_alwaysAssert(packet->payload != NULL);
-    /* application data needs a priority ordering for FIFO onto the wire */
-    packet->priority = packetPriority;
 }
 
 /* This is a copy of `packet_setPayload` but passes the memory manager through. Once we've moved UDP
@@ -522,19 +497,6 @@ ProtocolType packet_getProtocol(const Packet* packet) {
     return packet->protocol;
 }
 
-/* If modifying this function, you should also modify `packet_copyPayloadWithMemoryManager` below.
- */
-gssize packet_copyPayload(const Packet* packet, const Thread* thread, gsize payloadOffset,
-                          UntypedForeignPtr buffer, gsize bufferLength) {
-    MAGIC_ASSERT(packet);
-
-    if(packet->payload) {
-        return payload_getData(packet->payload, thread, payloadOffset, buffer, bufferLength);
-    } else {
-        return 0;
-    }
-}
-
 /* This is a copy of `packet_copyPayload` but passes the memory manager through. Once we've moved
  * UDP sockets to rust, we can remove `packet_copyPayload` and rename this function to
  * `packet_copyPayload`. */
@@ -613,7 +575,7 @@ static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags stat
     }
 }
 
-gchar* packet_toString(Packet* packet) {
+static gchar* _packet_toString(Packet* packet) {
     MAGIC_ASSERT(packet);
     GString* packetString = g_string_new("");
 
@@ -737,10 +699,6 @@ gchar* packet_toString(Packet* packet) {
     return g_string_free(packetString, FALSE);
 }
 
-gchar* _packet_getString(Packet* packet) {
-    return packet_toString(packet);
-}
-
 void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
     MAGIC_ASSERT(packet);
 
@@ -748,13 +706,8 @@ void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) 
 
     if (logger_isEnabled(logger_getDefault(), LOGLEVEL_TRACE)) {
         g_queue_push_tail(packet->orderedStatus, GUINT_TO_POINTER(status));
-        gchar* packetStr = packet_toString(packet);
+        gchar* packetStr = _packet_toString(packet);
         trace("[%s] %s", _packet_deliveryStatusToAscii(status), packetStr);
         g_free(packetStr);
     }
-}
-
-PacketDeliveryStatusFlags packet_getDeliveryStatus(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    return packet->allStatus;
 }
