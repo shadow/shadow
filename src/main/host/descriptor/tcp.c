@@ -916,8 +916,8 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host, Proto
     guint sequence = !isEmpty || isFinNotAck || (flags & PTCP_SYN) ? tcp->send.next : 0;
 
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
-    Packet* packet = packet_new(host);
-    packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
+    Packet* packet =
+        packet_new_tcp(host, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* update sequence number */

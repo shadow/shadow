@@ -660,8 +660,20 @@ mod export {
     use super::*;
 
     #[no_mangle]
-    pub extern "C-unwind" fn packet_new(hostrc: *const Host) -> *mut c::Packet {
-        unsafe { c::legacypacket_new(hostrc) }
+    pub extern "C-unwind" fn packet_new_tcp(
+        hostrc: *const Host,
+        flags: c::ProtocolTCPFlags,
+        src_ip: libc::in_addr_t,
+        src_port: libc::in_port_t,
+        dst_ip: libc::in_addr_t,
+        dst_port: libc::in_port_t,
+        seq: libc::c_uint,
+    ) -> *mut c::Packet {
+        unsafe {
+            let packet = c::legacypacket_new(hostrc);
+            c::legacypacket_setTCP(packet, flags, src_ip, src_port, dst_ip, dst_port, seq);
+            packet
+        }
     }
 
     #[no_mangle]
@@ -701,19 +713,6 @@ mod export {
     #[no_mangle]
     pub extern "C-unwind" fn packet_getPriority(packet: *const c::Packet) -> u64 {
         unsafe { c::legacypacket_getPriority(packet) }
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn packet_setTCP(
-        packet: *mut c::Packet,
-        flags: c::ProtocolTCPFlags,
-        src_ip: libc::in_addr_t,
-        src_port: libc::in_port_t,
-        dst_ip: libc::in_addr_t,
-        dst_port: libc::in_port_t,
-        seq: libc::c_uint,
-    ) {
-        unsafe { c::legacypacket_setTCP(packet, flags, src_ip, src_port, dst_ip, dst_port, seq) };
     }
 
     #[no_mangle]
