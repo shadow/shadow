@@ -880,8 +880,8 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
-static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
-                                               enum ProtocolTCPFlags flags, bool isEmpty) {
+static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host, ProtocolTCPFlags flags,
+                                               bool isEmpty) {
     MAGIC_ASSERT(tcp);
 
     /* packets from children of a server must appear to be coming from the server */
@@ -928,7 +928,7 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     return packet;
 }
 
-static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags,
+static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags,
                                      UntypedForeignPtr payload, gsize payloadLength,
                                      const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
@@ -942,13 +942,13 @@ static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTC
     return packet;
 }
 
-static Packet* _tcp_createControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
+static Packet* _tcp_createControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     return _tcp_createPacketWithoutPayload(tcp, host, flags, /*isEmpty=*/true);
 }
 
-static void _tcp_sendControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
+static void _tcp_sendControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     trace("%s <-> %s: sending response control packet now",
@@ -2042,7 +2042,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
     /* go through the state machine, tracking processing and response */
     TCPProcessFlags flags = TCP_PF_NONE;
-    enum ProtocolTCPFlags responseFlags = PTCP_NONE;
+    ProtocolTCPFlags responseFlags = PTCP_NONE;
 
     trace("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
 

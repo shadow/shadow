@@ -213,7 +213,7 @@ impl PacketRc {
         unsafe {
             c::packet_setUDP(
                 self.c_ptr.ptr(),
-                c::ProtocolUDPFlags_PUDP_NONE,
+                c::_ProtocolUDPFlags_PUDP_NONE,
                 u32::from(*src.ip()).to_be(),
                 src.port().to_be(),
                 u32::from(*dst.ip()).to_be(),
@@ -504,7 +504,7 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     let dest_port: [u8; 2] =
         u16::from_be(unsafe { c::packet_getDestinationPort(packet) }).to_be_bytes();
     let sequence: [u8; 4] = tcp_header.sequence.to_be_bytes();
-    let ack: [u8; 4] = if tcp_header.flags & c::ProtocolTCPFlags_PTCP_ACK != 0 {
+    let ack: [u8; 4] = if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_ACK != 0 {
         tcp_header.acknowledgment.to_be_bytes()
     } else {
         0u32.to_be_bytes()
@@ -519,16 +519,16 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     header_len <<= 4;
 
     let mut tcp_flags: u8 = 0;
-    if tcp_header.flags & c::ProtocolTCPFlags_PTCP_RST != 0 {
+    if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_RST != 0 {
         tcp_flags |= 0x04;
     }
-    if tcp_header.flags & c::ProtocolTCPFlags_PTCP_SYN != 0 {
+    if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_SYN != 0 {
         tcp_flags |= 0x02;
     }
-    if tcp_header.flags & c::ProtocolTCPFlags_PTCP_ACK != 0 {
+    if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_ACK != 0 {
         tcp_flags |= 0x10;
     }
-    if tcp_header.flags & c::ProtocolTCPFlags_PTCP_FIN != 0 {
+    if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_FIN != 0 {
         tcp_flags |= 0x01;
     }
     let window: [u8; 2] = u16::try_from(tcp_header.window).unwrap().to_be_bytes();
@@ -590,15 +590,15 @@ fn display_udp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
 }
 
 pub fn to_legacy_tcp_flags(flags: tcp::TcpFlags) -> c::ProtocolTCPFlags {
-    let mut new_flags = c::ProtocolTCPFlags_PTCP_NONE;
+    let mut new_flags = c::_ProtocolTCPFlags_PTCP_NONE;
 
     for flag in flags.iter() {
         match flag {
-            tcp::TcpFlags::FIN => new_flags |= c::ProtocolTCPFlags_PTCP_FIN,
-            tcp::TcpFlags::SYN => new_flags |= c::ProtocolTCPFlags_PTCP_SYN,
-            tcp::TcpFlags::RST => new_flags |= c::ProtocolTCPFlags_PTCP_RST,
+            tcp::TcpFlags::FIN => new_flags |= c::_ProtocolTCPFlags_PTCP_FIN,
+            tcp::TcpFlags::SYN => new_flags |= c::_ProtocolTCPFlags_PTCP_SYN,
+            tcp::TcpFlags::RST => new_flags |= c::_ProtocolTCPFlags_PTCP_RST,
             tcp::TcpFlags::PSH => panic!("Unsupported TCP flag: {flag:?}"),
-            tcp::TcpFlags::ACK => new_flags |= c::ProtocolTCPFlags_PTCP_ACK,
+            tcp::TcpFlags::ACK => new_flags |= c::_ProtocolTCPFlags_PTCP_ACK,
             tcp::TcpFlags::URG => panic!("Unsupported TCP flag: {flag:?}"),
             tcp::TcpFlags::ECE => panic!("Unsupported TCP flag: {flag:?}"),
             tcp::TcpFlags::CWR => panic!("Unsupported TCP flag: {flag:?}"),
@@ -615,27 +615,31 @@ pub fn to_legacy_tcp_flags(flags: tcp::TcpFlags) -> c::ProtocolTCPFlags {
 pub fn from_legacy_tcp_flags(mut flags: c::ProtocolTCPFlags) -> tcp::TcpFlags {
     let mut new_flags = tcp::TcpFlags::empty();
 
-    if flags & c::ProtocolTCPFlags_PTCP_RST != 0 {
+    if flags & c::_ProtocolTCPFlags_PTCP_RST != 0 {
         new_flags.insert(tcp::TcpFlags::RST);
-        flags &= !c::ProtocolTCPFlags_PTCP_RST;
+        flags &= !c::_ProtocolTCPFlags_PTCP_RST;
     }
 
-    if flags & c::ProtocolTCPFlags_PTCP_SYN != 0 {
+    if flags & c::_ProtocolTCPFlags_PTCP_SYN != 0 {
         new_flags.insert(tcp::TcpFlags::SYN);
-        flags &= !c::ProtocolTCPFlags_PTCP_SYN;
+        flags &= !c::_ProtocolTCPFlags_PTCP_SYN;
     }
 
-    if flags & c::ProtocolTCPFlags_PTCP_ACK != 0 {
+    if flags & c::_ProtocolTCPFlags_PTCP_ACK != 0 {
         new_flags.insert(tcp::TcpFlags::ACK);
-        flags &= !c::ProtocolTCPFlags_PTCP_ACK;
+        flags &= !c::_ProtocolTCPFlags_PTCP_ACK;
     }
 
-    if flags & c::ProtocolTCPFlags_PTCP_FIN != 0 {
+    if flags & c::_ProtocolTCPFlags_PTCP_FIN != 0 {
         new_flags.insert(tcp::TcpFlags::FIN);
-        flags &= !c::ProtocolTCPFlags_PTCP_FIN;
+        flags &= !c::_ProtocolTCPFlags_PTCP_FIN;
     }
 
-    assert_eq!(flags, c::ProtocolTCPFlags_PTCP_NONE, "Unexpected TCP flags");
+    assert_eq!(
+        flags,
+        c::_ProtocolTCPFlags_PTCP_NONE,
+        "Unexpected TCP flags"
+    );
 
     new_flags
 }

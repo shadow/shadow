@@ -18,7 +18,7 @@
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
 struct _PacketTCPHeader {
-    enum ProtocolTCPFlags flags;
+    ProtocolTCPFlags flags;
 
     // address is in network byte order
     in_addr_t sourceIP;
@@ -60,14 +60,12 @@ void packet_setPriority(Packet *packet, uint64_t value);
 uint64_t packet_getPriority(const Packet* packet);
 
 // The addresses and ports must be in network byte order.
-void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
-        in_addr_t sourceIP, in_port_t sourcePort,
-        in_addr_t destinationIP, in_port_t destinationPort);
+void packet_setUDP(Packet* packet, ProtocolUDPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
+                   in_addr_t destinationIP, in_port_t destinationPort);
 
 // The addresses and ports must be in network byte order.
-void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
-        in_addr_t sourceIP, in_port_t sourcePort,
-        in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
+void packet_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
+                   in_addr_t destinationIP, in_port_t destinationPort, guint sequence);
 
 void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
                       unsigned char windowScale, bool windowScaleSet,

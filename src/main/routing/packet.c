@@ -44,7 +44,7 @@ void* memdup(const void* ptr, size_t byteSize) {
 
 typedef struct _PacketUDPHeader PacketUDPHeader;
 struct _PacketUDPHeader {
-    enum ProtocolUDPFlags flags;
+    ProtocolUDPFlags flags;
 
     // address is in network byte order
     in_addr_t sourceIP;
@@ -265,9 +265,8 @@ void packet_setMock(Packet* packet) {
 }
 
 // The addresses and ports must be in network byte order.
-void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
-        in_addr_t sourceIP, in_port_t sourcePort,
-        in_addr_t destinationIP, in_port_t destinationPort) {
+void packet_setUDP(Packet* packet, ProtocolUDPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
+                   in_addr_t destinationIP, in_port_t destinationPort) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
     utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -285,9 +284,8 @@ void packet_setUDP(Packet* packet, enum ProtocolUDPFlags flags,
 }
 
 // The addresses and ports must be in network byte order.
-void packet_setTCP(Packet* packet, enum ProtocolTCPFlags flags,
-        in_addr_t sourceIP, in_port_t sourcePort,
-        in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
+void packet_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
+                   in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
     utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
