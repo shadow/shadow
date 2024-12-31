@@ -205,7 +205,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("_syscallhandler_.*")
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
-        .allowlist_function("packet_.*")
+        .allowlist_function("legacypacket_.*")
         .allowlist_function("epoll_new")
         .allowlist_function("glib_check_version")
         //# Needs GQueue

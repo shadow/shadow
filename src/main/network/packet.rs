@@ -60,7 +60,7 @@ impl Eq for PacketRc {}
 impl Clone for PacketRc {
     fn clone(&self) -> Self {
         let ptr = self.borrow_inner();
-        unsafe { c::packet_ref(ptr) }
+        unsafe { c::legacypacket_ref(ptr) }
         PacketRc::from_raw(ptr)
     }
 }
@@ -70,14 +70,16 @@ impl PacketRc {
     pub fn new() -> Self {
         // creating a new packet shouldn't require the host, so for now we'll get the host from the
         // worker rather than require it as an argument
-        Self::from_raw(Worker::with_active_host(|host| unsafe { c::packet_new(host) }).unwrap())
+        Self::from_raw(
+            Worker::with_active_host(|host| unsafe { c::legacypacket_new(host) }).unwrap(),
+        )
     }
 
     #[cfg(test)]
     /// Creates an empty packet for unit tests.
     pub fn mock_new() -> PacketRc {
-        let c_ptr = unsafe { c::packet_new_inner(1, 1) };
-        unsafe { c::packet_setMock(c_ptr) };
+        let c_ptr = unsafe { c::legacypacket_new_inner(1, 1) };
+        unsafe { c::legacypacket_setMock(c_ptr) };
         PacketRc::from_raw(c_ptr)
     }
 
@@ -108,7 +110,7 @@ impl PacketRc {
         let timestamp_echo = SimulationTime::from_millis(header.timestamp_echo.unwrap_or(0).into());
 
         unsafe {
-            c::packet_setTCP(
+            c::legacypacket_setTCP(
                 self.c_ptr.ptr(),
                 to_legacy_tcp_flags(header.flags),
                 u32::from(*header.src().ip()).to_be(),
@@ -118,7 +120,7 @@ impl PacketRc {
                 header.seq,
             );
 
-            c::packet_updateTCP(
+            c::legacypacket_updateTCP(
                 self.c_ptr.ptr(),
                 header.ack,
                 selective_acks_glist,
@@ -135,7 +137,7 @@ impl PacketRc {
     }
 
     pub fn get_tcp(&self) -> Option<tcp::TcpHeader> {
-        let header = unsafe { c::packet_getTCPHeader(self.c_ptr.ptr()) };
+        let header = unsafe { c::legacypacket_getTCPHeader(self.c_ptr.ptr()) };
         let header = unsafe { header.as_ref()? };
 
         // TODO: not sure if linux uses milliseconds, but it probably doesn't matter as long as we
@@ -211,7 +213,7 @@ impl PacketRc {
     /// Set UDP headers for this packet. Will panic if the packet already has a header.
     pub fn set_udp(&mut self, src: SocketAddrV4, dst: SocketAddrV4) {
         unsafe {
-            c::packet_setUDP(
+            c::legacypacket_setUDP(
                 self.c_ptr.ptr(),
                 c::_ProtocolUDPFlags_PUDP_NONE,
                 u32::from(*src.ip()).to_be(),
@@ -225,7 +227,7 @@ impl PacketRc {
     /// Set the packet payload. Will panic if the packet already has a payload.
     pub fn set_payload(&mut self, payload: &[u8], priority: FifoPacketPriority) {
         unsafe {
-            c::packet_setPayloadFromShadow(
+            c::legacypacket_setPayloadFromShadow(
                 self.c_ptr.ptr(),
                 payload.as_ptr() as *const libc::c_void,
                 payload.len().try_into().unwrap(),
@@ -237,7 +239,7 @@ impl PacketRc {
     /// Copy the packet payload to a buffer. Will truncate if the buffer is not large enough.
     pub fn get_payload(&self, buffer: &mut [u8]) -> usize {
         unsafe {
-            c::packet_copyPayloadShadow(
+            c::legacypacket_copyPayloadShadow(
                 self.c_ptr.ptr(),
                 0,
                 buffer.as_mut_ptr().cast(),
@@ -260,7 +262,7 @@ impl PacketRc {
 
         for iov in iovs {
             let rv = unsafe {
-                c::packet_copyPayloadWithMemoryManager(
+                c::legacypacket_copyPayloadWithMemoryManager(
                     self.c_ptr.ptr(),
                     bytes_copied,
                     iov.base.cast::<()>(),
@@ -288,52 +290,52 @@ impl PacketRc {
 
     pub fn total_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
-        let sz = unsafe { c::packet_getTotalSize(self.c_ptr.ptr()) };
+        let sz = unsafe { c::legacypacket_getTotalSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     pub fn header_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
-        let sz = unsafe { c::packet_getHeaderSize(self.c_ptr.ptr()) };
+        let sz = unsafe { c::legacypacket_getHeaderSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     pub fn payload_size(&self) -> usize {
         assert!(!self.c_ptr.ptr().is_null());
-        let sz = unsafe { c::packet_getPayloadSize(self.c_ptr.ptr()) };
+        let sz = unsafe { c::legacypacket_getPayloadSize(self.c_ptr.ptr()) };
         sz as usize
     }
 
     pub fn add_status(&mut self, status: PacketStatus) {
         assert!(!self.c_ptr.ptr().is_null());
         let status_flag = status as c::PacketDeliveryStatusFlags;
-        unsafe { c::packet_addDeliveryStatus(self.c_ptr.ptr(), status_flag) };
+        unsafe { c::legacypacket_addDeliveryStatus(self.c_ptr.ptr(), status_flag) };
     }
 
     pub fn src_address(&self) -> SocketAddrV4 {
         let ip = Ipv4Addr::from(u32::from_be(unsafe {
-            c::packet_getSourceIP(self.c_ptr.ptr())
+            c::legacypacket_getSourceIP(self.c_ptr.ptr())
         }));
-        let port = u16::from_be(unsafe { c::packet_getSourcePort(self.c_ptr.ptr()) });
+        let port = u16::from_be(unsafe { c::legacypacket_getSourcePort(self.c_ptr.ptr()) });
 
         SocketAddrV4::new(ip, port)
     }
 
     pub fn dst_address(&self) -> SocketAddrV4 {
         let ip = Ipv4Addr::from(u32::from_be(unsafe {
-            c::packet_getDestinationIP(self.c_ptr.ptr())
+            c::legacypacket_getDestinationIP(self.c_ptr.ptr())
         }));
-        let port = u16::from_be(unsafe { c::packet_getDestinationPort(self.c_ptr.ptr()) });
+        let port = u16::from_be(unsafe { c::legacypacket_getDestinationPort(self.c_ptr.ptr()) });
 
         SocketAddrV4::new(ip, port)
     }
 
     pub fn priority(&self) -> FifoPacketPriority {
-        unsafe { c::packet_getPriority(self.c_ptr.ptr()) }
+        unsafe { c::legacypacket_getPriority(self.c_ptr.ptr()) }
     }
 
     pub fn protocol(&self) -> c::ProtocolType {
-        unsafe { c::packet_getProtocol(self.c_ptr.ptr()) }
+        unsafe { c::legacypacket_getProtocol(self.c_ptr.ptr()) }
     }
 
     /// Transfers ownership of the given c_ptr reference into a new rust packet
@@ -357,6 +359,12 @@ impl PacketRc {
     pub fn borrow_inner(&self) -> *mut c::Packet {
         self.c_ptr.ptr()
     }
+
+    /// Allocate a new packet and deep copy everything except the payload. We keep the same payload
+    /// as the original packet while adding one to the payload ref count.
+    pub fn copy(&self) -> Self {
+        Self::from_raw(unsafe { c::legacypacket_copy(self.borrow_inner()) })
+    }
 }
 
 impl Drop for PacketRc {
@@ -364,7 +372,7 @@ impl Drop for PacketRc {
         if !self.c_ptr.ptr().is_null() {
             // If the rust packet is dropped before into_inner() is called,
             // we also drop the c packet ref to free it.
-            unsafe { c::packet_unref(self.c_ptr.ptr()) }
+            unsafe { c::legacypacket_unref(self.c_ptr.ptr()) }
         }
     }
 }
@@ -379,13 +387,13 @@ impl PacketDisplay for *const c::Packet {
     fn display_bytes(&self, mut writer: impl Write) -> std::io::Result<()> {
         assert!(!self.is_null());
 
-        let header_len: u16 = unsafe { c::packet_getHeaderSize(*self) }
+        let header_len: u16 = unsafe { c::legacypacket_getHeaderSize(*self) }
             .try_into()
             .unwrap();
-        let payload_len: u16 = unsafe { c::packet_getPayloadSize(*self) }
+        let payload_len: u16 = unsafe { c::legacypacket_getPayloadSize(*self) }
             .try_into()
             .unwrap();
-        let protocol = unsafe { c::packet_getProtocol(*self) };
+        let protocol = unsafe { c::legacypacket_getProtocol(*self) };
 
         // write the IP header
 
@@ -402,9 +410,9 @@ impl PacketDisplay for *const c::Packet {
         };
         let header_checksum: u16 = 0x0;
         let source_ip: [u8; 4] =
-            u32::from_be(unsafe { c::packet_getSourceIP(*self) }).to_be_bytes();
+            u32::from_be(unsafe { c::legacypacket_getSourceIP(*self) }).to_be_bytes();
         let dest_ip: [u8; 4] =
-            u32::from_be(unsafe { c::packet_getDestinationIP(*self) }).to_be_bytes();
+            u32::from_be(unsafe { c::legacypacket_getDestinationIP(*self) }).to_be_bytes();
 
         // version and header length: 1 byte
         // DSCP + ECN: 1 byte
@@ -439,7 +447,7 @@ impl PacketDisplay for *const c::Packet {
             // shadow's packet payloads are guarded by a mutex, so it's easiest to make a copy of them
             let mut payload_buf = vec![0u8; payload_len.into()];
             let count = unsafe {
-                c::packet_copyPayloadShadow(
+                c::legacypacket_copyPayloadShadow(
                     *self,
                     0,
                     payload_buf.as_mut_ptr() as *mut libc::c_void,
@@ -463,11 +471,11 @@ impl PacketDisplay for *const c::Packet {
 /// Helper for writing the tcp bytes of the packet.
 fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::io::Result<()> {
     assert_eq!(
-        unsafe { c::packet_getProtocol(packet) },
+        unsafe { c::legacypacket_getProtocol(packet) },
         c::_ProtocolType_PTCP
     );
 
-    let tcp_header = unsafe { c::packet_getTCPHeader(packet) };
+    let tcp_header = unsafe { c::legacypacket_getTCPHeader(packet) };
     assert!(!tcp_header.is_null());
     assert_eq!(
         tcp_header as usize % std::mem::align_of::<c::PacketTCPHeader>(),
@@ -500,9 +508,9 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     // write the TCP header
 
     let source_port: [u8; 2] =
-        u16::from_be(unsafe { c::packet_getSourcePort(packet) }).to_be_bytes();
+        u16::from_be(unsafe { c::legacypacket_getSourcePort(packet) }).to_be_bytes();
     let dest_port: [u8; 2] =
-        u16::from_be(unsafe { c::packet_getDestinationPort(packet) }).to_be_bytes();
+        u16::from_be(unsafe { c::legacypacket_getDestinationPort(packet) }).to_be_bytes();
     let sequence: [u8; 4] = tcp_header.sequence.to_be_bytes();
     let ack: [u8; 4] = if tcp_header.flags & c::_ProtocolTCPFlags_PTCP_ACK != 0 {
         tcp_header.acknowledgment.to_be_bytes()
@@ -561,17 +569,17 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
 /// Helper for writing the udp bytes of the packet.
 fn display_udp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::io::Result<()> {
     assert_eq!(
-        unsafe { c::packet_getProtocol(packet) },
+        unsafe { c::legacypacket_getProtocol(packet) },
         c::_ProtocolType_PUDP
     );
 
     // write the UDP header
 
     let source_port: [u8; 2] =
-        u16::from_be(unsafe { c::packet_getSourcePort(packet) }).to_be_bytes();
+        u16::from_be(unsafe { c::legacypacket_getSourcePort(packet) }).to_be_bytes();
     let dest_port: [u8; 2] =
-        u16::from_be(unsafe { c::packet_getDestinationPort(packet) }).to_be_bytes();
-    let udp_len: u16 = u16::try_from(unsafe { c::packet_getPayloadSize(packet) })
+        u16::from_be(unsafe { c::legacypacket_getDestinationPort(packet) }).to_be_bytes();
+    let udp_len: u16 = u16::try_from(unsafe { c::legacypacket_getPayloadSize(packet) })
         .unwrap()
         .checked_add(8)
         .unwrap();
@@ -642,4 +650,163 @@ pub fn from_legacy_tcp_flags(mut flags: c::ProtocolTCPFlags) -> tcp::TcpFlags {
     );
 
     new_flags
+}
+
+mod export {
+    use shadow_shim_helper_rs::syscall_types::UntypedForeignPtr;
+
+    use crate::host::host::Host;
+
+    use super::*;
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_new(hostrc: *const Host) -> *mut c::Packet {
+        unsafe { c::legacypacket_new(hostrc) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_setPayloadWithMemoryManager(
+        packet: *mut c::Packet,
+        payload: UntypedForeignPtr,
+        payload_len: u64,
+        mem: *const MemoryManager,
+        packet_priority: u64,
+    ) {
+        unsafe {
+            c::legacypacket_setPayloadWithMemoryManager(
+                packet,
+                payload,
+                payload_len,
+                mem,
+                packet_priority,
+            )
+        };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_ref(packet: *mut c::Packet) {
+        unsafe { c::legacypacket_ref(packet) };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_unref(packet: *mut c::Packet) {
+        unsafe { c::legacypacket_unref(packet) };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_setPriority(packet: *mut c::Packet, value: u64) {
+        unsafe { c::legacypacket_setPriority(packet, value) };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getPriority(packet: *const c::Packet) -> u64 {
+        unsafe { c::legacypacket_getPriority(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_setTCP(
+        packet: *mut c::Packet,
+        flags: c::ProtocolTCPFlags,
+        src_ip: libc::in_addr_t,
+        src_port: libc::in_port_t,
+        dst_ip: libc::in_addr_t,
+        dst_port: libc::in_port_t,
+        seq: libc::c_uint,
+    ) {
+        unsafe { c::legacypacket_setTCP(packet, flags, src_ip, src_port, dst_ip, dst_port, seq) };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_updateTCP(
+        packet: *mut c::Packet,
+        ack: libc::c_uint,
+        sel_acks: *mut c::GList,
+        window: libc::c_uint,
+        window_scale: libc::c_uchar,
+        window_scale_set: bool,
+        ts_val: c::CSimulationTime,
+        ts_echo: c::CSimulationTime,
+    ) {
+        unsafe {
+            c::legacypacket_updateTCP(
+                packet,
+                ack,
+                sel_acks,
+                window,
+                window_scale,
+                window_scale_set,
+                ts_val,
+                ts_echo,
+            )
+        };
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getPayloadSize(packet: *const c::Packet) -> u64 {
+        unsafe { c::legacypacket_getPayloadSize(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getDestinationIP(packet: *const c::Packet) -> libc::in_addr_t {
+        unsafe { c::legacypacket_getDestinationIP(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getDestinationPort(
+        packet: *const c::Packet,
+    ) -> libc::in_port_t {
+        unsafe { c::legacypacket_getDestinationPort(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getSourceIP(packet: *const c::Packet) -> libc::in_addr_t {
+        unsafe { c::legacypacket_getSourceIP(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getSourcePort(packet: *const c::Packet) -> libc::in_port_t {
+        unsafe { c::legacypacket_getSourcePort(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_copyPayloadWithMemoryManager(
+        packet: *const c::Packet,
+        payload_offset: u64,
+        buf: UntypedForeignPtr,
+        buf_len: u64,
+        mem: *mut MemoryManager,
+    ) -> i64 {
+        unsafe {
+            c::legacypacket_copyPayloadWithMemoryManager(packet, payload_offset, buf, buf_len, mem)
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_copyTCPSelectiveACKs(packet: *mut c::Packet) -> *mut c::GList {
+        unsafe { c::legacypacket_copyTCPSelectiveACKs(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_getTCPHeader(
+        packet: *const c::Packet,
+    ) -> *mut c::PacketTCPHeader {
+        unsafe { c::legacypacket_getTCPHeader(packet) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_compareTCPSequence(
+        packet1: *mut c::Packet,
+        packet2: *mut c::Packet,
+        ptr: *mut libc::c_void,
+    ) -> libc::c_int {
+        unsafe { c::legacypacket_compareTCPSequence(packet1, packet2, ptr) }
+    }
+
+    #[no_mangle]
+    pub extern "C-unwind" fn packet_addDeliveryStatus(
+        packet: *mut c::Packet,
+        status: c::PacketDeliveryStatusFlags,
+    ) {
+        unsafe { c::legacypacket_addDeliveryStatus(packet, status) };
+    }
 }

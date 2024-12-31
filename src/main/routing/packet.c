@@ -83,8 +83,8 @@ struct _Packet {
     MAGIC_DECLARE;
 };
 
-// Exposed for unit testing only. Use `packet_new` outside of tests.
-Packet* packet_new_inner(guint hostID, guint64 packetID) {
+// Exposed for unit testing only. Use `legacypacket_new` outside of tests.
+Packet* legacypacket_new_inner(guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
@@ -98,10 +98,10 @@ Packet* packet_new_inner(guint hostID, guint64 packetID) {
     return packet;
 }
 
-Packet* packet_new(const Host* host) {
+Packet* legacypacket_new(const Host* host) {
     guint hostID = host_getID(host);
     guint64 packetID = host_getNewPacketID(host);
-    Packet* packet = packet_new_inner(hostID, packetID);
+    Packet* packet = legacypacket_new_inner(hostID, packetID);
     worker_count_allocation(Packet);
     return packet;
 }
@@ -109,9 +109,9 @@ Packet* packet_new(const Host* host) {
 /* This is a copy of `packet_setPayload` but passes the memory manager through. Once we've moved UDP
  * sockets to rust, we can remove `packet_setPayload` and rename this function to
  * `packet_setPayload`. */
-void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
-                                        gsize payloadLength, const MemoryManager* mem,
-                                        uint64_t packetPriority) {
+void legacypacket_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payload,
+                                              gsize payloadLength, const MemoryManager* mem,
+                                              uint64_t packetPriority) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(payload.val);
     utility_debugAssert(!packet->payload);
@@ -123,8 +123,8 @@ void packet_setPayloadWithMemoryManager(Packet* packet, UntypedForeignPtr payloa
     packet->priority = packetPriority;
 }
 
-void packet_setPayloadFromShadow(Packet* packet, const void* payload, gsize payloadLength,
-                                 uint64_t packetPriority) {
+void legacypacket_setPayloadFromShadow(Packet* packet, const void* payload, gsize payloadLength,
+                                       uint64_t packetPriority) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(payload);
     utility_debugAssert(!packet->payload);
@@ -139,7 +139,7 @@ void packet_setPayloadFromShadow(Packet* packet, const void* payload, gsize payl
 /* copy everything except the payload.
  * the payload will point to the same payload as the original packet.
  * the payload is protected so it is safe to send the copied packet to a different host. */
-Packet* packet_copy(Packet* packet) {
+Packet* legacypacket_copy(Packet* packet) {
     MAGIC_ASSERT(packet);
 
     Packet* copy = g_new0(Packet, 1);
@@ -223,25 +223,23 @@ static void _packet_free(Packet* packet) {
     worker_count_deallocation(Packet);
 }
 
-void packet_ref(Packet* packet) {
+void legacypacket_ref(Packet* packet) {
     MAGIC_ASSERT(packet);
     (packet->referenceCount)++;
 }
 
-void packet_unref(Packet* packet) {
+void legacypacket_unref(Packet* packet) {
     MAGIC_ASSERT(packet);
     (packet->referenceCount)--;
     if(packet->referenceCount == 0) {
-        packet_addDeliveryStatus(packet, PDS_DESTROYED);
+        legacypacket_addDeliveryStatus(packet, PDS_DESTROYED);
         _packet_free(packet);
     }
 }
 
-void packet_setPriority(Packet *packet, uint64_t value) {
-   packet->priority = value;
-}
+void legacypacket_setPriority(Packet* packet, uint64_t value) { packet->priority = value; }
 
-gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
+gint legacypacket_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data) {
     MAGIC_ASSERT(packet1);
     MAGIC_ASSERT(packet2);
 
@@ -259,14 +257,14 @@ gint packet_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_d
 }
 
 // Enables non-zero size for mock packets for testing. Do not use outside of testing.
-void packet_setMock(Packet* packet) {
+void legacypacket_setMock(Packet* packet) {
     MAGIC_ASSERT(packet);
     packet->protocol = PMOCK;
 }
 
 // The addresses and ports must be in network byte order.
-void packet_setUDP(Packet* packet, ProtocolUDPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
-                   in_addr_t destinationIP, in_port_t destinationPort) {
+void legacypacket_setUDP(Packet* packet, ProtocolUDPFlags flags, in_addr_t sourceIP,
+                         in_port_t sourcePort, in_addr_t destinationIP, in_port_t destinationPort) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
     utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -284,8 +282,9 @@ void packet_setUDP(Packet* packet, ProtocolUDPFlags flags, in_addr_t sourceIP, i
 }
 
 // The addresses and ports must be in network byte order.
-void packet_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourceIP, in_port_t sourcePort,
-                   in_addr_t destinationIP, in_port_t destinationPort, guint sequence) {
+void legacypacket_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourceIP,
+                         in_port_t sourcePort, in_addr_t destinationIP, in_port_t destinationPort,
+                         guint sequence) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(!(packet->header) && packet->protocol == PNONE);
     utility_debugAssert(sourceIP && sourcePort && destinationIP && destinationPort);
@@ -303,9 +302,9 @@ void packet_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourceIP, i
     packet->protocol = PTCP;
 }
 
-void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs, guint window,
-                      unsigned char windowScale, bool windowScaleSet,
-                      CSimulationTime timestampValue, CSimulationTime timestampEcho) {
+void legacypacket_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
+                            guint window, unsigned char windowScale, bool windowScaleSet,
+                            CSimulationTime timestampValue, CSimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->header && (packet->protocol == PTCP));
 
@@ -331,12 +330,12 @@ void packet_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACK
     header->timestampEcho = timestampEcho;
 }
 
-gsize packet_getTotalSize(const Packet* packet) {
+gsize legacypacket_getTotalSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
-    return packet_getPayloadSize(packet) + packet_getHeaderSize(packet);
+    return legacypacket_getPayloadSize(packet) + legacypacket_getHeaderSize(packet);
 }
 
-gsize packet_getPayloadSize(const Packet* packet) {
+gsize legacypacket_getPayloadSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
     if (packet->protocol == PMOCK) {
         return CONFIG_MTU;
@@ -347,7 +346,7 @@ gsize packet_getPayloadSize(const Packet* packet) {
     }
 }
 
-gsize packet_getHeaderSize(const Packet* packet) {
+gsize legacypacket_getHeaderSize(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     if (packet->protocol == PUDP) {
@@ -356,7 +355,7 @@ gsize packet_getHeaderSize(const Packet* packet) {
         gsize size = CONFIG_HEADER_SIZE_TCPIP;
 
         // tcp options use additional bytes
-        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        PacketTCPHeader* header = legacypacket_getTCPHeader(packet);
         utility_alwaysAssert(header != NULL);
         if (header->windowScaleSet) {
             // window scale option is 3 bytes
@@ -374,13 +373,13 @@ gsize packet_getHeaderSize(const Packet* packet) {
     }
 }
 
-uint64_t packet_getPriority(const Packet* packet) {
+uint64_t legacypacket_getPriority(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->priority;
 }
 
 // The returned address will be in network byte order.
-in_addr_t packet_getDestinationIP(const Packet* packet) {
+in_addr_t legacypacket_getDestinationIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
     in_addr_t ip = 0;
 
@@ -407,7 +406,7 @@ in_addr_t packet_getDestinationIP(const Packet* packet) {
 }
 
 // The returned port will be in network byte order.
-in_port_t packet_getDestinationPort(const Packet* packet) {
+in_port_t legacypacket_getDestinationPort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
@@ -435,7 +434,7 @@ in_port_t packet_getDestinationPort(const Packet* packet) {
 }
 
 // The returned address will be in network byte order.
-in_addr_t packet_getSourceIP(const Packet* packet) {
+in_addr_t legacypacket_getSourceIP(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_addr_t ip = 0;
@@ -463,7 +462,7 @@ in_addr_t packet_getSourceIP(const Packet* packet) {
 }
 
 // The returned port will be in network byte order.
-in_port_t packet_getSourcePort(const Packet* packet) {
+in_port_t legacypacket_getSourcePort(const Packet* packet) {
     MAGIC_ASSERT(packet);
 
     in_port_t port = 0;
@@ -490,7 +489,7 @@ in_port_t packet_getSourcePort(const Packet* packet) {
     return port;
 }
 
-ProtocolType packet_getProtocol(const Packet* packet) {
+ProtocolType legacypacket_getProtocol(const Packet* packet) {
     MAGIC_ASSERT(packet);
     return packet->protocol;
 }
@@ -498,9 +497,9 @@ ProtocolType packet_getProtocol(const Packet* packet) {
 /* This is a copy of `packet_copyPayload` but passes the memory manager through. Once we've moved
  * UDP sockets to rust, we can remove `packet_copyPayload` and rename this function to
  * `packet_copyPayload`. */
-gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
-                                           UntypedForeignPtr buffer, gsize bufferLength,
-                                           MemoryManager* mem) {
+gssize legacypacket_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOffset,
+                                                 UntypedForeignPtr buffer, gsize bufferLength,
+                                                 MemoryManager* mem) {
     MAGIC_ASSERT(packet);
 
     if(packet->payload) {
@@ -511,8 +510,8 @@ gssize packet_copyPayloadWithMemoryManager(const Packet* packet, gsize payloadOf
     }
 }
 
-guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
-                               gsize bufferLength) {
+guint legacypacket_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
+                                     gsize bufferLength) {
     MAGIC_ASSERT(packet);
 
     if (packet->payload) {
@@ -522,7 +521,7 @@ guint packet_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* 
     }
 }
 
-GList* packet_copyTCPSelectiveACKs(Packet* packet) {
+GList* legacypacket_copyTCPSelectiveACKs(Packet* packet) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->protocol == PTCP);
 
@@ -538,7 +537,7 @@ GList* packet_copyTCPSelectiveACKs(Packet* packet) {
     return selectiveACKsCopy;
 }
 
-PacketTCPHeader* packet_getTCPHeader(const Packet* packet) {
+PacketTCPHeader* legacypacket_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
     utility_alwaysAssert(packet->protocol == PTCP);
     return (PacketTCPHeader*)packet->header;
@@ -697,7 +696,7 @@ static gchar* _packet_toString(Packet* packet) {
     return g_string_free(packetString, FALSE);
 }
 
-void packet_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
+void legacypacket_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status) {
     MAGIC_ASSERT(packet);
 
     packet->allStatus |= status;
