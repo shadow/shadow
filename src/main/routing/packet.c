@@ -177,12 +177,6 @@ Packet* legacypacket_copy(Packet* packet) {
                 PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
                 PacketTCPHeader* copyHeader = (PacketTCPHeader*)copy->header;
 
-                copyHeader->selectiveACKs = NULL;
-
-                if(packetHeader->selectiveACKs) {
-                    /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
-                    copyHeader->selectiveACKs = g_list_copy(packetHeader->selectiveACKs);
-                }
                 break;
             }
 
@@ -199,13 +193,6 @@ Packet* legacypacket_copy(Packet* packet) {
 
 static void _packet_free(Packet* packet) {
     MAGIC_ASSERT(packet);
-
-    if(packet->protocol == PTCP) {
-        PacketTCPHeader* header = (PacketTCPHeader*)packet->header;
-        if(header->selectiveACKs) {
-            g_list_free(header->selectiveACKs);
-        }
-    }
 
     if(packet->header) {
         g_free(packet->header);
@@ -302,24 +289,19 @@ void legacypacket_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourc
     packet->protocol = PTCP;
 }
 
-void legacypacket_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
-                            guint window, unsigned char windowScale, bool windowScaleSet,
+void legacypacket_updateTCP(Packet* packet, guint acknowledgement,
+                            PacketSelectiveAcks selectiveACKs, guint window,
+                            unsigned char windowScale, bool windowScaleSet,
                             CSimulationTime timestampValue, CSimulationTime timestampEcho) {
     MAGIC_ASSERT(packet);
     utility_debugAssert(packet->header && (packet->protocol == PTCP));
 
     PacketTCPHeader* header = (PacketTCPHeader*) packet->header;
 
-    if(selectiveACKs && g_list_length(selectiveACKs) > 0) {
-        /* free the old ack list if it exists */
-        if(header->selectiveACKs != NULL) {
-            g_list_free(header->selectiveACKs);
-            header->selectiveACKs = NULL;
-        }
-
+    if (selectiveACKs.len > 0) {
         /* set the new sacks */
         header->flags |= PTCP_SACK;
-        header->selectiveACKs = g_list_copy(selectiveACKs);
+        header->selectiveACKs = selectiveACKs;
     }
 
     header->acknowledgment = acknowledgement;
@@ -521,22 +503,6 @@ guint legacypacket_copyPayloadShadow(const Packet* packet, gsize payloadOffset, 
     }
 }
 
-GList* legacypacket_copyTCPSelectiveACKs(Packet* packet) {
-    MAGIC_ASSERT(packet);
-    utility_debugAssert(packet->protocol == PTCP);
-
-    PacketTCPHeader* packetHeader = (PacketTCPHeader*)packet->header;
-
-    /* make sure to do a deep copy of all pointers to avoid concurrency issues */
-    GList* selectiveACKsCopy = NULL;
-    if(packetHeader->selectiveACKs) {
-        /* g_list_copy is shallow, but we store integers in the data pointers, so its OK here */
-        selectiveACKsCopy = g_list_copy(packetHeader->selectiveACKs);
-    }
-
-    return selectiveACKsCopy;
-}
-
 PacketTCPHeader* legacypacket_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
     utility_alwaysAssert(packet->protocol == PTCP);
@@ -609,32 +575,18 @@ static gchar* _packet_toString(Packet* packet) {
                     destinationIPString, ntohs(header->destinationPort),
                     header->sequence, header->acknowledgment);
 
-            // Instead of printing out entire list of SACK, print out ranges to save space
-            gint firstSack = -1;
-            gint lastSack = -1;
-            for(GList *iter = header->selectiveACKs; iter; iter = g_list_next(iter)) {
-                gint seq = GPOINTER_TO_INT(iter->data);
-                if(firstSack == -1) {
-                    firstSack = seq;
-                } else if(lastSack == -1 || seq == lastSack + 1) {
-                    lastSack = seq;
-                } else {
-                    g_string_append_printf(packetString, "%d-%d ", firstSack, lastSack);
-                    firstSack = seq;
-                    lastSack = -1;
-                }
-            }
-
-            if(firstSack != -1) {
-                g_string_append_printf(packetString, "%d", firstSack);
-                if(lastSack != -1) {
-                    g_string_append_printf(packetString,"-%d", lastSack);
-                }
+            if (header->selectiveACKs.len == 0) {
+                g_string_append_printf(packetString, "NA ");
             } else {
-                g_string_append_printf(packetString, "NA");
+                for (unsigned int i = 0; i < header->selectiveACKs.len; i++) {
+                    unsigned int firstSack = header->selectiveACKs.ranges[i].start;
+                    unsigned int lastSack = header->selectiveACKs.ranges[i].end;
+                    g_string_append_printf(packetString, "%d-%d ", firstSack, lastSack);
+                }
             }
 
-            g_string_append_printf(packetString, " window=%u bytes=%u", header->window, payloadLength);
+            g_string_append_printf(
+                packetString, "window=%u bytes=%u", header->window, payloadLength);
 
             if(!(header->flags & PTCP_NONE)) {
                 g_string_append_printf(packetString, " header=");

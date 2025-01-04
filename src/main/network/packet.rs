@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 use crate::core::worker::Worker;
@@ -12,7 +13,7 @@ use linux_api::errno::Errno;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::util::SyncSendPointer;
 
-#[repr(i32)]
+#[repr(u32)]
 pub enum PacketStatus {
     SndCreated = c::_PacketDeliveryStatusFlags_PDS_SND_CREATED,
     SndTcpEnqueueThrottled = c::_PacketDeliveryStatusFlags_PDS_SND_TCP_ENQUEUE_THROTTLED,
@@ -94,14 +95,13 @@ impl PacketRc {
         // the tcp header allows for a max of 4 begin/end pairs
         assert!(selective_acks.len() <= 4);
 
-        let mut selective_acks_glist = std::ptr::null_mut();
+        let mut sel_acks: c::PacketSelectiveAcks = unsafe { MaybeUninit::zeroed().assume_init() };
 
-        for sack in selective_acks {
-            for val in [sack.0, sack.1] {
-                // integer to pointer cast
-                let val = val as *mut libc::c_void;
-                selective_acks_glist = unsafe { c::g_list_append(selective_acks_glist, val) };
-            }
+        for (i, sack) in selective_acks.iter().enumerate() {
+            assert!(i < 4);
+            sel_acks.ranges[i].start = sack.0;
+            sel_acks.ranges[i].end = sack.1;
+            sel_acks.len += 1;
         }
 
         // TODO: not sure if linux uses milliseconds, but it probably doesn't matter as long as we
@@ -123,7 +123,7 @@ impl PacketRc {
             c::legacypacket_updateTCP(
                 self.c_ptr.ptr(),
                 header.ack,
-                selective_acks_glist,
+                sel_acks,
                 header.window_size.into(),
                 header.window_scale.unwrap_or(0),
                 header.window_scale.is_some(),
@@ -131,9 +131,6 @@ impl PacketRc {
                 timestamp_echo.into(),
             );
         }
-
-        // the C packet should make a copy of the glist, so we can free ours
-        unsafe { c::g_list_free(selective_acks_glist) };
     }
 
     pub fn get_tcp(&self) -> Option<tcp::TcpHeader> {
@@ -149,35 +146,25 @@ impl PacketRc {
             .unwrap()
             .as_millis();
 
-        // need to get the selective acks from a glist, so we'll panic a lot here to simplify things
-
-        let mut selective_acks = header.selectiveACKs;
+        // need to get the selective acks
+        let mut selective_acks: Vec<(u32, u32)> = Vec::new();
+        let sel_acks_c: c::PacketSelectiveAcks = header.selectiveACKs;
 
         // TODO: this selective ack code is untested until the new tcp code uses sacks, so it has
         // not been checked for memory safety issues and there are probably bugs
-        let mut sack_iter = std::iter::from_fn(move || {
-            if selective_acks.is_null() {
-                return None;
+        for i in 0..4 {
+            if i < sel_acks_c.len {
+                let start = sel_acks_c.ranges[i as usize].start;
+                let end = sel_acks_c.ranges[i as usize].end;
+                selective_acks.push((start, end));
+            } else {
+                break;
             }
+        }
 
-            let rv = unsafe { (*selective_acks).data } as u64;
-            selective_acks = unsafe { (*selective_acks).next };
-            Some(u32::try_from(rv).unwrap())
-        });
-
-        let sack_iter = std::iter::from_fn(move || {
-            // we expect the packet sack list to have a length divisible by 2
-            let begin = sack_iter.next()?;
-            let end = sack_iter.next().unwrap();
-
-            Some((begin, end))
-        });
-
-        let selective_acks: Vec<_> = sack_iter.collect();
         let selective_acks = tcp::util::SmallArrayBackedSlice::new(&selective_acks).unwrap();
 
-        // the C packet doesn't have the distinction between no sack option or a sack option of
-        // length 0, so we'll assume that an empty list is the same as no list
+        // We'll assume that an empty list is the same as no list.
         let selective_acks = if !selective_acks.is_empty() {
             Some(selective_acks)
         } else {
@@ -719,7 +706,7 @@ mod export {
     pub extern "C-unwind" fn packet_updateTCP(
         packet: *mut c::Packet,
         ack: libc::c_uint,
-        sel_acks: *mut c::GList,
+        sel_acks: c::PacketSelectiveAcks,
         window: libc::c_uint,
         window_scale: libc::c_uchar,
         window_scale_set: bool,
@@ -778,11 +765,6 @@ mod export {
         unsafe {
             c::legacypacket_copyPayloadWithMemoryManager(packet, payload_offset, buf, buf_len, mem)
         }
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn packet_copyTCPSelectiveACKs(packet: *mut c::Packet) -> *mut c::GList {
-        unsafe { c::legacypacket_copyTCPSelectiveACKs(packet) }
     }
 
     #[no_mangle]

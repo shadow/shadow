@@ -989,10 +989,15 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     }
 }
 
-static gint _tcp_compare_sequence(gconstpointer ptr_1, gconstpointer ptr_2, gpointer user_data) {
-    const guint seq_1 = GPOINTER_TO_INT(ptr_1);
-    const guint seq_2 = GPOINTER_TO_INT(ptr_2);
+static gint _tcp_compare_sequence(gconstpointer ptr_1, gconstpointer ptr_2) {
+    const guint seq_1 = GPOINTER_TO_UINT(ptr_1);
+    const guint seq_2 = GPOINTER_TO_UINT(ptr_2);
     return (seq_1 < seq_2) ? -1 : (seq_1 > seq_2) ? 1 : 0;
+}
+
+static gint _tcp_compare_sequence_data(gconstpointer ptr_1, gconstpointer ptr_2,
+                                       gpointer user_data) {
+    return _tcp_compare_sequence(ptr_1, ptr_2);
 }
 
 /* remove all packets with a sequence number less than the sequence parameter */
@@ -1010,7 +1015,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     while (g_hash_table_iter_next(&iter, &key, NULL)) {
         guint ackedSequence = GPOINTER_TO_INT(key);
         if(ackedSequence < sequence) {
-            g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence, NULL);
+            g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence_data, NULL);
         }
     }
 
@@ -1232,14 +1237,61 @@ static void _tcp_sendShutdownFin(TCP* tcp, const Host* host) {
     }
 }
 
+// Assumes the list is sorted e.g. with _tcp_compare_sequence().
+// This function does not handle overflowing sequence numbers. We are accepting this limitation
+// since the C TCP sockets use per-packet sequence numbers rather than per-byte sequence numbers
+// like the rust TCP sockets, and we expect not to have more than 2^32 packets per socket in a
+// simulation.
+static PacketSelectiveAcks _tcp_selective_acks_from_list(GList* sel_acks_list) {
+    PacketSelectiveAcks sel_acks = {0};
+
+    if (sel_acks_list != NULL) {
+        unsigned int i = 0;
+        unsigned int start = 0;
+        unsigned int end = 0;
+
+        for (GList* iter = sel_acks_list; iter != NULL && i < 4; iter = g_list_next(iter)) {
+            unsigned int seq = GPOINTER_TO_UINT(iter->data);
+
+            if (sel_acks.ranges[i].start == 0 && sel_acks.ranges[i].end == 0) {
+                // Init first range.
+                sel_acks.ranges[i].start = seq;
+                sel_acks.ranges[i].end = seq + 1;
+                sel_acks.len += 1;
+                utility_debugAssert(sel_acks.len <= 4);
+            } else {
+                if (seq == sel_acks.ranges[i].end) {
+                    // Continues a prev range.
+                    sel_acks.ranges[i].end += 1;
+                } else if (seq > sel_acks.ranges[i].end) {
+                    // Found gap, need new range.
+                    i += 1;
+                    if (i >= 4) {
+                        // No ranges left.
+                        break;
+                    }
+                    sel_acks.ranges[i].start = seq;
+                    sel_acks.ranges[i].end = seq + 1;
+                    sel_acks.len += 1;
+                    utility_debugAssert(sel_acks.len <= 4);
+                }
+            }
+        }
+    }
+
+    return sel_acks;
+}
+
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     CSimulationTime now = worker_getCurrentSimulationTime();
 
+    PacketSelectiveAcks sel_acks = _tcp_selective_acks_from_list(tcp->send.selectiveACKs);
+
     /* update TCP header to our current advertised window and acknowledgment and timestamps */
-    packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, 0,
-                     false, now, tcp->receive.lastTimestamp);
+    packet_updateTCP(packet, tcp->receive.next, sel_acks, tcp->receive.window, 0, false, now,
+                     tcp->receive.lastTimestamp);
 
     /* keep track of the last things we sent them */
     tcp->send.lastAcknowledgment = tcp->receive.next;
@@ -1784,20 +1836,27 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
     return tcp;
 }
 
-static GList* _tcp_removeSacks(GList* selectiveACKs, gint sequence) {
+// This function assumes that the selective acks list is sorted.
+static GList* _tcp_removeSacks(GList* selectiveACKs, guint sequence) {
     GList *unacked = NULL;
     if(selectiveACKs) {
         GList *iter = selectiveACKs;
         while(iter) {
-            gint sackSequence = GPOINTER_TO_INT(iter->data);
+            guint sackSequence = GPOINTER_TO_UINT(iter->data);
 
+            // g_list_prepend does not have to traverse the list to add items, so prefer that over
+            // append. https://docs.gtk.org/glib/type_func.List.append.html
             if(sackSequence > sequence) {
-                unacked = g_list_append(unacked, iter->data);
+                unacked = g_list_prepend(unacked, iter->data);
             }
 
             iter = g_list_next(iter);
         }
         g_list_free(selectiveACKs);
+    }
+    // Let's guarantee that the items are sorted, since the caller makes that assumption.
+    if (unacked != NULL) {
+        unacked = g_list_sort(unacked, _tcp_compare_sequence);
     }
     return unacked;
 }
@@ -1829,17 +1888,18 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
 
         /* SACK: if not next packet, one was dropped and we need to include this in the selective ACKs */
         if(!isNextPacket && packetFits) {
-            tcp->send.selectiveACKs = g_list_append(tcp->send.selectiveACKs, GINT_TO_POINTER(header->sequence));
+            tcp->send.selectiveACKs = g_list_insert_sorted(
+                tcp->send.selectiveACKs, GUINT_TO_POINTER(header->sequence), _tcp_compare_sequence);
         } else if(tcp->send.selectiveACKs && g_list_length(tcp->send.selectiveACKs) > 0) {
             /* find the first gap in SACKs and remove everything before it */
             GList *iter = g_list_first(tcp->send.selectiveACKs);
             GList *next = g_list_next(iter);
 
-            gint firstSequence = GPOINTER_TO_INT(iter->data);
+            guint firstSequence = GPOINTER_TO_UINT(iter->data);
             if(firstSequence <= header->sequence + 1) {
                 while(next) {
-                    gint currSequence = GPOINTER_TO_INT(iter->data);
-                    gint nextSequence = GPOINTER_TO_INT(next->data);
+                    guint currSequence = GPOINTER_TO_UINT(iter->data);
+                    guint nextSequence = GPOINTER_TO_UINT(next->data);
                     /* check for a gap in sequences */
                     if(currSequence + 1 < nextSequence && currSequence > header->sequence) {
                         break;
@@ -1848,7 +1908,8 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
                     next = g_list_next(iter);
                 }
 
-                tcp->send.selectiveACKs = _tcp_removeSacks(tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
+                tcp->send.selectiveACKs =
+                    _tcp_removeSacks(tcp->send.selectiveACKs, GPOINTER_TO_UINT(iter->data));
             }
         }
 
@@ -2279,14 +2340,8 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
         return;
     }
 
-    GList* selectiveACKs = packet_copyTCPSelectiveACKs(packet);
-
-    if (selectiveACKs) {
-       retransmit_tally_mark_sacked(tcp->retransmit.tally, selectiveACKs);
-    }
-
-    if(selectiveACKs) {
-        g_list_free(selectiveACKs);
+    if (header->selectiveACKs.len > 0) {
+        retransmit_tally_mark_sacked(tcp->retransmit.tally, header->selectiveACKs);
     }
 
     /* update the last time stamp value (RFC 1323) */

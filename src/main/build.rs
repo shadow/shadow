@@ -165,9 +165,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         // Haven't decided how to handle glib struct types yet. Avoid using them
         // until we do.
         .blocklist_type("_?GQueue")
-        .allowlist_function("g_list_append")
-        .allowlist_function("g_list_free")
-        .allowlist_type("GList")
+        .blocklist_type("GList")
         // Needs GQueue
         .opaque_type("_?LegacySocket.*")
         .blocklist_type("_?Socket.*")
@@ -226,6 +224,8 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
         .allowlist_type("PacketDeliveryStatusFlags")
+        .allowlist_type("PacketSelectiveAckRange")
+        .allowlist_type("PacketSelectiveAcks")
         .allowlist_type("ShadowSyscallNum")
         .allowlist_var("AFFINITY_UNINIT")
         .allowlist_var("CONFIG_HEADER_SIZE_TCP")

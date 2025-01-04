@@ -32,7 +32,7 @@ struct _PacketTCPHeader {
 
     guint sequence;
     guint acknowledgment;
-    GList* selectiveACKs;
+    PacketSelectiveAcks selectiveACKs;
     guint window;
     unsigned char windowScale;
     bool windowScaleSet;
@@ -68,8 +68,9 @@ void legacypacket_setTCP(Packet* packet, ProtocolTCPFlags flags, in_addr_t sourc
                          in_port_t sourcePort, in_addr_t destinationIP, in_port_t destinationPort,
                          guint sequence);
 
-void legacypacket_updateTCP(Packet* packet, guint acknowledgement, GList* selectiveACKs,
-                            guint window, unsigned char windowScale, bool windowScaleSet,
+void legacypacket_updateTCP(Packet* packet, guint acknowledgement,
+                            PacketSelectiveAcks selectiveACKs, guint window,
+                            unsigned char windowScale, bool windowScaleSet,
                             CSimulationTime timestampValue, CSimulationTime timestampEcho);
 
 gsize legacypacket_getTotalSize(const Packet* packet);
@@ -93,7 +94,6 @@ gssize legacypacket_copyPayloadWithMemoryManager(const Packet* packet, gsize pay
                                                  MemoryManager* mem);
 guint legacypacket_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                      gsize bufferLength);
-GList* legacypacket_copyTCPSelectiveACKs(Packet* packet);
 PacketTCPHeader* legacypacket_getTCPHeader(const Packet* packet);
 gint legacypacket_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 

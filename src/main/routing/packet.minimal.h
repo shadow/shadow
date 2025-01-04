@@ -9,7 +9,6 @@
 
 typedef struct _Packet Packet;
 
-typedef enum _PacketDeliveryStatusFlags PacketDeliveryStatusFlags;
 enum _PacketDeliveryStatusFlags {
     PDS_NONE = 0,
     PDS_SND_CREATED = 1 << 1,
@@ -35,7 +34,29 @@ enum _PacketDeliveryStatusFlags {
     PDS_RELAY_CACHED = 1 << 21,
     PDS_RELAY_FORWARDED = 1 << 22,
 };
+// typedef needs to come after above enum definition to make our cpp code compile in
+// tcp_retransmit_tally.cc.
+typedef enum _PacketDeliveryStatusFlags PacketDeliveryStatusFlags;
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
+
+// At most 32 bytes are available in the TCP header for selective acks. They represent ranges of
+// sequence numbers that have been acked, so each is a 4-byte uint. We can include a maximum of 4
+// ranges in total, where each range is `[start, end)` (start is inclusive, end is exclusive).
+typedef struct _PacketSelectiveAckRange PacketSelectiveAckRange;
+struct _PacketSelectiveAckRange {
+    // The start (left) part of the range is inclusive.
+    unsigned int start;
+    // The end (right) part of the range is exclusive.
+    unsigned int end;
+};
+
+typedef struct _PacketSelectiveAcks PacketSelectiveAcks;
+struct _PacketSelectiveAcks {
+    // The number of meaningful ranges in the ranges array. Should be <= 4.
+    unsigned int len;
+    // The selective ack ranges.
+    PacketSelectiveAckRange ranges[4];
+};
 
 #endif
