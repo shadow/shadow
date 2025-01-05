@@ -9,7 +9,6 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             // Avoid re-exporting C types
             "LogLevel".into(),
             "SysCallCondition".into(),
-            "Packet".into(),
             "Process".into(),
             "EmulatedTime".into(),
             "SimulationTime".into(),
@@ -203,7 +202,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_function("_syscallhandler_.*")
         .allowlist_function("worker_.*")
         .allowlist_function("workerc_.*")
-        .allowlist_function("legacypacket_.*")
         .allowlist_function("epoll_new")
         .allowlist_function("glib_check_version")
         //# Needs GQueue
@@ -226,6 +224,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("PacketDeliveryStatusFlags")
         .allowlist_type("PacketSelectiveAckRange")
         .allowlist_type("PacketSelectiveAcks")
+        .allowlist_type("PacketTCPHeader")
         .allowlist_type("ShadowSyscallNum")
         .allowlist_var("AFFINITY_UNINIT")
         .allowlist_var("CONFIG_HEADER_SIZE_TCP")
@@ -285,6 +284,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .raw_line("use crate::host::syscall::handler::SyscallHandler;")
         .raw_line("use crate::host::syscall::types::SyscallReturn;")
         .raw_line("use crate::host::thread::Thread;")
+        .raw_line("use crate::network::packet::Packet;")
         .raw_line("use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;")
         .raw_line("")
         .raw_line("use shadow_shim_helper_rs::syscall_types::{ManagedPhysicalMemoryAddr, SyscallArgs, UntypedForeignPtr};")
@@ -354,8 +354,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/handler/uio.c",
         "host/syscall/protected.c",
         "host/syscall/syscall_condition.c",
-        "routing/payload.c",
-        "routing/packet.c",
         "utility/priority_queue.c",
         "utility/rpath.c",
         "utility/utility.c",

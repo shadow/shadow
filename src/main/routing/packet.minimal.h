@@ -7,8 +7,6 @@
 #ifndef SHD_PACKET_MINIMAL_H_
 #define SHD_PACKET_MINIMAL_H_
 
-typedef struct _Packet Packet;
-
 enum _PacketDeliveryStatusFlags {
     PDS_NONE = 0,
     PDS_SND_CREATED = 1 << 1,
