@@ -139,15 +139,16 @@ impl LegacyTcpSocket {
         _recv_time: EmulatedTime,
     ) {
         Worker::with_active_host(|host| {
-            // the C code should ref the inner `Packet`, so it's fine to drop the `PacketRc`
+            // Here we drop the `PacketRc`, and we transfer our ref to the inner `Packet` to C.
             unsafe {
-                c::legacysocket_pushInPacket(self.as_legacy_socket(), host, packet.borrow_inner())
+                c::legacysocket_pushInPacket(self.as_legacy_socket(), host, packet.into_raw())
             };
         })
         .unwrap();
     }
 
     pub fn pull_out_packet(&mut self, _cb_queue: &mut CallbackQueue) -> Option<PacketRc> {
+        // If we get a `Packet`, a ref to it is transfered to us from the C code.
         let packet = Worker::with_active_host(|host| unsafe {
             c::legacysocket_pullOutPacket(self.as_legacy_socket(), host)
         })
@@ -157,25 +158,26 @@ impl LegacyTcpSocket {
             return None;
         }
 
+        // We own the ref to the `Packet` now, let the C code borrow it.
         Worker::with_active_host(|host| unsafe {
             c::tcp_networkInterfaceIsAboutToSendPacket(self.as_legacy_tcp(), host, packet);
         })
         .unwrap();
 
+        // We own the ref to the `Packet`, track it in a `PacketRc` and return it to the caller.
         Some(PacketRc::from_raw(packet))
     }
 
     fn peek_packet(&self) -> Option<PacketRc> {
+        // If we get a `Packet`, a ref to it is transfered to us from the C code.
         let packet = unsafe { c::legacysocket_peekNextOutPacket(self.as_legacy_socket()) };
 
         if packet.is_null() {
             return None;
         }
 
-        let packet = PacketRc::from_raw(packet);
-        // We need to increment the ref count, i.e. don't let it decrement on drop.
-        packet.clone().into_inner();
-        Some(packet)
+        // We own the ref to the `Packet`, track it in a `PacketRc` and return it to the caller.
+        Some(PacketRc::from_raw(packet))
     }
 
     pub fn peek_next_packet_priority(&self) -> Option<FifoPacketPriority> {

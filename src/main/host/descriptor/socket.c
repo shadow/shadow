@@ -139,10 +139,15 @@ gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_
 }
 
 void legacysocket_pushInPacket(LegacySocket* socket, const Host* host, Packet* packet) {
+    // We took control of the ref to `Packet` from the Rust caller.
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
+    // The TCP code will only borrow our ref to `Packet` in the process function, but we still own
+    // it. If the TCP layer wants to hold another ref to the packet, it should call `packet_ref()`.
     socket->vtable->process(socket, host, packet);
+    // We drop our ref to `Packet` that we got from the Rust caller.
+    packet_unref(packet);
 }
 
 void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* packet) {
@@ -154,6 +159,7 @@ void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* pac
 /* functions implemented by socket */
 
 Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
+    // We own a ref to the packet since it was sitting in our queue.
     Packet* packet = legacysocket_removeFromOutputBuffer(socket, host);
 
     /* if packet was NULL, then the buffer shouldn't have changed so we can skip the check */
@@ -166,16 +172,24 @@ Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
         }
     }
 
+    // We owned the ref to the packet, but here we transfer that ref to the Rust caller.
     return packet;
 }
 
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket) {
     MAGIC_ASSERT(socket);
+    Packet* packet = NULL;
     if(!g_queue_is_empty(socket->outputControlBuffer)) {
-        return g_queue_peek_head(socket->outputControlBuffer);
+        packet = g_queue_peek_head(socket->outputControlBuffer);
     } else {
-        return g_queue_peek_head(socket->outputBuffer);
+        packet = g_queue_peek_head(socket->outputBuffer);
     }
+    // We are still going to hold our reference for the queue above, so we need to increment by one
+    // since we are returning a reference to the Rust calling code.
+    if (packet != NULL) {
+        packet_ref(packet);
+    }
+    return packet;
 }
 
 Packet* legacysocket_peekNextInPacket(const LegacySocket* socket) {
