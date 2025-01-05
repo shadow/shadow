@@ -7,13 +7,11 @@
 #ifndef SHD_PACKET_H_
 #define SHD_PACKET_H_
 
-#include <glib.h>
 #include <netinet/in.h>
 
 #include "main/routing/packet.minimal.h"
 
 #include "main/bindings/c/bindings-opaque.h"
-#include "main/core/definitions.h"
 #include "main/host/protocol.h"
 
 typedef struct _PacketTCPHeader PacketTCPHeader;
@@ -30,10 +28,10 @@ struct _PacketTCPHeader {
     // port is in network byte order
     in_port_t destinationPort;
 
-    guint sequence;
-    guint acknowledgment;
+    unsigned int sequence;
+    unsigned int acknowledgment;
     PacketSelectiveAcks selectiveACKs;
-    guint window;
+    unsigned int window;
     unsigned char windowScale;
     bool windowScaleSet;
     CSimulationTime timestampValue;
@@ -94,7 +92,7 @@ gssize legacypacket_copyPayloadWithMemoryManager(const Packet* packet, gsize pay
                                                  MemoryManager* mem);
 guint legacypacket_copyPayloadShadow(const Packet* packet, gsize payloadOffset, void* buffer,
                                      gsize bufferLength);
-PacketTCPHeader* legacypacket_getTCPHeader(const Packet* packet);
+PacketTCPHeader legacypacket_getTCPHeader(const Packet* packet);
 gint legacypacket_compareTCPSequence(Packet* packet1, Packet* packet2, gpointer user_data);
 
 void legacypacket_addDeliveryStatus(Packet* packet, PacketDeliveryStatusFlags status);

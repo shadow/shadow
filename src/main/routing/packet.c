@@ -337,9 +337,8 @@ gsize legacypacket_getHeaderSize(const Packet* packet) {
         gsize size = CONFIG_HEADER_SIZE_TCPIP;
 
         // tcp options use additional bytes
-        PacketTCPHeader* header = legacypacket_getTCPHeader(packet);
-        utility_alwaysAssert(header != NULL);
-        if (header->windowScaleSet) {
+        PacketTCPHeader header = legacypacket_getTCPHeader(packet);
+        if (header.windowScaleSet) {
             // window scale option is 3 bytes
             size += 3;
         }
@@ -503,10 +502,10 @@ guint legacypacket_copyPayloadShadow(const Packet* packet, gsize payloadOffset, 
     }
 }
 
-PacketTCPHeader* legacypacket_getTCPHeader(const Packet* packet) {
+PacketTCPHeader legacypacket_getTCPHeader(const Packet* packet) {
     MAGIC_ASSERT(packet);
     utility_alwaysAssert(packet->protocol == PTCP);
-    return (PacketTCPHeader*)packet->header;
+    return *((PacketTCPHeader*)packet->header);
 }
 
 static const gchar* _packet_deliveryStatusToAscii(PacketDeliveryStatusFlags status) {

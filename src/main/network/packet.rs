@@ -135,7 +135,6 @@ impl PacketRc {
 
     pub fn get_tcp(&self) -> Option<tcp::TcpHeader> {
         let header = unsafe { c::legacypacket_getTCPHeader(self.c_ptr.ptr()) };
-        let header = unsafe { header.as_ref()? };
 
         // TODO: not sure if linux uses milliseconds, but it probably doesn't matter as long as we
         // converted it to a SimulationTime the same way when sending the packet
@@ -463,12 +462,6 @@ fn display_tcp_bytes(packet: *const c::Packet, mut writer: impl Write) -> std::i
     );
 
     let tcp_header = unsafe { c::legacypacket_getTCPHeader(packet) };
-    assert!(!tcp_header.is_null());
-    assert_eq!(
-        tcp_header as usize % std::mem::align_of::<c::PacketTCPHeader>(),
-        0
-    );
-    let tcp_header = unsafe { tcp_header.as_ref() }.unwrap();
 
     // process TCP options
 
@@ -768,9 +761,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C-unwind" fn packet_getTCPHeader(
-        packet: *const c::Packet,
-    ) -> *mut c::PacketTCPHeader {
+    pub extern "C-unwind" fn packet_getTCPHeader(packet: *const c::Packet) -> c::PacketTCPHeader {
         unsafe { c::legacypacket_getTCPHeader(packet) }
     }
 

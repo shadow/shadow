@@ -835,8 +835,8 @@ static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     // Don't store old packets whose data we already gave to the plugin.
-    PacketTCPHeader* hdr = packet_getTCPHeader(packet);
-    bool already_received = hdr->sequence < tcp->receive.next;
+    PacketTCPHeader hdr = packet_getTCPHeader(packet);
+    bool already_received = hdr.sequence < tcp->receive.next;
 
     if (!already_received && !priorityqueue_find(tcp->unorderedInput, packet)) {
         /* TCP wants in-order data */
@@ -971,8 +971,8 @@ static void _tcp_sendControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags 
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
-    gpointer key = GINT_TO_POINTER(header->sequence);
+    PacketTCPHeader header = packet_getTCPHeader(packet);
+    gpointer key = GINT_TO_POINTER(header.sequence);
 
     /* if it is already in the queue, it won't consume another packet reference */
     if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
@@ -1184,10 +1184,7 @@ static void _tcp_retransmitPacket(TCP* tcp, const Host* host, gint sequence) {
         return;
     }
 
-    PacketTCPHeader* hdr = packet_getTCPHeader(packet);
-
     trace("retransmitting packet %d", sequence);
-    // fprintf(stderr, "R- retransmitting packet %d with ts %llu\n", sequence, hdr.timestampValue);
 
     /* remove from queue and update length and status.
      * calling steal means that the packet ref count is not decremented */
@@ -1298,14 +1295,14 @@ void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet*
     tcp->send.lastWindow = tcp->receive.window;
     tcp->info.lastAckSent = now;
 
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    PacketTCPHeader header = packet_getTCPHeader(packet);
 
-    if(header->flags & PTCP_ACK) {
+    if (header.flags & PTCP_ACK) {
         /* we are sending an ACK already, so we may not need any delayed ACK */
         tcp->send.delayedACKCounter = 0;
     }
 
-    if(header->sequence > 0) {
+    if (header.sequence > 0) {
         /* store in retransmission buffer */
         _tcp_addRetransmit(tcp, packet);
 
@@ -1368,18 +1365,20 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         }
 
         gsize length = packet_getPayloadSize(packet);
-        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        PacketTCPHeader header = packet_getTCPHeader(packet);
 
         if(length > 0) {
             /* we cant send it if our window is too small */
-            gboolean fitsInWindow = (header->sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
+            gboolean fitsInWindow =
+                (header.sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
             /* we cant send it if we dont have enough space */
             gboolean fitsInBuffer =
                 (length <= legacysocket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
 
             if(!fitsInBuffer || !fitsInWindow) {
-                _rswlog(tcp, "Can't retransmit %d, inWindow=%d, inBuffer=%d\n", header->sequence, fitsInWindow, fitsInBuffer);
+                _rswlog(tcp, "Can't retransmit %d, inWindow=%d, inBuffer=%d\n", header.sequence,
+                        fitsInWindow, fitsInBuffer);
                 /* we cant send the packet yet */
                 break;
             } else {
@@ -1405,9 +1404,9 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* we update `FileState_WRITABLE` below */
 
         tcp->send.packetsSent++;
-        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
+        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header.sequence);
 
-        _rswlog(tcp, "Sent %d\n", header->sequence);
+        _rswlog(tcp, "Sent %d\n", header.sequence);
 
         /* we already checked for space, so this should always succeed */
         utility_debugAssert(success);
@@ -1417,17 +1416,17 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
     while(!priorityqueue_isEmpty(tcp->unorderedInput)) {
         Packet* packet = priorityqueue_peek(tcp->unorderedInput);
 
-        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        PacketTCPHeader header = packet_getTCPHeader(packet);
 
-        _rswlog(tcp, "I just received packet %d\n", header->sequence);
-        if (header->sequence < tcp->receive.next) {
+        _rswlog(tcp, "I just received packet %d\n", header.sequence);
+        if (header.sequence < tcp->receive.next) {
             // This is a (probably retransmitted) copy of a packet we already stored
             // and delivered to the plugin.
-            trace("Removing packet %u with duplicate data", header->sequence);
+            trace("Removing packet %u with duplicate data", header.sequence);
             priorityqueue_pop(tcp->unorderedInput);
             tcp->unorderedInputLength -= packet_getPayloadSize(packet);
             packet_unref(packet);
-        } else if (header->sequence == tcp->receive.next) {
+        } else if (header.sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
             gboolean fitInBuffer = legacysocket_addToInputBuffer(&(tcp->super), host, packet);
 
@@ -1442,7 +1441,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
 
             if(fitInBuffer) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
-                tcp->receive.lastSequence = header->sequence;
+                tcp->receive.lastSequence = header.sequence;
                 priorityqueue_pop(tcp->unorderedInput);
                 tcp->unorderedInputLength -= packet_getPayloadSize(packet);
                 packet_unref(packet);
@@ -1451,8 +1450,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
             }
         }
 
-        _rswlog(tcp, "Could not buffer %d, was expecting %d\n", header->sequence,
-                tcp->receive.next);
+        _rswlog(tcp, "Could not buffer %d, was expecting %d\n", header.sequence, tcp->receive.next);
 
         /* we could not buffer it because its out of order or we have no space */
         break;
@@ -2072,7 +2070,8 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    PacketTCPHeader header_concrete = packet_getTCPHeader(packet);
+    PacketTCPHeader* header = &header_concrete;
 
     /* if packet is reset, don't process */
     if(header->flags & PTCP_RST) {
