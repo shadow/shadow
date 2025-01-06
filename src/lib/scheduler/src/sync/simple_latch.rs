@@ -29,7 +29,7 @@ pub struct Latch {
 #[derive(Debug, Clone)]
 pub struct LatchWaiter {
     /// The generation of this waiter.
-    gen: u32,
+    waiter_gen: u32,
     /// The read-only generation of the latch.
     latch_gen: Arc<AtomicU32>,
     /// Should we sched_yield in a spinloop indefinitely rather than futex-wait?
@@ -55,7 +55,7 @@ impl Latch {
         LatchWaiter {
             // we're the only one who can mutate the atomic,
             // so there's no race condition here
-            gen: self.latch_gen.load(Ordering::Relaxed),
+            waiter_gen: self.latch_gen.load(Ordering::Relaxed),
             latch_gen: Arc::clone(&self.latch_gen),
             spin_yield,
         }
@@ -93,7 +93,7 @@ impl LatchWaiter {
         loop {
             let latch_gen = self.latch_gen.load(Ordering::Acquire);
 
-            match latch_gen.wrapping_sub(self.gen) {
+            match latch_gen.wrapping_sub(self.waiter_gen) {
                 // the latch has been opened and we can advance to the next generation
                 1 => break,
                 // the latch has not been opened and we're at the same generation
@@ -124,7 +124,7 @@ impl LatchWaiter {
             }
         }
 
-        self.gen = self.gen.wrapping_add(1);
+        self.waiter_gen = self.waiter_gen.wrapping_add(1);
     }
 }
 
