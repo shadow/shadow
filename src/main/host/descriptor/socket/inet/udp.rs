@@ -107,7 +107,7 @@ impl UdpSocket {
 
     pub fn push_in_packet(
         &mut self,
-        mut packet: PacketRc,
+        packet: PacketRc,
         cb_queue: &mut CallbackQueue,
         recv_time: EmulatedTime,
     ) {
@@ -179,7 +179,7 @@ impl UdpSocket {
         log::trace!("Removed a message from the UDP socket's send buffer");
 
         // We transfer the `Bytes` directly from the buffer to the packet without copying them.
-        let mut packet =
+        let packet =
             PacketRc::new_ipv4_udp(header.src, header.dst, message, header.packet_priority);
         packet.add_status(PacketStatus::SndCreated);
 

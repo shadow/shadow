@@ -237,7 +237,7 @@ impl PacketDevice for NetworkInterface {
             };
 
             // The socket was in our sendable queue, so it _should_ have a packet.
-            let Some(mut packet) = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            let Some(packet) = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 socket.borrow_mut().pull_out_packet(cb_queue)
             }) else {
                 // It is possible that the socket changed state since it was added to our queue, so
@@ -260,7 +260,7 @@ impl PacketDevice for NetworkInterface {
     }
 
     // Pushes a packet from the simulated network into the interface.
-    fn push(&self, mut packet: PacketRc) {
+    fn push(&self, packet: PacketRc) {
         // The packet is successfully received by this interface.
         packet.add_status(PacketStatus::RcvInterfaceReceived);
 

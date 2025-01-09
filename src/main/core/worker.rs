@@ -321,7 +321,7 @@ impl Worker {
 
     /// The packet will be dropped if the packet's destination IP is not part of the simulation (no
     /// host has been configured for the IP).
-    pub fn send_packet(src_host: &Host, mut packetrc: PacketRc) {
+    pub fn send_packet(src_host: &Host, packetrc: PacketRc) {
         let current_time = Worker::current_time().unwrap();
         let round_end_time = Worker::round_end_time().unwrap();
 

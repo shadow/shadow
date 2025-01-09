@@ -142,9 +142,8 @@ impl CoDelQueue {
             }
         };
 
-        maybe_packet.map(|mut p| {
+        maybe_packet.inspect(|p| {
             p.add_status(PacketStatus::RouterDequeued);
-            p
         })
     }
 
@@ -302,7 +301,7 @@ impl CoDelQueue {
     /// Append a packet to the end of the queue.
     /// Requires the current time as an argument to avoid calling into the
     /// worker module internally.
-    pub fn push(&mut self, mut packet: PacketRc, now: EmulatedTime) {
+    pub fn push(&mut self, packet: PacketRc, now: EmulatedTime) {
         if self.elements.len() < LIMIT {
             packet.add_status(PacketStatus::RouterEnqueued);
             self.total_bytes_stored += packet.total_size();
@@ -318,7 +317,7 @@ impl CoDelQueue {
         }
     }
 
-    fn drop_packet(&self, mut packet: PacketRc) {
+    fn drop_packet(&self, packet: PacketRc) {
         packet.add_status(PacketStatus::RouterDropped);
     }
 }
