@@ -58,9 +58,8 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "main/host/descriptor/tcp.h".into(),
             "main/host/descriptor/epoll.h".into(),
             "main/host/futex.h".into(),
-            "main/host/protocol.h".into(),
             "main/host/status_listener.h".into(),
-            "main/routing/packet.minimal.h".into(),
+            "main/network/legacypacket.h".into(),
         ];
         config.sys_includes = vec![
             "sys/socket.h".into(),
@@ -158,7 +157,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/protected.h")
         .header("host/syscall/syscall_condition.h")
         .header("host/syscall_numbers.h")
-        .header("routing/packet.h")
+        .header("network/legacypacket.h")
         .header("utility/rpath.h")
         .header("utility/utility.h")
         // Haven't decided how to handle glib struct types yet. Avoid using them
