@@ -270,8 +270,8 @@ impl PacketDevice for NetworkInterface {
 
         // Find the socket that should process the packet.
         let protocol = packet.protocol();
-        let local = SocketAddrV4::new(self.addr, packet.dst_address().port());
-        let peer = packet.src_address();
+        let local = SocketAddrV4::new(self.addr, packet.dst_ipv4_address().port());
+        let peer = packet.src_ipv4_address();
         let key = AssociatedSocketKey::new(protocol, local, peer);
 
         // First check for a socket with the specific association.

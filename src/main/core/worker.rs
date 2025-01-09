@@ -334,8 +334,8 @@ impl Worker {
             return;
         }
 
-        let src_ip = *packetrc.src_address().ip();
-        let dst_ip = *packetrc.dst_address().ip();
+        let src_ip = *packetrc.src_ipv4_address().ip();
+        let dst_ip = *packetrc.dst_ipv4_address().ip();
         let payload_size = packetrc.payload_len();
 
         let Some(dst_host_id) = Worker::resolve_ip_to_host_id(dst_ip) else {

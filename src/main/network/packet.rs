@@ -413,7 +413,7 @@ impl Packet {
     /// Panics
     ///
     /// This function panics if the source address is not an IPv4 address.
-    pub fn src_address(&self) -> SocketAddrV4 {
+    pub fn src_ipv4_address(&self) -> SocketAddrV4 {
         let IpAddr::V4(addr) = self.header.src else {
             unimplemented!()
         };
@@ -432,7 +432,7 @@ impl Packet {
     /// Panics
     ///
     /// This function panics if the destination address is not an IPv4 address.
-    pub fn dst_address(&self) -> SocketAddrV4 {
+    pub fn dst_ipv4_address(&self) -> SocketAddrV4 {
         let IpAddr::V4(addr) = self.header.dst else {
             unimplemented!()
         };
@@ -822,8 +822,8 @@ impl PacketDisplay for Packet {
         let time_to_live: u8 = 64;
         let iana_protocol: u8 = self.data.iana_protocol().number();
         let header_checksum: u16 = 0x0;
-        let source_ip: [u8; 4] = self.src_address().ip().to_bits().to_be_bytes();
-        let dest_ip: [u8; 4] = self.dst_address().ip().to_bits().to_be_bytes();
+        let source_ip: [u8; 4] = self.src_ipv4_address().ip().to_bits().to_be_bytes();
+        let dest_ip: [u8; 4] = self.dst_ipv4_address().ip().to_bits().to_be_bytes();
 
         // version and header length: 1 byte
         // DSCP + ECN: 1 byte
@@ -1374,7 +1374,7 @@ mod export {
     #[no_mangle]
     pub extern "C-unwind" fn packet_getDestinationIP(packet_ptr: *const Packet) -> libc::in_addr_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
-        u32::to_be((*packet.dst_address().ip()).into())
+        u32::to_be((*packet.dst_ipv4_address().ip()).into())
     }
 
     #[no_mangle]
@@ -1382,19 +1382,19 @@ mod export {
         packet_ptr: *const Packet,
     ) -> libc::in_port_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
-        u16::to_be(packet.dst_address().port())
+        u16::to_be(packet.dst_ipv4_address().port())
     }
 
     #[no_mangle]
     pub extern "C-unwind" fn packet_getSourceIP(packet_ptr: *const Packet) -> libc::in_addr_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
-        u32::to_be((*packet.src_address().ip()).into())
+        u32::to_be((*packet.src_ipv4_address().ip()).into())
     }
 
     #[no_mangle]
     pub extern "C-unwind" fn packet_getSourcePort(packet_ptr: *const Packet) -> libc::in_port_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
-        u16::to_be(packet.src_address().port())
+        u16::to_be(packet.src_ipv4_address().port())
     }
 
     #[no_mangle]
