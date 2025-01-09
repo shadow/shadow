@@ -214,7 +214,7 @@ impl Relay {
         // Continue forwarding until we run out of either packets or tokens.
         loop {
             // Get next packet from our local cache, or from the source device.
-            let Some(mut packet) = internal.next_packet.take().or_else(|| src.pop()) else {
+            let Some(packet) = internal.next_packet.take().or_else(|| src.pop()) else {
                 // Ran out of packets to forward.
                 internal.state = RelayState::Idle;
                 return None;

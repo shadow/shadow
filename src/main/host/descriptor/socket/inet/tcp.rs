@@ -196,7 +196,7 @@ impl TcpSocket {
 
     pub fn push_in_packet(
         &mut self,
-        mut packet: PacketRc,
+        packet: PacketRc,
         cb_queue: &mut CallbackQueue,
         _recv_time: EmulatedTime,
     ) {
@@ -261,7 +261,7 @@ impl TcpSocket {
         // We transfer the `Bytes` objects directly from the tcp state's `Payload` object to the
         // packet without copying the bytes themselves.
         // TODO: set packet priority?
-        let mut packet = PacketRc::new_ipv4_tcp(header, payload, 0);
+        let packet = PacketRc::new_ipv4_tcp(header, payload, 0);
         packet.add_status(PacketStatus::SndCreated);
 
         Some(packet)
