@@ -120,7 +120,7 @@ version = "0.71.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "360897d4f2fdeea5d32f6dac9287952ae5babdc2aad42ad787c9470a4a6e3fee"
 dependencies = [
- "bitflags 2.6.0",
+ "bitflags",
  "cexpr",
  "clang-sys",
  "itertools 0.13.0",
@@ -133,12 +133,6 @@ dependencies = [
  "shlex",
  "syn 2.0.79",
 ]
-
-[[package]]
-name = "bitflags"
-version = "1.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
@@ -718,7 +712,7 @@ dependencies = [
 name = "linux-api"
 version = "0.0.0"
 dependencies = [
- "bitflags 2.6.0",
+ "bitflags",
  "bytemuck",
  "cbindgen",
  "libc",
@@ -726,7 +720,7 @@ dependencies = [
  "linux-raw-sys 0.7.0",
  "linux-syscall",
  "log",
- "memoffset 0.9.1",
+ "memoffset",
  "naked-function",
  "num_enum",
  "rustix",
@@ -838,15 +832,6 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "memoffset"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
-name = "memoffset"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
@@ -939,28 +924,15 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
-dependencies = [
- "bitflags 1.3.2",
- "cfg-if",
- "libc",
- "memoffset 0.7.1",
- "pin-utils",
-]
-
-[[package]]
-name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
- "bitflags 2.6.0",
+ "bitflags",
  "cfg-if",
  "cfg_aliases",
  "libc",
- "memoffset 0.9.1",
+ "memoffset",
 ]
 
 [[package]]
@@ -1066,12 +1038,6 @@ name = "pin-project-lite"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bda66fc9667c18cb2758a2ac84d1167245054bcf85d5d1aaa6923f45801bdd02"
-
-[[package]]
-name = "pin-utils"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pkg-config"
@@ -1301,7 +1267,7 @@ version = "0.38.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "375116bee2be9ed569afe2154ea6a99dfdffd257f533f187498c2a8f5feaf4ee"
 dependencies = [
- "bitflags 2.6.0",
+ "bitflags",
  "errno",
  "libc",
  "linux-raw-sys 0.4.14",
@@ -1336,7 +1302,7 @@ dependencies = [
  "atomic_refcell",
  "crossbeam",
  "libc",
- "nix 0.29.0",
+ "nix",
  "rand",
 ]
 
@@ -1467,7 +1433,7 @@ dependencies = [
  "atomic_refcell",
  "backtrace",
  "bindgen",
- "bitflags 2.6.0",
+ "bitflags",
  "bytemuck",
  "bytes",
  "cbindgen",
@@ -1481,10 +1447,10 @@ dependencies = [
  "log-c2rust",
  "logger",
  "lzma-rs",
- "memoffset 0.9.1",
+ "memoffset",
  "merge",
  "neli",
- "nix 0.29.0",
+ "nix",
  "once_cell",
  "paste",
  "petgraph",
@@ -1557,7 +1523,7 @@ dependencies = [
  "linux-api",
  "log",
  "logger",
- "nix 0.29.0",
+ "nix",
  "once_cell",
  "rand",
  "shadow-build-common",
@@ -1579,7 +1545,7 @@ dependencies = [
  "libc",
  "linux-api",
  "neli",
- "nix 0.26.4",
+ "nix",
  "once_cell",
  "rand",
  "rustix",
@@ -1601,7 +1567,7 @@ dependencies = [
  "linux-syscall",
  "log",
  "logger",
- "nix 0.29.0",
+ "nix",
  "once_cell",
  "rand",
  "shadow-pod",
@@ -1738,7 +1704,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 name = "tcp"
 version = "0.0.0"
 dependencies = [
- "bitflags 2.6.0",
+ "bitflags",
  "bytes",
  "enum_dispatch",
  "slotmap",
@@ -1981,7 +1947,7 @@ dependencies = [
  "criterion",
  "libc",
  "loom",
- "nix 0.29.0",
+ "nix",
  "num_enum",
  "rand",
  "rustc-hash",
