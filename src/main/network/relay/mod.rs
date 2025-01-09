@@ -232,7 +232,7 @@ impl Relay {
                 // Rate limit applies only if we have a token bucket.
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
-                    if let Err(blocking_dur) = tb.comforming_remove(packet.total_size() as u64) {
+                    if let Err(blocking_dur) = tb.comforming_remove(packet.len() as u64) {
                         // Too few tokens, need to block.
                         log::trace!(
                             "Relay src={} dst={} exceeded rate limit, need {} more tokens \
@@ -240,9 +240,9 @@ impl Relay {
                             src.get_address(),
                             packet.dst_address().ip(),
                             packet
-                                .total_size()
+                                .len()
                                 .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
-                            packet.total_size(),
+                            packet.len(),
                             blocking_dur
                         );
 

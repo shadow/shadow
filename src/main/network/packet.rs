@@ -211,24 +211,6 @@ impl PacketRc {
         unsafe { Arc::increment_strong_count(packet_ptr.cast_const()) };
         PacketRc::from_raw(packet_ptr)
     }
-
-    // The following are deprecated API function names that will be dropped in a future commit.
-
-    /// Deprecated, use `new_ipv4_udp_mock()` instead.
-    #[cfg(test)]
-    pub fn mock_new() -> Self {
-        Self::new_ipv4_udp_mock()
-    }
-
-    /// Deprecated, use `new_copy_inner()` instead.
-    pub fn copy(&self) -> Self {
-        self.new_copy_inner()
-    }
-
-    /// Deprecated, use `len()` instead.
-    pub fn total_size(&self) -> usize {
-        self.len()
-    }
 }
 
 impl PartialEq for PacketRc {

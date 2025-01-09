@@ -388,7 +388,7 @@ impl Worker {
         Worker::update_next_event_time(deliver_time);
 
         // copy the packet (except the payload) so the dst gets its own header info
-        let dst_packet = packetrc.copy();
+        let dst_packet = packetrc.new_copy_inner();
         Worker::with(|w| {
             w.shared
                 .push_packet_to_host(dst_packet, dst_host_id, deliver_time, src_host)

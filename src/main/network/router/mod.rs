@@ -96,7 +96,7 @@ mod tests {
         const N: usize = 10;
 
         for _ in 1..=N {
-            router.push_inner(PacketRc::mock_new(), now);
+            router.push_inner(PacketRc::new_ipv4_udp_mock(), now);
             assert!(router.inbound_packets.borrow().peek().is_some());
         }
         for _ in 1..=N {

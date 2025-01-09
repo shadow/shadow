@@ -202,7 +202,7 @@ impl NetworkInterface {
 
             let ts_sec: u32 = now.as_secs().try_into().unwrap_or(u32::MAX);
             let ts_usec: u32 = now.subsec_micros();
-            let packet_len: u32 = packet.total_size().try_into().unwrap_or(u32::MAX);
+            let packet_len: u32 = packet.len().try_into().unwrap_or(u32::MAX);
 
             if let Err(e) = pcap.write_packet_fmt(ts_sec, ts_usec, packet_len, |writer| {
                 packet.display_bytes(writer)
