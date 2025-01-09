@@ -223,7 +223,7 @@ impl Relay {
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == *packet.dst_address().ip();
+            let is_local = src.get_address() == *packet.dst_ipv4_address().ip();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -238,7 +238,7 @@ impl Relay {
                             "Relay src={} dst={} exceeded rate limit, need {} more tokens \
                             for packet of size {}, blocking for {:?}",
                             src.get_address(),
-                            packet.dst_address().ip(),
+                            packet.dst_ipv4_address().ip(),
                             packet
                                 .len()
                                 .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
@@ -266,7 +266,7 @@ impl Relay {
                 src.push(packet);
             } else {
                 // The source and destination are different.
-                let dst = host.get_packet_device(*packet.dst_address().ip());
+                let dst = host.get_packet_device(*packet.dst_ipv4_address().ip());
                 dst.push(packet);
             }
         }

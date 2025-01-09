@@ -114,7 +114,7 @@ impl UdpSocket {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
         if let Some(peer_addr) = self.peer_addr {
-            if peer_addr != packet.src_address() {
+            if peer_addr != packet.src_ipv4_address() {
                 // connect(2): "If the socket sockfd is of type SOCK_DGRAM, then addr is the address
                 // to which datagrams are sent by default, and the only address from which datagrams
                 // are received."
@@ -151,8 +151,8 @@ impl UdpSocket {
         let message = payload.concat();
 
         let header = MessageRecvHeader {
-            src: packet.src_address(),
-            dst: packet.dst_address(),
+            src: packet.src_ipv4_address(),
+            dst: packet.dst_ipv4_address(),
             recv_time,
         };
 
