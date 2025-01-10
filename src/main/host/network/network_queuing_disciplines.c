@@ -94,6 +94,7 @@ static gint _compareSocket(const InetSocket* sa, const InetSocket* sb, FifoSocke
     bool foundb = g_hash_table_lookup_extended(fifo->items, (gpointer)sb, NULL, (gpointer*)&itemb);
     utility_debugAssert(founda && foundb);
 
+    /*
     uint64_t pa = 0;
     uint64_t pb = 0;
 
@@ -110,6 +111,7 @@ static gint _compareSocket(const InetSocket* sa, const InetSocket* sb, FifoSocke
         itema->priority = pa;
         itemb->priority = pb;
     }
+    */
 
     if (itema->priority < itemb->priority) {
         return -1;
