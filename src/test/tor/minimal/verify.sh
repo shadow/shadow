@@ -30,11 +30,13 @@ check_host () {
     fi
 }
 
+# Note: if you add a new client type, you must increase the expected fileserver count too.
 check_host client 10 10
 check_host torclient 10 10
 check_host torbridgeclient 10 10
 check_host torptbridgeclient 10 10
-check_host fileserver 30 30
+# The fileserver count should be a sum of the client counts above.
+check_host fileserver 40 40
 
 # Only require half of the streams to succeed, to mitigate
 # https://github.com/shadow/shadow/issues/2544
