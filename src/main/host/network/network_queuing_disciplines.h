@@ -22,6 +22,8 @@ struct _RrSocketQueue {
 typedef struct _FifoSocketQueue FifoSocketQueue;
 struct _FifoSocketQueue {
     PriorityQueue* queue;
+    GHashTable* items;
+    uint64_t push_order_counter;
 };
 
 void rrsocketqueue_init(RrSocketQueue* self);
