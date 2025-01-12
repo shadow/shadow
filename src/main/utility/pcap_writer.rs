@@ -1,6 +1,5 @@
 use std::io::{Seek, SeekFrom, Write};
 
-use crate::cshadow as c;
 use crate::utility::give::Give;
 
 pub struct PcapWriter<W: Write> {
@@ -145,70 +144,6 @@ impl<W: Write + Seek> PcapWriter<W> {
 pub trait PacketDisplay {
     /// Write the packet bytes.
     fn display_bytes(&self, writer: impl Write) -> std::io::Result<()>;
-}
-
-mod export {
-    use std::ffi::{CStr, OsStr};
-    use std::fs::File;
-    use std::io::BufWriter;
-    use std::os::unix::ffi::OsStrExt;
-
-    use super::*;
-
-    /// A new packet capture writer. Each packet (header and payload) captured will be truncated to
-    /// a length `capture_len`.
-    #[no_mangle]
-    pub extern "C-unwind" fn pcapwriter_new(
-        path: *const libc::c_char,
-        capture_len: u32,
-    ) -> *mut PcapWriter<BufWriter<File>> {
-        assert!(!path.is_null());
-        let path = OsStr::from_bytes(unsafe { CStr::from_ptr(path) }.to_bytes());
-
-        let file = match File::create(path) {
-            Ok(f) => f,
-            Err(e) => {
-                log::warn!("Could not create pcap file: {}", e);
-                return std::ptr::null_mut();
-            }
-        };
-        let file = BufWriter::new(file);
-        Box::into_raw(Box::new(PcapWriter::new(file, capture_len).unwrap()))
-    }
-
-    #[no_mangle]
-    pub extern "C-unwind" fn pcapwriter_free(pcap: *mut PcapWriter<BufWriter<File>>) {
-        if pcap.is_null() {
-            return;
-        }
-        drop(unsafe { Box::from_raw(pcap) });
-    }
-
-    /// If there's an error, returns 1. Otherwise returns 0. If there's an error, the pcap file is
-    /// likely to be corrupt.
-    #[no_mangle]
-    pub extern "C-unwind" fn pcapwriter_writePacket(
-        pcap: *mut PcapWriter<BufWriter<File>>,
-        ts_sec: u32,
-        ts_usec: u32,
-        packet: *const c::Packet,
-    ) -> libc::c_int {
-        assert!(!pcap.is_null());
-        assert!(!packet.is_null());
-
-        let pcap = unsafe { pcap.as_mut() }.unwrap();
-
-        let packet_len: u32 = u32::try_from(unsafe { c::packet_getTotalSize(packet) }).unwrap();
-
-        if let Err(e) = pcap.write_packet_fmt(ts_sec, ts_usec, packet_len, |writer| {
-            packet.display_bytes(writer)
-        }) {
-            log::warn!("Unable to write packet to pcap output: {}", e);
-            return 1;
-        }
-
-        0
-    }
 }
 
 #[cfg(test)]

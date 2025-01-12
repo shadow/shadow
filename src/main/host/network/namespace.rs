@@ -1,11 +1,9 @@
 use std::cell::{Cell, RefCell};
-use std::ffi::OsStr;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
-use shadow_shim_helper_rs::HostId;
 
 use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
@@ -38,21 +36,10 @@ pub struct NetworkNamespace {
 }
 
 impl NetworkNamespace {
-    pub fn new(
-        host_id: HostId,
-        public_ip: Ipv4Addr,
-        pcap: Option<PcapOptions>,
-        qdisc: QDiscMode,
-    ) -> Self {
-        let localhost = NetworkInterface::new(
-            host_id,
-            Ipv4Addr::LOCALHOST,
-            OsStr::new("lo"),
-            pcap.clone(),
-            qdisc,
-        );
+    pub fn new(public_ip: Ipv4Addr, pcap: Option<PcapOptions>, qdisc: QDiscMode) -> Self {
+        let localhost = NetworkInterface::new("lo", Ipv4Addr::LOCALHOST, pcap.clone(), qdisc);
 
-        let internet = NetworkInterface::new(host_id, public_ip, OsStr::new("eth0"), pcap, qdisc);
+        let internet = NetworkInterface::new("eth0", public_ip, pcap, qdisc);
 
         Self {
             unix: Arc::new(AtomicRefCell::new(AbstractUnixNamespace::new())),
