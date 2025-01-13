@@ -3,7 +3,6 @@ use std::mem::MaybeUninit;
 use std::net::{IpAddr, SocketAddrV4};
 use std::sync::Arc;
 
-use crate::cshadow as c;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::utility::pcap_writer::PacketDisplay;
 use crate::utility::ObjectCounter;
@@ -40,7 +39,7 @@ pub enum PacketStatus {
 }
 
 /// Official IANA-assigned protocols supported in our packets.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum IanaProtocol {
     Tcp,
     Udp,
@@ -449,19 +448,6 @@ impl Packet {
     /// Returns the priority set at packet creation time.
     pub fn priority(&self) -> FifoPacketPriority {
         self.meta.priority
-    }
-
-    /// Deprecated: use `Packet::legacy_protocol()` or `Packet::iana_protocol()`.
-    pub fn protocol(&self) -> c::ProtocolType {
-        self.legacy_protocol()
-    }
-
-    /// Returns the packet's legacy protocol type.
-    pub fn legacy_protocol(&self) -> c::ProtocolType {
-        match self.data.iana_protocol() {
-            IanaProtocol::Tcp => c::_ProtocolType_PTCP,
-            IanaProtocol::Udp => c::_ProtocolType_PUDP,
-        }
     }
 
     /// Returns the packet's iana-assigned protocol type.
@@ -1534,6 +1520,16 @@ mod export {
         }
 
         c_sel_acks
+    }
+
+    impl From<c::ProtocolType> for IanaProtocol {
+        fn from(value: c::ProtocolType) -> Self {
+            match value {
+                c::_ProtocolType_PTCP => IanaProtocol::Tcp,
+                c::_ProtocolType_PUDP => IanaProtocol::Udp,
+                _ => panic!("Unexpected protocol type {value}"),
+            }
+        }
     }
 
     impl From<c::PacketDeliveryStatusFlags> for PacketStatus {

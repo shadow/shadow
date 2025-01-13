@@ -7,10 +7,10 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
-use crate::cshadow;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::interface::{NetworkInterface, PcapOptions};
+use crate::network::packet::IanaProtocol;
 
 // The start of our random port range in host order, used if application doesn't
 // specify the port it wants to bind to, and for client connections.
@@ -109,7 +109,7 @@ impl NetworkNamespace {
 
     pub fn is_addr_in_use(
         &self,
-        protocol_type: cshadow::ProtocolType,
+        protocol_type: IanaProtocol,
         src: SocketAddrV4,
         dst: SocketAddrV4,
     ) -> Result<bool, NoInterface> {
@@ -133,7 +133,7 @@ impl NetworkNamespace {
     /// Returns a random port in host byte order.
     pub fn get_random_free_port(
         &self,
-        protocol_type: cshadow::ProtocolType,
+        protocol_type: IanaProtocol,
         interface_ip: Ipv4Addr,
         peer: SocketAddrV4,
         mut rng: impl rand::Rng,
@@ -188,7 +188,7 @@ impl NetworkNamespace {
             }
         }
 
-        log::warn!("unable to find free ephemeral port for {protocol_type} peer {peer}");
+        log::warn!("unable to find free ephemeral port for {protocol_type:?} peer {peer}");
         None
     }
 
@@ -201,7 +201,7 @@ impl NetworkNamespace {
     pub unsafe fn associate_interface(
         &self,
         socket: &InetSocket,
-        protocol: cshadow::ProtocolType,
+        protocol: IanaProtocol,
         bind_addr: SocketAddrV4,
         peer_addr: SocketAddrV4,
     ) -> AssociationHandle {
@@ -234,7 +234,7 @@ impl NetworkNamespace {
     /// should only be called from the [`AssociationHandle`].
     pub fn disassociate_interface(
         &self,
-        protocol: cshadow::ProtocolType,
+        protocol: IanaProtocol,
         bind_addr: SocketAddrV4,
         peer_addr: SocketAddrV4,
     ) {
@@ -281,7 +281,7 @@ impl std::error::Error for NoInterface {}
 /// [`callback_queue::Handle`](crate::utility::callback_queue::Handle)).
 #[derive(Debug)]
 pub struct AssociationHandle {
-    protocol: cshadow::ProtocolType,
+    protocol: IanaProtocol,
     local_addr: SocketAddrV4,
     remote_addr: SocketAddrV4,
 }
