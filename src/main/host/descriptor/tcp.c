@@ -835,8 +835,8 @@ static void _tcp_bufferPacketIn(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     // Don't store old packets whose data we already gave to the plugin.
-    PacketTCPHeader* hdr = packet_getTCPHeader(packet);
-    bool already_received = hdr->sequence < tcp->receive.next;
+    PacketTCPHeader hdr = packet_getTCPHeader(packet);
+    bool already_received = hdr.sequence < tcp->receive.next;
 
     if (!already_received && !priorityqueue_find(tcp->unorderedInput, packet)) {
         /* TCP wants in-order data */
@@ -880,8 +880,8 @@ static void _tcp_updateSendWindow(TCP* tcp) {
     tcp->send.window = (guint32)MIN(tcp->cong.cwnd, (gint)tcp->receive.lastWindow);
 }
 
-static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
-                                               enum ProtocolTCPFlags flags, bool isEmpty) {
+static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host, ProtocolTCPFlags flags,
+                                               bool isEmpty) {
     MAGIC_ASSERT(tcp);
 
     /* packets from children of a server must appear to be coming from the server */
@@ -916,8 +916,8 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     guint sequence = !isEmpty || isFinNotAck || (flags & PTCP_SYN) ? tcp->send.next : 0;
 
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
-    Packet* packet = packet_new(host);
-    packet_setTCP(packet, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
+    Packet* packet =
+        packet_new_tcp(host, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* update sequence number */
@@ -928,7 +928,7 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host,
     return packet;
 }
 
-static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags,
+static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags,
                                      UntypedForeignPtr payload, gsize payloadLength,
                                      const MemoryManager* mem) {
     MAGIC_ASSERT(tcp);
@@ -942,13 +942,13 @@ static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, enum ProtocolTC
     return packet;
 }
 
-static Packet* _tcp_createControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
+static Packet* _tcp_createControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     return _tcp_createPacketWithoutPayload(tcp, host, flags, /*isEmpty=*/true);
 }
 
-static void _tcp_sendControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPFlags flags) {
+static void _tcp_sendControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags flags) {
     MAGIC_ASSERT(tcp);
 
     trace("%s <-> %s: sending response control packet now",
@@ -971,8 +971,8 @@ static void _tcp_sendControlPacket(TCP* tcp, const Host* host, enum ProtocolTCPF
 static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
-    gpointer key = GINT_TO_POINTER(header->sequence);
+    PacketTCPHeader header = packet_getTCPHeader(packet);
+    gpointer key = GINT_TO_POINTER(header.sequence);
 
     /* if it is already in the queue, it won't consume another packet reference */
     if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
@@ -989,10 +989,15 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     }
 }
 
-static gint _tcp_compare_sequence(gconstpointer ptr_1, gconstpointer ptr_2, gpointer user_data) {
-    const guint seq_1 = GPOINTER_TO_INT(ptr_1);
-    const guint seq_2 = GPOINTER_TO_INT(ptr_2);
+static gint _tcp_compare_sequence(gconstpointer ptr_1, gconstpointer ptr_2) {
+    const guint seq_1 = GPOINTER_TO_UINT(ptr_1);
+    const guint seq_2 = GPOINTER_TO_UINT(ptr_2);
     return (seq_1 < seq_2) ? -1 : (seq_1 > seq_2) ? 1 : 0;
+}
+
+static gint _tcp_compare_sequence_data(gconstpointer ptr_1, gconstpointer ptr_2,
+                                       gpointer user_data) {
+    return _tcp_compare_sequence(ptr_1, ptr_2);
 }
 
 /* remove all packets with a sequence number less than the sequence parameter */
@@ -1010,7 +1015,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     while (g_hash_table_iter_next(&iter, &key, NULL)) {
         guint ackedSequence = GPOINTER_TO_INT(key);
         if(ackedSequence < sequence) {
-            g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence, NULL);
+            g_queue_insert_sorted(keys_sorted, key, _tcp_compare_sequence_data, NULL);
         }
     }
 
@@ -1179,10 +1184,7 @@ static void _tcp_retransmitPacket(TCP* tcp, const Host* host, gint sequence) {
         return;
     }
 
-    PacketTCPHeader* hdr = packet_getTCPHeader(packet);
-
     trace("retransmitting packet %d", sequence);
-    // fprintf(stderr, "R- retransmitting packet %d with ts %llu\n", sequence, hdr.timestampValue);
 
     /* remove from queue and update length and status.
      * calling steal means that the packet ref count is not decremented */
@@ -1232,28 +1234,75 @@ static void _tcp_sendShutdownFin(TCP* tcp, const Host* host) {
     }
 }
 
+// Assumes the list is sorted e.g. with _tcp_compare_sequence().
+// This function does not handle overflowing sequence numbers. We are accepting this limitation
+// since the C TCP sockets use per-packet sequence numbers rather than per-byte sequence numbers
+// like the rust TCP sockets, and we expect not to have more than 2^32 packets per socket in a
+// simulation.
+static PacketSelectiveAcks _tcp_selective_acks_from_list(GList* sel_acks_list) {
+    PacketSelectiveAcks sel_acks = {0};
+
+    if (sel_acks_list != NULL) {
+        unsigned int i = 0;
+        unsigned int start = 0;
+        unsigned int end = 0;
+
+        for (GList* iter = sel_acks_list; iter != NULL && i < 4; iter = g_list_next(iter)) {
+            unsigned int seq = GPOINTER_TO_UINT(iter->data);
+
+            if (sel_acks.ranges[i].start == 0 && sel_acks.ranges[i].end == 0) {
+                // Init first range.
+                sel_acks.ranges[i].start = seq;
+                sel_acks.ranges[i].end = seq + 1;
+                sel_acks.len += 1;
+                utility_debugAssert(sel_acks.len <= 4);
+            } else {
+                if (seq == sel_acks.ranges[i].end) {
+                    // Continues a prev range.
+                    sel_acks.ranges[i].end += 1;
+                } else if (seq > sel_acks.ranges[i].end) {
+                    // Found gap, need new range.
+                    i += 1;
+                    if (i >= 4) {
+                        // No ranges left.
+                        break;
+                    }
+                    sel_acks.ranges[i].start = seq;
+                    sel_acks.ranges[i].end = seq + 1;
+                    sel_acks.len += 1;
+                    utility_debugAssert(sel_acks.len <= 4);
+                }
+            }
+        }
+    }
+
+    return sel_acks;
+}
+
 void tcp_networkInterfaceIsAboutToSendPacket(TCP* tcp, const Host* host, Packet* packet) {
     MAGIC_ASSERT(tcp);
 
     CSimulationTime now = worker_getCurrentSimulationTime();
 
+    PacketSelectiveAcks sel_acks = _tcp_selective_acks_from_list(tcp->send.selectiveACKs);
+
     /* update TCP header to our current advertised window and acknowledgment and timestamps */
-    packet_updateTCP(packet, tcp->receive.next, tcp->send.selectiveACKs, tcp->receive.window, 0,
-                     false, now, tcp->receive.lastTimestamp);
+    packet_updateTCP(packet, tcp->receive.next, sel_acks, tcp->receive.window, 0, false, now,
+                     tcp->receive.lastTimestamp);
 
     /* keep track of the last things we sent them */
     tcp->send.lastAcknowledgment = tcp->receive.next;
     tcp->send.lastWindow = tcp->receive.window;
     tcp->info.lastAckSent = now;
 
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    PacketTCPHeader header = packet_getTCPHeader(packet);
 
-    if(header->flags & PTCP_ACK) {
+    if (header.flags & PTCP_ACK) {
         /* we are sending an ACK already, so we may not need any delayed ACK */
         tcp->send.delayedACKCounter = 0;
     }
 
-    if(header->sequence > 0) {
+    if (header.sequence > 0) {
         /* store in retransmission buffer */
         _tcp_addRetransmit(tcp, packet);
 
@@ -1316,18 +1365,20 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         }
 
         gsize length = packet_getPayloadSize(packet);
-        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        PacketTCPHeader header = packet_getTCPHeader(packet);
 
         if(length > 0) {
             /* we cant send it if our window is too small */
-            gboolean fitsInWindow = (header->sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
+            gboolean fitsInWindow =
+                (header.sequence < (guint)(tcp->send.unacked + tcp->send.window)) ? TRUE : FALSE;
 
             /* we cant send it if we dont have enough space */
             gboolean fitsInBuffer =
                 (length <= legacysocket_getOutputBufferSpace(&(tcp->super))) ? TRUE : FALSE;
 
             if(!fitsInBuffer || !fitsInWindow) {
-                _rswlog(tcp, "Can't retransmit %d, inWindow=%d, inBuffer=%d\n", header->sequence, fitsInWindow, fitsInBuffer);
+                _rswlog(tcp, "Can't retransmit %d, inWindow=%d, inBuffer=%d\n", header.sequence,
+                        fitsInWindow, fitsInBuffer);
                 /* we cant send the packet yet */
                 break;
             } else {
@@ -1353,9 +1404,9 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
         /* we update `FileState_WRITABLE` below */
 
         tcp->send.packetsSent++;
-        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header->sequence);
+        tcp->send.highestSequence = (guint32)MAX(tcp->send.highestSequence, (guint)header.sequence);
 
-        _rswlog(tcp, "Sent %d\n", header->sequence);
+        _rswlog(tcp, "Sent %d\n", header.sequence);
 
         /* we already checked for space, so this should always succeed */
         utility_debugAssert(success);
@@ -1365,17 +1416,17 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
     while(!priorityqueue_isEmpty(tcp->unorderedInput)) {
         Packet* packet = priorityqueue_peek(tcp->unorderedInput);
 
-        PacketTCPHeader* header = packet_getTCPHeader(packet);
+        PacketTCPHeader header = packet_getTCPHeader(packet);
 
-        _rswlog(tcp, "I just received packet %d\n", header->sequence);
-        if (header->sequence < tcp->receive.next) {
+        _rswlog(tcp, "I just received packet %d\n", header.sequence);
+        if (header.sequence < tcp->receive.next) {
             // This is a (probably retransmitted) copy of a packet we already stored
             // and delivered to the plugin.
-            trace("Removing packet %u with duplicate data", header->sequence);
+            trace("Removing packet %u with duplicate data", header.sequence);
             priorityqueue_pop(tcp->unorderedInput);
             tcp->unorderedInputLength -= packet_getPayloadSize(packet);
             packet_unref(packet);
-        } else if (header->sequence == tcp->receive.next) {
+        } else if (header.sequence == tcp->receive.next) {
             /* move from the unordered buffer to user input buffer */
             gboolean fitInBuffer = legacysocket_addToInputBuffer(&(tcp->super), host, packet);
 
@@ -1390,7 +1441,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
 
             if(fitInBuffer) {
                 // fprintf(stderr, "SND/RCV Recv %s %s %d @ %f\n", tcp->super.boundString, tcp->super.peerString, header.sequence, dtime);
-                tcp->receive.lastSequence = header->sequence;
+                tcp->receive.lastSequence = header.sequence;
                 priorityqueue_pop(tcp->unorderedInput);
                 tcp->unorderedInputLength -= packet_getPayloadSize(packet);
                 packet_unref(packet);
@@ -1399,8 +1450,7 @@ static void _tcp_flush(TCP* tcp, const Host* host) {
             }
         }
 
-        _rswlog(tcp, "Could not buffer %d, was expecting %d\n", header->sequence,
-                tcp->receive.next);
+        _rswlog(tcp, "Could not buffer %d, was expecting %d\n", header.sequence, tcp->receive.next);
 
         /* we could not buffer it because its out of order or we have no space */
         break;
@@ -1784,20 +1834,27 @@ static TCP* _tcp_getSourceTCP(TCP* tcp, in_addr_t ip, in_port_t port) {
     return tcp;
 }
 
-static GList* _tcp_removeSacks(GList* selectiveACKs, gint sequence) {
+// This function assumes that the selective acks list is sorted.
+static GList* _tcp_removeSacks(GList* selectiveACKs, guint sequence) {
     GList *unacked = NULL;
     if(selectiveACKs) {
         GList *iter = selectiveACKs;
         while(iter) {
-            gint sackSequence = GPOINTER_TO_INT(iter->data);
+            guint sackSequence = GPOINTER_TO_UINT(iter->data);
 
+            // g_list_prepend does not have to traverse the list to add items, so prefer that over
+            // append. https://docs.gtk.org/glib/type_func.List.append.html
             if(sackSequence > sequence) {
-                unacked = g_list_append(unacked, iter->data);
+                unacked = g_list_prepend(unacked, iter->data);
             }
 
             iter = g_list_next(iter);
         }
         g_list_free(selectiveACKs);
+    }
+    // Let's guarantee that the items are sorted, since the caller makes that assumption.
+    if (unacked != NULL) {
+        unacked = g_list_sort(unacked, _tcp_compare_sequence);
     }
     return unacked;
 }
@@ -1829,17 +1886,18 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
 
         /* SACK: if not next packet, one was dropped and we need to include this in the selective ACKs */
         if(!isNextPacket && packetFits) {
-            tcp->send.selectiveACKs = g_list_append(tcp->send.selectiveACKs, GINT_TO_POINTER(header->sequence));
+            tcp->send.selectiveACKs = g_list_insert_sorted(
+                tcp->send.selectiveACKs, GUINT_TO_POINTER(header->sequence), _tcp_compare_sequence);
         } else if(tcp->send.selectiveACKs && g_list_length(tcp->send.selectiveACKs) > 0) {
             /* find the first gap in SACKs and remove everything before it */
             GList *iter = g_list_first(tcp->send.selectiveACKs);
             GList *next = g_list_next(iter);
 
-            gint firstSequence = GPOINTER_TO_INT(iter->data);
+            guint firstSequence = GPOINTER_TO_UINT(iter->data);
             if(firstSequence <= header->sequence + 1) {
                 while(next) {
-                    gint currSequence = GPOINTER_TO_INT(iter->data);
-                    gint nextSequence = GPOINTER_TO_INT(next->data);
+                    guint currSequence = GPOINTER_TO_UINT(iter->data);
+                    guint nextSequence = GPOINTER_TO_UINT(next->data);
                     /* check for a gap in sequences */
                     if(currSequence + 1 < nextSequence && currSequence > header->sequence) {
                         break;
@@ -1848,7 +1906,8 @@ TCPProcessFlags _tcp_dataProcessing(TCP* tcp, Packet* packet, PacketTCPHeader *h
                     next = g_list_next(iter);
                 }
 
-                tcp->send.selectiveACKs = _tcp_removeSacks(tcp->send.selectiveACKs, GPOINTER_TO_INT(iter->data));
+                tcp->send.selectiveACKs =
+                    _tcp_removeSacks(tcp->send.selectiveACKs, GPOINTER_TO_UINT(iter->data));
             }
         }
 
@@ -2011,7 +2070,8 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
     /* now we have the true TCP for the packet */
     MAGIC_ASSERT(tcp);
-    PacketTCPHeader* header = packet_getTCPHeader(packet);
+    PacketTCPHeader header_concrete = packet_getTCPHeader(packet);
+    PacketTCPHeader* header = &header_concrete;
 
     /* if packet is reset, don't process */
     if(header->flags & PTCP_RST) {
@@ -2042,7 +2102,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
     /* go through the state machine, tracking processing and response */
     TCPProcessFlags flags = TCP_PF_NONE;
-    enum ProtocolTCPFlags responseFlags = PTCP_NONE;
+    ProtocolTCPFlags responseFlags = PTCP_NONE;
 
     trace("processing packet while in state %s", _tcp_stateToAscii(tcp->state));
 
@@ -2279,14 +2339,8 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
         return;
     }
 
-    GList* selectiveACKs = packet_copyTCPSelectiveACKs(packet);
-
-    if (selectiveACKs) {
-       retransmit_tally_mark_sacked(tcp->retransmit.tally, selectiveACKs);
-    }
-
-    if(selectiveACKs) {
-        g_list_free(selectiveACKs);
+    if (header->selectiveACKs.len > 0) {
+        retransmit_tally_mark_sacked(tcp->retransmit.tally, header->selectiveACKs);
     }
 
     /* update the last time stamp value (RFC 1323) */

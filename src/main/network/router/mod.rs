@@ -3,7 +3,6 @@ use std::net::Ipv4Addr;
 
 use self::codel_queue::CoDelQueue;
 use crate::core::worker::Worker;
-use crate::cshadow as c;
 use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
 use crate::utility::{Magic, ObjectCounter};
@@ -48,10 +47,7 @@ impl Router {
     /// the destination host.
     fn route_outgoing_packet(&self, packet: PacketRc) {
         // TODO: move Worker::send_packet to here?
-        let cpacket = packet.into_inner();
-        Worker::with_active_host(|src_host| unsafe { Worker::send_packet(src_host, cpacket) })
-            .unwrap();
-        unsafe { c::packet_unref(cpacket) };
+        Worker::with_active_host(|src_host| Worker::send_packet(src_host, packet)).unwrap();
     }
 
     /// Routes the packet from the virtual internet into our CoDel queue, which

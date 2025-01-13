@@ -173,7 +173,8 @@ impl LegacyTcpSocket {
         }
 
         let packet = PacketRc::from_raw(packet);
-        unsafe { c::packet_ref(packet.borrow_inner()) }
+        // We need to increment the ref count, i.e. don't let it decrement on drop.
+        packet.clone().into_inner();
         Some(packet)
     }
 

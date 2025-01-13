@@ -19,13 +19,12 @@ use crate::core::runahead::Runahead;
 use crate::core::sim_config::Bandwidth;
 use crate::core::sim_stats::{LocalSimStats, SharedSimStats};
 use crate::core::work::event::Event;
-use crate::cshadow;
 use crate::host::host::Host;
 use crate::host::process::{Process, ProcessId};
 use crate::host::thread::{Thread, ThreadId};
 use crate::network::dns::Dns;
 use crate::network::graph::{IpAssignment, RoutingInfo};
-use crate::network::packet::PacketRc;
+use crate::network::packet::{PacketRc, PacketStatus};
 use crate::utility::childpid_watcher::ChildPidWatcher;
 use crate::utility::counter::Counter;
 use crate::utility::status_bar;
@@ -322,14 +321,7 @@ impl Worker {
 
     /// The packet will be dropped if the packet's destination IP is not part of the simulation (no
     /// host has been configured for the IP).
-    ///
-    /// # Safety
-    ///
-    /// `packet` must be valid and not accessed by another thread while this function is
-    /// running.
-    pub unsafe fn send_packet(src_host: &Host, packet: *mut cshadow::Packet) {
-        assert!(!packet.is_null());
-
+    pub fn send_packet(src_host: &Host, mut packetrc: PacketRc) {
         let current_time = Worker::current_time().unwrap();
         let round_end_time = Worker::round_end_time().unwrap();
 
@@ -342,12 +334,9 @@ impl Worker {
             return;
         }
 
-        let src_ip = unsafe { cshadow::packet_getSourceIP(packet) };
-        let dst_ip = unsafe { cshadow::packet_getDestinationIP(packet) };
-        let payload_size = unsafe { cshadow::packet_getPayloadSize(packet) };
-
-        let src_ip: std::net::Ipv4Addr = u32::from_be(src_ip).into();
-        let dst_ip: std::net::Ipv4Addr = u32::from_be(dst_ip).into();
+        let src_ip = *packetrc.src_address().ip();
+        let dst_ip = *packetrc.dst_address().ip();
+        let payload_size = packetrc.payload_size();
 
         let Some(dst_host_id) = Worker::resolve_ip_to_host_id(dst_ip) else {
             log_once_per_value_at_level!(
@@ -357,12 +346,7 @@ impl Worker {
                 log::Level::Debug,
                 "Packet has destination {dst_ip} which doesn't exist in the simulation. Dropping the packet.",
             );
-            unsafe {
-                cshadow::packet_addDeliveryStatus(
-                    packet,
-                    cshadow::_PacketDeliveryStatusFlags_PDS_INET_DROPPED,
-                )
-            };
+            packetrc.add_status(PacketStatus::InetDropped);
             return;
         };
 
@@ -379,12 +363,7 @@ impl Worker {
         // responding to packet loss
         // https://github.com/shadow/shadow/issues/2517
         if !is_bootstrapping && chance >= reliability && payload_size > 0 {
-            unsafe {
-                cshadow::packet_addDeliveryStatus(
-                    packet,
-                    cshadow::_PacketDeliveryStatusFlags_PDS_INET_DROPPED,
-                )
-            };
+            packetrc.add_status(PacketStatus::InetDropped);
             return;
         }
 
@@ -396,15 +375,7 @@ impl Worker {
         // TODO: this should change for sending to remote manager (on a different machine); this is
         // the only place where tasks are sent between separate host
 
-        unsafe {
-            cshadow::packet_addDeliveryStatus(
-                packet,
-                cshadow::_PacketDeliveryStatusFlags_PDS_INET_SENT,
-            )
-        };
-
-        // copy the packet
-        let packet = PacketRc::from_raw(unsafe { cshadow::packet_copy(packet) });
+        packetrc.add_status(PacketStatus::InetSent);
 
         // delay the packet until the next round
         let mut deliver_time = current_time + delay;
@@ -416,9 +387,11 @@ impl Worker {
         // round and calculated its min event time, so we put this in our min event time instead
         Worker::update_next_event_time(deliver_time);
 
+        // copy the packet (except the payload) so the dst gets its own header info
+        let dst_packet = packetrc.copy();
         Worker::with(|w| {
             w.shared
-                .push_packet_to_host(packet, dst_host_id, deliver_time, src_host)
+                .push_packet_to_host(dst_packet, dst_host_id, deliver_time, src_host)
         })
         .unwrap();
     }

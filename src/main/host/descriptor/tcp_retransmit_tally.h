@@ -11,7 +11,7 @@
 #include <vector>
 #endif // __cplusplus
 
-struct _GList;
+struct _PacketSelectiveAcks;
 
 /* Really hacky and brittle.  Only doing an explicit copy because #including
  * shd-tcp.h and shadow.h is not working. */
@@ -36,7 +36,7 @@ size_t retransmit_tally_size_bytes();
 
 enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, uint32_t max_ack, bool is_dup);
 void retransmit_tally_cleanup_sacked(void *p);
-void retransmit_tally_mark_sacked(void *p, struct _GList *sacked);
+void retransmit_tally_mark_sacked(void* p, struct _PacketSelectiveAcks sacked);
 /* Marks the block [begin, end) as lost. */
 void retransmit_tally_mark_lost(void *p, uint32_t begin, uint32_t end);
 void retransmit_tally_mark_retransmitted(void *p, uint32_t begin, uint32_t end);

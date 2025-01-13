@@ -1,4 +1,5 @@
 #include "main/host/descriptor/tcp_retransmit_tally.h"
+#include "main/routing/packet.minimal.h"
 #include <algorithm>
 #include <cassert>
 #include <gmodule.h>
@@ -219,29 +220,16 @@ enum TCPProcessFlags_ retransmit_tally_update(void *p, uint32_t last_ack, uint32
    return static_cast<TCPProcessFlags_>(ret);
 }
 
-/* We have to do an awful linear scan here because sacks use GList and there
- * is no efficient way to get the last element. */
-void retransmit_tally_mark_sacked(void *p, GList *sacked) {
-   auto rt = cast_and_assert(p);
-   SeqRange sacked_block{-1, -1};
+void retransmit_tally_mark_sacked(void* p, PacketSelectiveAcks sacked) {
+    auto rt = cast_and_assert(p);
+    SeqRange sacked_block{-1, -1};
 
-   GList *n = g_list_first(sacked);
-
-   while (n != nullptr) {
-      int s = GPOINTER_TO_INT(n->data);
-      if (sacked_block.first == -1) { sacked_block.first = s; }
-
-      if (g_list_next(n) == nullptr
-          || GPOINTER_TO_INT(g_list_next(n)->data) != s + 1)
-      {
-         sacked_block.second = s + 1;
-         ranges_insert(&rt->sacked_, sacked_block);
-         sacked_block.first = -1;
-         sacked_block.second = -1;
-      }
-
-      n = g_list_next(n);
-   }
+    for (unsigned int i = 0; i < sacked.len; i++) {
+        sacked_block.first = sacked.ranges[i].start;
+        sacked_block.second = sacked.ranges[i].end;
+        assert(sacked_block.second > 0);
+        ranges_insert(&rt->sacked_, sacked_block);
+    }
 }
 
 void retransmit_tally_mark_lost(void *p, uint32_t begin, uint32_t end) {
