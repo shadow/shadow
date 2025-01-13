@@ -1797,7 +1797,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .into_iter()
                     .chain(args.iter().map(|s| CString::new(*s).unwrap()))
                     .collect();
-                let env: Vec<CString> = Vec::new();
+                let args = execv_argvec(&args);
+                let env = execv_argvec(&[] as &[CString; 0]);
                 let raw_pid: i64;
                 // A function that returns twice in the same address space, such as vfork,
                 // is unsound in Rust. We work around this by doing the vfork+exec in a single
@@ -1822,8 +1823,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // r12 shouldn't be clobbered by the vfork syscall
                         in("r12") libc::SYS_execve,
                         in("rdi") path.as_ptr(),
-                        in("rsi") execv_argvec(&args).as_ptr(),
-                        in("rdx") execv_argvec(&env).as_ptr(),
+                        in("rsi") args.as_ptr(),
+                        in("rdx") env.as_ptr(),
                         clobber_abi("C"),
                     )
                 };
