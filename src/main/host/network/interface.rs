@@ -8,10 +8,9 @@ use std::path::PathBuf;
 
 use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
-use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::queuing::{NetworkQueue, NetworkQueueKind};
-use crate::network::packet::{PacketRc, PacketStatus};
+use crate::network::packet::{IanaProtocol, PacketRc, PacketStatus};
 use crate::network::PacketDevice;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::pcap_writer::{PacketDisplay, PcapWriter};
@@ -28,13 +27,13 @@ pub struct PcapOptions {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct AssociatedSocketKey {
-    protocol: c::ProtocolType,
+    protocol: IanaProtocol,
     local: SocketAddrV4,
     remote: SocketAddrV4,
 }
 
 impl AssociatedSocketKey {
-    fn new(protocol: c::ProtocolType, local: SocketAddrV4, remote: SocketAddrV4) -> Self {
+    fn new(protocol: IanaProtocol, local: SocketAddrV4, remote: SocketAddrV4) -> Self {
         Self {
             protocol,
             local,
@@ -122,7 +121,7 @@ impl NetworkInterface {
     pub fn associate(
         &self,
         socket: &InetSocket,
-        protocol: c::ProtocolType,
+        protocol: IanaProtocol,
         port: u16,
         peer: SocketAddrV4,
     ) {
@@ -138,7 +137,7 @@ impl NetworkInterface {
         }
     }
 
-    pub fn disassociate(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) {
+    pub fn disassociate(&self, protocol: IanaProtocol, port: u16, peer: SocketAddrV4) {
         if *self.cleanup_in_progress.borrow() {
             return;
         }
@@ -159,7 +158,7 @@ impl NetworkInterface {
         }
     }
 
-    pub fn is_addr_in_use(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {
+    pub fn is_addr_in_use(&self, protocol: IanaProtocol, port: u16, peer: SocketAddrV4) -> bool {
         let local = SocketAddrV4::new(self.addr, port);
         let key = AssociatedSocketKey::new(protocol, local, peer);
         self.recv_sockets.borrow().contains_key(&key)
@@ -269,7 +268,7 @@ impl PacketDevice for NetworkInterface {
         self.capture_if_configured(&packet);
 
         // Find the socket that should process the packet.
-        let protocol = packet.protocol();
+        let protocol = packet.iana_protocol();
         let local = SocketAddrV4::new(self.addr, packet.dst_ipv4_address().port());
         let peer = packet.src_ipv4_address();
         let key = AssociatedSocketKey::new(protocol, local, peer);

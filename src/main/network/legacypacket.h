@@ -6,7 +6,7 @@
 // Enum typedefs below need to come after enum definitions to make our cpp code compile in
 // tcp_retransmit_tally.cc.
 
-enum _ProtocolType { PNONE, PTCP, PUDP, PMOCK };
+enum _ProtocolType { PNONE, PTCP, PUDP };
 typedef enum _ProtocolType ProtocolType;
 
 enum _ProtocolUDPFlags {

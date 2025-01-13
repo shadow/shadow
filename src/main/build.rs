@@ -220,6 +220,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .allowlist_type("TriggerType")
         .allowlist_type("SimulationTime")
         .allowlist_type("ProtocolTCPFlags")
+        .allowlist_type("ProtocolType")
         .allowlist_type("PacketDeliveryStatusFlags")
         .allowlist_type("PacketSelectiveAckRange")
         .allowlist_type("PacketSelectiveAcks")
