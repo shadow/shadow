@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 #include "lib/logger/log_level.h"
 #include "lib/logger/logger.h"
@@ -59,7 +60,7 @@ struct _PacketUDPHeader {
 
 /* packets are guaranteed not to be shared across hosts */
 struct _Packet {
-    guint referenceCount;
+    atomic_uint referenceCount;
 
     /* id of the host that created the packet */
     guint hostID;
@@ -88,7 +89,7 @@ Packet* legacypacket_new_inner(guint hostID, guint64 packetID) {
     Packet* packet = g_new0(Packet, 1);
     MAGIC_INIT(packet);
 
-    packet->referenceCount = 1;
+    atomic_init(&packet->referenceCount, 1);
 
     packet->hostID = hostID;
     packet->packetID = packetID;
@@ -145,7 +146,7 @@ Packet* legacypacket_copy(Packet* packet) {
     Packet* copy = g_new0(Packet, 1);
     MAGIC_INIT(copy);
 
-    copy->referenceCount = 1;
+    atomic_init(&copy->referenceCount, 1);
 
     copy->hostID = packet->hostID;
     copy->packetID = packet->packetID;
@@ -212,13 +213,14 @@ static void _packet_free(Packet* packet) {
 
 void legacypacket_ref(Packet* packet) {
     MAGIC_ASSERT(packet);
-    (packet->referenceCount)++;
+    atomic_fetch_add_explicit(&packet->referenceCount, 1, memory_order_relaxed);
 }
 
 void legacypacket_unref(Packet* packet) {
     MAGIC_ASSERT(packet);
-    (packet->referenceCount)--;
-    if(packet->referenceCount == 0) {
+    atomic_uint old = atomic_fetch_sub_explicit(&packet->referenceCount, 1, memory_order_release);
+    atomic_thread_fence(memory_order_acquire);
+    if(old == 1) {
         legacypacket_addDeliveryStatus(packet, PDS_DESTROYED);
         _packet_free(packet);
     }
