@@ -17,8 +17,7 @@ typedef struct _SocketFunctionTable SocketFunctionTable;
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/definitions.h"
 #include "main/host/descriptor/descriptor_types.h"
-#include "main/host/protocol.h"
-#include "main/routing/packet.minimal.h"
+#include "main/network/legacypacket.h"
 
 typedef gboolean (*SocketIsFamilySupportedFunc)(LegacySocket* socket, sa_family_t family);
 typedef gint (*SocketConnectToPeerFunc)(LegacySocket* socket, const Host* host, in_addr_t ip,

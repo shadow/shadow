@@ -37,6 +37,7 @@ to be unique as with any other IP address assignment. (#3414)
   technically a breaking change to the setup script, we don't expect anyone was
   using this option. (#3478)
 * Converted the network interface and queuing disciplines to Rust and removed the legacy C implementations. (#3480)
+* Converted the legacy C packet and payload structs to Rust for safer reference counting. This also eliminates a payload copy in Rust TCP and UDP code. (#3492)
 
 PATCH changes (bugfixes):
 

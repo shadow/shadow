@@ -2,7 +2,6 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
-use bytes::BytesMut;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use linux_api::socket::Shutdown;
@@ -197,7 +196,7 @@ impl TcpSocket {
 
     pub fn push_in_packet(
         &mut self,
-        mut packet: PacketRc,
+        packet: PacketRc,
         cb_queue: &mut CallbackQueue,
         _recv_time: EmulatedTime,
     ) {
@@ -209,17 +208,14 @@ impl TcpSocket {
         // the packet
 
         let header = packet
-            .get_tcp()
+            .ipv4_tcp_header()
             .expect("TCP socket received a non-tcp packet");
 
-        // in the future, the packet could contain an array of `Bytes` objects and we could simply
         // transfer the `Bytes` objects directly from the payload to the tcp state without copying
         // the bytes themselves
 
-        let mut payload = BytesMut::zeroed(packet.payload_size());
-        let num_bytes_copied = packet.get_payload(&mut payload);
-        assert_eq!(num_bytes_copied, packet.payload_size());
-        let payload = tcp::Payload(vec![payload.freeze()]);
+        let payload = tcp::Payload(packet.payload());
+        assert_eq!(payload.len() as usize, packet.payload_len());
 
         self.with_tcp_state_and_signal(cb_queue, |s| {
             let pushed_len = s.push_packet(&header, payload).unwrap();
@@ -262,18 +258,10 @@ impl TcpSocket {
         #[cfg(debug_assertions)]
         debug_assert!(wants_to_send);
 
-        let mut packet = PacketRc::new();
-
-        // TODO: This is expensive. Here we allocate a new buffer, copy all of the payload bytes to
-        // this new buffer, and then copy the bytes in this new buffer to the packet's buffer. In
-        // the future, the packet could contain an array of `Bytes` objects and we could simply
-        // transfer the `Bytes` objects directly from the tcp state's `Payload` object to the packet
-        // without copying the bytes themselves.
-        let payload = payload.concat();
-
-        packet.set_tcp(&header);
+        // We transfer the `Bytes` objects directly from the tcp state's `Payload` object to the
+        // packet without copying the bytes themselves.
         // TODO: set packet priority?
-        packet.set_payload(&payload, /* priority= */ 0);
+        let packet = PacketRc::new_ipv4_tcp(header, payload, 0);
         packet.add_status(PacketStatus::SndCreated);
 
         Some(packet)

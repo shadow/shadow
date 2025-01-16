@@ -8,10 +8,9 @@ use std::path::PathBuf;
 
 use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
-use crate::cshadow as c;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::queuing::{NetworkQueue, NetworkQueueKind};
-use crate::network::packet::{PacketRc, PacketStatus};
+use crate::network::packet::{IanaProtocol, PacketRc, PacketStatus};
 use crate::network::PacketDevice;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::pcap_writer::{PacketDisplay, PcapWriter};
@@ -28,13 +27,13 @@ pub struct PcapOptions {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct AssociatedSocketKey {
-    protocol: c::ProtocolType,
+    protocol: IanaProtocol,
     local: SocketAddrV4,
     remote: SocketAddrV4,
 }
 
 impl AssociatedSocketKey {
-    fn new(protocol: c::ProtocolType, local: SocketAddrV4, remote: SocketAddrV4) -> Self {
+    fn new(protocol: IanaProtocol, local: SocketAddrV4, remote: SocketAddrV4) -> Self {
         Self {
             protocol,
             local,
@@ -122,7 +121,7 @@ impl NetworkInterface {
     pub fn associate(
         &self,
         socket: &InetSocket,
-        protocol: c::ProtocolType,
+        protocol: IanaProtocol,
         port: u16,
         peer: SocketAddrV4,
     ) {
@@ -138,7 +137,7 @@ impl NetworkInterface {
         }
     }
 
-    pub fn disassociate(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) {
+    pub fn disassociate(&self, protocol: IanaProtocol, port: u16, peer: SocketAddrV4) {
         if *self.cleanup_in_progress.borrow() {
             return;
         }
@@ -159,7 +158,7 @@ impl NetworkInterface {
         }
     }
 
-    pub fn is_addr_in_use(&self, protocol: c::ProtocolType, port: u16, peer: SocketAddrV4) -> bool {
+    pub fn is_addr_in_use(&self, protocol: IanaProtocol, port: u16, peer: SocketAddrV4) -> bool {
         let local = SocketAddrV4::new(self.addr, port);
         let key = AssociatedSocketKey::new(protocol, local, peer);
         self.recv_sockets.borrow().contains_key(&key)
@@ -202,7 +201,7 @@ impl NetworkInterface {
 
             let ts_sec: u32 = now.as_secs().try_into().unwrap_or(u32::MAX);
             let ts_usec: u32 = now.subsec_micros();
-            let packet_len: u32 = packet.total_size().try_into().unwrap_or(u32::MAX);
+            let packet_len: u32 = packet.len().try_into().unwrap_or(u32::MAX);
 
             if let Err(e) = pcap.write_packet_fmt(ts_sec, ts_usec, packet_len, |writer| {
                 packet.display_bytes(writer)
@@ -237,7 +236,7 @@ impl PacketDevice for NetworkInterface {
             };
 
             // The socket was in our sendable queue, so it _should_ have a packet.
-            let Some(mut packet) = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            let Some(packet) = CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                 socket.borrow_mut().pull_out_packet(cb_queue)
             }) else {
                 // It is possible that the socket changed state since it was added to our queue, so
@@ -260,7 +259,7 @@ impl PacketDevice for NetworkInterface {
     }
 
     // Pushes a packet from the simulated network into the interface.
-    fn push(&self, mut packet: PacketRc) {
+    fn push(&self, packet: PacketRc) {
         // The packet is successfully received by this interface.
         packet.add_status(PacketStatus::RcvInterfaceReceived);
 
@@ -269,9 +268,9 @@ impl PacketDevice for NetworkInterface {
         self.capture_if_configured(&packet);
 
         // Find the socket that should process the packet.
-        let protocol = packet.protocol();
-        let local = SocketAddrV4::new(self.addr, packet.dst_address().port());
-        let peer = packet.src_address();
+        let protocol = packet.iana_protocol();
+        let local = SocketAddrV4::new(self.addr, packet.dst_ipv4_address().port());
+        let peer = packet.src_ipv4_address();
         let key = AssociatedSocketKey::new(protocol, local, peer);
 
         // First check for a socket with the specific association.
