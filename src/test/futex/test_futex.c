@@ -156,6 +156,27 @@ static void _futex_wait_bitset_timeout_test() {
     g_assert_cmpfloat(delta, >=, -.1);
 }
 
+static void _futex_wait_bitset_timeout_expired_test() {
+    // FUTEX_WAIT_BITSET has an absolute timeout.
+    struct timespec t0;
+    if (clock_gettime(CLOCK_MONOTONIC, &t0) < 0) {
+        panic("clock_gettime: %s", strerror(errno));
+    }
+    struct timespec timeout = {.tv_sec = 0, .tv_nsec = 0};
+    int futex = 0;
+    long rv = syscall(
+        SYS_futex, &futex, FUTEX_WAIT_BITSET, futex, &timeout, NULL, FUTEX_BITSET_MATCH_ANY);
+    g_assert_cmpint(rv, ==, -1);
+    assert_errno_is(ETIMEDOUT);
+    struct timespec t1;
+    if (clock_gettime(CLOCK_MONOTONIC, &t1) < 0) {
+        panic("clock_gettime: %s", strerror(errno));
+    }
+    double delta = timespec_to_double(&t1) - timespec_to_double(&t0);
+    g_assert_cmpfloat(delta, <=, .1);
+    g_assert_cmpfloat(delta, >=, -.1);
+}
+
 void nop_signal_handler(int signo) {}
 
 static void _futex_wait_intr_test() {
@@ -407,6 +428,7 @@ int main(int argc, char** argv) {
     g_test_add_func("/futex/wake_stress", _futex_stress_test);
     g_test_add_func("/futex/wait_timeout", _futex_wait_timeout_test);
     g_test_add_func("/futex/wait_bitset_timeout", _futex_wait_bitset_timeout_test);
+    g_test_add_func("/futex/wait_bitset_timeout_expired", _futex_wait_bitset_timeout_expired_test);
 
     if (!running_in_shadow()) {
         // TODO: implement FUTEX_WAKE_BITSET in Shadow.

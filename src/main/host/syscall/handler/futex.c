@@ -117,9 +117,14 @@ static SyscallReturn _syscallhandler_futexWaitHelper(SyscallHandler* sys,
         (Trigger){.type = TRIGGER_FUTEX, .object = futex, .state = FileState_FUTEX_WAKEUP};
     SysCallCondition* cond = syscallcondition_new(trigger);
     if (timeoutSimTime != SIMTIME_INVALID) {
+        CEmulatedTime now = worker_getCurrentEmulatedTime();
         CEmulatedTime timeoutEmulatedTime = (type == TIMEOUT_RELATIVE)
-                                                ? timeoutSimTime + worker_getCurrentEmulatedTime()
+                                                ? timeoutSimTime + now
                                                 : timeoutSimTime;
+        if (timeoutEmulatedTime < now) {
+            // The timeout has already expired
+            timeoutEmulatedTime = now;
+        }
         syscallcondition_setTimeout(cond, timeoutEmulatedTime);
     }
 
