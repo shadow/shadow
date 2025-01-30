@@ -979,6 +979,7 @@ mod export {
 
     use super::*;
     use crate::cshadow::{CEmulatedTime, CSimulationTime};
+    use crate::network::packet::IanaProtocol;
 
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_execute(hostrc: *const Host, until: CEmulatedTime) {
@@ -1093,7 +1094,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_disassociateInterface(
         hostrc: *const Host,
-        protocol: cshadow::ProtocolType,
+        c_protocol: cshadow::ProtocolType,
         bind_ip: in_addr_t,
         bind_port: in_port_t,
         peer_ip: in_addr_t,
@@ -1109,6 +1110,8 @@ mod export {
         let bind_addr = SocketAddrV4::new(bind_ip, bind_port);
         let peer_addr = SocketAddrV4::new(peer_ip, peer_port);
 
+        let protocol = IanaProtocol::from(c_protocol);
+
         // associate the interfaces corresponding to bind_addr with socket
         hostrc
             .net_ns
@@ -1118,7 +1121,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_getRandomFreePort(
         hostrc: *const Host,
-        protocol_type: cshadow::ProtocolType,
+        c_protocol: cshadow::ProtocolType,
         interface_ip: in_addr_t,
         peer_ip: in_addr_t,
         peer_port: in_port_t,
@@ -1131,10 +1134,12 @@ mod export {
             u16::from_be(peer_port),
         );
 
+        let protocol = IanaProtocol::from(c_protocol);
+
         hostrc
             .net_ns
             .get_random_free_port(
-                protocol_type,
+                protocol,
                 interface_ip,
                 peer_addr,
                 hostrc.random.borrow_mut().deref_mut(),

@@ -1,5 +1,5 @@
 #include "main/host/descriptor/tcp_retransmit_tally.h"
-#include "main/routing/packet.minimal.h"
+#include "main/network/legacypacket.h"
 #include <algorithm>
 #include <cassert>
 #include <gmodule.h>

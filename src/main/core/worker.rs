@@ -321,7 +321,7 @@ impl Worker {
 
     /// The packet will be dropped if the packet's destination IP is not part of the simulation (no
     /// host has been configured for the IP).
-    pub fn send_packet(src_host: &Host, mut packetrc: PacketRc) {
+    pub fn send_packet(src_host: &Host, packetrc: PacketRc) {
         let current_time = Worker::current_time().unwrap();
         let round_end_time = Worker::round_end_time().unwrap();
 
@@ -334,9 +334,9 @@ impl Worker {
             return;
         }
 
-        let src_ip = *packetrc.src_address().ip();
-        let dst_ip = *packetrc.dst_address().ip();
-        let payload_size = packetrc.payload_size();
+        let src_ip = *packetrc.src_ipv4_address().ip();
+        let dst_ip = *packetrc.dst_ipv4_address().ip();
+        let payload_size = packetrc.payload_len();
 
         let Some(dst_host_id) = Worker::resolve_ip_to_host_id(dst_ip) else {
             log_once_per_value_at_level!(
@@ -388,7 +388,7 @@ impl Worker {
         Worker::update_next_event_time(deliver_time);
 
         // copy the packet (except the payload) so the dst gets its own header info
-        let dst_packet = packetrc.copy();
+        let dst_packet = packetrc.new_copy_inner();
         Worker::with(|w| {
             w.shared
                 .push_packet_to_host(dst_packet, dst_host_id, deliver_time, src_host)
