@@ -5,7 +5,7 @@
 We support the following Linux x86-64 distributions:
 
 - Ubuntu 20.04, 22.04, 24.04
-- Debian 10, 11, and 12
+- Debian 11, 12
 - Fedora 40
 
 We do not provide official support for other platforms. This means that we do
@@ -21,11 +21,8 @@ guarantees"](semver.md).
 Some Linux distributions support multiple kernel versions, for example an older
 General Availability (GA) kernel and newer hardware-enablement (HWE) kernels.
 We try to allow Shadow to run on the oldest kernel supported on each
-distribution (the GA kernel). However:
-
-* On Debian 10 (buster) We do not support the GA kernel. We do support the HWE
-kernel (e.g. installed via backports).
-* We are currently only able to regularly test on the latest Ubuntu kernel,
+distribution (the GA kernel). However,
+we are currently only able to regularly test on the latest Ubuntu kernel,
 since that's what GitHub Actions provides.
 
 By these criteria, Shadow's oldest supported kernel version is currently 5.4
