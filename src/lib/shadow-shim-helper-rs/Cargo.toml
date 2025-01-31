@@ -16,7 +16,7 @@ log = { version = "0.4", features = ["release_max_level_debug"] }
 logger = { path = "../logger" }
 once_cell = "1.20.2"
 shadow-pod = { path = "../pod" }
-rand = "0.8.5"
+rand = "0.9.0"
 shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
@@ -32,7 +32,7 @@ system-deps = "7.0"
 cbindgen = { version = "0.28.0", default-features = false }
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = "0.9.0"
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt
