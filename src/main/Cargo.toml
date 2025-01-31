@@ -55,7 +55,7 @@ signal-hook = "0.3.17"
 static_assertions = "1.1.0"
 std-util = { path = "../lib/std-util" }
 tcp = { path = "../lib/tcp" }
-tempfile = "3.15"
+tempfile = "3.16"
 vasi-sync = { path = "../lib/vasi-sync" }
 # TODO: switch to upstream crate if/when they merge and release
 # https://github.com/dylanmckay/vsprintf/pull/2
