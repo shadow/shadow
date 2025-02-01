@@ -359,7 +359,7 @@ mod tests {
     fn test_insert_random() {
         use rand::Rng;
         use rand_core::SeedableRng;
-        let dist = rand::distributions::Uniform::new_inclusive(0, 10);
+        let dist = rand::distr::Uniform::new_inclusive(0, 10).unwrap();
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         for i in 0..1000 {
             let mut m = IntervalMap::new();
@@ -591,7 +591,7 @@ mod tests {
     fn test_clear_random() {
         use rand::Rng;
         use rand_core::SeedableRng;
-        let dist = rand::distributions::Uniform::new_inclusive(0, 10);
+        let dist = rand::distr::Uniform::new_inclusive(0, 10).unwrap();
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         for i in 0..1000 {
             let mut m = IntervalMap::new();

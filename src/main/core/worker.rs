@@ -357,7 +357,7 @@ impl Worker {
         let reliability: f64 = Worker::with(|w| w.shared.reliability(src_ip, dst_ip).unwrap())
             .unwrap()
             .into();
-        let chance: f64 = src_host.random_mut().gen();
+        let chance: f64 = src_host.random_mut().random();
 
         // don't drop control packets with length 0, otherwise congestion control has problems
         // responding to packet loss

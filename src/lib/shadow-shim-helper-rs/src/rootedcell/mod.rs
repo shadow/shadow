@@ -51,7 +51,7 @@ impl Tag {
         // requiring different versions
         // https://doc.rust-lang.org/cargo/reference/resolver.html#semver-compatibility.
         static TAG_PREFIX: OnceCell<TagGlobalId> = OnceCell::new();
-        let prefix = *TAG_PREFIX.get_or_init(rand::prelude::random);
+        let prefix = *TAG_PREFIX.get_or_init(rand::random);
 
         static NEXT_TAG_SUFFIX: TagLocallyUniquePartAtomicType =
             TagLocallyUniquePartAtomicType::new(0);

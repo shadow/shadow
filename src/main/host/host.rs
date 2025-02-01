@@ -1280,7 +1280,7 @@ mod export {
     #[no_mangle]
     pub unsafe extern "C-unwind" fn host_rngDouble(host: *const Host) -> f64 {
         let host = unsafe { host.as_ref().unwrap() };
-        host.random_mut().gen()
+        host.random_mut().random()
     }
 
     /// Fills the buffer with pseudo-random bytes.

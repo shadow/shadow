@@ -343,7 +343,7 @@ mod tests {
                 {
                     // a shared borrow for a duration in the range of 0-10 ms
                     let _x = lock_clone.borrow();
-                    std::thread::sleep(Duration::from_millis(rng.gen_range(0..10)));
+                    std::thread::sleep(Duration::from_millis(rng.random_range(0..10)));
                 }
                 shared_counter.count_down();
             }
@@ -364,7 +364,7 @@ mod tests {
             {
                 // an exclusive borrow for a duration in the range of 0-10 ms
                 let _x = lock.borrow_mut();
-                std::thread::sleep(Duration::from_millis(rng.gen_range(0..10)));
+                std::thread::sleep(Duration::from_millis(rng.random_range(0..10)));
             }
             exclusive_counter.count_down();
             // wait for the other threads to be done with their shared borrow

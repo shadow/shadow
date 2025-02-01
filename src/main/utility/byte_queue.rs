@@ -743,25 +743,25 @@ mod tests {
 
         for _ in 0..NUM_ITER {
             // push
-            if rng.gen_bool(PROB_PUSH) {
-                let mut bytes = vec![0u8; rng.gen_range(0..MAX_PUSH)];
+            if rng.random_bool(PROB_PUSH) {
+                let mut bytes = vec![0u8; rng.random_range(0..MAX_PUSH)];
                 rng.fill_bytes(&mut bytes);
 
-                if rng.gen_bool(PROB_STREAM) {
+                if rng.random_bool(PROB_STREAM) {
                     bq.push_stream(&bytes[..]).unwrap();
                 } else {
                     bq.push_packet(&bytes[..], bytes.len()).unwrap();
                 }
             }
 
-            let pop_size = rng.gen_range(0..MAX_POP);
+            let pop_size = rng.random_range(0..MAX_POP);
 
             // peek
             let mut peeked_bytes = vec![0u8; pop_size];
             let peek_rv = bq.peek(&mut peeked_bytes[..]).unwrap();
 
             // pop
-            if rng.gen_bool(PROB_POP) {
+            if rng.random_bool(PROB_POP) {
                 let mut popped_bytes = vec![0u8; pop_size];
                 let pop_rv = bq.pop(&mut popped_bytes[..]).unwrap();
 
