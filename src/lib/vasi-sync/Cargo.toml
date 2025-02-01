@@ -17,7 +17,7 @@ rustc-hash = { version = "2.1.0", default-features = false }
 
 [dev-dependencies]
 criterion = "0.5.1"
-rand = "0.8.5"
+rand = "0.9.0"
 rustix = { version = "0.38.37", default-features = false, features = ["process"] }
 libc = "0.2"
 nix = "0.29.0"
