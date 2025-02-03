@@ -185,7 +185,7 @@ impl CoDelQueue {
 
             item = self.codel_pop(now);
 
-            match item.as_ref().map_or(false, |x| x.ok_to_drop) {
+            match item.as_ref().is_some_and(|x| x.ok_to_drop) {
                 true => {
                     // Set the next drop time based on CoDel control law.
                     // `self.drop_next` is already set in `drop_from_store_mode()`
