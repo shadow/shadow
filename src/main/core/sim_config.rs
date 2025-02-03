@@ -51,7 +51,7 @@ impl SimConfig {
         let mut random = Xoshiro256PlusPlus::seed_from_u64(seed.into());
 
         // this should be the same for all hosts
-        let randomness_for_seed_calc = random.gen();
+        let randomness_for_seed_calc = random.random();
 
         // build the host list
         let mut hosts = vec![];

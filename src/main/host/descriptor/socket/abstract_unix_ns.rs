@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 use atomic_refcell::AtomicRefCell;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 
 use crate::host::descriptor::listener::{StateEventSource, StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};

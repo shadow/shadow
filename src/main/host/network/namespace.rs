@@ -146,7 +146,7 @@ impl NetworkNamespace {
         // if choosing randomly doesn't succeed within 10 tries, then we have already
         // allocated a lot of ports (>90% on average). then we fall back to linear search.
         for _ in 0..10 {
-            let random_port = rng.gen_range(MIN_RANDOM_PORT..=u16::MAX);
+            let random_port = rng.random_range(MIN_RANDOM_PORT..=u16::MAX);
 
             // `is_addr_in_use` will check all interfaces in the case of INADDR_ANY
             let specific_in_use = self
@@ -171,7 +171,7 @@ impl NetworkNamespace {
         // now if we tried too many times and still don't have a port, fall back
         // to a linear search to make sure we get a free port if we have one.
         // but start from a random port instead of the min.
-        let start = rng.gen_range(MIN_RANDOM_PORT..=u16::MAX);
+        let start = rng.random_range(MIN_RANDOM_PORT..=u16::MAX);
         for port in (start..=u16::MAX).chain(MIN_RANDOM_PORT..start) {
             let specific_in_use = self
                 .is_addr_in_use(protocol_type, SocketAddrV4::new(interface_ip, port), peer)

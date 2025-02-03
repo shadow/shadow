@@ -399,7 +399,7 @@ mod tests {
     fn allocator_random_allocations() {
         const NROUNDS: usize = 100;
         let mut marked_blocks: std::vec::Vec<(u32, ShMemBlock<u32>)> = Default::default();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let mut execute_round = || {
             // Some allocations
@@ -409,7 +409,7 @@ mod tests {
             }
 
             // Generate some number of items to pop
-            let n1: u8 = rng.gen();
+            let n1: u8 = rng.random();
 
             for _ in 0..n1 {
                 let last_marked_block = marked_blocks.pop().unwrap();
