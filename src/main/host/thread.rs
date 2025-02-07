@@ -599,6 +599,18 @@ impl From<ThreadId> for libc::pid_t {
     }
 }
 
+impl From<ThreadId> for u32 {
+    fn from(val: ThreadId) -> Self {
+        val.0
+    }
+}
+
+impl From<ThreadId> for u64 {
+    fn from(val: ThreadId) -> Self {
+        val.0.into()
+    }
+}
+
 impl std::fmt::Display for ThreadId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)

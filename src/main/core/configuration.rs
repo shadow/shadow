@@ -11,7 +11,7 @@
 //! that the configuration parsing does not become environment-dependent. If a configuration file
 //! parses on one system, it should parse successfully on other systems as well.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::str::FromStr;
@@ -463,6 +463,10 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_new_tcp").unwrap().as_str())]
     pub use_new_tcp: Option<bool>,
+
+    /// Override the behaviour of emulated syscalls.
+    #[clap(skip)]
+    pub syscall_overrides: Option<HashMap<u32, Vec<String>>>,
 }
 
 impl ExperimentalOptions {
@@ -507,6 +511,7 @@ impl Default for ExperimentalOptions {
             scheduler: Some(Scheduler::ThreadPerCore),
             report_errors_to_stderr: Some(true),
             use_new_tcp: Some(false),
+            syscall_overrides: Some(HashMap::new()),
         }
     }
 }
