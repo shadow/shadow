@@ -264,6 +264,8 @@ impl PacketDevice for NetworkInterface {
         // The packet is successfully received by this interface.
         packet.add_status(PacketStatus::RcvInterfaceReceived);
 
+        // println!("addr: {}, src: {}, dst: {}", self.addr, *packet.src_address().ip(), *packet.dst_address().ip());
+
         // Record the packet before we process it, otherwise we may send more packets before we
         // record this one and the order will be incorrect.
         self.capture_if_configured(&packet);

@@ -191,6 +191,8 @@ impl UdpSocket {
 
         self.refresh_readable_writable(FileSignals::empty(), cb_queue);
 
+        // println!("src: {}, dst: {}", header.src, header.dst);
+
         Some(packet)
     }
 
@@ -370,9 +372,26 @@ impl UdpSocket {
         }
 
         // make sure that we're bound
-        if socket_ref.bound_addr.is_some() {
+        if let Some(bound_addr) = socket_ref.bound_addr {
             // we must have an association since we're bound
             assert!(socket_ref.association.is_some());
+
+            // make sure the new peer address is connectable from the bound interface
+            if !bound_addr.ip().is_unspecified() {
+                // assume that a socket bound to 0.0.0.0 can connect anywhere, so only check
+                // localhost
+                match (
+                    bound_addr.ip() == &Ipv4Addr::LOCALHOST,
+                    dst_addr.ip() == &Ipv4Addr::LOCALHOST,
+                ) {
+                    // bound and peer on loopback interface
+                    (true, true) => {}
+                    // neither bound nor peer on loopback interface (shadow treats any
+                    // non-127.0.0.1 address as an "internet" address)
+                    (false, false) => {}
+                    _ => return Err(Errno::EINVAL.into()),
+                }
+            }
         } else {
             // we can't be unbound but have a peer
             assert!(socket_ref.peer_addr.is_none());
@@ -421,6 +440,8 @@ impl UdpSocket {
                 Worker::with_active_host(|host| host.get_next_packet_priority()).unwrap();
 
             let src_addr = socket_ref.bound_addr.unwrap();
+
+            // println!("preaddr: {}", src_addr);
             let src_addr = if src_addr.ip().is_unspecified() {
                 // depending on the destination address, choose either localhost or the public IP
                 // address
@@ -438,6 +459,11 @@ impl UdpSocket {
                 dst: dst_addr,
                 packet_priority,
             };
+
+            // println!("src: {}, dst: {}", header.src, header.dst);
+            // if (*header.src.ip()).to_bits() == 2130706433 {
+            //     println!("LMAO2");
+            // }
 
             // push the message to the send buffer (shouldn't fail since we checked for available
             // space above)

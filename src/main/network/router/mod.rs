@@ -35,6 +35,7 @@ impl Router {
 
     fn push_inner(&self, packet: PacketRc, now: EmulatedTime) {
         self.magic.debug_check();
+        // println!("addr: {}, src: {}, dst: {}", self.address, *packet.src_address().ip(), *packet.dst_address().ip());
         self.inbound_packets.borrow_mut().push(packet, now);
     }
 

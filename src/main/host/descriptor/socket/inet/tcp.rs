@@ -703,6 +703,10 @@ impl TcpSocket {
             socket_ref.with_tcp_state(cb_queue, |state| state.connect(peer_addr, associate_fn))
         };
 
+        // if let Some(local_addr) = local_addr {
+        //     println!("connect: src={}, dst={}", local_addr, peer_addr);
+        // }
+
         let handle = match rv {
             Ok(x) => x,
             Err(tcp::ConnectError::InProgress) => return Err(Errno::EALREADY.into()),

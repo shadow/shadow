@@ -220,6 +220,10 @@ impl Relay {
                 return None;
             };
 
+            if (*packet.src_address().ip()).to_bits() == 2130706433 && (*packet.dst_address().ip()).to_bits() == 201392129 {
+                println!("prot: {}, dev: {}, src: {}, dst: {}", packet.protocol(), internal.src_dev_address, *packet.src_address().ip(), *packet.dst_address().ip());
+            }
+
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
@@ -267,6 +271,8 @@ impl Relay {
             } else {
                 // The source and destination are different.
                 let dst = host.get_packet_device(*packet.dst_address().ip());
+                // println!("dev: {}, src: {}, dst: {}", internal.src_dev_address, *packet.src_address().ip(), *packet.dst_address().ip());
+                // println!("src: {}, dst: {}", (*packet.src_address().ip()).to_bits(), (*packet.dst_address().ip()).to_bits());
                 dst.push(packet);
             }
         }

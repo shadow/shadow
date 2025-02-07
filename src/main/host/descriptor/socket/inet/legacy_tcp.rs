@@ -789,6 +789,21 @@ impl LegacyTcpSocket {
                     local_addr.port().to_be(),
                 )
             };
+        } else {
+            if let Some(local_addr) = socket_ref.getsockname()? {
+                // println!("src: {}, dst: {}", local_addr, peer_addr);
+                match (
+                    local_addr.ip() == Ipv4Addr::LOCALHOST,
+                    peer_addr.ip() == &Ipv4Addr::LOCALHOST,
+                ) {
+                    // bound and peer on loopback interface
+                    (true, true) => {}
+                    // neither bound nor peer on loopback interface (shadow treats any
+                    // non-127.0.0.1 address as an "internet" address)
+                    (false, false) => {}
+                    _ => return Err(Errno::EINVAL.into()),
+                }
+            }
         }
 
         unsafe {
