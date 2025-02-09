@@ -7,3 +7,4 @@ publish.workspace = true
 
 [dependencies]
 nom = { version = "8.0", features = ["alloc"] }
+nom-language = "0.1.0"
