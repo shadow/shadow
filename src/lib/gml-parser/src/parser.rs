@@ -7,11 +7,9 @@ use std::collections::HashMap;
 use nom::{
     bytes::complete::{escaped_transform, is_not, tag, take, take_while},
     character::complete::{digit1, multispace0, multispace1, space0},
-    character::{is_alphabetic, is_alphanumeric},
     combinator::{self, map_res, recognize, verify},
     error::{ErrorKind, FromExternalError, ParseError},
-    sequence::tuple,
-    IResult,
+    IResult, Parser,
 };
 
 use crate::gml::{Edge, Gml, GmlItem, Node, Value};
@@ -38,15 +36,15 @@ fn take_verify<'a, E: GmlParseError<'a>>(
     count: u32,
     cond: impl Fn(char) -> bool,
 ) -> impl Fn(&'a str) -> IResult<&'a str, &'a str, E> {
-    move |i| verify(take(count), |s: &str| s.chars().all(&cond))(i)
+    move |i| verify(take(count), |s: &str| s.chars().all(&cond)).parse(i)
 }
 
 /// Parse a GML key.
 pub fn key<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
     // a key starts with the a character [a-zA-Z_], and has remaining characters [a-zA-Z0-9_]
-    let take_first = take_verify(1, |chr| is_alphabetic(chr as u8) || chr == '_');
-    let take_remaining = take_while(|chr| is_alphanumeric(chr as u8) || chr == '_');
-    let (input, key) = recognize(tuple((take_first, take_remaining)))(input)?;
+    let take_first = take_verify(1, |chr| chr.is_ascii_alphabetic() || chr == '_');
+    let take_remaining = take_while(|chr: char| chr.is_ascii_alphanumeric() || chr == '_');
+    let (input, key) = recognize((take_first, take_remaining)).parse(input)?;
     Ok((input, key))
 }
 
@@ -72,7 +70,7 @@ pub fn gml<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Gml<'a>
     let (input, _) = tag("[")(input)?;
     let (input, _) = newline(input)?;
 
-    let (input, (items, _)) = nom::multi::many_till(item, tag("]"))(input)?;
+    let (input, (items, _)) = nom::multi::many_till(item, tag("]")).parse(input)?;
 
     let [nodes, edges, directed, others]: [Vec<_>; 4] = partition(items.into_iter(), |x| match x {
         GmlItem::Node(_) => 0,
@@ -155,7 +153,7 @@ fn node<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Node<'a>, 
     let (input, _) = tag("[")(input)?;
     let (input, _) = newline(input)?;
 
-    let (input, (key_values, _)) = nom::multi::many_till(tuple((key, value)), tag("]"))(input)?;
+    let (input, (key_values, _)) = nom::multi::many_till((key, value), tag("]")).parse(input)?;
     let expected_len = key_values.len();
     let mut key_values: HashMap<_, _> = key_values.into_iter().collect();
     if key_values.len() != expected_len {
@@ -183,7 +181,7 @@ fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Edge<'a>, 
     let (input, _) = tag("[")(input)?;
     let (input, _) = newline(input)?;
 
-    let (input, (key_values, _)) = nom::multi::many_till(tuple((key, value)), tag("]"))(input)?;
+    let (input, (key_values, _)) = nom::multi::many_till((key, value), tag("]")).parse(input)?;
     let expected_len = key_values.len();
     let mut key_values: HashMap<_, _> = key_values.into_iter().collect();
     if key_values.len() != expected_len {
@@ -214,22 +212,20 @@ fn edge<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Edge<'a>, 
 fn value<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
     let (input, _) = space0(input)?;
 
-    let (input, (value, _)) = nom::branch::alt((
-        tuple((int, newline)),
-        tuple((float, newline)),
-        tuple((string, newline)),
-    ))(input)?;
+    let (input, (value, _)) =
+        nom::branch::alt(((int, newline), (float, newline), (string, newline))).parse(input)?;
 
     Ok((input, value))
 }
 
 fn int<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
-    let (input, value) = map_res(recognize(digit1), str::parse)(input)?;
+    let (input, value) = map_res(recognize(digit1), str::parse).parse(input)?;
     Ok((input, Value::Int(value)))
 }
 
 fn float<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a>, E> {
-    let (input, value) = map_res(nom::number::complete::recognize_float, str::parse)(input)?;
+    let (input, value) =
+        map_res(nom::number::complete::recognize_float, str::parse).parse(input)?;
     Ok((input, Value::Float(value)))
 }
 
@@ -250,7 +246,7 @@ fn string<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, Value<'a
 }
 
 fn newline<'a, E: GmlParseError<'a>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    recognize(tuple((space0, multispace1, space0)))(input)
+    recognize((space0, multispace1, space0)).parse(input)
 }
 
 fn int_to_bool(x: i32) -> Result<bool, &'static str> {
