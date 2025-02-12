@@ -61,7 +61,7 @@ impl IanaProtocol {
 
 /// A packet's type of service (TOS) indicates its desired queuing priority. This may be used by
 /// Shadow's interface qdisc to prioritize packets that it sends out to the network. For example,
-/// in the `pfifo_fast` qdisc, packets in lower priority bands would be send ahead of others.
+/// in the `pfifo_fast` qdisc, packets in lower priority bands would be sent ahead of others.
 // https://lartc.org/howto/lartc.qdisc.classless.html
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TypeOfService {
@@ -71,17 +71,20 @@ pub enum TypeOfService {
     MinimizeDelay,
     /// Corresponds to "Best Effort" priority (band 1).
     MaximizeReliability,
-    /// Corresponds to "Bulk" Linux priority (band 2).
+    /// Corresponds to "Bulk" priority (band 2).
     MaximizeThroughput,
 }
 
 /// A thread-safe shared reference to a `Packet`.
 ///
-/// A `PacketRc` allows us to support reference counting on `Packet`s while safely sharing them
-/// across threads. A clone of a `PacketRc`s increments the reference count of the shared `Packet`
-/// while dropping the `PacketRc` decrements the reference count. The shared inner `Packet` is only
-/// dropped when all `PacketRc`s referring to it are also dropped (i.e., the reference count reaches
-/// zero).
+/// A `PacketRc` is a wrapper around a `Packet` and allows us to support reference counting on
+/// `Packet`s while safely sharing them across threads. A clone of a `PacketRc`s increments the
+/// reference count of the shared `Packet` while dropping the `PacketRc` decrements the reference
+/// count. The shared inner `Packet` is only dropped when all `PacketRc`s referring to it are also
+/// dropped (i.e., the reference count reaches zero).
+/// 
+/// The `PartialEq` implementation on `PacketRc` compares the pointer values of the wrapped
+/// `Packet`.
 ///
 /// `PacketRc` implements the `Deref` trait so that all non-associated functions on `Packet` can be
 /// accessed from instances of `PacketRc` too.
@@ -167,6 +170,10 @@ impl PacketRc {
     /// To avoid a memory leak, the returned pointer must be either reconstituted into a `PacketRc`
     /// using the Rust function `PacketRc::from_raw()`, or dropped using the C function
     /// `packet_unref()`.
+    /// 
+    /// Although this returns a `*mut Packet` pointer, the packet is not actually mutuable. We
+    /// return a `*mut Packet` pointer only to avoid having to change the instnaces of the pointers
+    /// to const instances in the C network code.
     ///
     /// # Deprecation
     ///
@@ -213,6 +220,7 @@ impl PacketRc {
 }
 
 impl PartialEq for PacketRc {
+    /// Compares the pointer rather than the value of the inner `Arc<Packet>` object.
     fn eq(&self, other: &Self) -> bool {
         // Two `PacketRc`s are considered equal if they point to the same shared `Packet`.
         Arc::ptr_eq(&self.inner, &other.inner)
@@ -363,6 +371,10 @@ impl Packet {
     /// This function may return a non-empty vector of zero-length `Bytes` object(s) if zero-length
     /// `Bytes` object(s) were provided at creation time. Thus, it may be helpful to check if the
     /// packet has useful payload using `payload_len()` before calling this function.
+    //
+    // TODO: after we remove the legacy C TCP stack, then all packet creation functions will require
+    // a pre-set payload, and we do not add more bytes later. Thus, we can then store them as a
+    // slice of `Bytes` rather than a `Vec<Bytes>`.
     pub fn payload(&self) -> Vec<Bytes> {
         match &self.data {
             Data::LegacyTcp(tcp_rc) => tcp_rc.borrow().payload.clone(),
@@ -529,6 +541,8 @@ struct TcpData {
     // We don't use `tcp::TcpHeader` here because it includes non-transport layer data (IP headers).
     header: TcpHeader,
     // A vector allows us to store the payload in multiple separate chunks.
+    // Consider using `SmallVec` instead. I'm not sure what the improvement would be, and it if is
+    // worth adding in the extra dependency on the `SmallVec` code here.
     payload: Vec<Bytes>,
 }
 
@@ -597,6 +611,8 @@ impl TcpHeader {
     }
 
     // This function must be kept in sync with `display_bytes()`.
+    // TODO: is there a better way of keeping this logic in sync with similar logic in
+    // `display_bytes()`?
     pub fn len(&self) -> usize {
         // Base is 20 bytes: https://en.wikipedia.org/wiki/Transmission_Control_Protocol
         let mut len = 20usize;
@@ -606,6 +622,8 @@ impl TcpHeader {
             // Window scale option is 3 bytes.
             len += 3;
         }
+
+        // TODO: should we consider the length of the selective acks, if any exist?
 
         // Add padding bytes if needed.
         if (len % 4) != 0 {
@@ -724,7 +742,7 @@ struct Metadata {
     /// This is currently set by the legacy C TCP stack to help uniquely identify a packet while
     /// debugging. It can be removed when the legacy TCP stack and our C packet API is removed.
     _host_id: Option<HostId>,
-    /// The id of the host that created the packet.
+    /// The id of the packet.
     ///
     /// # Deprecation
     ///
