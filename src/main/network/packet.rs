@@ -82,7 +82,7 @@ pub enum TypeOfService {
 /// reference count of the shared `Packet` while dropping the `PacketRc` decrements the reference
 /// count. The shared inner `Packet` is only dropped when all `PacketRc`s referring to it are also
 /// dropped (i.e., the reference count reaches zero).
-/// 
+///
 /// The `PartialEq` implementation on `PacketRc` compares the pointer values of the wrapped
 /// `Packet`.
 ///
@@ -170,7 +170,7 @@ impl PacketRc {
     /// To avoid a memory leak, the returned pointer must be either reconstituted into a `PacketRc`
     /// using the Rust function `PacketRc::from_raw()`, or dropped using the C function
     /// `packet_unref()`.
-    /// 
+    ///
     /// Although this returns a `*mut Packet` pointer, the packet is not actually mutuable. We
     /// return a `*mut Packet` pointer only to avoid having to change the instnaces of the pointers
     /// to const instances in the C network code.
@@ -213,9 +213,7 @@ impl PacketRc {
     /// This function provides compatibility with the legacy C TCP stack and should be considered
     /// deprecated and removed when the legacy C TCP stack is removed.
     fn borrow_raw_mut(packet_ptr: *mut Packet) -> Self {
-        assert!(!packet_ptr.is_null());
-        unsafe { Arc::increment_strong_count(packet_ptr.cast_const()) };
-        PacketRc::from_raw(packet_ptr)
+        Self::borrow_raw(packet_ptr.cast_const())
     }
 }
 
@@ -584,7 +582,9 @@ struct TcpHeader {
 }
 
 impl TcpHeader {
-    pub fn _new(
+    // Unused now, but want to allow its use in the future.
+    #[allow(dead_code)]
+    pub fn new(
         src_port: u16,
         dst_port: u16,
         flags: tcp::TcpFlags,
@@ -651,7 +651,7 @@ impl From<tcp::TcpHeader> for TcpHeader {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default)]
 struct TcpSelectiveAcks {
     len: u8,
     // A TCP packet can only hold at most 4 selective ack blocks.
@@ -678,6 +678,20 @@ impl From<TcpSelectiveAcks> for tcp::util::SmallArrayBackedSlice<4, (u32, u32)> 
     fn from(selective_acks: TcpSelectiveAcks) -> Self {
         assert!(selective_acks.len <= 4);
         Self::new(&selective_acks.ranges[0..(selective_acks.len as usize)]).unwrap()
+    }
+}
+
+impl PartialEq for TcpSelectiveAcks {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len != other.len {
+            return false;
+        }
+        for i in 0..self.len as usize {
+            if self.ranges[i] != other.ranges[i] {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -759,7 +773,7 @@ impl Metadata {
             _packet_id: None,
             // For efficiency, we only store statuses when tracing is enabled because they are
             // logged at trace level and won't be displayed at other levels anyway.
-            statuses: log::log_enabled!(log::Level::Trace).then(|| AtomicRefCell::new(vec![])),
+            statuses: log::log_enabled!(log::Level::Trace).then(AtomicRefCell::default),
         }
     }
 
@@ -776,7 +790,7 @@ impl Metadata {
             _packet_id: Some(packet_id),
             // For efficiency, we only store statuses when tracing is enabled because they are
             // logged at trace level and won't be displayed at other levels anyway.
-            statuses: log::log_enabled!(log::Level::Trace).then(|| AtomicRefCell::new(vec![])),
+            statuses: log::log_enabled!(log::Level::Trace).then(AtomicRefCell::default),
         }
     }
 }
@@ -817,128 +831,112 @@ impl PacketDisplay for Packet {
 
         // write protocol-specific data
 
-        self.data.display_bytes(writer)?;
+        match &self.data {
+            Data::LegacyTcp(tcp_ref) => write_tcpdata_bytes(&tcp_ref.borrow(), writer),
+            Data::Tcp(tcp) => write_tcpdata_bytes(tcp, writer),
+            Data::Udp(udp) => write_udpdata_bytes(udp, writer),
+        }?;
 
         Ok(())
     }
 }
 
-impl PacketDisplay for Data {
-    fn display_bytes(&self, writer: impl Write) -> std::io::Result<()> {
-        match self {
-            Data::LegacyTcp(tcp_ref) => tcp_ref.borrow().display_bytes(writer),
-            Data::Tcp(tcp) => tcp.display_bytes(writer),
-            Data::Udp(udp) => udp.display_bytes(writer),
-        }
+fn write_tcpdata_bytes(data: &TcpData, mut writer: impl Write) -> std::io::Result<()> {
+    // process TCP options
+
+    let tcp_hdr = &data.header;
+
+    // options can be a max of 40 bytes
+    let mut options = [0u8; 40];
+    let mut options_len = 0;
+
+    if let Some(window_scale) = tcp_hdr.window_scale {
+        // option-kind = 3, option-len = 3, option-data = window-scale
+        options[options_len..][..3].copy_from_slice(&[3, 3, window_scale]);
+        options_len += 3;
     }
+
+    // TODO: do we want to include selective acks or timestamp options?
+
+    if options_len % 4 != 0 {
+        // need to add padding (our options array was already initialized with zeroes)
+        let padding = 4 - (options_len % 4);
+        options_len += padding;
+    }
+
+    let options = &options[..options_len];
+
+    // process the TCP header
+
+    let mut tcp_flags = tcp_hdr.flags;
+
+    // Header length in bytes. This must be kept in sync with `header().len()`.
+    let header_len: usize = 20usize.checked_add(options.len()).unwrap();
+    assert_eq!(header_len, tcp_hdr.len());
+
+    // Ultimately, TCP header len is represented in 32-bit words, so we divide by 4. The
+    // left-shift of 4 is because the header len is represented in the top 4 bits.
+    let mut header_len = u8::try_from(header_len).unwrap();
+    header_len /= 4;
+    header_len <<= 4;
+
+    // Filter these two bits because we stuff non-TCP legacy flags here on legacy packets.
+    // TODO: remove this filter when the C TCP stack and Data::LegacyTCP packets are removed.
+    tcp_flags.remove(tcp::TcpFlags::ECE);
+    tcp_flags.remove(tcp::TcpFlags::CWR);
+
+    // write the header data
+
+    // source port: 2 bytes
+    writer.write_all(&tcp_hdr.src_port.to_be_bytes())?;
+    // destination port: 2 bytes
+    writer.write_all(&tcp_hdr.dst_port.to_be_bytes())?;
+    // sequence number: 4 bytes
+    writer.write_all(&tcp_hdr.sequence.to_be_bytes())?;
+    // acknowledgement number: 4 bytes
+    writer.write_all(&tcp_hdr.acknowledgement.to_be_bytes())?;
+    // data offset + reserved + NS: 1 byte
+    // flags: 1 byte
+    writer.write_all(&[header_len, tcp_flags.bits()])?;
+    // window size: 2 bytes
+    writer.write_all(&tcp_hdr.window_size.to_be_bytes())?;
+    // checksum: 2 bytes
+    let checksum: u16 = 0u16;
+    writer.write_all(&checksum.to_be_bytes())?;
+    // urgent: 2 bytes
+    let urgent_pointer: u16 = 0u16;
+    writer.write_all(&urgent_pointer.to_be_bytes())?;
+
+    writer.write_all(options)?;
+
+    // write payload data
+
+    for bytes in &data.payload {
+        writer.write_all(bytes)?;
+    }
+
+    Ok(())
 }
 
-impl PacketDisplay for TcpData {
-    fn display_bytes(&self, mut writer: impl Write) -> std::io::Result<()> {
-        // process TCP options
+fn write_udpdata_bytes(data: &UdpData, mut writer: impl Write) -> std::io::Result<()> {
+    // write the UDP header
 
-        let tcp_hdr = &self.header;
+    // source port: 2 bytes
+    writer.write_all(&data.header.src_port.to_be_bytes())?;
+    // destination port: 2 bytes
+    writer.write_all(&data.header.dst_port.to_be_bytes())?;
+    // length: 2 bytes
+    let udp_len: u16 = u16::try_from(data.len()).unwrap();
+    writer.write_all(&udp_len.to_be_bytes())?;
+    // checksum: 2 bytes
+    let checksum: u16 = 0x0;
+    writer.write_all(&checksum.to_be_bytes())?;
 
-        // options can be a max of 40 bytes
-        let mut options = [0u8; 40];
-        let mut options_len = 0;
+    // write payload data
 
-        if let Some(window_scale) = tcp_hdr.window_scale {
-            // option-kind = 3, option-len = 3, option-data = window-scale
-            options[options_len..][..3].copy_from_slice(&[3, 3, window_scale]);
-            options_len += 3;
-        }
+    writer.write_all(&data.payload)?;
 
-        // TODO: do we want to include selective acks or timestamp options?
-
-        if options_len % 4 != 0 {
-            // need to add padding (our options array was already initialized with zeroes)
-            let padding = 4 - (options_len % 4);
-            options_len += padding;
-        }
-
-        let options = &options[..options_len];
-
-        // process the TCP header
-
-        let mut tcp_flags = tcp_hdr.flags;
-
-        let ack: u32 = if tcp_flags.contains(tcp::TcpFlags::ACK) {
-            tcp_hdr.acknowledgement
-        } else {
-            0u32
-        };
-
-        // Header length in bytes. This must be kept in sync with `header().len()`.
-        let header_len: usize = 20usize.checked_add(options.len()).unwrap();
-        assert_eq!(header_len, tcp_hdr.len());
-
-        // Ultimately, TCP header len is represented in 32-bit words, so we divide by 4. The
-        // left-shift of 4 is because the header len is represented in the top 4 bits.
-        let mut header_len = u8::try_from(header_len).unwrap();
-        header_len /= 4;
-        header_len <<= 4;
-
-        // Filter these two bits because we stuff non-TCP legacy flags here on legacy packets.
-        // TODO: remove this filter when the C TCP stack and Data::LegacyTCP packets are removed.
-        tcp_flags.remove(tcp::TcpFlags::ECE);
-        tcp_flags.remove(tcp::TcpFlags::CWR);
-
-        // write the header data
-
-        // source port: 2 bytes
-        writer.write_all(&tcp_hdr.src_port.to_be_bytes())?;
-        // destination port: 2 bytes
-        writer.write_all(&tcp_hdr.dst_port.to_be_bytes())?;
-        // sequence number: 4 bytes
-        writer.write_all(&tcp_hdr.sequence.to_be_bytes())?;
-        // acknowledgement number: 4 bytes
-        writer.write_all(&ack.to_be_bytes())?;
-        // data offset + reserved + NS: 1 byte
-        // flags: 1 byte
-        writer.write_all(&[header_len, tcp_flags.bits()])?;
-        // window size: 2 bytes
-        writer.write_all(&tcp_hdr.window_size.to_be_bytes())?;
-        // checksum: 2 bytes
-        let checksum: u16 = 0u16;
-        writer.write_all(&checksum.to_be_bytes())?;
-        // urgent: 2 bytes
-        let urgent_pointer: u16 = 0u16;
-        writer.write_all(&urgent_pointer.to_be_bytes())?;
-
-        writer.write_all(options)?;
-
-        // write payload data
-
-        for bytes in &self.payload {
-            writer.write_all(bytes)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl PacketDisplay for UdpData {
-    fn display_bytes(&self, mut writer: impl Write) -> std::io::Result<()> {
-        // write the UDP header
-
-        // source port: 2 bytes
-        writer.write_all(&self.header.src_port.to_be_bytes())?;
-        // destination port: 2 bytes
-        writer.write_all(&self.header.dst_port.to_be_bytes())?;
-        // length: 2 bytes
-        let udp_len: u16 = u16::try_from(self.len()).unwrap();
-        writer.write_all(&udp_len.to_be_bytes())?;
-        // checksum: 2 bytes
-        let checksum: u16 = 0x0;
-        writer.write_all(&checksum.to_be_bytes())?;
-
-        // write payload data
-
-        writer.write_all(&self.payload)?;
-
-        Ok(())
-    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1214,7 +1212,7 @@ mod export {
     }
 
     #[no_mangle]
-    pub extern "C-unwind" fn packet_setPayloadWithMemoryManager(
+    pub extern "C-unwind" fn packet_appendPayloadWithMemoryManager(
         packet_ptr: *mut Packet,
         src: UntypedForeignPtr,
         src_len: u64,
@@ -1228,10 +1226,13 @@ mod export {
             unimplemented!()
         };
 
-        let len = usize::try_from(src_len).unwrap_or(usize::MAX);
+        let len = usize::try_from(src_len).unwrap();
         let src = ForeignArrayPtr::new(src.cast::<u8>(), len);
 
         // We want the dst buf on the heap so we don't have to copy it later.
+        // TODO: consider using `Box::<[u8]>::new_uninit_slice(len)`, writing bytes to the slice
+        // from the memory manager, then `dst.assume_init()`` to go back to a `Box::<[u8]>`. This
+        // might be more efficient because it avoids zero-filling the buffer.
         let mut dst = vec![0u8; len].into_boxed_slice();
 
         log::trace!(
@@ -1243,13 +1244,11 @@ mod export {
         // copy of the payload that occurs until the receiver host later copies it into their
         // managed process.
         if let Err(e) = mem.copy_from_ptr(&mut dst[..], src) {
-            log::warn!(
+            // Panic because the packet data will be corrupt (not what the application wrote).
+            panic!(
                 "Couldn't read managed process memory at {:?} into packet payload at {:?}: {:?}",
-                src,
-                dst,
-                e
+                src, dst, e
             );
-            return;
         }
 
         log::trace!(

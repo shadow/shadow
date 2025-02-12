@@ -943,7 +943,7 @@ static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, ProtocolTCPFlag
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
-        packet_setPayloadWithMemoryManager(packet, payload, payloadLength, mem);
+        packet_appendPayloadWithMemoryManager(packet, payload, payloadLength, mem);
     }
     return packet;
 }
