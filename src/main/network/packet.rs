@@ -1227,13 +1227,12 @@ mod export {
         };
 
         let len = usize::try_from(src_len).unwrap();
-        let src = ForeignArrayPtr::new(src.cast::<u8>(), len);
+        let src = ForeignArrayPtr::new(src.cast::<MaybeUninit<u8>>(), len);
 
-        // We want the dst buf on the heap so we don't have to copy it later.
-        // TODO: consider using `Box::<[u8]>::new_uninit_slice(len)`, writing bytes to the slice
-        // from the memory manager, then `dst.assume_init()`` to go back to a `Box::<[u8]>`. This
-        // might be more efficient because it avoids zero-filling the buffer.
-        let mut dst = vec![0u8; len].into_boxed_slice();
+        // We want the dst buf on the heap so we don't have to copy it later. Uses
+        // `new_uninit_slice` to avoid zero-filling the bytes in dst buffer that we are going to
+        // copy over with the memory manager below anyway.
+        let mut dst = Box::<[u8]>::new_uninit_slice(len);
 
         log::trace!(
             "Requested to read payload of len {len} from the managed process into the packet's \
@@ -1250,6 +1249,8 @@ mod export {
                 src, dst, e
             );
         }
+
+        let dst = unsafe { dst.assume_init() };
 
         log::trace!(
             "We read {} bytes from the managed process into the packet's payload",
