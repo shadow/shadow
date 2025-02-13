@@ -13,8 +13,7 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/descriptor/socket.h"
 #include "main/host/descriptor/tcp.h"
-#include "main/host/protocol.h"
-#include "main/routing/packet.h"
+#include "main/network/legacypacket.h"
 #include "main/utility/utility.h"
 
 gsize _legacysocket_getOutputBufferSpaceIncludingTCP(LegacySocket* socket);
@@ -138,11 +137,15 @@ gint legacysocket_connectToPeer(LegacySocket* socket, const Host* host, in_addr_
     return socket->vtable->connectToPeer(socket, host, ip, port, family);
 }
 
+// This function takes an owned packet from the Rust caller, and drops the packet upon return.
 void legacysocket_pushInPacket(LegacySocket* socket, const Host* host, Packet* packet) {
     MAGIC_ASSERT(socket);
     MAGIC_ASSERT(socket->vtable);
     packet_addDeliveryStatus(packet, PDS_RCV_SOCKET_PROCESSED);
+    // The TCP code will only borrow our ref to `Packet` in the process function, but we still own
+    // it. If the TCP layer wants to hold another ref to the packet, it should call `packet_ref()`.
     socket->vtable->process(socket, host, packet);
+    packet_unref(packet);
 }
 
 void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* packet) {
@@ -153,6 +156,7 @@ void legacysocket_dropPacket(LegacySocket* socket, const Host* host, Packet* pac
 
 /* functions implemented by socket */
 
+// Returns an owned packet to the Rust caller, or NULL if no packet is available.
 Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
     Packet* packet = legacysocket_removeFromOutputBuffer(socket, host);
 
@@ -169,13 +173,20 @@ Packet* legacysocket_pullOutPacket(LegacySocket* socket, const Host* host) {
     return packet;
 }
 
+// Returns an owned packet to the Rust caller, or NULL if no packet is available.
 Packet* legacysocket_peekNextOutPacket(const LegacySocket* socket) {
     MAGIC_ASSERT(socket);
+    Packet* packet = NULL;
     if(!g_queue_is_empty(socket->outputControlBuffer)) {
-        return g_queue_peek_head(socket->outputControlBuffer);
+        packet = g_queue_peek_head(socket->outputControlBuffer);
     } else {
-        return g_queue_peek_head(socket->outputBuffer);
+        packet = g_queue_peek_head(socket->outputBuffer);
     }
+    // Increment the ref count since we return an owned packet to the Rust caller.
+    if (packet != NULL) {
+        packet_ref(packet);
+    }
+    return packet;
 }
 
 Packet* legacysocket_peekNextInPacket(const LegacySocket* socket) {

@@ -214,7 +214,7 @@ impl Relay {
         // Continue forwarding until we run out of either packets or tokens.
         loop {
             // Get next packet from our local cache, or from the source device.
-            let Some(mut packet) = internal.next_packet.take().or_else(|| src.pop()) else {
+            let Some(packet) = internal.next_packet.take().or_else(|| src.pop()) else {
                 // Ran out of packets to forward.
                 internal.state = RelayState::Idle;
                 return None;
@@ -223,7 +223,7 @@ impl Relay {
             // The packet is local if the src and dst refer to the same device.
             // This can happen for the loopback device, and for the inet device
             // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == *packet.dst_address().ip();
+            let is_local = src.get_address() == *packet.dst_ipv4_address().ip();
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -232,17 +232,17 @@ impl Relay {
                 // Rate limit applies only if we have a token bucket.
                 if let Some(tb) = internal.rate_limiter.as_mut() {
                     // Try to remove tokens for this packet.
-                    if let Err(blocking_dur) = tb.comforming_remove(packet.total_size() as u64) {
+                    if let Err(blocking_dur) = tb.comforming_remove(packet.len() as u64) {
                         // Too few tokens, need to block.
                         log::trace!(
                             "Relay src={} dst={} exceeded rate limit, need {} more tokens \
                             for packet of size {}, blocking for {:?}",
                             src.get_address(),
-                            packet.dst_address().ip(),
+                            packet.dst_ipv4_address().ip(),
                             packet
-                                .total_size()
+                                .len()
                                 .saturating_sub(tb.comforming_remove(0).unwrap() as usize),
-                            packet.total_size(),
+                            packet.len(),
                             blocking_dur
                         );
 
@@ -266,7 +266,7 @@ impl Relay {
                 src.push(packet);
             } else {
                 // The source and destination are different.
-                let dst = host.get_packet_device(*packet.dst_address().ip());
+                let dst = host.get_packet_device(*packet.dst_ipv4_address().ip());
                 dst.push(packet);
             }
         }
