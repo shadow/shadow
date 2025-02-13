@@ -91,7 +91,6 @@ pub enum TypeOfService {
 #[derive(Clone, Debug)]
 pub struct PacketRc {
     inner: Arc<Packet>,
-    _counter: ObjectCounter,
 }
 
 impl PacketRc {
@@ -161,7 +160,6 @@ impl PacketRc {
         assert!(!packet_ptr.is_null());
         Self {
             inner: unsafe { Arc::from_raw(packet_ptr) },
-            _counter: ObjectCounter::new("PacketRc"),
         }
     }
 
@@ -231,7 +229,6 @@ impl From<Packet> for PacketRc {
     fn from(packet: Packet) -> Self {
         Self {
             inner: Arc::new(packet),
-            _counter: ObjectCounter::new("PacketRc"),
         }
     }
 }
