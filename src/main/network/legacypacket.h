@@ -1,13 +1,29 @@
-/*
- * The Shadow Simulator
- * Copyright (c) 2010-2011, Rob Jansen
- * See LICENSE for licensing information
- */
+#ifndef SHD_LEGACY_PACKET_H_
+#define SHD_LEGACY_PACKET_H_
 
-#ifndef SHD_PACKET_MINIMAL_H_
-#define SHD_PACKET_MINIMAL_H_
+#include <netinet/in.h>
 
-typedef struct _Packet Packet;
+// Enum typedefs below need to come after enum definitions to make our cpp code compile in
+// tcp_retransmit_tally.cc.
+
+enum _ProtocolType { PNONE, PTCP, PUDP };
+typedef enum _ProtocolType ProtocolType;
+
+enum _ProtocolUDPFlags {
+    PUDP_NONE = 0,
+};
+typedef enum _ProtocolUDPFlags ProtocolUDPFlags;
+
+enum _ProtocolTCPFlags {
+    PTCP_NONE = 0,
+    PTCP_RST = 1 << 1,
+    PTCP_SYN = 1 << 2,
+    PTCP_ACK = 1 << 3,
+    PTCP_SACK = 1 << 4,
+    PTCP_FIN = 1 << 5,
+    PTCP_DUPACK = 1 << 6,
+};
+typedef enum _ProtocolTCPFlags ProtocolTCPFlags;
 
 enum _PacketDeliveryStatusFlags {
     PDS_NONE = 0,
@@ -34,11 +50,7 @@ enum _PacketDeliveryStatusFlags {
     PDS_RELAY_CACHED = 1 << 21,
     PDS_RELAY_FORWARDED = 1 << 22,
 };
-// typedef needs to come after above enum definition to make our cpp code compile in
-// tcp_retransmit_tally.cc.
 typedef enum _PacketDeliveryStatusFlags PacketDeliveryStatusFlags;
-
-typedef struct _PacketTCPHeader PacketTCPHeader;
 
 // At most 32 bytes are available in the TCP header for selective acks. They represent ranges of
 // sequence numbers that have been acked, so each is a 4-byte uint. We can include a maximum of 4
@@ -59,4 +71,33 @@ struct _PacketSelectiveAcks {
     PacketSelectiveAckRange ranges[4];
 };
 
-#endif
+// The c bindings break the cpp build but are not needed in the cpp code.
+#ifndef __cplusplus
+// Just for CSimulationTime.
+#include "main/bindings/c/bindings-opaque.h"
+typedef struct _PacketTCPHeader PacketTCPHeader;
+struct _PacketTCPHeader {
+    ProtocolTCPFlags flags;
+
+    // address is in network byte order
+    in_addr_t sourceIP;
+    // port is in network byte order
+    in_port_t sourcePort;
+
+    // address is in network byte order
+    in_addr_t destinationIP;
+    // port is in network byte order
+    in_port_t destinationPort;
+
+    unsigned int sequence;
+    unsigned int acknowledgment;
+    PacketSelectiveAcks selectiveACKs;
+    unsigned int window;
+    unsigned char windowScale;
+    bool windowScaleSet;
+    CSimulationTime timestampValue;
+    CSimulationTime timestampEcho;
+};
+#endif // __cplusplus
+
+#endif // SHD_LEGACY_PACKET_H_

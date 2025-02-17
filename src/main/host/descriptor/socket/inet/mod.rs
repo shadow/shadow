@@ -19,7 +19,7 @@ use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::SyscallError;
-use crate::network::packet::PacketRc;
+use crate::network::packet::{IanaProtocol, PacketRc};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
 use crate::utility::HostTreePointer;
@@ -512,9 +512,9 @@ fn associate_socket(
     };
 
     let protocol = match socket {
-        InetSocket::LegacyTcp(_) => c::_ProtocolType_PTCP,
-        InetSocket::Tcp(_) => c::_ProtocolType_PTCP,
-        InetSocket::Udp(_) => c::_ProtocolType_PUDP,
+        InetSocket::LegacyTcp(_) => IanaProtocol::Tcp,
+        InetSocket::Tcp(_) => IanaProtocol::Tcp,
+        InetSocket::Udp(_) => IanaProtocol::Udp,
     };
 
     // get a free ephemeral port if they didn't specify one

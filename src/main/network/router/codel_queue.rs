@@ -142,9 +142,8 @@ impl CoDelQueue {
             }
         };
 
-        maybe_packet.map(|mut p| {
+        maybe_packet.inspect(|p| {
             p.add_status(PacketStatus::RouterDequeued);
-            p
         })
     }
 
@@ -206,10 +205,9 @@ impl CoDelQueue {
         match self.elements.pop_front() {
             Some(element) => {
                 // Found a packet.
-                debug_assert!(element.packet.total_size() <= self.total_bytes_stored);
-                self.total_bytes_stored = self
-                    .total_bytes_stored
-                    .saturating_sub(element.packet.total_size());
+                debug_assert!(element.packet.len() <= self.total_bytes_stored);
+                self.total_bytes_stored =
+                    self.total_bytes_stored.saturating_sub(element.packet.len());
 
                 debug_assert!(now >= &element.enqueue_ts);
                 let standing_delay = now.saturating_duration_since(&element.enqueue_ts);
@@ -302,10 +300,10 @@ impl CoDelQueue {
     /// Append a packet to the end of the queue.
     /// Requires the current time as an argument to avoid calling into the
     /// worker module internally.
-    pub fn push(&mut self, mut packet: PacketRc, now: EmulatedTime) {
+    pub fn push(&mut self, packet: PacketRc, now: EmulatedTime) {
         if self.elements.len() < LIMIT {
             packet.add_status(PacketStatus::RouterEnqueued);
-            self.total_bytes_stored += packet.total_size();
+            self.total_bytes_stored += packet.len();
             self.elements.push_back(CoDelElement {
                 packet,
                 enqueue_ts: now,
@@ -318,7 +316,7 @@ impl CoDelQueue {
         }
     }
 
-    fn drop_packet(&self, mut packet: PacketRc) {
+    fn drop_packet(&self, packet: PacketRc) {
         packet.add_status(PacketStatus::RouterDropped);
     }
 }
@@ -351,7 +349,7 @@ mod tests {
 
         for i in 1..=N {
             assert_eq!(cdq.len(), i - 1);
-            cdq.push(PacketRc::mock_new(), now);
+            cdq.push(PacketRc::new_ipv4_udp_mock(), now);
             assert_eq!(cdq.len(), i);
         }
         for i in 1..=N {
@@ -396,7 +394,7 @@ mod tests {
 
         let mut cdq = CoDelQueue::new();
         for _ in 0..5 {
-            cdq.push(PacketRc::mock_new(), start);
+            cdq.push(PacketRc::new_ipv4_udp_mock(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
 
@@ -442,7 +440,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 6;
         for _ in 0..N {
-            cdq.push(PacketRc::mock_new(), start);
+            cdq.push(PacketRc::new_ipv4_udp_mock(), start);
         }
         assert!(cdq.total_bytes_stored > c::CONFIG_MTU.try_into().unwrap());
         assert_eq!(cdq.len(), N);
@@ -475,7 +473,10 @@ mod tests {
         // low-delay packets should put us back into store mode.
         for _ in 0..3 {
             // Add some low-delay packets
-            cdq.push(PacketRc::mock_new(), start + TARGET + INTERVAL * 2u32 - one);
+            cdq.push(
+                PacketRc::new_ipv4_udp_mock(),
+                start + TARGET + INTERVAL * 2u32 - one,
+            );
         }
         cdq.pop(start + TARGET + INTERVAL * 2u32);
         assert_eq!(cdq.mode, CoDelMode::Store);
@@ -499,7 +500,7 @@ mod tests {
         let mut cdq = CoDelQueue::new();
         const N: usize = 20;
         for _ in 0..N {
-            cdq.push(PacketRc::mock_new(), start);
+            cdq.push(PacketRc::new_ipv4_udp_mock(), start);
         }
         assert_eq!(cdq.len(), N);
 

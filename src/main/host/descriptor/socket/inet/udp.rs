@@ -107,14 +107,14 @@ impl UdpSocket {
 
     pub fn push_in_packet(
         &mut self,
-        mut packet: PacketRc,
+        packet: PacketRc,
         cb_queue: &mut CallbackQueue,
         recv_time: EmulatedTime,
     ) {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
         if let Some(peer_addr) = self.peer_addr {
-            if peer_addr != packet.src_address() {
+            if peer_addr != packet.src_ipv4_address() {
                 // connect(2): "If the socket sockfd is of type SOCK_DGRAM, then addr is the address
                 // to which datagrams are sent by default, and the only address from which datagrams
                 // are received."
@@ -142,24 +142,23 @@ impl UdpSocket {
             return;
         }
 
-        // in the future, the packet could contain the `Bytes` object itself and we could simply
-        // transfer the `Bytes` directly from the packet to the buffer without copying the bytes
+        // transfer the `Bytes` directly from the packet to the buffer without copying the bytes.
+        // we use concat in case the payload has mutiple chunks, but that should not happen in
+        // the normal case since we only send UDP messages with a single `Bytes` object.
 
-        let mut message = BytesMut::zeroed(packet.payload_size());
-        let num_bytes_copied = packet.get_payload(&mut message);
-        assert_eq!(num_bytes_copied, packet.payload_size());
+        let payload = tcp::Payload(packet.payload());
+        assert_eq!(payload.len() as usize, packet.payload_len());
+        let message = payload.concat();
 
         let header = MessageRecvHeader {
-            src: packet.src_address(),
-            dst: packet.dst_address(),
+            src: packet.src_ipv4_address(),
+            dst: packet.dst_ipv4_address(),
             recv_time,
         };
 
         // push the message to the receive buffer (shouldn't fail since we checked for available
         // space above)
-        self.recv_buffer
-            .push_message(message.freeze(), header)
-            .unwrap();
+        self.recv_buffer.push_message(message, header).unwrap();
 
         log::trace!("Added a packet to the UDP socket's recv buffer");
         packet.add_status(PacketStatus::RcvSocketBuffered);
@@ -179,14 +178,9 @@ impl UdpSocket {
 
         log::trace!("Removed a message from the UDP socket's send buffer");
 
-        let mut packet = PacketRc::new();
-        let priority = header.packet_priority;
-
-        // in the future, the packet could contain the `Bytes` object itself and we could simply
-        // transfer the `Bytes` directly from the buffer to the packet without copying the bytes
-
-        packet.set_udp(header.src, header.dst);
-        packet.set_payload(&message, priority);
+        // We transfer the `Bytes` directly from the buffer to the packet without copying them.
+        let packet =
+            PacketRc::new_ipv4_udp(header.src, header.dst, message, header.packet_priority);
         packet.add_status(PacketStatus::SndCreated);
 
         self.refresh_readable_writable(FileSignals::empty(), cb_queue);

@@ -14,7 +14,7 @@
 
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/core/definitions.h"
-#include "main/routing/packet.minimal.h"
+#include "main/network/legacypacket.h"
 
 #define TCP_MIN_CWND 10
 

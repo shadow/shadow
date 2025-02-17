@@ -28,8 +28,7 @@
 #include "main/host/descriptor/tcp_cong.h"
 #include "main/host/descriptor/tcp_cong_reno.h"
 #include "main/host/descriptor/tcp_retransmit_tally.h"
-#include "main/host/protocol.h"
-#include "main/routing/packet.h"
+#include "main/network/legacypacket.h"
 #include "main/utility/priority_queue.h"
 #include "main/utility/utility.h"
 
@@ -915,9 +914,17 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host, Proto
     gboolean isFinNotAck = ((flags & PTCP_FIN) && !(flags & PTCP_ACK));
     guint sequence = !isEmpty || isFinNotAck || (flags & PTCP_SYN) ? tcp->send.next : 0;
 
+    /* empty (control) packets get priority 0, data packets get the next priority sequence. */
+    uint64_t priority = 0;
+    if (!isEmpty) {
+        priority = host_getNextPacketPriority(host);
+    }
+
     /* create the TCP packet. the ack, window, and timestamps will be set in _tcp_flush */
-    Packet* packet =
-        packet_new_tcp(host, flags, sourceIP, sourcePort, destinationIP, destinationPort, sequence);
+    guint hostID = host_getID(host);
+    guint64 packetID = host_getNewPacketID(host);
+    Packet* packet = packet_new_tcp(hostID, packetID, flags, sourceIP, sourcePort, destinationIP,
+                                    destinationPort, sequence, priority);
     packet_addDeliveryStatus(packet, PDS_SND_CREATED);
 
     /* update sequence number */
@@ -936,8 +943,7 @@ static Packet* _tcp_createDataPacket(TCP* tcp, const Host* host, ProtocolTCPFlag
     bool isEmpty = payloadLength == 0;
     Packet* packet = _tcp_createPacketWithoutPayload(tcp, host, flags, isEmpty);
     if (!isEmpty) {
-        uint64_t priority = host_getNextPacketPriority(host);
-        packet_setPayloadWithMemoryManager(packet, payload, payloadLength, mem, priority);
+        packet_appendPayloadWithMemoryManager(packet, payload, payloadLength, mem);
     }
     return packet;
 }
@@ -956,9 +962,6 @@ static void _tcp_sendControlPacket(TCP* tcp, const Host* host, ProtocolTCPFlags 
 
     /* create the ack packet, without any payload data */
     Packet* control = _tcp_createControlPacket(tcp, host, flags);
-
-    /* make sure it gets sent before whatever else is in the queue */
-    packet_setPriority(control, 0);
 
     /* push it in the buffer and to the socket */
     _tcp_bufferPacketOut(tcp, control);
