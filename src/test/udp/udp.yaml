@@ -1,5 +1,5 @@
 general:
-  stop_time: 5
+  stop_time: 10
 network:
   graph:
     type: 1_gbit_switch
@@ -8,20 +8,20 @@ hosts:
     network_node_id: 0
     processes:
     - path: ./test-udp
-      args: client localhost:5678
-      start_time: 1
-    - path: ./test-udp
       args: server localhost:5678
       start_time: 1
-  testclient:
-    network_node_id: 0
-    processes:
     - path: ./test-udp
-      args: client testserver:5678
+      args: client localhost:5678
       start_time: 2
   testserver:
     network_node_id: 0
     processes:
     - path: ./test-udp
       args: server 0.0.0.0:5678
-      start_time: 2
+      start_time: 3
+  testclient:
+    network_node_id: 0
+    processes:
+    - path: ./test-udp
+      args: client testserver:5678
+      start_time: 4
