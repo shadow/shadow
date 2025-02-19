@@ -653,7 +653,7 @@ impl RunnableProcess {
             dumpable: self.dumpable.clone(),
             native_pid,
             #[cfg(feature = "perf_timers")]
-            cpu_delay_timer: RefCell::new(PerfTimer::new_started()),
+            cpu_delay_timer: RefCell::new(PerfTimer::new_stopped()),
             #[cfg(feature = "perf_timers")]
             total_run_time: Cell::new(Duration::ZERO),
             itimer_real,
