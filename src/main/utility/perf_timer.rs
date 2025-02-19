@@ -16,6 +16,14 @@ impl PerfTimer {
         }
     }
 
+    /// Create a timer, but don't start it.
+    pub fn new_stopped() -> Self {
+        Self {
+            start_time: None,
+            elapsed: Duration::new(0, 0),
+        }
+    }
+
     /// Start the timer, which must not already be running.
     pub fn start(&mut self) {
         compiler_fence(Ordering::SeqCst);
