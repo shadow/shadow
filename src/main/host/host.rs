@@ -215,7 +215,7 @@ impl Host {
         preload_paths: Arc<Vec<PathBuf>>,
     ) -> Self {
         #[cfg(feature = "perf_timers")]
-        let execution_timer = RefCell::new(PerfTimer::new());
+        let execution_timer = RefCell::new(PerfTimer::new_started());
 
         let root = Root::new();
         let random = RefCell::new(Xoshiro256PlusPlus::seed_from_u64(params.node_seed));

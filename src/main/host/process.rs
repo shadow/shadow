@@ -653,7 +653,7 @@ impl RunnableProcess {
             dumpable: self.dumpable.clone(),
             native_pid,
             #[cfg(feature = "perf_timers")]
-            cpu_delay_timer: RefCell::new(PerfTimer::new()),
+            cpu_delay_timer: RefCell::new(PerfTimer::new_started()),
             #[cfg(feature = "perf_timers")]
             total_run_time: Cell::new(Duration::ZERO),
             itimer_real,
@@ -997,7 +997,7 @@ impl Process {
 
         #[cfg(feature = "perf_timers")]
         let cpu_delay_timer = {
-            let mut t = PerfTimer::new();
+            let mut t = PerfTimer::new_started();
             t.stop();
             RefCell::new(t)
         };

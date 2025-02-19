@@ -8,8 +8,8 @@ pub struct PerfTimer {
 }
 
 impl PerfTimer {
-    /// Create timer, which starts running.
-    pub fn new() -> Self {
+    /// Create a timer, and start it.
+    pub fn new_started() -> Self {
         Self {
             start_time: Some(Instant::now()),
             elapsed: Duration::new(0, 0),
@@ -46,6 +46,6 @@ impl PerfTimer {
 
 impl Default for PerfTimer {
     fn default() -> Self {
-        Self::new()
+        Self::new_started()
     }
 }
