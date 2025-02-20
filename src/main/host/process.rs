@@ -653,7 +653,7 @@ impl RunnableProcess {
             dumpable: self.dumpable.clone(),
             native_pid,
             #[cfg(feature = "perf_timers")]
-            cpu_delay_timer: RefCell::new(PerfTimer::new()),
+            cpu_delay_timer: RefCell::new(PerfTimer::new_stopped()),
             #[cfg(feature = "perf_timers")]
             total_run_time: Cell::new(Duration::ZERO),
             itimer_real,
@@ -995,17 +995,6 @@ impl Process {
             std::fs::canonicalize(host.data_dir_path()).unwrap(),
         );
 
-        #[cfg(feature = "perf_timers")]
-        let cpu_delay_timer = {
-            let mut t = PerfTimer::new();
-            t.stop();
-            RefCell::new(t)
-        };
-
-        // TODO: measure execution time of creating the main_thread with
-        // cpu_delay_timer? We previously did, but it's a little complex to do so,
-        // and it shouldn't matter much.
-
         {
             let mut descriptor_table = desc_table.borrow_mut(host.root());
             Self::open_stdio_file_helper(
@@ -1118,7 +1107,7 @@ impl Process {
                         unsafe_borrows: RefCell::new(Vec::new()),
                         threads,
                         #[cfg(feature = "perf_timers")]
-                        cpu_delay_timer,
+                        cpu_delay_timer: RefCell::new(PerfTimer::new_stopped()),
                         #[cfg(feature = "perf_timers")]
                         total_run_time: Cell::new(Duration::ZERO),
                         child_process_event_listeners: Default::default(),

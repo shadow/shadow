@@ -167,7 +167,7 @@ impl SyscallHandler {
         }
 
         #[cfg(feature = "perf_timers")]
-        let timer = PerfTimer::new();
+        let timer = PerfTimer::new_started();
 
         let mut rv = self.run_handler(ctx, args);
 
