@@ -14,5 +14,7 @@ add_shadow_tests(BASENAME epoll-rs)
 set(CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/epoll-edge-rs.yaml")
 
 add_linux_tests(BASENAME epoll-edge-rs COMMAND ../../target/debug/test_epoll_edge --libc-passing)
-add_shadow_tests(BASENAME epoll-edge-rs)
-add_shadow_tests(BASENAME epoll-edge-rs-new-tcp SHADOW_CONFIG "${CONFIG}" ARGS --use-new-tcp true)
+# We explicitly disable modeling syscall latency in these, because some of the
+# tests require precise timing.
+add_shadow_tests(BASENAME epoll-edge-rs ARGS --model-unblocked-syscall-latency false)
+add_shadow_tests(BASENAME epoll-edge-rs-new-tcp SHADOW_CONFIG "${CONFIG}" ARGS --model-unblocked-syscall-latency false --use-new-tcp true)
