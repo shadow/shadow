@@ -497,7 +497,7 @@ macro_rules! unit_impl {
                 stringify!($name).to_owned()
             }
 
-            fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+            fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
                 schemars::schema::SchemaObject {
                     instance_type: Some(schemars::schema::InstanceType::String.into()),
                     format: Some(stringify!($name).to_owned()),
