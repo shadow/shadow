@@ -194,7 +194,7 @@ pub mod export {
     /// (e.g. that the caller isn't holding a Rust mutable reference to one of
     /// the pointers while the callback transforms the pointer into another Rust
     /// reference).
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn taskref_new_bound(
         host_id: HostId,
         callback: TaskCallbackFunc,
@@ -234,7 +234,7 @@ pub mod export {
     /// (e.g. that the caller isn't holding a Rust mutable reference to one of
     /// the pointers while the callback transforms the pointer into another Rust
     /// reference).
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn taskref_new_unbound(
         callback: TaskCallbackFunc,
         object: *mut libc::c_void,
@@ -266,7 +266,7 @@ pub mod export {
     /// # Safety
     ///
     /// `task` must be legally dereferencable.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn taskref_drop(task: *mut TaskRef) {
         drop(unsafe { Box::from_raw(notnull_mut(task)) });
     }

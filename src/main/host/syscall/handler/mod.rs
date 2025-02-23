@@ -880,7 +880,7 @@ mod export {
     /// Returns a pointer to the current running host. The returned pointer is invalidated the next
     /// time the worker switches hosts. Rust syscall handlers should get the host from the
     /// [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getHost(sys: *const SyscallHandler) -> *const Host {
         let sys = unsafe { sys.as_ref() }.unwrap();
         Worker::with_active_host(|h| {
@@ -893,7 +893,7 @@ mod export {
     /// Returns a pointer to the current running process. The returned pointer is invalidated the
     /// next time the worker switches processes. Rust syscall handlers should get the process from
     /// the [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getProcess(
         sys: *const SyscallHandler,
     ) -> *const Process {
@@ -908,7 +908,7 @@ mod export {
     /// Returns a pointer to the current running thread. The returned pointer is invalidated the
     /// next time the worker switches threads. Rust syscall handlers should get the thread from the
     /// [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getThread(
         sys: *const SyscallHandler,
     ) -> *const Thread {
@@ -920,13 +920,13 @@ mod export {
         .unwrap()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_wasBlocked(sys: *const SyscallHandler) -> bool {
         let sys = unsafe { sys.as_ref() }.unwrap();
         sys.is_blocked()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_didListenTimeoutExpire(
         sys: *const SyscallHandler,
     ) -> bool {
@@ -945,7 +945,7 @@ mod export {
             .unwrap_or(false)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getEpoll(
         sys: *const SyscallHandler,
     ) -> *mut c::Epoll {

@@ -121,7 +121,7 @@ pub fn alarm(secs: u32) -> Result<u32, Errno> {
 mod export {
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_clock_gettime(
         clockid: i32,
         res: *mut linux_timespec,

@@ -189,7 +189,7 @@ mod export {
 
     use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_new() -> *mut RootedRefCell_StateEventSource {
         let event_source = worker::Worker::with_active_host(|host| {
             Box::new(RootedRefCell::new(host.root(), StateEventSource::new()))
@@ -198,13 +198,13 @@ mod export {
         Box::into_raw(event_source)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
         assert!(!event_source.is_null());
         drop(unsafe { Box::from_raw(event_source) });
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_addLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,
@@ -218,7 +218,7 @@ mod export {
         .unwrap();
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_removeLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,
