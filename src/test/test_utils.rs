@@ -118,7 +118,7 @@ pub trait AsMutPtr<T> {
 impl<T> AsMutPtr<T> for Option<T> {
     fn as_mut_ptr(&mut self) -> *mut T {
         match self {
-            Some(v) => v as *mut T,
+            Some(v) => std::ptr::from_mut(v),
             None => std::ptr::null_mut(),
         }
     }
