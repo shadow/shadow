@@ -4,7 +4,7 @@ use nix::errno::Errno;
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
 
-use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
+use test_utils::{ShadowTest, TestEnvironment, ensure_ord, set};
 
 #[derive(Debug)]
 struct WaiterResult {

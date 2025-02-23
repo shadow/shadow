@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use bytes::Bytes;
 
-use crate::tests::{establish_helper, Host, Scheduler, TcpSocket, TestEnvState};
+use crate::tests::{Host, Scheduler, TcpSocket, TestEnvState, establish_helper};
 use crate::{Ipv4Header, Payload, Shutdown, TcpFlags, TcpHeader, TcpState};
 
 #[test]

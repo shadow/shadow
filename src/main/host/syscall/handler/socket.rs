@@ -6,10 +6,10 @@ use nix::sys::socket::SockFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::descriptor_table::DescriptorHandle;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
-use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::netlink::{NetlinkFamily, NetlinkSocket, NetlinkSocketType};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};

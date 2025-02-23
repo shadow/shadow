@@ -4,8 +4,8 @@ use std::net::{IpAddr, SocketAddrV4};
 use std::sync::Arc;
 
 use crate::host::network::interface::FifoPacketPriority;
-use crate::utility::pcap_writer::PacketDisplay;
 use crate::utility::ObjectCounter;
+use crate::utility::pcap_writer::PacketDisplay;
 
 use atomic_refcell::AtomicRefCell;
 use bytes::Bytes;

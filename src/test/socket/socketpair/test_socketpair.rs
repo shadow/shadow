@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 struct SocketpairArguments {
     domain: libc::c_int,

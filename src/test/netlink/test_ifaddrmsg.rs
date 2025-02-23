@@ -8,7 +8,7 @@ use neli::rtnl::Ifaddrmsg;
 use neli::types::RtBuffer;
 use neli::{FromBytes, ToBytes};
 
-use test_utils::{set, ShadowTest, TestEnvironment};
+use test_utils::{ShadowTest, TestEnvironment, set};
 
 fn test_normal() -> anyhow::Result<()> {
     let fd = unsafe {

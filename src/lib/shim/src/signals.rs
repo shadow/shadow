@@ -1,8 +1,8 @@
 use core::cell::Cell;
 
 use linux_api::signal::{
-    defaultaction, sigaction, siginfo_t, sigset_t, stack_t, SigActionFlags, SigAltStackFlags,
-    Signal, SignalHandler,
+    SigActionFlags, SigAltStackFlags, Signal, SignalHandler, defaultaction, sigaction, siginfo_t,
+    sigset_t, stack_t,
 };
 use linux_api::ucontext::ucontext;
 use log::{trace, warn};
@@ -198,7 +198,9 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
                 //
                 // In other cases things could go horribly, but it'd be a bug in
                 // the managed process rather than in shadow itself.
-                log::debug!("Signal handler configured to switch to a stack that's already in use. This could go badly.")
+                log::debug!(
+                    "Signal handler configured to switch to a stack that's already in use. This could go badly."
+                )
             }
 
             // Update the signal-stack configuration while the handler is being run.

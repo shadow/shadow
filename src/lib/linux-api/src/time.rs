@@ -1,6 +1,6 @@
-use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
 use linux_syscall::Result64;
+use linux_syscall::syscall;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::bindings;

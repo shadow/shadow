@@ -13,8 +13,8 @@
 // here.
 
 use linux_api::errno::Errno;
-use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
+use linux_syscall::syscall;
 
 pub const S_IRUSR: u32 = 0o400;
 pub const S_IWUSR: u32 = 0o200;

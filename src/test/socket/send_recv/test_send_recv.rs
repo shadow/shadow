@@ -10,13 +10,13 @@ use std::os::unix::io::AsRawFd;
 use nix::sys::socket::MsgFlags;
 use rand::RngCore;
 use rand::SeedableRng;
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::running_in_shadow;
 use test_utils::socket_utils::{
-    autobind_helper, connect_to_peername, dgram_connect_helper, socket_init_helper,
-    stream_connect_helper, SockAddr, SocketInitMethod,
+    SockAddr, SocketInitMethod, autobind_helper, connect_to_peername, dgram_connect_helper,
+    socket_init_helper, stream_connect_helper,
 };
-use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, AsMutPtr};
+use test_utils::{AsMutPtr, set};
 
 #[derive(Debug)]
 struct SendtoArguments<'a> {
@@ -182,7 +182,9 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             for &sock_type in sock_types.iter() {
                 // add details to the test names to avoid duplicates
                 let append_args = |s| {
-                    format!("{s} <sys_method={sys_method:?}, init_method={init_method:?}, sock_type={sock_type}>")
+                    format!(
+                        "{s} <sys_method={sys_method:?}, init_method={init_method:?}, sock_type={sock_type}>"
+                    )
                 };
 
                 tests.extend(vec![

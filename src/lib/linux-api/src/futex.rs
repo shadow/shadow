@@ -1,7 +1,7 @@
 use core::sync::atomic::AtomicU32;
 
-use linux_syscall::syscall;
 use linux_syscall::Result64 as LinuxSyscallResult64;
+use linux_syscall::syscall;
 
 use crate::errno::Errno;
 use crate::time::kernel_timespec;

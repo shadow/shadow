@@ -18,9 +18,9 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
 
 pub mod abstract_unix_ns;
 pub mod inet;

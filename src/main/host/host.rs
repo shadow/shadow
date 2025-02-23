@@ -10,21 +10,21 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use atomic_refcell::AtomicRefCell;
-use linux_api::signal::{siginfo_t, Signal};
+use linux_api::signal::{Signal, siginfo_t};
 use log::{debug, trace};
 use logger::LogLevel;
 use once_cell::unsync::OnceCell;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDropper;
+use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::rootedcell::cell::RootedCell;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
-use shadow_shim_helper_rs::rootedcell::Root;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ManagerShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 use shadow_tsc::Tsc;
 use vasi_sync::scmutex::SelfContainedMutexGuard;
@@ -43,9 +43,9 @@ use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, Pcap
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
+use crate::network::PacketDevice;
 use crate::network::relay::{RateLimit, Relay};
 use crate::network::router::Router;
-use crate::network::PacketDevice;
 use crate::utility;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -402,7 +402,9 @@ impl Host {
             if let Some(shutdown_time) = shutdown_time {
                 let task = TaskRef::new(move |host| {
                     let Some(process) = host.process_borrow(process_id) else {
-                        debug!("Can't send shutdown signal to process {process_id}; it no longer exists");
+                        debug!(
+                            "Can't send shutdown signal to process {process_id}; it no longer exists"
+                        );
                         return;
                     };
                     let process = process.borrow(host.root());

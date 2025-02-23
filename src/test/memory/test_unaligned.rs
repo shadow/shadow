@@ -1,9 +1,9 @@
 use std::error::Error;
 
 use nix::errno::Errno;
-use test_utils::set;
 use test_utils::ShadowTest;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 fn test_unaligned_read() -> Result<(), Box<dyn Error>> {
     // Force Shadow to read an *unaligned* timespec struct.

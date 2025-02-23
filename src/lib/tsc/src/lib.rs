@@ -34,11 +34,7 @@ impl Tsc {
     /// e.g. see <https://github.com/shadow/shadow/issues/1519>.
     pub fn native_cycles_per_second() -> Option<u64> {
         let res = unsafe { c_internal::TscC_nativeCyclesPerSecond() };
-        if res == 0 {
-            None
-        } else {
-            Some(res)
-        }
+        if res == 0 { None } else { Some(res) }
     }
 
     pub fn new(cycles_per_second: u64) -> Self {

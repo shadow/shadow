@@ -8,13 +8,13 @@ use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
 
-use linux_api::signal::{rt_sigprocmask, SigProcMaskAction};
+use linux_api::signal::{SigProcMaskAction, rt_sigprocmask};
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{ShimEventStartReq, ShimEventToShadow, ShimEventToShim};
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-use shadow_shmem::allocator::{shdeserialize, ShMemBlockAlias, ShMemBlockSerialized};
+use shadow_shmem::allocator::{ShMemBlockAlias, ShMemBlockSerialized, shdeserialize};
 use tls::ThreadLocalStorage;
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scmutex::SelfContainedMutex;
@@ -254,8 +254,8 @@ mod global_manager_shmem {
         SHMEM.force()
     }
 
-    pub fn try_get(
-    ) -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, ManagerShmem>> + 'static>
+    pub fn try_get()
+    -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, ManagerShmem>> + 'static>
     {
         if !SHMEM.initd() {
             // No need to do the more-expensive `INITIALIZER` check; `set`
@@ -299,8 +299,8 @@ mod global_host_shmem {
         SHMEM.force()
     }
 
-    pub fn try_get(
-    ) -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static> {
+    pub fn try_get()
+    -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static> {
         if !SHMEM.initd() {
             // No need to do the more-expensive `INITIALIZER` check; `set`
             // forces `SHMEM` to initialize.
@@ -599,8 +599,8 @@ pub mod export {
     ///
     /// The returned pointer must not outlive the current thread.
     #[unsafe(no_mangle)]
-    pub unsafe extern "C-unwind" fn shim_threadSharedMem(
-    ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
+    pub unsafe extern "C-unwind" fn shim_threadSharedMem()
+    -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemThread {
         tls_thread_shmem::with(core::ptr::from_ref)
     }
 
@@ -622,8 +622,8 @@ pub mod export {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C-unwind" fn shim_managerSharedMem(
-    ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager {
+    pub extern "C-unwind" fn shim_managerSharedMem()
+    -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager {
         let rv = global_manager_shmem::try_get();
         rv.map(|x| {
             let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemManager = x.deref();
@@ -636,8 +636,8 @@ pub mod export {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C-unwind" fn shim_hostSharedMem(
-    ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost {
+    pub extern "C-unwind" fn shim_hostSharedMem()
+    -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost {
         let rv = global_host_shmem::try_get();
         rv.map(|x| {
             let rv: &shadow_shim_helper_rs::shim_shmem::export::ShimShmemHost = x.deref();
@@ -650,8 +650,8 @@ pub mod export {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C-unwind" fn shim_processSharedMem(
-    ) -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
+    pub extern "C-unwind" fn shim_processSharedMem()
+    -> *const shadow_shim_helper_rs::shim_shmem::export::ShimShmemProcess {
         tls_process_shmem::with(|process| {
             // We know this pointer will be live for the lifetime of the
             // process, and that we never construct a mutable reference to the

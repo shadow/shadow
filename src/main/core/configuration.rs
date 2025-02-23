@@ -20,7 +20,7 @@ use clap::Parser;
 use logger as c_log;
 use merge::Merge;
 use once_cell::sync::Lazy;
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 

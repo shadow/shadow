@@ -3,11 +3,11 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::socket_utils::{
-    autobind_helper, socket_init_helper, stream_connect_helper, SockAddr, SocketInitMethod,
-};
 use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, AsMutPtr};
+use test_utils::socket_utils::{
+    SockAddr, SocketInitMethod, autobind_helper, socket_init_helper, stream_connect_helper,
+};
+use test_utils::{AsMutPtr, set};
 
 struct GetpeernameArguments {
     fd: libc::c_int,

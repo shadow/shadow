@@ -60,7 +60,7 @@ impl Eq for TaskRef {}
 
 pub mod export {
     use shadow_shim_helper_rs::util::SyncSendPointer;
-    use shadow_shim_helper_rs::{notnull::notnull_mut, HostId};
+    use shadow_shim_helper_rs::{HostId, notnull::notnull_mut};
 
     use super::*;
     use crate::utility::HostTreePointer;

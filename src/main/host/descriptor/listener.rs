@@ -3,8 +3,8 @@
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileSignals, FileState};
-use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::HostTreePointer;
+use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 
 #[derive(Clone, Copy, Debug)]
 pub enum StateListenerFilter {
@@ -120,9 +120,9 @@ impl StateEventSource {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.inner
             .add_listener(move |(state, changed, signals), cb_queue| {

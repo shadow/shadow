@@ -2,7 +2,7 @@ use linux_syscall::{Result as LinuxSyscallResult, Result64};
 
 use crate::errno::Errno;
 use crate::ldt::linux_user_desc;
-use crate::posix_types::{kernel_pid_t, Pid};
+use crate::posix_types::{Pid, kernel_pid_t};
 use crate::signal::Signal;
 use crate::{bindings, const_conversions};
 

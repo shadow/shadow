@@ -677,8 +677,8 @@ impl CompatFile {
 mod export {
     use super::*;
 
-    use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 
     /// The new descriptor takes ownership of the reference to the legacy file and does not
     /// increment its ref count, but will decrement the ref count when this descriptor is
@@ -940,11 +940,11 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::syscall::Trigger;
     use crate::host::syscall::condition::SyscallCondition;
     use crate::host::syscall::types::{
         Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
-    use crate::host::syscall::Trigger;
 
     #[test]
     // can't call foreign function: syscallcondition_new

@@ -365,7 +365,7 @@ mod tests {
 
     use nix::sys::eventfd::EventFd;
     use rustix::fd::AsRawFd;
-    use rustix::process::{waitpid, WaitOptions};
+    use rustix::process::{WaitOptions, waitpid};
 
     use super::*;
 

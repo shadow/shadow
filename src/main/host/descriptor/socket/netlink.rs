@@ -6,7 +6,7 @@ use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::ioctls::IoctlRequest;
 use linux_api::netlink::{ifaddrmsg, ifinfomsg, nlmsghdr};
-use linux_api::rtnetlink::{RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR, RTM_GETADDR, RTM_GETLINK};
+use linux_api::rtnetlink::{RTM_GETADDR, RTM_GETLINK, RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR};
 use linux_api::socket::Shutdown;
 use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
 use neli::consts::rtnl::{
@@ -33,9 +33,9 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall::types::SyscallError;
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
 
 // this constant is copied from UNIX_SOCKET_DEFAULT_BUFFER_SIZE
 const NETLINK_SOCKET_DEFAULT_BUFFER_SIZE: u64 = 212_992;
@@ -346,9 +346,9 @@ impl NetlinkSocket {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.common.event_source.add_listener(
             monitoring_state,

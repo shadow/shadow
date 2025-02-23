@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -15,10 +15,10 @@ use rand_xoshiro::Xoshiro256PlusPlus;
 use scheduler::thread_per_core::ThreadPerCoreSched;
 use scheduler::thread_per_host::ThreadPerHostSched;
 use scheduler::{HostIter, Scheduler};
+use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::HostId;
 use shadow_shmem::allocator::ShMemBlock;
 
 use crate::core::configuration::{self, ConfigOptions, Flatten};

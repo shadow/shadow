@@ -5,10 +5,10 @@
 
 use nix::poll::PollFlags;
 use nix::sys::socket::sockopt;
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::set;
 use test_utils::socket_utils;
 use test_utils::socket_utils::SockAddr;
-use test_utils::TestEnvironment as TestEnv;
 
 struct ListenArguments {
     fd: libc::c_int,

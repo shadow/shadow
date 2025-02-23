@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 

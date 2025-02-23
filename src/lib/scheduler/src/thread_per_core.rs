@@ -7,8 +7,8 @@ use std::fmt::Debug;
 
 use crossbeam::queue::ArrayQueue;
 
-use crate::pools::unbounded::{TaskRunner, UnboundedThreadPool};
 use crate::CORE_AFFINITY;
+use crate::pools::unbounded::{TaskRunner, UnboundedThreadPool};
 
 pub trait Host: Debug + Send {}
 impl<T> Host for T where T: Debug + Send {}

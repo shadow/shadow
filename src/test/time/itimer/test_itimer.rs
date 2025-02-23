@@ -7,7 +7,7 @@ use nix::sys::{
     signal::{SaFlags, SigAction, SigHandler, SigSet, Signal},
     time::{TimeVal, TimeValLike},
 };
-use test_utils::{ensure_ord, getitimer, set, setitimer, ITimer, ShadowTest, TestEnvironment};
+use test_utils::{ITimer, ShadowTest, TestEnvironment, ensure_ord, getitimer, set, setitimer};
 
 // Counts how many times the SIGALRM handler ran.
 static SIGNAL_CTR: AtomicU64 = AtomicU64::new(0);

@@ -6,8 +6,8 @@
 use std::error::Error;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 const NUM_THREADS: usize = 5;
 

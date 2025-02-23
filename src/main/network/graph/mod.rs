@@ -1,7 +1,7 @@
 mod petgraph_wrapper;
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::error::Error;
 use std::hash::Hash;
 

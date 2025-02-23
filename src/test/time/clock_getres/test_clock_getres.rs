@@ -1,4 +1,4 @@
-use test_utils::{set, FuzzArg, FuzzError, FuzzOrder, TestEnvironment};
+use test_utils::{FuzzArg, FuzzError, FuzzOrder, TestEnvironment, set};
 
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?

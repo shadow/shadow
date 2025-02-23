@@ -9,9 +9,9 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
+use crate::network::PacketRc;
 use crate::network::packet::PacketStatus;
 use crate::network::relay::token_bucket::TokenBucket;
-use crate::network::PacketRc;
 use crate::utility::ObjectCounter;
 
 mod token_bucket;
