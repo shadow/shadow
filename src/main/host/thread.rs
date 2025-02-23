@@ -8,14 +8,14 @@ use linux_api::fcntl::DescriptorFlags;
 use linux_api::mman::{MapFlags, ProtFlags};
 use linux_api::posix_types::Pid;
 use linux_api::signal::stack_t;
+use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmemProtected, ThreadShmem};
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 use shadow_shim_helper_rs::util::SendPointer;
-use shadow_shim_helper_rs::HostId;
-use shadow_shmem::allocator::{shmalloc, ShMemBlock};
+use shadow_shmem::allocator::{ShMemBlock, shmalloc};
 
 use super::context::ProcessContext;
 use super::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
@@ -26,7 +26,7 @@ use crate::cshadow as c;
 use crate::host::syscall::condition::{SyscallConditionRef, SyscallConditionRefMut};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::utility::callback_queue::CallbackQueue;
-use crate::utility::{syscall, IsSend, ObjectCounter};
+use crate::utility::{IsSend, ObjectCounter, syscall};
 
 /// The thread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -611,8 +611,8 @@ mod export {
 
     use super::*;
     use crate::core::worker::Worker;
-    use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::socket::Socket;
+    use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::{CompatFile, Descriptor, File};
 
     /// Make the requested syscall from within the plugin.

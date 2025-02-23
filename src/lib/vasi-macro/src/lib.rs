@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
+use syn::{Attribute, GenericParam, Generics, Type, parse_quote};
 
 /// Implement `vasi::VirtualAddressSpaceIndependent` for the annotated type.
 /// Requires all fields to implement `vasi::VirtualAddressSpaceIndependent`.

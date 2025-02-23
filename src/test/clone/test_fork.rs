@@ -8,7 +8,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use libc::{c_int, c_void, siginfo_t, CLD_EXITED};
+use libc::{CLD_EXITED, c_int, c_void, siginfo_t};
 use linux_api::errno::Errno;
 use linux_api::posix_types::Pid;
 use linux_api::sched::{CloneFlags, CloneResult};
@@ -16,8 +16,8 @@ use linux_api::signal::{LinuxDefaultAction, Signal};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigmaskHow};
 use nix::sys::signalfd::SigSet;
 use rustix::fd::{AsFd, AsRawFd};
-use test_utils::{ensure_ord, running_in_shadow, TestEnvironment as TestEnv};
-use test_utils::{set, ShadowTest};
+use test_utils::{ShadowTest, set};
+use test_utils::{TestEnvironment as TestEnv, ensure_ord, running_in_shadow};
 
 fn execv_argvec(args: &[impl AsRef<CStr>]) -> Vec<*const i8> {
     args.iter()
@@ -954,12 +954,14 @@ fn test_waitid_sets_signal_death_info(fatal_signal: Signal) -> anyhow::Result<()
         } else {
             // Will be one of CLD_KILLED or CLD_DUMPED; we can't reliably
             // predict which. See `core(5)`.
-            assert!([
-                linux_api::signal::SigInfoCodeCld::CLD_KILLED,
-                linux_api::signal::SigInfoCodeCld::CLD_DUMPED
-            ]
-            .map(i32::from)
-            .contains(&info.si_code));
+            assert!(
+                [
+                    linux_api::signal::SigInfoCodeCld::CLD_KILLED,
+                    linux_api::signal::SigInfoCodeCld::CLD_DUMPED
+                ]
+                .map(i32::from)
+                .contains(&info.si_code)
+            );
         }
         assert_eq!(info.si_signo, Signal::SIGCHLD.as_i32());
         assert_eq!(unsafe { info.si_pid() }, child_pid.as_raw_nonzero().get());

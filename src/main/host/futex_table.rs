@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use shadow_shim_helper_rs::syscall_types::ManagedPhysicalMemoryAddr;
 use shadow_shim_helper_rs::util::SyncSendPointer;

@@ -7,11 +7,11 @@ use atomic_refcell::{AtomicRef, AtomicRefCell};
 use linux_api::posix_types::Pid;
 use once_cell::sync::Lazy;
 use rand::Rng;
+use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
-use shadow_shim_helper_rs::HostId;
 
 use super::work::event_queue::EventQueue;
 use crate::core::controller::ShadowStatusBarState;

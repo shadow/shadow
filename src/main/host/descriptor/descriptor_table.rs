@@ -6,8 +6,8 @@ use shadow_shim_helper_rs::syscall_types::SyscallReg;
 
 use crate::host::descriptor::Descriptor;
 use crate::host::host::Host;
-use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::ObjectCounter;
+use crate::utility::callback_queue::CallbackQueue;
 
 /// POSIX requires fds to be assigned as `libc::c_int`, so we can't allow any fds larger than this.
 pub const FD_MAX: u32 = i32::MAX as u32;

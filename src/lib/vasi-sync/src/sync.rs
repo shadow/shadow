@@ -8,7 +8,7 @@
 #[cfg(not(loom))]
 pub use core::{
     sync::atomic,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicI8, AtomicU32, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU32, AtomicUsize, Ordering},
 };
 #[cfg(loom)]
 use std::collections::HashMap;
@@ -24,9 +24,9 @@ pub use loom::cell::Cell;
 use loom::sync::{Condvar, Mutex};
 #[cfg(loom)]
 pub use loom::{
-    sync::atomic,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicI8, AtomicU32, AtomicUsize, Ordering},
     sync::Arc,
+    sync::atomic,
+    sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU32, AtomicUsize, Ordering},
 };
 #[cfg(not(loom))]
 use vasi::VirtualAddressSpaceIndependent;

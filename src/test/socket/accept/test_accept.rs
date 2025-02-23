@@ -3,10 +3,10 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::socket_utils;
 use test_utils::socket_utils::SockAddr;
-use test_utils::TestEnvironment as TestEnv;
-use test_utils::{set, AsMutPtr};
+use test_utils::{AsMutPtr, set};
 
 struct AcceptArguments {
     fd: libc::c_int,

@@ -11,8 +11,8 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
-use crate::host::syscall::condition::SyscallCondition;
 use crate::host::syscall::Trigger;
+use crate::host::syscall::condition::SyscallCondition;
 
 /// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
 #[derive(Copy, Clone)]
@@ -244,10 +244,7 @@ impl SyscallError {
 
     /// Returns the [condition](SyscallCondition) that the syscall is blocked on.
     pub fn blocked_condition(&mut self) -> Option<&mut SyscallCondition> {
-        if let Self::Blocked(Blocked {
-            condition, ..
-        }) = self
-        {
+        if let Self::Blocked(Blocked { condition, .. }) = self {
             Some(condition)
         } else {
             None

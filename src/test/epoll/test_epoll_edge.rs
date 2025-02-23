@@ -1,18 +1,18 @@
 use std::io::Cursor;
 use std::time::Duration;
 
+use neli::ToBytes;
 use neli::consts::nl::{NlmF, NlmFFlags};
 use neli::consts::rtnl::{IfaFFlags, RtAddrFamily, RtScope, Rtm};
 use neli::nl::{NlPayload, Nlmsghdr};
 use neli::rtnl::Ifaddrmsg;
 use neli::types::RtBuffer;
-use neli::ToBytes;
 
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
 
-use test_utils::socket_utils::{socket_init_helper, SocketInitMethod};
-use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
+use test_utils::socket_utils::{SocketInitMethod, socket_init_helper};
+use test_utils::{ShadowTest, TestEnvironment, ensure_ord, set};
 
 #[derive(Debug)]
 struct WaiterResult {

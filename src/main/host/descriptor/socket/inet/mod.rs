@@ -20,9 +20,9 @@ use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::SyscallError;
 use crate::network::packet::{IanaProtocol, PacketRc};
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
 
 use self::legacy_tcp::LegacyTcpSocket;
 use self::tcp::TcpSocket;
@@ -594,8 +594,7 @@ mod export {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
         #[allow(irrefutable_let_patterns)]
-        let InetSocket::LegacyTcp(socket) = socket
-        else {
+        let InetSocket::LegacyTcp(socket) = socket else {
             panic!("Socket was not a legacy TCP socket: {socket:?}");
         };
 

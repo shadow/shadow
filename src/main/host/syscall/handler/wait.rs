@@ -4,7 +4,7 @@ use std::ffi::c_int;
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::resource::rusage;
-use linux_api::signal::{siginfo_t, Signal};
+use linux_api::signal::{Signal, siginfo_t};
 use linux_api::wait::{WaitFlags, WaitId};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -112,7 +112,9 @@ impl SyscallHandler {
         }
 
         if !options.contains(WaitFlags::WEXITED) {
-            warn_once_then_debug!("Waiting only for child events that currently never happen under Shadow: {options:?}");
+            warn_once_then_debug!(
+                "Waiting only for child events that currently never happen under Shadow: {options:?}"
+            );
             // The other events that can be waited for (WUNTRACED, WSTOPPED,
             // WCONTINUED) currently can't happen under Shadow.
             // TODO: If and when those things *can* happen, check for them here.

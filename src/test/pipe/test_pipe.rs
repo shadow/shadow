@@ -738,7 +738,7 @@ fn test_o_direct_large_packet_vectored() -> Result<(), String> {
         fn split(buf: &mut [u8]) -> (&mut [u8], &mut [u8], &mut [u8]) {
             let buf = buf.split_at_mut(50);
             let buf = (buf.0, buf.1.split_at_mut(libc::PIPE_BUF));
-            (buf.0, buf.1 .0, buf.1 .1)
+            (buf.0, buf.1.0, buf.1.1)
         }
 
         // split the read buffer into four different iovecs

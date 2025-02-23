@@ -1,13 +1,13 @@
-use linux_api::signal::{sigaction, siginfo_t, sigset_t, stack_t, Signal};
+use linux_api::signal::{Signal, sigaction, siginfo_t, sigset_t, stack_t};
 use shadow_shmem::allocator::{ShMemBlock, ShMemBlockSerialized};
 use vasi::VirtualAddressSpaceIndependent;
 use vasi_sync::scmutex::SelfContainedMutex;
 
-use crate::option::FfiOption;
 use crate::HostId;
+use crate::option::FfiOption;
 use crate::{
     emulated_time::{AtomicEmulatedTime, EmulatedTime},
-    rootedcell::{refcell::RootedRefCell, Root},
+    rootedcell::{Root, refcell::RootedRefCell},
     simulation_time::SimulationTime,
 };
 

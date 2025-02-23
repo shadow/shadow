@@ -1,7 +1,7 @@
-use linux_syscall::{syscall, Result as _, Result64};
+use linux_syscall::{Result as _, Result64, syscall};
 
 use crate::errno::Errno;
-use crate::posix_types::{kernel_size_t, kernel_ulong_t, RawFd};
+use crate::posix_types::{RawFd, kernel_size_t, kernel_ulong_t};
 use crate::{bindings, const_conversions};
 
 bitflags::bitflags! {

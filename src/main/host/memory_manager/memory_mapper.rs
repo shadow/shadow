@@ -21,7 +21,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::context::ProcessContext;
 use crate::host::context::ThreadContext;
-use crate::host::memory_manager::{page_size, MemoryManager};
+use crate::host::memory_manager::{MemoryManager, page_size};
 use crate::host::syscall::types::ForeignArrayPtr;
 use crate::utility::interval_map::{Interval, IntervalMap, Mutation};
 use crate::utility::proc_maps;
@@ -323,7 +323,9 @@ impl Drop for MemoryMapper {
         if misses.is_empty() {
             debug!("MemoryManager misses: None");
         } else {
-            debug!("MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)");
+            debug!(
+                "MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)"
+            );
             for (path, count) in misses.iter() {
                 debug!("\t{} in {}", count, path);
             }
@@ -929,10 +931,11 @@ impl MemoryMapper {
                         });
                     }
                     // Reinsert region with updated prot.
-                    assert!(self
-                        .regions
-                        .insert(modified_interval, modified_region)
-                        .is_empty());
+                    assert!(
+                        self.regions
+                            .insert(modified_interval, modified_region)
+                            .is_empty()
+                    );
                 }
                 Mutation::ModifiedEnd(interval, new_end) => {
                     // Modified prot of end of region.
@@ -953,10 +956,11 @@ impl MemoryMapper {
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
-                    assert!(self
-                        .regions
-                        .insert(modified_interval, modified_region)
-                        .is_empty());
+                    assert!(
+                        self.regions
+                            .insert(modified_interval, modified_region)
+                            .is_empty()
+                    );
                 }
                 Mutation::Split(_original, left_interval, right_interval) => {
                     let right_region = self.regions.get_mut(right_interval.start).unwrap().1;
@@ -980,10 +984,11 @@ impl MemoryMapper {
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
-                    assert!(self
-                        .regions
-                        .insert(modified_interval, modified_region)
-                        .is_empty());
+                    assert!(
+                        self.regions
+                            .insert(modified_interval, modified_region)
+                            .is_empty()
+                    );
                 }
                 Mutation::Removed(modified_interval, mut modified_region) => {
                     modified_region.prot = prot;
@@ -997,10 +1002,11 @@ impl MemoryMapper {
                         }
                         .unwrap_or_else(|e| warn!("mprotect: {}", e));
                     }
-                    assert!(self
-                        .regions
-                        .insert(modified_interval, modified_region)
-                        .is_empty());
+                    assert!(
+                        self.regions
+                            .insert(modified_interval, modified_region)
+                            .is_empty()
+                    );
                 }
             }
         }

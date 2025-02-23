@@ -1,6 +1,6 @@
 use bytemuck::TransparentWrapper;
-use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
+use linux_syscall::syscall;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use shadow_pod::Pod;
 use vasi::VirtualAddressSpaceIndependent;
@@ -9,8 +9,8 @@ use crate::bindings::{self, linux_sigval};
 use crate::const_conversions;
 use crate::const_conversions::i32_from_u32_allowing_wraparound;
 use crate::errno::Errno;
-use crate::posix_types::kernel_pid_t;
 use crate::posix_types::Pid;
+use crate::posix_types::kernel_pid_t;
 
 // signal names. This is a `struct` instead of an `enum` to support
 // realtime signals.

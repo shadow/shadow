@@ -17,8 +17,8 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::io::{IoVec, IoVecWriter};
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::host::timer::Timer;
-use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::HostTreePointer;
+use crate::utility::callback_queue::CallbackQueue;
 
 pub struct TimerFd {
     timer: Timer,
@@ -221,9 +221,9 @@ impl TimerFd {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)

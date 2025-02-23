@@ -5,9 +5,9 @@
 
 use std::time::Duration;
 
-use test_utils::set;
-use test_utils::socket_utils::{socket_init_helper, SocketInitMethod};
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
+use test_utils::socket_utils::{SocketInitMethod, socket_init_helper};
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?

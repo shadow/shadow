@@ -1,13 +1,13 @@
 use std::io::Cursor;
 
+use neli::ToBytes;
 use neli::consts::nl::{NlmF, NlmFFlags};
 use neli::consts::rtnl::{IfaFFlags, RtAddrFamily, RtScope, Rtm};
 use neli::nl::{NlPayload, Nlmsghdr};
 use neli::rtnl::Ifaddrmsg;
 use neli::types::RtBuffer;
-use neli::ToBytes;
 
-use test_utils::{set, ShadowTest, TestEnvironment};
+use test_utils::{ShadowTest, TestEnvironment, set};
 
 // Send a bunch of Netlink messages to the file descriptor. Return the number of written bytes.
 fn flood(fd: libc::c_int) -> libc::ssize_t {

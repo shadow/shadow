@@ -1,5 +1,5 @@
 use linux_api::errno::Errno;
-use linux_api::signal::{defaultaction, siginfo_t, LinuxDefaultAction, Signal, SignalHandler};
+use linux_api::signal::{LinuxDefaultAction, Signal, SignalHandler, defaultaction, siginfo_t};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 

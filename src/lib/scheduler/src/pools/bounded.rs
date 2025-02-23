@@ -4,13 +4,13 @@
 
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use atomic_refcell::AtomicRefCell;
 
 use crate::logical_processor::LogicalProcessors;
-use crate::sync::count_down_latch::{build_count_down_latch, LatchCounter, LatchWaiter};
+use crate::sync::count_down_latch::{LatchCounter, LatchWaiter, build_count_down_latch};
 use crate::sync::thread_parking::{ThreadUnparker, ThreadUnparkerUnassigned};
 
 // If making substantial changes to this scheduler, you should verify the compilation error message

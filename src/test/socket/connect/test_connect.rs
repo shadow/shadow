@@ -5,10 +5,10 @@
 
 use std::sync::{Arc, Barrier};
 
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::set;
 use test_utils::socket_utils::SockAddr;
 use test_utils::socket_utils::{self, SocketInitMethod};
-use test_utils::TestEnvironment as TestEnv;
 
 use nix::errno::Errno;
 
