@@ -42,33 +42,33 @@ pub enum InetSocket {
 impl InetSocket {
     pub fn borrow(&self) -> InetSocketRef {
         match self {
-            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.borrow()),
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.borrow()),
-            Self::Udp(ref f) => InetSocketRef::Udp(f.borrow()),
+            Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.borrow()),
+            Self::Tcp(f) => InetSocketRef::Tcp(f.borrow()),
+            Self::Udp(f) => InetSocketRef::Udp(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<InetSocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.try_borrow()?),
-            Self::Udp(ref f) => InetSocketRef::Udp(f.try_borrow()?),
+            Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
+            Self::Tcp(f) => InetSocketRef::Tcp(f.try_borrow()?),
+            Self::Udp(f) => InetSocketRef::Udp(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> InetSocketRefMut {
         match self {
-            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.borrow_mut()),
-            Self::Udp(ref f) => InetSocketRefMut::Udp(f.borrow_mut()),
+            Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
+            Self::Tcp(f) => InetSocketRefMut::Tcp(f.borrow_mut()),
+            Self::Udp(f) => InetSocketRefMut::Udp(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
-            Self::Udp(ref f) => InetSocketRefMut::Udp(f.try_borrow_mut()?),
+            Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
+            Self::Tcp(f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
+            Self::Udp(f) => InetSocketRefMut::Udp(f.try_borrow_mut()?),
         })
     }
 

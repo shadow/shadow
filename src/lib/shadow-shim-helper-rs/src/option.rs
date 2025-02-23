@@ -47,15 +47,15 @@ impl<T> FfiOption<T> {
     }
 
     pub fn as_ref(&self) -> FfiOption<&T> {
-        match *self {
-            Self::Some(ref x) => FfiOption::Some(x),
+        match self {
+            Self::Some(x) => FfiOption::Some(x),
             Self::None => FfiOption::None,
         }
     }
 
     pub fn as_mut(&mut self) -> FfiOption<&mut T> {
-        match *self {
-            Self::Some(ref mut x) => FfiOption::Some(x),
+        match self {
+            Self::Some(x) => FfiOption::Some(x),
             Self::None => FfiOption::None,
         }
     }

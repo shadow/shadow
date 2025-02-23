@@ -166,41 +166,41 @@ impl IsSync for File {}
 impl File {
     pub fn borrow(&self) -> FileRef {
         match self {
-            Self::Pipe(ref f) => FileRef::Pipe(f.borrow()),
-            Self::EventFd(ref f) => FileRef::EventFd(f.borrow()),
-            Self::Socket(ref f) => FileRef::Socket(f.borrow()),
-            Self::TimerFd(ref f) => FileRef::TimerFd(f.borrow()),
-            Self::Epoll(ref f) => FileRef::Epoll(f.borrow()),
+            Self::Pipe(f) => FileRef::Pipe(f.borrow()),
+            Self::EventFd(f) => FileRef::EventFd(f.borrow()),
+            Self::Socket(f) => FileRef::Socket(f.borrow()),
+            Self::TimerFd(f) => FileRef::TimerFd(f.borrow()),
+            Self::Epoll(f) => FileRef::Epoll(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<FileRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Pipe(ref f) => FileRef::Pipe(f.try_borrow()?),
-            Self::EventFd(ref f) => FileRef::EventFd(f.try_borrow()?),
-            Self::Socket(ref f) => FileRef::Socket(f.try_borrow()?),
-            Self::TimerFd(ref f) => FileRef::TimerFd(f.try_borrow()?),
-            Self::Epoll(ref f) => FileRef::Epoll(f.try_borrow()?),
+            Self::Pipe(f) => FileRef::Pipe(f.try_borrow()?),
+            Self::EventFd(f) => FileRef::EventFd(f.try_borrow()?),
+            Self::Socket(f) => FileRef::Socket(f.try_borrow()?),
+            Self::TimerFd(f) => FileRef::TimerFd(f.try_borrow()?),
+            Self::Epoll(f) => FileRef::Epoll(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> FileRefMut {
         match self {
-            Self::Pipe(ref f) => FileRefMut::Pipe(f.borrow_mut()),
-            Self::EventFd(ref f) => FileRefMut::EventFd(f.borrow_mut()),
-            Self::Socket(ref f) => FileRefMut::Socket(f.borrow_mut()),
-            Self::TimerFd(ref f) => FileRefMut::TimerFd(f.borrow_mut()),
-            Self::Epoll(ref f) => FileRefMut::Epoll(f.borrow_mut()),
+            Self::Pipe(f) => FileRefMut::Pipe(f.borrow_mut()),
+            Self::EventFd(f) => FileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(f) => FileRefMut::Socket(f.borrow_mut()),
+            Self::TimerFd(f) => FileRefMut::TimerFd(f.borrow_mut()),
+            Self::Epoll(f) => FileRefMut::Epoll(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<FileRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Pipe(ref f) => FileRefMut::Pipe(f.try_borrow_mut()?),
-            Self::EventFd(ref f) => FileRefMut::EventFd(f.try_borrow_mut()?),
-            Self::Socket(ref f) => FileRefMut::Socket(f.try_borrow_mut()?),
-            Self::TimerFd(ref f) => FileRefMut::TimerFd(f.try_borrow_mut()?),
-            Self::Epoll(ref f) => FileRefMut::Epoll(f.try_borrow_mut()?),
+            Self::Pipe(f) => FileRefMut::Pipe(f.try_borrow_mut()?),
+            Self::EventFd(f) => FileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(f) => FileRefMut::Socket(f.try_borrow_mut()?),
+            Self::TimerFd(f) => FileRefMut::TimerFd(f.try_borrow_mut()?),
+            Self::Epoll(f) => FileRefMut::Epoll(f.try_borrow_mut()?),
         })
     }
 
@@ -208,7 +208,7 @@ impl File {
         match self {
             Self::Pipe(f) => Arc::as_ptr(f) as usize,
             Self::EventFd(f) => Arc::as_ptr(f) as usize,
-            Self::Socket(ref f) => f.canonical_handle(),
+            Self::Socket(f) => f.canonical_handle(),
             Self::TimerFd(f) => Arc::as_ptr(f) as usize,
             Self::Epoll(f) => Arc::as_ptr(f) as usize,
         }

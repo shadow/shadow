@@ -104,7 +104,7 @@ pub trait AsPtr<T> {
 impl<T> AsPtr<T> for Option<T> {
     fn as_ptr(&self) -> *const T {
         match self {
-            Some(ref v) => std::ptr::from_ref(v),
+            Some(v) => std::ptr::from_ref(v),
             None => std::ptr::null(),
         }
     }
@@ -118,7 +118,7 @@ pub trait AsMutPtr<T> {
 impl<T> AsMutPtr<T> for Option<T> {
     fn as_mut_ptr(&mut self) -> *mut T {
         match self {
-            Some(ref mut v) => v as *mut T,
+            Some(v) => v as *mut T,
             None => std::ptr::null_mut(),
         }
     }
