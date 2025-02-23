@@ -380,12 +380,14 @@ unsafe fn epoll_pwait2(
     timeout: *const libc::timespec,
     sigmask: *const libc::sigset_t,
 ) -> libc::c_int {
-    libc::syscall(
-        libc::SYS_epoll_pwait2,
-        epfd,
-        events,
-        maxevents,
-        timeout,
-        sigmask,
-    ) as libc::c_int
+    unsafe {
+        libc::syscall(
+            libc::SYS_epoll_pwait2,
+            epfd,
+            events,
+            maxevents,
+            timeout,
+            sigmask,
+        ) as libc::c_int
+    }
 }
