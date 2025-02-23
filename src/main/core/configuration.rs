@@ -1079,7 +1079,7 @@ impl JsonSchema for Signal {
         String::from("Signal")
     }
 
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
         // Use the "anything" schema. The Deserialize implementation does the
         // actual parsing and error handling.
         // TODO: Ideally we'd only accept strings or integers here. The
