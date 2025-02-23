@@ -115,8 +115,8 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
             break;
         };
 
-        let action = tls_process_shmem::with(|process| *unsafe {
-            process.protected.borrow(&host_lock.root).signal_action(sig)
+        let action = tls_process_shmem::with(|process| unsafe {
+            *process.protected.borrow(&host_lock.root).signal_action(sig)
         });
 
         if matches!(unsafe { action.handler() }, SignalHandler::SigIgn) {
