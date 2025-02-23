@@ -705,7 +705,7 @@ mod tests {
 mod export {
     use std::io::IsTerminal;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn utility_handleErrorInner(
         file_name: *const libc::c_char,
         line: libc::c_int,

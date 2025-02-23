@@ -327,7 +327,7 @@ mod sprintf_test {
     use super::*;
 
     // Wrapper code we expose to our C test harness.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     unsafe extern "C-unwind" fn test_format_buffer_valist(
         format_buffer: *mut FormatBuffer<10>,
         fmt: *const core::ffi::c_char,

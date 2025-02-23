@@ -575,21 +575,21 @@ mod export {
 
     /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
     /// calling this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_drop(socket: *const InetSocket) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket.cast_mut()) });
     }
 
     /// Helper for GLib functions that take a `TaskObjectFreeFunc`. See [`inetsocket_drop`].
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
         inetsocket_drop(socket.cast_const().cast())
     }
 
     /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
     /// legacy TCP socket or if `socket` is already mutably borrowed. Will never return `NULL`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_asLegacyTcp(socket: *const InetSocket) -> *mut c::TCP {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
@@ -608,7 +608,7 @@ mod export {
 
     /// Decrement the ref count of the `InetSocketWeak` object. The pointer must not be used after
     /// calling this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket) });
@@ -617,7 +617,7 @@ mod export {
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
     /// references and has been dropped. Returns an owned `InetSocket` that must be dropped as a
     /// `Box` later (for example using `inetsocket_drop`).
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocketweak_upgrade(
         socket: *const InetSocketWeak,
     ) -> *mut InetSocket {

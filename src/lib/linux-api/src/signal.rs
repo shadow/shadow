@@ -1543,12 +1543,12 @@ mod export {
 
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn linux_signal_is_valid(signo: i32) -> bool {
         Signal::try_from(signo).is_ok()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn linux_signal_is_realtime(signo: i32) -> bool {
         let Ok(signal) = Signal::try_from(signo) else {
             return false;
@@ -1556,31 +1556,31 @@ mod export {
         signal.is_realtime()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn linux_sigemptyset() -> linux_sigset_t {
         sigset_t::EMPTY.0
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn linux_sigfullset() -> linux_sigset_t {
         sigset_t::FULL.0
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigaddset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.add(signo);
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigdelset(set: *mut linux_sigset_t, signo: i32) {
         let set = sigset_t::wrap_mut(unsafe { set.as_mut().unwrap() });
         let signo = Signal::try_from(signo).unwrap();
         set.del(signo);
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigismember(
         set: *const linux_sigset_t,
         signo: i32,
@@ -1589,13 +1589,13 @@ mod export {
         set.has(signo.try_into().unwrap())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigisemptyset(set: *const linux_sigset_t) -> bool {
         let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         set.is_empty()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigorset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
@@ -1605,7 +1605,7 @@ mod export {
         sigset_t(*lhs | *rhs).0
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigandset(
         lhs: *const linux_sigset_t,
         rhs: *const linux_sigset_t,
@@ -1615,13 +1615,13 @@ mod export {
         sigset_t(*lhs & *rhs).0
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_signotset(set: *const linux_sigset_t) -> linux_sigset_t {
         let set = unsafe { set.as_ref().unwrap() };
         sigset_t(!*set).0
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_siglowest(set: *const linux_sigset_t) -> i32 {
         let set = sigset_t::wrap_ref(unsafe { set.as_ref().unwrap() });
         match set.lowest() {
@@ -1630,13 +1630,13 @@ mod export {
         }
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn linux_defaultAction(signo: i32) -> LinuxDefaultAction {
         let sig = Signal::try_from(signo).unwrap();
         defaultaction(sig)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_kill(pid: i32, sig: i32) -> i32 {
         match kill_raw(pid, sig) {
             Ok(()) => 0,
@@ -1645,7 +1645,7 @@ mod export {
     }
 
     /// Returns the handler if there is one, or else NULL.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigaction_handler(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32)> {
@@ -1657,7 +1657,7 @@ mod export {
     }
 
     /// Returns the action if there is one, else NULL.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigaction_action(
         sa: *const linux_sigaction,
     ) -> Option<unsafe extern "C" fn(i32, *mut linux_siginfo_t, *mut core::ffi::c_void)> {
@@ -1679,13 +1679,13 @@ mod export {
         }
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigaction_is_ign(sa: *const linux_sigaction) -> bool {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigIgn)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn linux_sigaction_is_dfl(sa: *const linux_sigaction) -> bool {
         let sa = sigaction::wrap_ref(unsafe { sa.as_ref().unwrap() });
         matches!(unsafe { sa.handler() }, SignalHandler::SigDfl)

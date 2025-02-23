@@ -132,7 +132,7 @@ impl log::Log for ShimLogger {
 pub mod export {
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn shimlogger_install(level: logger::LogLevel) {
         let level = log_c2rust::c_to_rust_log_level(level).unwrap();
         ShimLogger::install(level.to_level_filter());

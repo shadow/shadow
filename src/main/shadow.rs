@@ -463,7 +463,7 @@ fn log_environment(args: Vec<&OsStr>) {
 mod export {
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn main_runShadow(
         argc: libc::c_int,
         argv: *const *const libc::c_char,
