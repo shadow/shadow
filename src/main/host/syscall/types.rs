@@ -245,7 +245,7 @@ impl SyscallError {
     /// Returns the [condition](SyscallCondition) that the syscall is blocked on.
     pub fn blocked_condition(&mut self) -> Option<&mut SyscallCondition> {
         if let Self::Blocked(Blocked {
-            ref mut condition, ..
+            condition, ..
         }) = self
         {
             Some(condition)

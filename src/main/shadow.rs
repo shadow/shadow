@@ -370,7 +370,7 @@ fn load_config_file(
             .context("Could not merge '<<' keys")?;
 
         // remove top-level extension fields
-        if let serde_yaml::Value::Mapping(ref mut mapping) = &mut config_file {
+        if let serde_yaml::Value::Mapping(mapping) = &mut config_file {
             // remove entries having a key beginning with "x-" (follows docker's convention:
             // https://docs.docker.com/compose/compose-file/#extension)
             mapping.retain(|key, _value| {

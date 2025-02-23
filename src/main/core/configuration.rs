@@ -1177,14 +1177,14 @@ pub enum NullableOption<T> {
 impl<T> NullableOption<T> {
     pub fn as_ref(&self) -> NullableOption<&T> {
         match self {
-            NullableOption::Value(ref x) => NullableOption::Value(x),
+            NullableOption::Value(x) => NullableOption::Value(x),
             NullableOption::Null => NullableOption::Null,
         }
     }
 
     pub fn as_mut(&mut self) -> NullableOption<&mut T> {
         match self {
-            NullableOption::Value(ref mut x) => NullableOption::Value(x),
+            NullableOption::Value(x) => NullableOption::Value(x),
             NullableOption::Null => NullableOption::Null,
         }
     }

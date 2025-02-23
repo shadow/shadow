@@ -405,9 +405,9 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
 
     fn increment_address(addr: &std::net::IpAddr) -> std::net::IpAddr {
         match addr {
-            std::net::IpAddr::V4(mut x) => loop {
+            std::net::IpAddr::V4(x) => loop {
                 // increment the address
-                x = std::net::Ipv4Addr::from(u32::from(x) + 1);
+                let x = std::net::Ipv4Addr::from(u32::from(*x) + 1);
                 match x.octets()[3] {
                     // if the address ends in ".0" or ".255" (broadcast), try the next
                     0 | 255 => {}
