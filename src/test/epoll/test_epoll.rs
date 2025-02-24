@@ -4,7 +4,7 @@ use nix::errno::Errno;
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
 
-use test_utils::{ensure_ord, set, ShadowTest, TestEnvironment};
+use test_utils::{ShadowTest, TestEnvironment, ensure_ord, set};
 
 #[derive(Debug)]
 struct WaiterResult {
@@ -380,12 +380,14 @@ unsafe fn epoll_pwait2(
     timeout: *const libc::timespec,
     sigmask: *const libc::sigset_t,
 ) -> libc::c_int {
-    libc::syscall(
-        libc::SYS_epoll_pwait2,
-        epfd,
-        events,
-        maxevents,
-        timeout,
-        sigmask,
-    ) as libc::c_int
+    unsafe {
+        libc::syscall(
+            libc::SYS_epoll_pwait2,
+            epfd,
+            events,
+            maxevents,
+            timeout,
+            sigmask,
+        ) as libc::c_int
+    }
 }

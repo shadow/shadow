@@ -234,7 +234,7 @@ impl SyscallHandler {
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
         // if it's a socket, call recvmsg_helper() instead
-        if let File::Socket(ref socket) = file {
+        if let File::Socket(socket) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());
@@ -515,7 +515,7 @@ impl SyscallHandler {
         let net_ns = ctx.objs.host.network_namespace_borrow();
 
         // if it's a socket, call sendmsg_helper() instead
-        if let File::Socket(ref socket) = file {
+        if let File::Socket(socket) = file {
             if offset.is_some() {
                 // sockets don't support offsets
                 return Err(Errno::ESPIPE.into());

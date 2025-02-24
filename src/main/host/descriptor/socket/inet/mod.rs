@@ -20,9 +20,9 @@ use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::SyscallError;
 use crate::network::packet::{IanaProtocol, PacketRc};
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
 
 use self::legacy_tcp::LegacyTcpSocket;
 use self::tcp::TcpSocket;
@@ -42,33 +42,33 @@ pub enum InetSocket {
 impl InetSocket {
     pub fn borrow(&self) -> InetSocketRef {
         match self {
-            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.borrow()),
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.borrow()),
-            Self::Udp(ref f) => InetSocketRef::Udp(f.borrow()),
+            Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.borrow()),
+            Self::Tcp(f) => InetSocketRef::Tcp(f.borrow()),
+            Self::Udp(f) => InetSocketRef::Udp(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<InetSocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::LegacyTcp(ref f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
-            Self::Tcp(ref f) => InetSocketRef::Tcp(f.try_borrow()?),
-            Self::Udp(ref f) => InetSocketRef::Udp(f.try_borrow()?),
+            Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
+            Self::Tcp(f) => InetSocketRef::Tcp(f.try_borrow()?),
+            Self::Udp(f) => InetSocketRef::Udp(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> InetSocketRefMut {
         match self {
-            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.borrow_mut()),
-            Self::Udp(ref f) => InetSocketRefMut::Udp(f.borrow_mut()),
+            Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
+            Self::Tcp(f) => InetSocketRefMut::Tcp(f.borrow_mut()),
+            Self::Udp(f) => InetSocketRefMut::Udp(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::LegacyTcp(ref f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
-            Self::Tcp(ref f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
-            Self::Udp(ref f) => InetSocketRefMut::Udp(f.try_borrow_mut()?),
+            Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
+            Self::Tcp(f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),
+            Self::Udp(f) => InetSocketRefMut::Udp(f.try_borrow_mut()?),
         })
     }
 
@@ -575,27 +575,26 @@ mod export {
 
     /// Decrement the ref count of the `InetSocket` object. The pointer must not be used after
     /// calling this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_drop(socket: *const InetSocket) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket.cast_mut()) });
     }
 
     /// Helper for GLib functions that take a `TaskObjectFreeFunc`. See [`inetsocket_drop`].
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_dropVoid(socket: *mut libc::c_void) {
         inetsocket_drop(socket.cast_const().cast())
     }
 
     /// Get a legacy C [`TCP`](c::TCP) pointer for the socket. Will panic if `socket` is not a
     /// legacy TCP socket or if `socket` is already mutably borrowed. Will never return `NULL`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocket_asLegacyTcp(socket: *const InetSocket) -> *mut c::TCP {
         let socket = unsafe { socket.as_ref() }.unwrap();
 
         #[allow(irrefutable_let_patterns)]
-        let InetSocket::LegacyTcp(socket) = socket
-        else {
+        let InetSocket::LegacyTcp(socket) = socket else {
             panic!("Socket was not a legacy TCP socket: {socket:?}");
         };
 
@@ -608,7 +607,7 @@ mod export {
 
     /// Decrement the ref count of the `InetSocketWeak` object. The pointer must not be used after
     /// calling this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocketweak_drop(socket: *mut InetSocketWeak) {
         assert!(!socket.is_null());
         drop(unsafe { Box::from_raw(socket) });
@@ -617,7 +616,7 @@ mod export {
     /// Upgrade the weak reference. May return `NULL` if the socket has no remaining strong
     /// references and has been dropped. Returns an owned `InetSocket` that must be dropped as a
     /// `Box` later (for example using `inetsocket_drop`).
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn inetsocketweak_upgrade(
         socket: *const InetSocketWeak,
     ) -> *mut InetSocket {

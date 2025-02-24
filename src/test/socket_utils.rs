@@ -40,27 +40,27 @@ impl SockAddr {
     /// Get the pointer to the sockaddr struct.
     pub fn as_ptr(&self) -> *const libc::sockaddr {
         match self {
-            Self::Generic(ref x) => std::ptr::from_ref(x) as *const _,
-            Self::Inet(ref x) => std::ptr::from_ref(x) as *const _,
-            Self::Unix(ref x) => std::ptr::from_ref(x) as *const _,
+            Self::Generic(x) => std::ptr::from_ref(x) as *const _,
+            Self::Inet(x) => std::ptr::from_ref(x) as *const _,
+            Self::Unix(x) => std::ptr::from_ref(x) as *const _,
         }
     }
 
     /// Get the mutable pointer to the sockaddr struct.
     pub fn as_mut_ptr(&mut self) -> *mut libc::sockaddr {
         match self {
-            Self::Generic(ref mut x) => std::ptr::from_mut(x) as *mut _,
-            Self::Inet(ref mut x) => std::ptr::from_mut(x) as *mut _,
-            Self::Unix(ref mut x) => std::ptr::from_mut(x) as *mut _,
+            Self::Generic(x) => std::ptr::from_mut(x) as *mut _,
+            Self::Inet(x) => std::ptr::from_mut(x) as *mut _,
+            Self::Unix(x) => std::ptr::from_mut(x) as *mut _,
         }
     }
 
     /// The size (number of bytes) of the sockaddr.
     pub fn ptr_size(&self) -> libc::socklen_t {
         match self {
-            Self::Generic(ref x) => std::mem::size_of_val(x) as u32,
-            Self::Inet(ref x) => std::mem::size_of_val(x) as u32,
-            Self::Unix(ref x) => std::mem::size_of_val(x) as u32,
+            Self::Generic(x) => std::mem::size_of_val(x) as u32,
+            Self::Inet(x) => std::mem::size_of_val(x) as u32,
+            Self::Unix(x) => std::mem::size_of_val(x) as u32,
         }
     }
 
@@ -72,42 +72,42 @@ impl SockAddr {
 
     pub fn as_generic(&self) -> Option<&libc::sockaddr_storage> {
         match self {
-            Self::Generic(ref x) => Some(x),
+            Self::Generic(x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_generic_mut(&mut self) -> Option<&mut libc::sockaddr_storage> {
         match self {
-            Self::Generic(ref mut x) => Some(x),
+            Self::Generic(x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_inet(&self) -> Option<&libc::sockaddr_in> {
         match self {
-            Self::Inet(ref x) => Some(x),
+            Self::Inet(x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_inet_mut(&mut self) -> Option<&mut libc::sockaddr_in> {
         match self {
-            Self::Inet(ref mut x) => Some(x),
+            Self::Inet(x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_unix(&self) -> Option<&libc::sockaddr_un> {
         match self {
-            Self::Unix(ref x) => Some(x),
+            Self::Unix(x) => Some(x),
             _ => None,
         }
     }
 
     pub fn as_unix_mut(&mut self) -> Option<&mut libc::sockaddr_un> {
         match self {
-            Self::Unix(ref mut x) => Some(x),
+            Self::Unix(x) => Some(x),
             _ => None,
         }
     }

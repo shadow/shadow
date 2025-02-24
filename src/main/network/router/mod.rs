@@ -3,8 +3,8 @@ use std::net::Ipv4Addr;
 
 use self::codel_queue::CoDelQueue;
 use crate::core::worker::Worker;
-use crate::network::packet::PacketRc;
 use crate::network::PacketDevice;
+use crate::network::packet::PacketRc;
 use crate::utility::{Magic, ObjectCounter};
 mod codel_queue;
 

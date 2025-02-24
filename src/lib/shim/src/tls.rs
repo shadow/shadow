@@ -313,7 +313,9 @@ impl ThreadLocalStorage {
 
             let next_next_offset_val = this_var_offset + size;
             if next_next_offset_val > BYTES_PER_THREAD {
-                panic!("Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage");
+                panic!(
+                    "Exceeded hard-coded limit of {BYTES_PER_THREAD} per thread of thread local storage"
+                );
             }
 
             match self.next_offset.compare_exchange(
@@ -678,7 +680,7 @@ impl<'tls, 'var, T, F: Fn() -> T> Deref for TlsVarRef<'tls, 'var, T, F> {
 #[cfg(test)]
 mod test {
     use core::cell::RefCell;
-    use core::sync::atomic::{self, AtomicI16, AtomicI32, AtomicI8};
+    use core::sync::atomic::{self, AtomicI8, AtomicI16, AtomicI32};
 
     use super::*;
 

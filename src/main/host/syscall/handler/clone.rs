@@ -1,4 +1,4 @@
-use linux_api::capability::{user_cap_data, user_cap_header, LINUX_CAPABILITY_VERSION_3};
+use linux_api::capability::{LINUX_CAPABILITY_VERSION_3, user_cap_data, user_cap_header};
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::sched::CloneFlags;

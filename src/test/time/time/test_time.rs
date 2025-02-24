@@ -1,6 +1,6 @@
 use std::{thread, time};
 
-use test_utils::{ensure_ord, set, TestEnvironment};
+use test_utils::{TestEnvironment, ensure_ord, set};
 
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?

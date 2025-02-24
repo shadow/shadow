@@ -397,69 +397,95 @@ mod tests {
             .unwrap();
 
         // Bad begin
-        assert!("7fffb2d4800q-7fffb2d49000 ---p 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d4800q-7fffb2d49000 ---p 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad end
-        assert!("7fffb2d48000-7fffb2d4900q ---p 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d4900q ---p 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad r
-        assert!("7fffb2d48000-7fffb2d49000 z--p 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 z--p 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad w
-        assert!("7fffb2d48000-7fffb2d49000 -z-p 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 -z-p 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad x
-        assert!("7fffb2d48000-7fffb2d49000 --zp 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 --zp 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad sharing
-        assert!("7fffb2d48000-7fffb2d49000 ---- 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---- 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad offset
-        assert!("7fffb2d48000-7fffb2d49000 ---p 0000000z 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 0000000z 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad device high
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 0z:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 0z:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad device low
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:0z 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 00:0z 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad inode
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 z   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 z   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Bad path
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   z"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   z"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Leading garbage
-        assert!("z 7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso]"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "z 7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso]"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Trailing garbage after path
-        assert!("7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] z"
-            .parse::<Mapping>()
-            .is_err());
+        assert!(
+            "7fffb2d48000-7fffb2d49000 ---p 00000000 00:00 0   [vdso] z"
+                .parse::<Mapping>()
+                .is_err()
+        );
 
         // Trailing garbage after (deleted)
         assert!(

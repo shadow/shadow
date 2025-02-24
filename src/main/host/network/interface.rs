@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs::File;
 use std::io::BufWriter;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -10,11 +10,11 @@ use crate::core::configuration::QDiscMode;
 use crate::core::worker::Worker;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::queuing::{NetworkQueue, NetworkQueueKind};
-use crate::network::packet::{IanaProtocol, PacketRc, PacketStatus};
 use crate::network::PacketDevice;
+use crate::network::packet::{IanaProtocol, PacketRc, PacketStatus};
+use crate::utility::ObjectCounter;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::pcap_writer::{PacketDisplay, PcapWriter};
-use crate::utility::ObjectCounter;
 
 /// The priority used by the fifo qdisc to choose the next socket to send a packet from.
 pub type FifoPacketPriority = u64;

@@ -1,5 +1,5 @@
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?

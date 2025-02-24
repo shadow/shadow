@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_quote, Attribute, GenericParam, Generics, Type};
+use syn::{Attribute, GenericParam, Generics, Type, parse_quote};
 
 /// Implement `vasi::VirtualAddressSpaceIndependent` for the annotated type.
 /// Requires all fields to implement `vasi::VirtualAddressSpaceIndependent`.
@@ -278,7 +278,7 @@ fn impl_derive_virtual_address_space_independent(ast: syn::DeriveInput) -> proc_
     let generics = add_trait_bounds(ast.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let gen = quote! {
+    quote! {
         unsafe impl #impl_generics vasi::VirtualAddressSpaceIndependent for #name #ty_generics #where_clause {
             const IGNORE: () = {
                 const fn check<T: ::vasi::VirtualAddressSpaceIndependent>() {}
@@ -290,6 +290,6 @@ fn impl_derive_virtual_address_space_independent(ast: syn::DeriveInput) -> proc_
             // Force compilation to fail if the type isn't FFI safe.
             extern "C" fn _vasi_validate_ffi_safe #impl_generics (_: #name #ty_generics) #where_clause {}
         };
-    };
-    gen.into()
+    }
+    .into()
 }

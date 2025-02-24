@@ -1,6 +1,6 @@
-use linux_api::capability::{user_cap_data, user_cap_header, LINUX_CAPABILITY_VERSION_3};
+use linux_api::capability::{LINUX_CAPABILITY_VERSION_3, user_cap_data, user_cap_header};
 
-use test_utils::{set, ShadowTest, TestEnvironment};
+use test_utils::{ShadowTest, TestEnvironment, set};
 
 fn test_capset() -> anyhow::Result<()> {
     let hdr = user_cap_header {

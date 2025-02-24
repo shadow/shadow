@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use shadow_shim_helper_rs::syscall_types::ManagedPhysicalMemoryAddr;
 use shadow_shim_helper_rs::util::SyncSendPointer;
@@ -84,7 +84,7 @@ mod export {
     use super::*;
 
     /// This does not consume the `futex` reference.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn futextable_add(
         table: *mut FutexTable,
         futex: *mut c::Futex,
@@ -98,7 +98,7 @@ mod export {
         table.add(futex).is_ok()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn futextable_remove(
         table: *mut FutexTable,
         addr: ManagedPhysicalMemoryAddr,
@@ -109,7 +109,7 @@ mod export {
 
     /// This returns a borrowed reference. If you don't increment the refcount of the returned
     /// futex, then the returned pointer will be invalidated if the futex table is mutated.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn futextable_get(
         table: *mut FutexTable,
         addr: ManagedPhysicalMemoryAddr,

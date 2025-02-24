@@ -186,7 +186,7 @@ impl tcp::util::time::Instant for EmulatedTime {
 pub mod export {
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn emutime_add_simtime(
         lhs: CEmulatedTime,
         rhs: CSimulationTime,
@@ -201,7 +201,7 @@ pub mod export {
         EmulatedTime::to_c_emutime(sum)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn emutime_sub_emutime(
         lhs: CEmulatedTime,
         rhs: CEmulatedTime,

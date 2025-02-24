@@ -20,7 +20,7 @@ use clap::Parser;
 use logger as c_log;
 use merge::Merge;
 use once_cell::sync::Lazy;
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
@@ -1079,7 +1079,7 @@ impl JsonSchema for Signal {
         String::from("Signal")
     }
 
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
         // Use the "anything" schema. The Deserialize implementation does the
         // actual parsing and error handling.
         // TODO: Ideally we'd only accept strings or integers here. The
@@ -1177,14 +1177,14 @@ pub enum NullableOption<T> {
 impl<T> NullableOption<T> {
     pub fn as_ref(&self) -> NullableOption<&T> {
         match self {
-            NullableOption::Value(ref x) => NullableOption::Value(x),
+            NullableOption::Value(x) => NullableOption::Value(x),
             NullableOption::Null => NullableOption::Null,
         }
     }
 
     pub fn as_mut(&mut self) -> NullableOption<&mut T> {
         match self {
-            NullableOption::Value(ref mut x) => NullableOption::Value(x),
+            NullableOption::Value(x) => NullableOption::Value(x),
             NullableOption::Null => NullableOption::Null,
         }
     }
