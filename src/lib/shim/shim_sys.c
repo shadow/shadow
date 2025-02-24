@@ -186,13 +186,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         shimshmem_incrementUnappliedCpuLatency(
             host_lock, _shim_sys_latency_for_syscall(syscall_num));
         CSimulationTime unappliedCpuLatency = shimshmem_getUnappliedCpuLatency(host_lock);
-        // TODO: Once ptrace mode is deprecated, we can hold this lock longer to
-        // avoid having to reacquire it below. We currently can't hold the lock
-        // over when any syscalls would be made though, since those result in a
-        // ptrace-stop returning control to shadow without giving us a chance to
-        // release the lock.
-        shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
-
         // Count the syscall and check whether we ought to yield.
         CSimulationTime maxUnappliedCpuLatency =
             shimshmem_maxUnappliedCpuLatency(shim_hostSharedMem());
@@ -210,7 +203,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             // to Shadow instead of being executed natively.
 
             CEmulatedTime newTime = _shim_sys_get_time() + unappliedCpuLatency;
-            host_lock = shimshmemhost_lock(shim_hostSharedMem());
             CEmulatedTime maxTime = shimshmem_getMaxRunaheadTime(host_lock);
             if (newTime <= maxTime) {
                 shimshmem_setEmulatedTime(shim_hostSharedMem(), newTime);
@@ -224,6 +216,8 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
                       newTime - maxTime);
                 syscall(SYS_shadow_yield);
             }
+        } else {
+            shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
         }
         // Should have been released and NULLed.
         assert(!host_lock);
