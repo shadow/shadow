@@ -268,16 +268,14 @@ impl SyscallHandler {
                 .expect("flushing syscall ptrs");
         }
 
-        if ctx.host.shim_shmem().model_unblocked_syscall_latency
-            && ctx.process.is_running()
-            && !matches!(rv, Err(SyscallError::Blocked(_)))
-        {
+        if ctx.process.is_running() && !matches!(rv, Err(SyscallError::Blocked(_))) {
             let max_unapplied_cpu_latency = ctx.host.shim_shmem().max_unapplied_cpu_latency;
 
             // increment unblocked syscall latency, but only for non-shadow-syscalls, since the
             // latter are part of Shadow's internal plumbing; they shouldn't necessarily "consume"
             // time
-            if !is_shadow_syscall(syscall) {
+            if ctx.host.shim_shmem().model_unblocked_syscall_latency && !is_shadow_syscall(syscall)
+            {
                 ctx.host
                     .shim_shmem_lock_borrow_mut()
                     .unwrap()

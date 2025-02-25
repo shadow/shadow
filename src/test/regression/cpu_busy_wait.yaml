@@ -1,0 +1,18 @@
+# https://github.com/shadow/shadow/issues/1968
+
+general:
+  stop_time: 15s
+
+experimental:
+  native_preemption_enabled: true
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    - path: ../../target/debug/test_cpu_busy_wait
+      start_time: 1s

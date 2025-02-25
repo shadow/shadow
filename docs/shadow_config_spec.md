@@ -74,6 +74,9 @@ hosts:
 - [`experimental`](#experimental)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
+- [`experimental.native_preemption_enabled`](#experimentalnative_preemption_enabled)
+- [`experimental.native_preemption_native_interval`](#experimentalnative_preemption_native_interval)
+- [`experimental.native_preemption_sim_interval`](#experimentalnative_preemption_sim_interval)
 - [`experimental.report_errors_to_stderr`](#experimentalreport_errors_to_stderr)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler`](#experimentalscheduler)
@@ -327,9 +330,57 @@ larger values reduce simulation overhead, at the cost of coarser time jumps.
 Note also that accumulated-but-unapplied latency is discarded when a thread is
 blocked on a syscall.
 
-Ignored when
+No effect when CPU latency isn't being modeled, e.g. via
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
-is false.
+or [`experimental.native_preemption_enabled`](#experimentalnative_preemption_enabled).
+
+#### `experimental.native_preemption_enabled`
+
+Default: false  
+Type: Bool
+
+When true, and when managed code runs for an extended time without
+returning control to shadow (e.g. by making a syscall), shadow preempts
+the managed code and moves simulated time forward.
+
+This usually shouldn't be needed, and breaks simulation determinism, but can be
+used to escape "pure-CPU busy-loops". See [limitations.md#cpu-busy-loops].
+
+#### `experimental.native_preemption_native_interval`
+
+Default: "100 milliseconds"  
+Type: String
+
+When `native_preemption_enabled` is true, amount of native CPU-time to wait
+before preempting managed code that hasn't returned control to shadow.
+
+Using a relatively long value here avoids triggering preemption when it isn't
+needed (and thereby unnecessarily reducing determinism of the simulation), but
+may cause the simulation to take longer to escape a "CPU-only busy-loop" when it
+*is* needed.
+
+Only supports microsecond granularity, and values below 1 microsecond are
+rejected.
+
+No effect when `native_preemption_enabled` is false.
+
+#### `experimental.native_preemption_sim_interval`
+
+Default: "10 milliseconds"  
+Type: String
+
+When `native_preemption_enabled` is true, amount of simulated time to consume
+after `native_preemption_native_interval` has elapsed without returning control
+to shadow.
+
+Larger values here may mean fewer preemptions, and therefore less real time, are
+required to escape a CPU-only busy loop, but result in larger time-jumps inside
+the simulation, which may have unexpected effects.
+
+For simulation efficiency, this latency is only actually applied when
+`max_unapplied_cpu_latency` is reached.
+
+No effect when `native_preemption_enabled` is false.
 
 #### `experimental.report_errors_to_stderr`
 
