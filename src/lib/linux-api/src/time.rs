@@ -101,6 +101,11 @@ pub use bindings::linux_itimerval;
 pub type itimerval = linux_itimerval;
 unsafe impl shadow_pod::Pod for itimerval {}
 
+pub use bindings::linux___kernel_old_itimerval;
+#[allow(non_camel_case_types)]
+pub type kernel_old_itimerval = linux___kernel_old_itimerval;
+unsafe impl shadow_pod::Pod for kernel_old_itimerval {}
+
 /// Raw `alarm` syscall. Permits u64 arg and return value for generality with
 /// the general syscall ABI, but note that the `alarm` syscall definition itself
 /// uses u32.
@@ -116,6 +121,60 @@ pub fn alarm(secs: u32) -> Result<u32, Errno> {
     // The syscall defines the return type as u32, so it *should* always be
     // convertible to u32.
     Ok(res.try_into().unwrap())
+}
+
+/// Make a `getitimer` syscall.
+///
+/// # Safety
+///
+/// `curr_value` must be safe for the kernel to write to.
+//
+// Kernel decl:
+// ```
+// kernel/time/itimer.c:SYSCALL_DEFINE2(getitimer, int, which, struct __kernel_old_itimerval __user *, value)
+// ```
+pub unsafe fn getitimer_raw(
+    which: core::ffi::c_int,
+    curr_value: *mut kernel_old_itimerval,
+) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_getitimer, which, curr_value) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// Make a `getitimer` syscall.
+pub fn getitimer(which: ITimerId, curr_value: &mut kernel_old_itimerval) -> Result<(), Errno> {
+    unsafe { getitimer_raw(which.into(), curr_value) }
+}
+
+/// Make a `setitimer` syscall.
+///
+/// # Safety
+///
+/// `old_value` must be safe for the kernel to write to, or NULL.
+///
+/// An invalid or inaccessible `new_value` *isn't* a safety violation, but may
+/// cause the syscall to fail e.g. with `EFAULT`.
+pub unsafe fn setitimer_raw(
+    which: core::ffi::c_int,
+    new_value: *const kernel_old_itimerval,
+    old_value: *mut kernel_old_itimerval,
+) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_setitimer, which, new_value, old_value) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// Make a `setitimer` syscall.
+pub fn setitimer(
+    which: ITimerId,
+    new_value: &kernel_old_itimerval,
+    old_value: Option<&mut kernel_old_itimerval>,
+) -> Result<(), Errno> {
+    let old_value = old_value
+        .map(core::ptr::from_mut)
+        .unwrap_or(core::ptr::null_mut());
+    unsafe { setitimer_raw(which.into(), new_value, old_value) }
 }
 
 mod export {
