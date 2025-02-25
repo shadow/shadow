@@ -118,6 +118,52 @@ pub fn alarm(secs: u32) -> Result<u32, Errno> {
     Ok(res.try_into().unwrap())
 }
 
+/// Make a `getitimer` syscall.
+///
+/// # Safety
+///
+/// `curr_value` must be safe for the kernel to write to.
+pub unsafe fn getitimer_raw(which: i32, curr_value: *mut itimerval) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_getitimer, which, curr_value) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// Make a `getitimer` syscall.
+pub fn getitimer(which: ITimerId, curr_value: &mut itimerval) -> Result<(), Errno> {
+    unsafe { getitimer_raw(which.into(), curr_value) }
+}
+
+/// Make a `setitimer` syscall.
+///
+/// # Safety
+///
+/// `old_value` must be safe for the kernel to write to, or NULL.
+///
+/// An invalid or inaccessible `new_value` *isn't* a safety violation, but may
+/// cause the syscall to fail e.g. with `EFAULT`.
+pub unsafe fn setitimer_raw(
+    which: i32,
+    new_value: *const itimerval,
+    old_value: *mut itimerval,
+) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_setitimer, which, new_value, old_value) }
+        .check()
+        .map_err(Errno::from)
+}
+
+/// Make a `setitimer` syscall.
+pub fn setitimer(
+    which: ITimerId,
+    new_value: &itimerval,
+    old_value: Option<&mut itimerval>,
+) -> Result<(), Errno> {
+    let old_value = old_value
+        .map(|p| p as *mut itimerval)
+        .unwrap_or(core::ptr::null_mut());
+    unsafe { setitimer_raw(which.into(), new_value, old_value) }
+}
+
 mod export {
     use super::*;
 
