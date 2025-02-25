@@ -191,6 +191,10 @@ name = "test_busy_wait"
 path = "regression/test_busy_wait.rs"
 
 [[bin]]
+name = "test_cpu_busy_wait"
+path = "regression/test_cpu_busy_wait.rs"
+
+[[bin]]
 name = "test_itimer"
 path = "time/itimer/test_itimer.rs"
 

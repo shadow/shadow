@@ -48,8 +48,23 @@ macro_rules! assert_shmem_safe {
 
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
+pub struct NativePreemptionConfig {
+    /// Maximum wall-clock time to allow managed code to run before preempting
+    /// to move time forward.
+    // Using `kernel_old_timeval` here leaks implementation details from the
+    // shim a bit, but lets us do the fiddly time conversion and potential error
+    // reporting from the shadow process up-front.
+    pub native_duration: linux_api::time::kernel_old_timeval,
+    /// Amount of simulation-time to move forward after `native_duration_micros`
+    /// has elapsed without returning control to Shadow.
+    pub sim_duration: SimulationTime,
+}
+
+#[derive(VirtualAddressSpaceIndependent)]
+#[repr(C)]
 pub struct ManagerShmem {
     pub log_start_time_micros: i64,
+    pub native_preemption_config: FfiOption<NativePreemptionConfig>,
 }
 
 #[derive(VirtualAddressSpaceIndependent)]

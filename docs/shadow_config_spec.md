@@ -331,6 +331,55 @@ Ignored when
 [`general.model_unblocked_syscall_latency`](#generalmodel_unblocked_syscall_latency)
 is false.
 
+#### `experimental.native_preemption_enabled`
+
+Default: false  
+Type: Bool
+
+When true, and when managed code runs for an extended time without
+returning control to shadow (e.g. by making a syscall), shadow preempts
+the managed code and moves simulated time forward.
+
+This usually shouldn't be needed, and breaks simulation determinism, but can be
+used to escape "pure-CPU busy loops".
+
+The primary reason this isn't enabled by default is that when this mechanism
+triggers, the simulation may no longer be deterministic. e.g. if there is a long
+CPU-only operation that can *eventually* complete on its own without this
+mechanism, but may or may not be interrupted by this mechanism depending on the
+host CPU speed, caching effects, etc., then runs of the simulation where the
+preemption triggered may differ from runs where it didn't.
+
+#### `experimental.native_preemption_native_interval`
+
+Default: "100 milliseconds"  
+Type: String
+
+When `native_preemption_enabled` is true, amount of native CPU-time to wait
+before preempting managed code that hasn't returned control to shadow.
+
+Using a relatively long value here avoids triggering preemption when it isn't
+needed (and thereby unnecessarily reducing determinism of the simulation), but
+may cause the simulation to take longer to escape a "CPU-only busy loop" when it
+*is* needed.
+
+No effect when `native_preemption_enabled` is false.
+
+#### `experimental.native_preemption_sim_interval`
+
+Default: "10 milliseconds"  
+Type: String
+
+When `native_preemption_enabled` is true, amount of simulated time to consume
+after `native_preemption_native_interval` has elapsed without returning control
+to shadow.
+
+Larger values here may mean fewer preemptions, and therefore less real time, are
+required to escape a CPU-only busy loop, but result in larger time-jumps inside
+the simulation, which may have unexpected effects.
+
+No effect when `native_preemption_enabled` is false.
+
 #### `experimental.report_errors_to_stderr`
 
 Default: true  

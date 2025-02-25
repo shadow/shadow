@@ -174,6 +174,25 @@ impl ConfigOptions {
         SimulationTime::from_nanos(nanos)
     }
 
+    pub fn native_preemption_enabled(&self) -> bool {
+        self.experimental.native_preemption_enabled.unwrap()
+    }
+
+    pub fn native_preemption_native_interval(&self) -> linux_api::time::kernel_old_timeval {
+        let t = self.experimental.native_preemption_native_interval.unwrap();
+        let t = core::time::Duration::from(t);
+        linux_api::time::kernel_old_timeval {
+            tv_sec: t.as_secs().try_into().unwrap(),
+            tv_usec: t.subsec_micros().into(),
+        }
+    }
+
+    pub fn native_preemption_sim_interval(&self) -> SimulationTime {
+        let t = self.experimental.native_preemption_sim_interval.unwrap();
+        let nanos = t.convert(units::TimePrefix::Nano).unwrap().value();
+        SimulationTime::from_nanos(nanos)
+    }
+
     pub fn strace_logging_mode(&self) -> Option<FmtOptions> {
         match self.experimental.strace_logging_mode.as_ref().unwrap() {
             StraceLoggingMode::Standard => Some(FmtOptions::Standard),
@@ -463,6 +482,31 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "bool")]
     #[clap(help = EXP_HELP.get("use_new_tcp").unwrap().as_str())]
     pub use_new_tcp: Option<bool>,
+
+    /// When true, and when managed code runs for an extended time without
+    /// returning control to shadow (e.g. by making a syscall), shadow preempts
+    /// the managed code and moves simulated time forward. This usually
+    /// shouldn't be needed, but can be used to escape "pure-CPU busy loops".
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("native_preemption_enabled").unwrap().as_str())]
+    pub native_preemption_enabled: Option<bool>,
+
+    /// When `native_preemption_enabled` is true, amount of native CPU-time to
+    /// wait before preempting managed code that hasn't returned control to
+    /// shadow.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "seconds")]
+    #[clap(help = EXP_HELP.get("native_preemption_native_interval").unwrap().as_str())]
+    pub native_preemption_native_interval: Option<units::Time<units::TimePrefix>>,
+
+    /// When `native_preemption_enabled` is true, amount of simulated time to
+    /// consume after `native_preemption_native_interval` has elapsed without
+    /// returning control to shadow.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "seconds")]
+    #[clap(help = EXP_HELP.get("native_preemption_sim_interval").unwrap().as_str())]
+    pub native_preemption_sim_interval: Option<units::Time<units::TimePrefix>>,
 }
 
 impl ExperimentalOptions {
@@ -507,6 +551,12 @@ impl Default for ExperimentalOptions {
             scheduler: Some(Scheduler::ThreadPerCore),
             report_errors_to_stderr: Some(true),
             use_new_tcp: Some(false),
+            native_preemption_enabled: Some(false),
+            native_preemption_native_interval: Some(units::Time::new(
+                100,
+                units::TimePrefix::Milli,
+            )),
+            native_preemption_sim_interval: Some(units::Time::new(10, units::TimePrefix::Milli)),
         }
     }
 }
