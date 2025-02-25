@@ -34,11 +34,7 @@ impl Tsc {
     /// e.g. see <https://github.com/shadow/shadow/issues/1519>.
     pub fn native_cycles_per_second() -> Option<u64> {
         let res = unsafe { c_internal::TscC_nativeCyclesPerSecond() };
-        if res == 0 {
-            None
-        } else {
-            Some(res)
-        }
+        if res == 0 { None } else { Some(res) }
     }
 
     pub fn new(cycles_per_second: u64) -> Self {
@@ -144,20 +140,20 @@ mod export {
     /// (particularly AMD), and can return the wrong value for others. i.e. this
     /// needs more work if we need to dependably get the host's TSC rate.
     /// e.g. see https://github.com/shadow/shadow/issues/1519.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn Tsc_nativeCyclesPerSecond() -> u64 {
         Tsc::native_cycles_per_second().unwrap_or(0)
     }
 
     /// Instantiate a TSC with the given clock rate.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn Tsc_create(cycles_per_second: u64) -> Tsc {
         Tsc::new(cycles_per_second)
     }
 
     /// Updates `regs` to reflect the result of executing an rdtsc instruction at
     /// time `nanos`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn Tsc_emulateRdtsc(
         tsc: *const Tsc,
         rax: *mut u64,
@@ -174,7 +170,7 @@ mod export {
 
     /// Updates `regs` to reflect the result of executing an rdtscp instruction at
     /// time `nanos`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn Tsc_emulateRdtscp(
         tsc: *const Tsc,
         rax: *mut u64,
@@ -192,13 +188,13 @@ mod export {
     }
 
     /// Whether `buf` begins with an rdtsc instruction.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn isRdtsc(ip: *const u8) -> bool {
         unsafe { Tsc::ip_is_rdtsc(ip) }
     }
 
     /// Whether `buf` begins with an rdtscp instruction.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn isRdtscp(ip: *const u8) -> bool {
         unsafe { Tsc::ip_is_rdtscp(ip) }
     }

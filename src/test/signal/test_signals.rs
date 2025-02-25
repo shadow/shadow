@@ -1,8 +1,8 @@
 use std::arch::asm;
 use std::error::Error;
 use std::os::unix::io::RawFd;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use nix::errno::Errno;
@@ -13,11 +13,11 @@ use once_cell::sync::OnceCell;
 use rustix::thread::NanosleepRelativeResult;
 use rustix::time::Timespec;
 use signal_hook::low_level::channel::Channel as SignalSafeChannel;
+use test_utils::ShadowTest;
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::running_in_shadow;
 use test_utils::set;
 use test_utils::setitimer;
-use test_utils::ShadowTest;
-use test_utils::TestEnvironment as TestEnv;
 
 const SS_AUTODISARM: libc::c_int = 1 << 31;
 

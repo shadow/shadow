@@ -24,9 +24,9 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter};
 use crate::host::syscall::types::SyscallError;
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::{SockaddrStorage, SockaddrUnix};
-use crate::utility::HostTreePointer;
 
 const UNIX_SOCKET_DEFAULT_BUFFER_SIZE: u64 = 212_992;
 
@@ -332,9 +332,9 @@ impl UnixSocket {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.common.event_source.add_listener(
             monitoring_state,
@@ -1167,7 +1167,7 @@ impl Protocol for ConnOrientedInitial {
         ) {
             Ok(peer) => peer,
             Err(IncomingConnError::NotSupported) => {
-                return (self.into(), Err(Errno::ECONNREFUSED.into()))
+                return (self.into(), Err(Errno::ECONNREFUSED.into()));
             }
             Err(IncomingConnError::QueueFull) => {
                 if common.status.contains(FileStatus::NONBLOCK) {

@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 // The number of random values to generate with each method.
 const RGENLEN: usize = 200;

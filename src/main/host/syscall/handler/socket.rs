@@ -6,10 +6,10 @@ use nix::sys::socket::SockFlag;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::descriptor::descriptor_table::DescriptorHandle;
+use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 use crate::host::descriptor::socket::inet::tcp::TcpSocket;
 use crate::host::descriptor::socket::inet::udp::UdpSocket;
-use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::descriptor::socket::netlink::{NetlinkFamily, NetlinkSocket, NetlinkSocketType};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
@@ -168,7 +168,7 @@ impl SyscallHandler {
             file.inner_file().clone()
         };
 
-        let File::Socket(ref socket) = file else {
+        let File::Socket(socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -178,7 +178,7 @@ impl SyscallHandler {
 
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
-        Socket::bind(socket, addr.as_ref(), &net_ns, &mut *rng)
+        Socket::bind(&socket, addr.as_ref(), &net_ns, &mut *rng)
     }
 
     log_syscall!(
@@ -223,7 +223,7 @@ impl SyscallHandler {
             }
         };
 
-        let File::Socket(ref socket) = file.inner_file() else {
+        let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -300,7 +300,7 @@ impl SyscallHandler {
             }
         };
 
-        let File::Socket(ref socket) = file.inner_file() else {
+        let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -376,7 +376,7 @@ impl SyscallHandler {
             }
         };
 
-        let File::Socket(ref socket) = file.inner_file() else {
+        let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -457,7 +457,7 @@ impl SyscallHandler {
             }
         };
 
-        let File::Socket(ref socket) = file.inner_file() else {
+        let File::Socket(socket) = file.inner_file() else {
             return Err(Errno::ENOTSOCK.into());
         };
 
@@ -739,7 +739,7 @@ impl SyscallHandler {
         addr_len_ptr: ForeignPtr<libc::socklen_t>,
         flags: std::ffi::c_int,
     ) -> Result<DescriptorHandle, SyscallError> {
-        let File::Socket(ref socket) = file else {
+        let File::Socket(socket) = file else {
             return Err(Errno::ENOTSOCK.into());
         };
 

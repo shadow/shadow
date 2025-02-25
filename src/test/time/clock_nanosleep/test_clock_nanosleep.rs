@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use test_utils::time::*;
-use test_utils::{ensure_ord, set, FuzzArg, FuzzError, FuzzOrder, TestEnvironment};
+use test_utils::{FuzzArg, FuzzError, FuzzOrder, TestEnvironment, ensure_ord, set};
 
 // For most clocks, Linux only checks TIMER_ABSTIME and ignores other bits that are set in the flags
 // arg (see kernel/time/posix-timers.c). But for the *_ALARM clocks, Linux returns EINVAL if you set

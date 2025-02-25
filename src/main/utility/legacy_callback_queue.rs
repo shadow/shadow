@@ -3,8 +3,8 @@ use std::ops::DerefMut;
 
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 
-use crate::host::descriptor::listener::StateEventSource;
 use crate::host::descriptor::FileState;
+use crate::host::descriptor::listener::StateEventSource;
 use crate::utility::callback_queue::CallbackQueue;
 
 /// An event source stored by a `LegacyFile`.
@@ -32,10 +32,12 @@ pub fn with_global_cb_queue<T>(f: impl FnOnce() -> T) -> T {
         }
 
         // set the global queue
-        assert!(cb_queue
-            .borrow_mut()
-            .replace(CallbackQueue::new())
-            .is_none());
+        assert!(
+            cb_queue
+                .borrow_mut()
+                .replace(CallbackQueue::new())
+                .is_none()
+        );
 
         let rv = f();
 
@@ -62,13 +64,13 @@ mod export {
     use std::net::Ipv4Addr;
 
     use crate::core::worker;
-    use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::descriptor::FileSignals;
+    use crate::host::descriptor::socket::inet::InetSocket;
     use crate::host::host::Host;
 
     /// Notify listeners using the global callback queue. If the queue hasn't been set using
     /// [`with_global_cb_queue`], the listeners will be notified here before returning.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn notify_listeners_with_global_cb_queue(
         event_source: *const RootedRefCell_StateEventSource,
         state: FileState,
@@ -95,7 +97,7 @@ mod export {
     /// Tell the host that the socket wants to send packets using the global callback queue. If the
     /// queue hasn't been set using [`with_global_cb_queue`], the host will be notified here before
     /// returning. Takes ownership of `inetSocket` (will free/drop).
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn socket_wants_to_send_with_global_cb_queue(
         host: *const Host,
         socket: *mut InetSocket,

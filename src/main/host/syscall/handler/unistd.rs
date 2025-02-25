@@ -21,7 +21,7 @@ use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
 use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
-use crate::host::syscall::io::{read_cstring_vec, IoVec};
+use crate::host::syscall::io::{IoVec, read_cstring_vec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallStringArg};
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;

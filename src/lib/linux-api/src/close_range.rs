@@ -1,4 +1,4 @@
-use linux_syscall::{syscall, Result64};
+use linux_syscall::{Result64, syscall};
 
 use crate::bindings;
 use crate::errno::Errno;

@@ -7,17 +7,17 @@ use formatting_nostd::FormatBuffer;
 use linux_api::errno::Errno;
 use linux_api::ldt::linux_user_desc;
 use linux_api::posix_types::Pid;
-use linux_api::sched::{clone_args, CloneFlags};
+use linux_api::sched::{CloneFlags, clone_args};
 use linux_api::signal::tgkill;
 use rustix::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd};
 use rustix::fs::{OFlags, SeekFrom};
 use rustix::mm::{MapFlags, MprotectFlags, ProtFlags};
 use rustix::time::Timespec;
-use test_utils::{result_assert_eq, TestEnvironment as TestEnv};
-use test_utils::{set, ShadowTest};
+use test_utils::{ShadowTest, set};
+use test_utils::{TestEnvironment as TestEnv, result_assert_eq};
 use vasi_sync::lazy_lock::LazyLock;
 use vasi_sync::scchannel::SelfContainedChannel;
-use vasi_sync::sync::{futex_wait, AtomicI32};
+use vasi_sync::sync::{AtomicI32, futex_wait};
 
 const CLONE_TEST_STACK_NBYTES: usize = 4 * 4096;
 

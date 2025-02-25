@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
-use linux_api::time::{itimerspec, ClockId};
+use linux_api::time::{ClockId, itimerspec};
 use nix::sys::timerfd::{TimerFlags, TimerSetTimeFlags};
 use shadow_shim_helper_rs::{
     emulated_time::EmulatedTime, simulation_time::SimulationTime, syscall_types::ForeignPtr,
@@ -12,7 +12,7 @@ use shadow_shim_helper_rs::{
 use crate::core::worker::Worker;
 use crate::host::descriptor::descriptor_table::DescriptorHandle;
 use crate::host::descriptor::{
-    timerfd::TimerFd, CompatFile, Descriptor, File, FileStatus, OpenFile,
+    CompatFile, Descriptor, File, FileStatus, OpenFile, timerfd::TimerFd,
 };
 use crate::host::{
     syscall::handler::{SyscallContext, SyscallHandler},

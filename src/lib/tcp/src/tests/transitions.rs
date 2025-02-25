@@ -4,7 +4,7 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use crate::tests::util::time::Duration;
-use crate::tests::{establish_helper, Errno, Host, Scheduler, TcpSocket, TestEnvState};
+use crate::tests::{Errno, Host, Scheduler, TcpSocket, TestEnvState, establish_helper};
 use crate::{Ipv4Header, Payload, TcpConfig, TcpFlags, TcpHeader, TcpState};
 
 #[test]

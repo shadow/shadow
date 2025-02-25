@@ -19,8 +19,8 @@ use crate::utility::{HostTreePointer, ObjectCounter};
 use self::entry::Entry;
 use self::key::{Key, PriorityKey};
 
-use super::socket::inet::InetSocket;
 use super::socket::Socket;
+use super::socket::inet::InetSocket;
 
 // Private submodules to help us track the status of items we are monitoring.
 mod entry;
@@ -219,9 +219,9 @@ impl Epoll {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)

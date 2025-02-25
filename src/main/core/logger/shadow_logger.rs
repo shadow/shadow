@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
@@ -477,7 +477,7 @@ mod export {
     /// When disabled, the logger thread is notified to write each record as
     /// soon as it's created.  The calling thread still isn't blocked on the
     /// record actually being written, though.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shadow_logger_setEnableBuffering(buffering_enabled: i32) {
         set_buffering_enabled(buffering_enabled != 0)
     }

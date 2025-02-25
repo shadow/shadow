@@ -1,6 +1,6 @@
 use core::arch::x86_64::_rdtsc as rdtsc;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 // We've found several real-world examples where the process does a busy wait

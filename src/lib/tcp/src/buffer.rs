@@ -344,7 +344,7 @@ impl Segment {
     pub fn len(&self) -> u32 {
         match self {
             Segment::Syn | Segment::Fin => 1,
-            Segment::Data(ref data) => data.len().try_into().unwrap(),
+            Segment::Data(data) => data.len().try_into().unwrap(),
         }
     }
 }
