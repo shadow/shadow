@@ -33,6 +33,7 @@ mod bindings {
 
 pub mod clone;
 pub mod mmap_box;
+pub mod preempt;
 pub mod shimlogger;
 pub mod syscall;
 pub mod tls;
@@ -77,14 +78,39 @@ impl ExecutionContext {
     /// will restore the previous context when dropped.
     pub fn enter(&self) -> ExecutionContextRestorer {
         ExecutionContextRestorer {
-            prev: CURRENT_EXECUTION_CONTEXT.get().replace(*self),
+            prev: self.enter_without_restorer(),
         }
     }
 
     /// Enter this context for the current thread, *without* creating a
     /// restorer. Returns the previous context.
     pub fn enter_without_restorer(&self) -> ExecutionContext {
-        CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+        let prev = CURRENT_EXECUTION_CONTEXT.get().get();
+
+        // Potentially enable/disable preemption, being careful that the current
+        // context is set to shadow when calling other internal functions that
+        // require it.
+        let prev2 = match (prev, *self) {
+            (ExecutionContext::Shadow, ExecutionContext::Application) => {
+                log::debug!("XXX Enable preempt");
+                unsafe { preempt::enable() };
+                CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+            },
+            (ExecutionContext::Application, ExecutionContext::Shadow) => {
+                let prev2 = CURRENT_EXECUTION_CONTEXT.get().replace(*self);
+                log::debug!("XXX Disabling preempt");
+                unsafe { preempt::disable() };
+                prev2
+            }
+            _ => {
+                CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+            }
+        };
+        // It *shouldn't* be possible for the execution context to have changed
+        // out from under us in between the initial peek and the actual
+        // replacement.
+        assert_eq!(prev, prev2);
+        prev
     }
 }
 
