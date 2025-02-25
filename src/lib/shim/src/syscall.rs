@@ -70,7 +70,6 @@ unsafe fn emulated_syscall_event(
         log::trace!("waiting for event");
         let res = crate::tls_ipc::with(|ipc| ipc.from_shadow().receive().unwrap());
         log::trace!("got response {res:?}");
-
         match res {
             ShimEventToShim::SyscallComplete(syscall_complete) => {
                 // Shadow has returned a result for the emulated syscall
