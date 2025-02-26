@@ -120,6 +120,7 @@ bindgen_flags+=("--allowlist-type=itimerval")
 # More time types (time_types.h)
 bindgen_flags+=("--allowlist-type=__kernel_timespec")
 bindgen_flags+=("--allowlist-type=__kernel_old_timeval")
+bindgen_flags+=("--allowlist-type=__kernel_old_itimerval")
 
 # Sched types
 bindgen_flags+=("--allowlist-type=clone_args")
