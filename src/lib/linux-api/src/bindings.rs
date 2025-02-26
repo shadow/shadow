@@ -2636,6 +2636,48 @@ fn bindgen_test_layout___kernel_old_timeval() {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux___kernel_old_itimerval {
+    pub it_interval: linux___kernel_old_timeval,
+    pub it_value: linux___kernel_old_timeval,
+}
+#[test]
+fn bindgen_test_layout___kernel_old_itimerval() {
+    const UNINIT: ::core::mem::MaybeUninit<linux___kernel_old_itimerval> =
+        ::core::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::core::mem::size_of::<linux___kernel_old_itimerval>(),
+        32usize,
+        concat!("Size of: ", stringify!(linux___kernel_old_itimerval))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<linux___kernel_old_itimerval>(),
+        8usize,
+        concat!("Alignment of ", stringify!(linux___kernel_old_itimerval))
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_interval) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_old_itimerval),
+            "::",
+            stringify!(it_interval)
+        )
+    );
+    assert_eq!(
+        unsafe { ::core::ptr::addr_of!((*ptr).it_value) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(linux___kernel_old_itimerval),
+            "::",
+            stringify!(it_value)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_rusage {
     pub ru_utime: linux___kernel_old_timeval,
     pub ru_stime: linux___kernel_old_timeval,
