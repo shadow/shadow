@@ -10,8 +10,8 @@ use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::types::SyscallError;
 use crate::host::timer::Timer;
 
-fn itimerval_from_timer(timer: &Timer) -> linux_api::time::itimerval {
-    linux_api::time::itimerval {
+fn kernel_old_itimerval_from_timer(timer: &Timer) -> linux_api::time::kernel_old_itimerval {
+    linux_api::time::kernel_old_itimerval {
         it_interval: timer
             .expire_interval()
             .unwrap_or(SimulationTime::ZERO)
@@ -30,12 +30,12 @@ impl SyscallHandler {
         getitimer,
         /* rv */ std::ffi::c_int,
         /* which */ linux_api::time::ITimerId,
-        /*curr_value*/ *const std::ffi::c_void,
+        /*curr_value*/ *const linux_api::time::kernel_old_itimerval,
     );
     pub fn getitimer(
         ctx: &mut SyscallContext,
         which: std::ffi::c_int,
-        curr_value_ptr: ForeignPtr<linux_api::time::itimerval>,
+        curr_value_ptr: ForeignPtr<linux_api::time::kernel_old_itimerval>,
     ) -> Result<(), SyscallError> {
         let Ok(which) = ITimerId::try_from(which) else {
             debug!("Bad itimerid {which}");
@@ -47,7 +47,7 @@ impl SyscallHandler {
             return Err(Errno::EINVAL.into());
         }
 
-        let itimerval = itimerval_from_timer(&ctx.objs.process.realtime_timer_borrow());
+        let itimerval = kernel_old_itimerval_from_timer(&ctx.objs.process.realtime_timer_borrow());
         ctx.objs
             .process
             .memory_borrow_mut()
@@ -60,14 +60,14 @@ impl SyscallHandler {
         setitimer,
         /* rv */ std::ffi::c_int,
         /* which */ linux_api::time::ITimerId,
-        /* new_value */ *const std::ffi::c_void,
-        /* old_value */ *const std::ffi::c_void,
+        /* new_value */ *const linux_api::time::kernel_old_itimerval,
+        /* old_value */ *const linux_api::time::kernel_old_itimerval,
     );
     pub fn setitimer(
         ctx: &mut SyscallContext,
         which: std::ffi::c_int,
-        new_value_ptr: ForeignPtr<linux_api::time::itimerval>,
-        old_value_ptr: ForeignPtr<linux_api::time::itimerval>,
+        new_value_ptr: ForeignPtr<linux_api::time::kernel_old_itimerval>,
+        old_value_ptr: ForeignPtr<linux_api::time::kernel_old_itimerval>,
     ) -> Result<(), SyscallError> {
         let Ok(which) = ITimerId::try_from(which) else {
             debug!("Bad itimerid {which}");
@@ -80,7 +80,8 @@ impl SyscallHandler {
         }
 
         if !old_value_ptr.is_null() {
-            let itimerval = itimerval_from_timer(&ctx.objs.process.realtime_timer_borrow());
+            let itimerval =
+                kernel_old_itimerval_from_timer(&ctx.objs.process.realtime_timer_borrow());
             ctx.objs
                 .process
                 .memory_borrow_mut()

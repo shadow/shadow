@@ -809,11 +809,19 @@ pub type linux_sigset_t = bindings::linux_sigset_t;
 /// Compatible with the Linux kernel's definition of sigset_t on x86_64.
 ///
 /// This is analagous to, but typically smaller than, libc's sigset_t.
+#[derive(
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Debug,
+    Default,
+    VirtualAddressSpaceIndependent,
+    bytemuck_derive::TransparentWrapper,
+)]
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, VirtualAddressSpaceIndependent)]
 #[allow(non_camel_case_types)]
 pub struct sigset_t(linux_sigset_t);
-unsafe impl TransparentWrapper<linux_sigset_t> for sigset_t {}
 unsafe impl shadow_pod::Pod for sigset_t {}
 
 impl sigset_t {

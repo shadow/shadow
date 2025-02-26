@@ -365,6 +365,19 @@ impl std::convert::TryFrom<linux_api::time::timeval> for SimulationTime {
     }
 }
 
+impl std::convert::TryFrom<linux_api::time::kernel_old_timeval> for SimulationTime {
+    type Error = ();
+
+    fn try_from(value: linux_api::time::kernel_old_timeval) -> Result<Self, Self::Error> {
+        if value.tv_sec < 0 || value.tv_usec < 0 || value.tv_usec > 999_999 {
+            return Err(());
+        }
+        let secs = Duration::from_secs(value.tv_sec.try_into().unwrap());
+        let micros = Duration::from_micros(value.tv_usec.try_into().unwrap());
+        Self::try_from(secs + micros)
+    }
+}
+
 impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
     type Error = ();
 
@@ -373,6 +386,17 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
         let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
         let tv_usec = value.subsec_micros().into();
         Ok(linux_api::time::timeval { tv_sec, tv_usec })
+    }
+}
+
+impl std::convert::TryFrom<SimulationTime> for linux_api::time::kernel_old_timeval {
+    type Error = ();
+
+    fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
+        let value = Duration::from(value);
+        let tv_sec = value.as_secs().try_into().map_err(|_| ())?;
+        let tv_usec = value.subsec_micros().into();
+        Ok(linux_api::time::kernel_old_timeval { tv_sec, tv_usec })
     }
 }
 

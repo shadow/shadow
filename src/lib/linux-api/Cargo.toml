@@ -26,6 +26,7 @@ naked-function = "0.1.5"
 linux-raw-sys = "0.8.0"
 rustix = { optional = true, version = "0.38.37", default-features = false, features = ["process"] }
 libc = { optional = true, default-features = false, version = "0.2.159" }
+bytemuck_derive = "1.8.1"
 
 [dev-dependencies]
 rustix = { version = "0.38.37", default-features=false, features = ["thread", "process", "time"] }
