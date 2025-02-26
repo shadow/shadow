@@ -30,7 +30,7 @@ impl SyscallHandler {
         getitimer,
         /* rv */ std::ffi::c_int,
         /* which */ linux_api::time::ITimerId,
-        /*curr_value*/ *const std::ffi::c_void,
+        /*curr_value*/ *const linux_api::time::kernel_old_itimerval,
     );
     pub fn getitimer(
         ctx: &mut SyscallContext,
@@ -60,8 +60,8 @@ impl SyscallHandler {
         setitimer,
         /* rv */ std::ffi::c_int,
         /* which */ linux_api::time::ITimerId,
-        /* new_value */ *const std::ffi::c_void,
-        /* old_value */ *const std::ffi::c_void,
+        /* new_value */ *const linux_api::time::kernel_old_itimerval,
+        /* old_value */ *const linux_api::time::kernel_old_itimerval,
     );
     pub fn setitimer(
         ctx: &mut SyscallContext,
