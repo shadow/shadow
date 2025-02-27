@@ -570,22 +570,14 @@ pub mod export {
     /// Typical usage is to set this to the desired value at the beginning of an
     /// operation, and restore the old value afterwards.
     #[unsafe(no_mangle)]
-    pub extern "C-unwind" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
-        let new = if new {
-            ExecutionContext::Shadow
-        } else {
-            ExecutionContext::Application
-        };
-        match new.enter_without_restorer() {
-            ExecutionContext::Shadow => true,
-            ExecutionContext::Application => false,
-        }
+    pub extern "C-unwind" fn shim_swapExecutionContext(new: ExecutionContext) -> ExecutionContext {
+        new.enter_without_restorer()
     }
 
     /// Whether syscall interposition is currently enabled.
     #[unsafe(no_mangle)]
-    pub extern "C-unwind" fn shim_interpositionEnabled() -> bool {
-        ExecutionContext::current() == ExecutionContext::Application
+    pub extern "C-unwind" fn shim_getExecutionContext() -> ExecutionContext {
+        ExecutionContext::current()
     }
 
     /// Allocates and installs a signal stack.

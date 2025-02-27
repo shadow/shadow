@@ -40,11 +40,13 @@ long shim_syscallv(ucontext_t* ctx, long n, va_list args) {
 
     long rv;
 
-    if (shim_interpositionEnabled() && shim_sys_handle_syscall_locally(n, &rv, args)) {
+    if (shim_getExecutionContext() == EXECUTION_CONTEXT_APPLICATION &&
+        shim_sys_handle_syscall_locally(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
-    } else if ((shim_interpositionEnabled() || syscall_num_is_shadow(n)) &&
+    } else if ((shim_getExecutionContext() == EXECUTION_CONTEXT_APPLICATION ||
+                syscall_num_is_shadow(n)) &&
                shim_thisThreadEventIPC()) {
         // The syscall is made using the shmem IPC channel.
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
