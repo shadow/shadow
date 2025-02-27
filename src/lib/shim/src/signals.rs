@@ -9,7 +9,7 @@ use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
 use crate::tls::ShimTlsVar;
-use crate::{global_host_shmem, tls_allow_native_syscalls, tls_process_shmem, tls_thread_shmem};
+use crate::{ExecutionContext, global_host_shmem, tls_process_shmem, tls_thread_shmem};
 
 /// Information passed through to the SIGUSR1 signal handler. Contains the info
 /// needed to call a managed code signal handler.
@@ -31,7 +31,8 @@ static SIGUSR1_SIGINFO: ShimTlsVar<Cell<Option<Sigusr1Info>>> =
 extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core::ffi::c_void) {
     let mut info = SIGUSR1_SIGINFO.get().take().unwrap();
     let signo = info.siginfo.signal().unwrap().as_i32();
-    assert!(crate::tls_allow_native_syscalls::swap(false));
+    let prev = ExecutionContext::Application.enter();
+    assert_eq!(prev.ctx(), ExecutionContext::Shadow);
     // SAFETY: Should have been initialized correctly in `process_signals`.
     let handler = unsafe { info.action.handler() };
 
@@ -68,11 +69,10 @@ extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core:
             panic!("No handler")
         }
     }
-    assert!(!crate::tls_allow_native_syscalls::swap(true));
 }
 
 fn die_with_fatal_signal(sig: Signal) -> ! {
-    assert!(crate::tls_allow_native_syscalls::get());
+    assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     if sig == Signal::SIGKILL {
         // No need to restore default action, and trying to do so would fail.
     } else {
@@ -331,11 +331,11 @@ extern "C" fn handle_hardware_error_signal(
     info: *mut siginfo_t,
     ctx: *mut core::ffi::c_void,
 ) {
-    let old_native_syscall_flag = tls_allow_native_syscalls::swap(true);
+    let prev_ctx = ExecutionContext::Shadow.enter();
 
     let signal = Signal::try_from(signo).unwrap();
 
-    if old_native_syscall_flag {
+    if prev_ctx.ctx() == ExecutionContext::Shadow {
         // Error was raised from shim code.
         die_with_fatal_signal(signal);
     }
@@ -360,8 +360,6 @@ extern "C" fn handle_hardware_error_signal(
     let ctx = ctx.cast::<ucontext>();
     // SAFETY: The kernel should have given us a valid `ucontext` here.
     unsafe { process_signals(ctx.as_mut()) };
-
-    tls_allow_native_syscalls::swap(old_native_syscall_flag);
 }
 
 pub fn install_hardware_error_handlers() {

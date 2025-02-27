@@ -9,6 +9,7 @@ use core::mem::MaybeUninit;
 use crate::tls::ShimTlsVar;
 
 use linux_api::signal::{SigProcMaskAction, rt_sigprocmask};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{ShimEventStartReq, ShimEventToShadow, ShimEventToShim};
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, ManagerShmem, ProcessShmem, ThreadShmem};
@@ -44,18 +45,60 @@ pub fn simtime() -> Option<SimulationTime> {
     SimulationTime::from_c_simtime(unsafe { bindings::shim_sys_get_simtime_nanos() })
 }
 
-mod tls_allow_native_syscalls {
-    use super::*;
+/// Values of this enum describes whether something occurred within the context
+/// of the shadow (shim) code, or the application/plugin code.
+///
+/// Methods of this enum interact with a private thread-local that tracks the
+/// current `ExecutionContext` for that thread.
+// See `CURRENT_EXECUTION_CONTEXT`.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
+pub enum ExecutionContext {
+    Shadow,
+    Application,
+}
 
-    static ALLOW_NATIVE_SYSCALLS: ShimTlsVar<Cell<bool>> =
-        ShimTlsVar::new(&SHIM_TLS, || Cell::new(false));
+static CURRENT_EXECUTION_CONTEXT: ShimTlsVar<Cell<ExecutionContext>> =
+    ShimTlsVar::new(&SHIM_TLS, || Cell::new(ExecutionContext::Application));
 
-    pub fn get() -> bool {
-        ALLOW_NATIVE_SYSCALLS.get().get()
+impl ExecutionContext {
+    /// Returns the current context for the current thread.
+    pub fn current() -> ExecutionContext {
+        CURRENT_EXECUTION_CONTEXT.get().get()
     }
 
-    pub fn swap(new: bool) -> bool {
-        ALLOW_NATIVE_SYSCALLS.get().replace(new)
+    /// Enter this context for the current thread, and return a restorer that
+    /// will restore the previous context when dropped.
+    pub fn enter(&self) -> ExecutionContextRestorer {
+        ExecutionContextRestorer {
+            prev: CURRENT_EXECUTION_CONTEXT.get().replace(*self),
+        }
+    }
+
+    /// Enter this context for the current thread, *without* creating a
+    /// restorer. Returns the previous context.
+    pub fn enter_without_restorer(&self) -> ExecutionContext {
+        CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+    }
+}
+
+/// Restores an execution context when droped.
+#[must_use]
+#[derive(Debug)]
+pub struct ExecutionContextRestorer {
+    prev: ExecutionContext,
+}
+
+impl ExecutionContextRestorer {
+    /// Returns the context that this object will restore.
+    pub fn ctx(&self) -> ExecutionContext {
+        self.prev
+    }
+}
+
+impl Drop for ExecutionContextRestorer {
+    fn drop(&mut self) {
+        ExecutionContext::enter_without_restorer(&self.prev);
     }
 }
 
@@ -528,13 +571,21 @@ pub mod export {
     /// operation, and restore the old value afterwards.
     #[unsafe(no_mangle)]
     pub extern "C-unwind" fn shim_swapAllowNativeSyscalls(new: bool) -> bool {
-        tls_allow_native_syscalls::swap(new)
+        let new = if new {
+            ExecutionContext::Shadow
+        } else {
+            ExecutionContext::Application
+        };
+        match new.enter_without_restorer() {
+            ExecutionContext::Shadow => true,
+            ExecutionContext::Application => false,
+        }
     }
 
     /// Whether syscall interposition is currently enabled.
     #[unsafe(no_mangle)]
     pub extern "C-unwind" fn shim_interpositionEnabled() -> bool {
-        !tls_allow_native_syscalls::get()
+        ExecutionContext::current() == ExecutionContext::Application
     }
 
     /// Allocates and installs a signal stack.
