@@ -155,7 +155,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         uint64_t emulated_time_ms = shim_sys_get_simtime_nanos();
         pid_t tid = shimshmem_getThreadId(shim_threadSharedMem());
 
-        bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+        ExecutionContext prev_ctx = shim_swapExecutionContext(EXECUTION_CONTEXT_SHADOW);
 
         char buf[100] = {0};
         int len = snprintf(buf, sizeof(buf), "%018ld [tid %d] %s(...) = %ld\n", emulated_time_ms,
@@ -178,7 +178,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
             }
         }
 
-        shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
+        shim_swapExecutionContext(prev_ctx);
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {
