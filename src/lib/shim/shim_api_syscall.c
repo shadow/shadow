@@ -21,15 +21,10 @@ static long _shim_api_retval_to_errno(long retval) {
     return retval;
 }
 
-long shimc_api_syscallv(long n, va_list args) {
-    long rv = shim_syscallv(NULL, n, args);
-    return _shim_api_retval_to_errno(rv);
-}
-
-long shimc_api_syscall(long n, ...) {
+long shimc_api_syscall(ExecutionContext ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
-    long rv = shimc_api_syscallv(n, args);
+    long rv = shim_syscallv(NULL, ctx, n, args);
     va_end(args);
-    return rv;
+    return _shim_api_retval_to_errno(rv);
 }

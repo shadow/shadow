@@ -35,18 +35,16 @@ long shim_emulated_syscall(ucontext_t* ctx, long n, ...) {
     return rv;
 }
 
-long shim_syscallv(ucontext_t* ctx, long n, va_list args) {
+long shim_syscallv(ucontext_t* ctx, ExecutionContext exe_ctx, long n, va_list args) {
     shim_ensure_init();
 
     long rv;
 
-    if (shim_getExecutionContext() == EXECUTION_CONTEXT_APPLICATION &&
-        shim_sys_handle_syscall_locally(n, &rv, args)) {
+    if (exe_ctx == EXECUTION_CONTEXT_APPLICATION && shim_sys_handle_syscall_locally(n, &rv, args)) {
         // No inter-process syscall needed, we handled it on the shim side! :)
         trace("Handled syscall %ld from the shim; we avoided inter-process overhead.", n);
         // rv was already set
-    } else if ((shim_getExecutionContext() == EXECUTION_CONTEXT_APPLICATION ||
-                syscall_num_is_shadow(n)) &&
+    } else if ((exe_ctx == EXECUTION_CONTEXT_APPLICATION || syscall_num_is_shadow(n)) &&
                shim_thisThreadEventIPC()) {
         // The syscall is made using the shmem IPC channel.
         trace("Making syscall %ld indirectly; we ask shadow to handle it using the shmem IPC "
@@ -64,10 +62,10 @@ long shim_syscallv(ucontext_t* ctx, long n, va_list args) {
     return rv;
 }
 
-long shim_syscall(ucontext_t* ctx, long n, ...) {
+long shim_syscall(ucontext_t* ctx, ExecutionContext exe_ctx, long n, ...) {
     va_list(args);
     va_start(args, n);
-    long rv = shim_syscallv(ctx, n, args);
+    long rv = shim_syscallv(ctx, exe_ctx, n, args);
     va_end(args);
     return rv;
 }

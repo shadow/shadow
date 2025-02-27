@@ -50,9 +50,13 @@ pub fn simtime() -> Option<SimulationTime> {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum ExecutionContext {
-    Shadow,
-    Application,
+    // Redirect through constants below so that we can access in const contexts.
+    Shadow = EXECUTION_CONTEXT_SHADOW_CONST,
+    Application = EXECUTION_CONTEXT_APPLICATION_CONST,
 }
+
+pub const EXECUTION_CONTEXT_SHADOW_CONST: u8 = 0;
+pub const EXECUTION_CONTEXT_APPLICATION_CONST: u8 = 1;
 
 static CURRENT_EXECUTION_CONTEXT: ShimTlsVar<Cell<ExecutionContext>> =
     ShimTlsVar::new(&SHIM_TLS, || Cell::new(ExecutionContext::Application));
@@ -127,6 +131,7 @@ mod tls_thread_signal_stack {
     /// This should be called once per thread before any signal handlers run.
     /// Panics if already called on the current thread.
     pub fn init() {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         if THREAD_SIGNAL_STACK.get().get().is_null() {
             // Allocate
             let new_stack = unsafe {
@@ -185,6 +190,7 @@ mod tls_thread_signal_stack {
     /// this, since we know Shadow won't permit another thread to run
     /// preemptively before the curent thread has a chance to finish exiting.
     pub unsafe fn free() {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         // A signal stack waiting to be freed.
         //
         // We can't free the current thread's signal stack, since we may be running on it.
@@ -219,6 +225,7 @@ mod tls_ipc {
 
     // Panics if this thread's IPC hasn't been initialized yet.
     pub fn with<O>(f: impl FnOnce(&IPCData) -> O) -> O {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         let ipc = IPC_DATA_BLOCK.get();
         let ipc = ipc.borrow();
         ipc.as_ref().map(|block| f(block)).unwrap()
@@ -231,6 +238,7 @@ mod tls_ipc {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `IPCData`.
     /// The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         let blk: ShMemBlockAlias<IPCData> = unsafe { shdeserialize(blk) };
         IPC_DATA_BLOCK.get().replace(Some(blk));
     }
@@ -244,6 +252,7 @@ mod tls_thread_shmem {
 
     /// Panics if `set` hasn't been called yet.
     pub fn with<O>(f: impl FnOnce(&ThreadShmem) -> O) -> O {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         f(SHMEM.get().borrow().as_ref().unwrap())
     }
 
@@ -254,6 +263,7 @@ mod tls_thread_shmem {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of
     /// type `ThreadShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         // SAFETY: Caller guarantees correct type.
         let blk = unsafe { shdeserialize(blk) };
         SHMEM.get().borrow_mut().replace(blk);
@@ -270,6 +280,7 @@ mod global_manager_shmem {
     // The actual block is in a `LazyLock`, which is much faster to access.
     // It uses `INITIALIZER` to do its one-time init.
     static SHMEM: LazyLock<ShMemBlockAlias<ManagerShmem>> = LazyLock::const_new(|| {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         let serialized = INITIALIZER.lock().take().unwrap();
         unsafe { shdeserialize(&serialized) }
     });
@@ -279,6 +290,7 @@ mod global_manager_shmem {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `ManagerShmem`.
     /// The `ShMemBlock` must outlive this process.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         assert!(!SHMEM.initd());
         assert!(INITIALIZER.lock().replace(*blk).is_none());
         // Ensure that `try_get` returns true (without it having to take the
@@ -290,12 +302,14 @@ mod global_manager_shmem {
     /// Panics if `set` hasn't been called yet.
     pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, ManagerShmem>> + 'static
     {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         SHMEM.force()
     }
 
     pub fn try_get()
     -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, ManagerShmem>> + 'static>
     {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         if !SHMEM.initd() {
             // No need to do the more-expensive `INITIALIZER` check; `set`
             // forces `SHMEM` to initialize.
@@ -316,6 +330,7 @@ mod global_host_shmem {
     // The actual block is in a `LazyLock`, which is much faster to access.
     // It uses `INITIALIZER` to do its one-time init.
     static SHMEM: LazyLock<ShMemBlockAlias<HostShmem>> = LazyLock::const_new(|| {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         let serialized = INITIALIZER.lock().take().unwrap();
         unsafe { shdeserialize(&serialized) }
     });
@@ -325,6 +340,7 @@ mod global_host_shmem {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of type `HostShmem`.
     /// The `ShMemBlock` must outlive this process.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         assert!(!SHMEM.initd());
         assert!(INITIALIZER.lock().replace(*blk).is_none());
         // Ensure that `try_get` returns true (without it having to take the
@@ -335,11 +351,13 @@ mod global_host_shmem {
 
     /// Panics if `set` hasn't been called yet.
     pub fn get() -> impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         SHMEM.force()
     }
 
     pub fn try_get()
     -> Option<impl core::ops::Deref<Target = ShMemBlockAlias<'static, HostShmem>> + 'static> {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         if !SHMEM.initd() {
             // No need to do the more-expensive `INITIALIZER` check; `set`
             // forces `SHMEM` to initialize.
@@ -358,6 +376,7 @@ mod tls_process_shmem {
 
     /// Panics if `set` hasn't been called yet.
     pub fn with<O>(f: impl FnOnce(&ProcessShmem) -> O) -> O {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         f(SHMEM.get().borrow().as_ref().unwrap())
     }
 
@@ -368,6 +387,7 @@ mod tls_process_shmem {
     /// `blk` must contained a serialized block referencing a `ShMemBlock` of
     /// type `ProcessShmem`.  The `ShMemBlock` must outlive the current thread.
     pub unsafe fn set(blk: &ShMemBlockSerialized) {
+        debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
         // SAFETY: Caller guarantees correct type.
         let blk = unsafe { shdeserialize(blk) };
         SHMEM.get().borrow_mut().replace(blk);
@@ -401,6 +421,7 @@ static SHIM_TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(tls::Mode
 /// access thread local storage again from the current thread, e.g.
 /// using `std::panic::catch_unwind` or a custom panic hook.
 pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     // Block all signals, to ensure a signal handler can't run and attempt to
     // access thread local storage.
     rt_sigprocmask(
@@ -425,6 +446,7 @@ pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
 ///
 /// Uses C ABI so that we can call from `asm`.
 extern "C" fn init_thread() {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     unsafe { bindings::_shim_child_thread_init_preload() };
     log::trace!("Finished shim thread init");
 }
@@ -433,6 +455,7 @@ extern "C" fn init_thread() {
 ///
 /// Safe and cheap to call repeatedly; e.g. from API entry points.
 fn init_process() {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     static STARTED_INIT: LazyLock<()> = LazyLock::const_new(|| ());
     if STARTED_INIT.initd() {
         // Avoid recursion in initialization.
@@ -450,6 +473,7 @@ fn init_process() {
 /// Wait for "start" event from Shadow, use it to initialize the thread shared
 /// memory block, and optionally to initialize the process shared memory block.
 fn wait_for_start_event(get_initial_working_dir: bool) {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     log::trace!("waiting for start event");
 
     let mut working_dir = [0u8; linux_api::limits::PATH_MAX];
@@ -518,7 +542,10 @@ pub mod export {
         arg5: u64,
         arg6: u64,
     ) -> i64 {
-        unsafe { bindings::shimc_api_syscall(n, arg1, arg2, arg3, arg4, arg5, arg6) }
+        let _prev = ExecutionContext::Shadow.enter();
+        unsafe {
+            bindings::shimc_api_syscall(_prev.ctx().into(), n, arg1, arg2, arg3, arg4, arg5, arg6)
+        }
     }
 
     /// # Safety
@@ -531,6 +558,7 @@ pub mod export {
         hints: *const libc::addrinfo,
         res: *mut *mut libc::addrinfo,
     ) -> i32 {
+        let _prev = ExecutionContext::Shadow.enter();
         unsafe { bindings::shimc_api_getaddrinfo(node, service, hints, res) }
     }
 
@@ -540,6 +568,7 @@ pub mod export {
     /// * `res` is invalidated afterwards.
     #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_api_freeaddrinfo(res: *mut libc::addrinfo) {
+        let _prev = ExecutionContext::Shadow.enter();
         unsafe { bindings::shimc_api_freeaddrinfo(res) }
     }
 
@@ -548,6 +577,10 @@ pub mod export {
     /// Pointers must be dereferenceable
     #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_api_getifaddrs(ifap: *mut *mut libc::ifaddrs) -> i32 {
+        // We *don't* enter ExecutionContext::Shadow here, because this
+        // implementation is pure "userspace"; it doesn't directly access shadow
+        // internal functionality, but *does* use libc in a way that we want the
+        // underlying syscalls to be interposed.
         unsafe { bindings::shimc_api_getifaddrs(ifap) }
     }
 
@@ -557,6 +590,10 @@ pub mod export {
     /// * `ifa` is invalidated afterwards.
     #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_api_freeifaddrs(ifa: *mut libc::ifaddrs) {
+        // We *don't* enter ExecutionContext::Shadow here, because this
+        // implementation is pure "userspace"; it doesn't directly access shadow
+        // internal functionality, but *does* use libc in a way that we want the
+        // underlying syscalls to be interposed.
         unsafe { bindings::shimc_api_freeifaddrs(ifa) }
     }
 

@@ -112,8 +112,9 @@ unsafe extern "C-unwind" fn set_context(ctx: &sigcontext) -> ! {
 /// `blk` must contained a serialized block of
 /// type `IPCData`, which outlives the current thread.
 unsafe extern "C-unwind" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
+
     let blk = unsafe { blk.as_ref().unwrap() };
-    let _prev = ExecutionContext::Shadow.enter();
 
     // SAFETY: ensured by caller
     unsafe { crate::tls_ipc::set(blk) };
@@ -287,12 +288,20 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
             "cmp rax, 0",
             "jne 2f",
 
+            // Set the current context to shadow
+            "mov rdi, {exe_ctx_shadow}",
+            "call {shim_swapExecutionContext}",
+
             // Initialize the IPC block for this thread
             "mov rdi, {blk}",
             "call {tls_ipc_set}",
 
             // Initialize state for this thread
             "call {shim_init_thread}",
+
+            // Set the current context to application
+            "mov rdi, {exe_ctx_application}",
+            "call {shim_swapExecutionContext}",
 
             // Set CPU state from ctx
             "mov rdi, r12",
@@ -312,6 +321,9 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
             // clone syscall arg5
             in("r8") newtls,
             blk = in(reg) child_ipc_blk,
+            exe_ctx_shadow = const crate::EXECUTION_CONTEXT_SHADOW_CONST,
+            exe_ctx_application = const crate::EXECUTION_CONTEXT_APPLICATION_CONST,
+            shim_swapExecutionContext = sym crate::export::shim_swapExecutionContext,
             tls_ipc_set = sym tls_ipc_set,
             shim_init_thread = sym crate::init_thread,
             // callee-saved register
