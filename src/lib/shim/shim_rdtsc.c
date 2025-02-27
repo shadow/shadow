@@ -32,7 +32,7 @@ static uint64_t _shim_rdtsc_nanos(ExecutionContext ctx) {
     // *don't* directly call shim_sys_get_simtime_nanos() here.  We need to go
     // through the syscall code to correctly handle the case where
     // `model_unblocked_syscall_latency` is enabled.
-    long rv = shim_syscall(NULL, SYS_clock_gettime, CLOCK_REALTIME, &t);
+    long rv = shim_syscall(NULL, ctx, SYS_clock_gettime, CLOCK_REALTIME, &t);
     if (rv != 0) {
         panic("emulated SYS_clock_gettime: %s", strerror(-rv));
     }
@@ -89,15 +89,12 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         }
     }
 
-    // Restore the previous execution cotnext *before* potentially
-    // delegating to generic handler below, so that it can recognize the whether
-    // SIGSEGV was raised from managed code or shim code.
-    shim_swapExecutionContext(prev_ctx);
-
     if (!handled) {
         trace("SIGSEGV not recognized as rdtsc; handling as error");
-        shim_handle_hardware_error_signal(SIGSEGV, info, voidUcontext);
+        shim_handle_hardware_error_signal(prev_ctx, SIGSEGV, info, voidUcontext);
     }
+
+    shim_swapExecutionContext(prev_ctx);
 }
 
 void shim_rdtsc_init() {
