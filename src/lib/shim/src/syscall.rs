@@ -174,6 +174,8 @@ unsafe fn emulated_syscall_event(
 }
 
 pub mod export {
+    use crate::ExecutionContext;
+
     use super::*;
 
     /// # Safety
@@ -185,7 +187,7 @@ pub mod export {
         n: core::ffi::c_long,
         mut args: va_list::VaList,
     ) -> core::ffi::c_long {
-        let old_native_syscall_flag = crate::tls_allow_native_syscalls::swap(true);
+        let _prev = ExecutionContext::Shadow.enter();
 
         let syscall_args = SyscallArgs {
             number: n,
@@ -203,8 +205,6 @@ pub mod export {
         let ctx = ctx.cast::<ucontext>();
         let ctx = unsafe { ctx.as_mut() };
         let retval = unsafe { emulated_syscall_event(ctx, &event) };
-
-        crate::tls_allow_native_syscalls::swap(old_native_syscall_flag);
 
         retval.into()
     }

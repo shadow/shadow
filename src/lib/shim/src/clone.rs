@@ -5,7 +5,7 @@ use linux_api::ucontext::{sigcontext, ucontext};
 use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
 use shadow_shmem::allocator::ShMemBlockSerialized;
 
-use crate::tls_allow_native_syscalls;
+use crate::ExecutionContext;
 
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
@@ -113,12 +113,10 @@ unsafe extern "C-unwind" fn set_context(ctx: &sigcontext) -> ! {
 /// type `IPCData`, which outlives the current thread.
 unsafe extern "C-unwind" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
     let blk = unsafe { blk.as_ref().unwrap() };
-    let prev = crate::tls_allow_native_syscalls::swap(true);
+    let _prev = ExecutionContext::Shadow.enter();
 
     // SAFETY: ensured by caller
     unsafe { crate::tls_ipc::set(blk) };
-
-    crate::tls_allow_native_syscalls::swap(prev);
 }
 
 /// Execute a native `clone` syscall to create a new thread in a new process.
@@ -192,7 +190,7 @@ unsafe fn do_clone_process(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64
             if !child_stack.is_null() {
                 // Do the requested stack switch by long jumping out of the
                 // signal handler to an updated context.
-                tls_allow_native_syscalls::swap(false);
+                ExecutionContext::Application.enter_without_restorer();
                 let mut mctx = ctx.uc_mcontext;
                 mctx.rsp = child_stack as u64;
                 unsafe { set_context(&mctx) };
