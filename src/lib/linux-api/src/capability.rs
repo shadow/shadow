@@ -1,5 +1,5 @@
-use linux_syscall::syscall;
 use linux_syscall::Result as LinuxSyscallResult;
+use linux_syscall::syscall;
 
 use crate::bindings;
 use crate::errno::Errno;

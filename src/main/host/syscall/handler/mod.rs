@@ -5,17 +5,17 @@ use std::time::Duration;
 
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
+use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 use shadow_shim_helper_rs::syscall_types::SyscallReg;
 use shadow_shim_helper_rs::util::SendPointer;
-use shadow_shim_helper_rs::HostId;
 
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::context::ThreadContext;
-use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::descriptor::Descriptor;
+use crate::host::descriptor::descriptor_table::{DescriptorHandle, DescriptorTable};
 use crate::host::process::ProcessId;
 use crate::host::syscall::formatter::log_syscall_simple;
 use crate::host::syscall::is_shadow_syscall;
@@ -125,7 +125,9 @@ impl SyscallHandler {
         // that same syscall should be executed again when it becomes unblocked
         if let Some(blocked_syscall) = self.blocked_syscall {
             if blocked_syscall != syscall {
-                panic!("We blocked syscall {blocked_syscall} but syscall {syscall} is unexpectedly being invoked");
+                panic!(
+                    "We blocked syscall {blocked_syscall} but syscall {syscall} is unexpectedly being invoked"
+                );
             }
         }
 
@@ -600,7 +602,9 @@ impl SyscallHandler {
             _ => {
                 log_once_per_value_at_level!(
                     syscall,
-                    SyscallNum, log::Level::Warn, log::Level::Debug,
+                    SyscallNum,
+                    log::Level::Warn,
+                    log::Level::Debug,
                     "Detected unsupported syscall {} ({}) called from thread {} in process {} on host {}",
                     syscall_name,
                     ctx.args.number,
@@ -684,7 +688,9 @@ impl SyscallHandler {
         // memory without an incompatible borrow
         if rv.is_err() {
             // the syscall didn't complete successfully; don't write back pointers
-            log::trace!("Syscall didn't complete successfully; discarding plugin ptrs without writing back.");
+            log::trace!(
+                "Syscall didn't complete successfully; discarding plugin ptrs without writing back."
+            );
             ctx.objs.process.free_unsafe_borrows_noflush();
         } else {
             ctx.objs
@@ -880,7 +886,7 @@ mod export {
     /// Returns a pointer to the current running host. The returned pointer is invalidated the next
     /// time the worker switches hosts. Rust syscall handlers should get the host from the
     /// [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getHost(sys: *const SyscallHandler) -> *const Host {
         let sys = unsafe { sys.as_ref() }.unwrap();
         Worker::with_active_host(|h| {
@@ -893,7 +899,7 @@ mod export {
     /// Returns a pointer to the current running process. The returned pointer is invalidated the
     /// next time the worker switches processes. Rust syscall handlers should get the process from
     /// the [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getProcess(
         sys: *const SyscallHandler,
     ) -> *const Process {
@@ -908,7 +914,7 @@ mod export {
     /// Returns a pointer to the current running thread. The returned pointer is invalidated the
     /// next time the worker switches threads. Rust syscall handlers should get the thread from the
     /// [`SyscallContext`] instead.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getThread(
         sys: *const SyscallHandler,
     ) -> *const Thread {
@@ -920,13 +926,13 @@ mod export {
         .unwrap()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_wasBlocked(sys: *const SyscallHandler) -> bool {
         let sys = unsafe { sys.as_ref() }.unwrap();
         sys.is_blocked()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_didListenTimeoutExpire(
         sys: *const SyscallHandler,
     ) -> bool {
@@ -945,7 +951,7 @@ mod export {
             .unwrap_or(false)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn rustsyscallhandler_getEpoll(
         sys: *const SyscallHandler,
     ) -> *mut c::Epoll {

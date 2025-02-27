@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use test_utils::time::*;
-use test_utils::{ensure_ord, set, FuzzArg, FuzzError, FuzzOrder, TestEnvironment};
+use test_utils::{FuzzArg, FuzzError, FuzzOrder, TestEnvironment, ensure_ord, set};
 
 fn main() -> anyhow::Result<()> {
     // should we restrict the tests we run?

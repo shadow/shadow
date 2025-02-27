@@ -3,8 +3,8 @@
  * See LICENSE for licensing information
  */
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 struct SocketpairArguments {
     domain: libc::c_int,
@@ -242,7 +242,7 @@ fn check_socketpair_call(
             args.sock_type | args.flag,
             args.protocol,
             match &mut args.fds {
-                Some(ref mut x) => x.as_mut_ptr(),
+                Some(x) => x.as_mut_ptr(),
                 None => std::ptr::null_mut(),
             },
         )

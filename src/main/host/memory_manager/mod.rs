@@ -788,7 +788,7 @@ mod export {
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. Always succeeds with n==0.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn memorymanager_readPtr(
         mem: *const MemoryManager,
         dst: *mut c_void,
@@ -810,7 +810,7 @@ mod export {
 
     /// Copy `n` bytes from `src` to `dst`. Returns 0 on success or -EFAULT if any of the specified
     /// range couldn't be accessed. The write is flushed immediately.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn memorymanager_writePtr(
         mem: *mut MemoryManager,
         dst: UntypedForeignPtr,

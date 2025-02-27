@@ -1,4 +1,4 @@
-use crate::sync::{atomic, AtomicUsize, Cell, ConstPtr, UnsafeCell};
+use crate::sync::{AtomicUsize, Cell, ConstPtr, UnsafeCell, atomic};
 
 use core::hash::{BuildHasher, Hasher};
 use core::marker::PhantomData;

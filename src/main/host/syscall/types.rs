@@ -11,8 +11,8 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
-use crate::host::syscall::condition::SyscallCondition;
 use crate::host::syscall::Trigger;
+use crate::host::syscall::condition::SyscallCondition;
 
 /// Wrapper around a [`ForeignPtr`] that encapsulates its size and current position.
 #[derive(Copy, Clone)]
@@ -244,10 +244,7 @@ impl SyscallError {
 
     /// Returns the [condition](SyscallCondition) that the syscall is blocked on.
     pub fn blocked_condition(&mut self) -> Option<&mut SyscallCondition> {
-        if let Self::Blocked(Blocked {
-            ref mut condition, ..
-        }) = self
-        {
+        if let Self::Blocked(Blocked { condition, .. }) = self {
             Some(condition)
         } else {
             None
@@ -291,7 +288,7 @@ mod export {
 
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeDone(retval: SyscallReg) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval,
@@ -299,7 +296,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeDoneI64(retval: i64) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
@@ -307,7 +304,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeDoneU64(retval: u64) -> SyscallReturn {
         SyscallReturn::Done(SyscallReturnDone {
             retval: retval.into(),
@@ -315,7 +312,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeDonePtr(
         retval: UntypedForeignPtr,
     ) -> SyscallReturn {
@@ -325,7 +322,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeDoneErrno(err: i32) -> SyscallReturn {
         debug_assert!(err > 0);
         // Should use `syscallreturn_makeInterrupted` instead
@@ -336,7 +333,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeInterrupted(
         restartable: bool,
     ) -> SyscallReturn {
@@ -346,7 +343,7 @@ mod export {
         })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeBlocked(
         cond: *mut c::SysCallCondition,
         restartable: bool,
@@ -354,12 +351,12 @@ mod export {
         SyscallReturn::Block(SyscallReturnBlocked { cond, restartable })
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_makeNative() -> SyscallReturn {
         SyscallReturn::Native
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_blocked(
         scr: *mut SyscallReturn,
     ) -> *mut SyscallReturnBlocked {
@@ -370,7 +367,7 @@ mod export {
         b
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn syscallreturn_done(
         scr: *mut SyscallReturn,
     ) -> *mut SyscallReturnDone {

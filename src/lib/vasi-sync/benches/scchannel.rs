@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use rustix::process::{CpuSet, Pid};
 use vasi_sync::scchannel::SelfContainedChannel;
 

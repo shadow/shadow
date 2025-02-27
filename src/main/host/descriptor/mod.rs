@@ -166,41 +166,41 @@ impl IsSync for File {}
 impl File {
     pub fn borrow(&self) -> FileRef {
         match self {
-            Self::Pipe(ref f) => FileRef::Pipe(f.borrow()),
-            Self::EventFd(ref f) => FileRef::EventFd(f.borrow()),
-            Self::Socket(ref f) => FileRef::Socket(f.borrow()),
-            Self::TimerFd(ref f) => FileRef::TimerFd(f.borrow()),
-            Self::Epoll(ref f) => FileRef::Epoll(f.borrow()),
+            Self::Pipe(f) => FileRef::Pipe(f.borrow()),
+            Self::EventFd(f) => FileRef::EventFd(f.borrow()),
+            Self::Socket(f) => FileRef::Socket(f.borrow()),
+            Self::TimerFd(f) => FileRef::TimerFd(f.borrow()),
+            Self::Epoll(f) => FileRef::Epoll(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<FileRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Pipe(ref f) => FileRef::Pipe(f.try_borrow()?),
-            Self::EventFd(ref f) => FileRef::EventFd(f.try_borrow()?),
-            Self::Socket(ref f) => FileRef::Socket(f.try_borrow()?),
-            Self::TimerFd(ref f) => FileRef::TimerFd(f.try_borrow()?),
-            Self::Epoll(ref f) => FileRef::Epoll(f.try_borrow()?),
+            Self::Pipe(f) => FileRef::Pipe(f.try_borrow()?),
+            Self::EventFd(f) => FileRef::EventFd(f.try_borrow()?),
+            Self::Socket(f) => FileRef::Socket(f.try_borrow()?),
+            Self::TimerFd(f) => FileRef::TimerFd(f.try_borrow()?),
+            Self::Epoll(f) => FileRef::Epoll(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> FileRefMut {
         match self {
-            Self::Pipe(ref f) => FileRefMut::Pipe(f.borrow_mut()),
-            Self::EventFd(ref f) => FileRefMut::EventFd(f.borrow_mut()),
-            Self::Socket(ref f) => FileRefMut::Socket(f.borrow_mut()),
-            Self::TimerFd(ref f) => FileRefMut::TimerFd(f.borrow_mut()),
-            Self::Epoll(ref f) => FileRefMut::Epoll(f.borrow_mut()),
+            Self::Pipe(f) => FileRefMut::Pipe(f.borrow_mut()),
+            Self::EventFd(f) => FileRefMut::EventFd(f.borrow_mut()),
+            Self::Socket(f) => FileRefMut::Socket(f.borrow_mut()),
+            Self::TimerFd(f) => FileRefMut::TimerFd(f.borrow_mut()),
+            Self::Epoll(f) => FileRefMut::Epoll(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<FileRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Pipe(ref f) => FileRefMut::Pipe(f.try_borrow_mut()?),
-            Self::EventFd(ref f) => FileRefMut::EventFd(f.try_borrow_mut()?),
-            Self::Socket(ref f) => FileRefMut::Socket(f.try_borrow_mut()?),
-            Self::TimerFd(ref f) => FileRefMut::TimerFd(f.try_borrow_mut()?),
-            Self::Epoll(ref f) => FileRefMut::Epoll(f.try_borrow_mut()?),
+            Self::Pipe(f) => FileRefMut::Pipe(f.try_borrow_mut()?),
+            Self::EventFd(f) => FileRefMut::EventFd(f.try_borrow_mut()?),
+            Self::Socket(f) => FileRefMut::Socket(f.try_borrow_mut()?),
+            Self::TimerFd(f) => FileRefMut::TimerFd(f.try_borrow_mut()?),
+            Self::Epoll(f) => FileRefMut::Epoll(f.try_borrow_mut()?),
         })
     }
 
@@ -208,7 +208,7 @@ impl File {
         match self {
             Self::Pipe(f) => Arc::as_ptr(f) as usize,
             Self::EventFd(f) => Arc::as_ptr(f) as usize,
-            Self::Socket(ref f) => f.canonical_handle(),
+            Self::Socket(f) => f.canonical_handle(),
             Self::TimerFd(f) => Arc::as_ptr(f) as usize,
             Self::Epoll(f) => Arc::as_ptr(f) as usize,
         }
@@ -677,8 +677,8 @@ impl CompatFile {
 mod export {
     use super::*;
 
-    use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
     use crate::host::descriptor::socket::inet::InetSocket;
+    use crate::host::descriptor::socket::inet::legacy_tcp::LegacyTcpSocket;
 
     /// The new descriptor takes ownership of the reference to the legacy file and does not
     /// increment its ref count, but will decrement the ref count when this descriptor is
@@ -687,7 +687,7 @@ mod export {
     ///
     /// If creating a descriptor for a `TCP` object, you should use `descriptor_fromLegacyTcp`
     /// instead. If `legacy_file` is a TCP socket, this function will panic.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn descriptor_fromLegacyFile(
         legacy_file: *mut c::LegacyFile,
         descriptor_flags: libc::c_int,
@@ -701,7 +701,7 @@ mod export {
     /// increment its ref count, but will decrement the ref count when this descriptor is
     /// freed/dropped with `descriptor_free()`. The descriptor flags must be either 0 or
     /// `O_CLOEXEC`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn descriptor_fromLegacyTcp(
         legacy_tcp: *mut c::TCP,
         descriptor_flags: libc::c_int,
@@ -724,7 +724,7 @@ mod export {
     /// If the descriptor is a legacy file, returns a pointer to the legacy file object. Otherwise
     /// returns NULL. The legacy file's ref count is not modified, so the pointer must not outlive
     /// the lifetime of the descriptor.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn descriptor_asLegacyFile(
         descriptor: *const Descriptor,
     ) -> *mut c::LegacyFile {
@@ -742,7 +742,7 @@ mod export {
     /// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is not
     /// modified, so the returned pointer must not outlive the lifetime of the descriptor.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn descriptor_borrowOpenFile(
         descriptor: *const Descriptor,
     ) -> *const OpenFile {
@@ -760,7 +760,7 @@ mod export {
     /// `OpenFile` object. Otherwise returns NULL. The `OpenFile` object's ref count is incremented,
     /// so the returned pointer must always later be passed to `openfile_drop()`, otherwise the
     /// memory will leak.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn descriptor_newRefOpenFile(
         descriptor: *const Descriptor,
     ) -> *const OpenFile {
@@ -775,7 +775,7 @@ mod export {
     }
 
     /// The descriptor flags must be either 0 or `O_CLOEXEC`.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn descriptor_setFlags(descriptor: *mut Descriptor, flags: libc::c_int) {
         assert!(!descriptor.is_null());
 
@@ -789,7 +789,7 @@ mod export {
 
     /// Decrement the ref count of the `OpenFile` object. The pointer must not be used after calling
     /// this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn openfile_drop(file: *const OpenFile) {
         assert!(!file.is_null());
 
@@ -797,7 +797,7 @@ mod export {
     }
 
     /// Get the state of the `OpenFile` object.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn openfile_getStatus(file: *const OpenFile) -> FileState {
         assert!(!file.is_null());
 
@@ -809,7 +809,7 @@ mod export {
     /// Add a status listener to the `OpenFile` object. This will increment the status listener's
     /// ref count, and will decrement the ref count when this status listener is removed or when the
     /// `OpenFile` is freed/dropped.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn openfile_addListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
@@ -825,7 +825,7 @@ mod export {
     }
 
     /// Remove a listener from the `OpenFile` object.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn openfile_removeListener(
         file: *const OpenFile,
         listener: *mut c::StatusListener,
@@ -842,7 +842,7 @@ mod export {
 
     /// Get the canonical handle for an `OpenFile` object. Two `OpenFile` objects refer to the same
     /// underlying data if their handles are equal.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn openfile_getCanonicalHandle(file: *const OpenFile) -> libc::uintptr_t {
         assert!(!file.is_null());
 
@@ -854,7 +854,7 @@ mod export {
     /// If the descriptor is a new/rust descriptor, returns a pointer to the reference-counted
     /// `File` object. Otherwise returns NULL. The `File` object's ref count is incremented, so the
     /// pointer must always later be passed to `file_drop()`, otherwise the memory will leak.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn descriptor_newRefFile(descriptor: *const Descriptor) -> *const File {
         assert!(!descriptor.is_null());
 
@@ -868,7 +868,7 @@ mod export {
 
     /// Decrement the ref count of the `File` object. The pointer must not be used after calling
     /// this function.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn file_drop(file: *const File) {
         assert!(!file.is_null());
 
@@ -878,14 +878,14 @@ mod export {
     /// Increment the ref count of the `File` object. The returned pointer will not be the same as
     /// the given pointer (they are distinct references), and they both must be dropped with
     /// `file_drop` separately later.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn file_cloneRef(file: *const File) -> *const File {
         let file = unsafe { file.as_ref() }.unwrap();
         Box::into_raw(Box::new(file.clone()))
     }
 
     /// Get the state of the `File` object.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn file_getStatus(file: *const File) -> FileState {
         assert!(!file.is_null());
 
@@ -897,7 +897,7 @@ mod export {
     /// Add a status listener to the `File` object. This will increment the status listener's ref
     /// count, and will decrement the ref count when this status listener is removed or when the
     /// `File` is freed/dropped.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn file_addListener(
         file: *const File,
         listener: *mut c::StatusListener,
@@ -912,7 +912,7 @@ mod export {
     }
 
     /// Remove a listener from the `File` object.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn file_removeListener(
         file: *const File,
         listener: *mut c::StatusListener,
@@ -927,7 +927,7 @@ mod export {
 
     /// Get the canonical handle for a `File` object. Two `File` objects refer to the same
     /// underlying data if their handles are equal.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn file_getCanonicalHandle(file: *const File) -> libc::uintptr_t {
         assert!(!file.is_null());
 
@@ -940,11 +940,11 @@ mod export {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::syscall::Trigger;
     use crate::host::syscall::condition::SyscallCondition;
     use crate::host::syscall::types::{
         Blocked, Failed, SyscallError, SyscallReturn, SyscallReturnBlocked, SyscallReturnDone,
     };
-    use crate::host::syscall::Trigger;
 
     #[test]
     // can't call foreign function: syscallcondition_new

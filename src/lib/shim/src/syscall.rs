@@ -179,7 +179,7 @@ pub mod export {
     /// # Safety
     ///
     /// `ctx` must be valid if provided.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_emulated_syscallv(
         ctx: *mut libc::ucontext_t,
         n: core::ffi::c_long,
@@ -212,7 +212,7 @@ pub mod export {
     /// # Safety
     ///
     /// The specified syscall must be safe to make.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_native_syscallv(
         n: core::ffi::c_long,
         mut args: va_list::VaList,

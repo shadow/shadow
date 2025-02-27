@@ -1,7 +1,7 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Used to unpark a thread, but which hasn't been assigned a specific thread yet.
 #[derive(Debug, Clone)]

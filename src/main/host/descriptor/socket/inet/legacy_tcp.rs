@@ -22,7 +22,7 @@ use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::NetworkNamespace;
-use crate::host::syscall::io::{write_partial, IoVec};
+use crate::host::syscall::io::{IoVec, write_partial};
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::host::thread::ThreadId;
 use crate::network::packet::PacketRc;
@@ -918,7 +918,9 @@ impl LegacyTcpSocket {
         .unwrap();
 
         let CompatFile::New(open_file) = new_descriptor.into_file() else {
-            panic!("The TCP code should have added the TCP socket to the descriptor table as a rust socket");
+            panic!(
+                "The TCP code should have added the TCP socket to the descriptor table as a rust socket"
+            );
         };
 
         // sanity check: make sure new socket peer address matches address returned from
@@ -1158,7 +1160,9 @@ impl LegacyTcpSocket {
                     log::debug!("Ignoring TCP_NODELAY");
                 } else {
                     // wants to disable TCP_NODELAY
-                    log::warn!("Cannot disable TCP_NODELAY since shadow does not implement Nagle's algorithm.");
+                    log::warn!(
+                        "Cannot disable TCP_NODELAY since shadow does not implement Nagle's algorithm."
+                    );
                     return Err(Errno::ENOPROTOOPT.into());
                 }
             }
@@ -1303,9 +1307,9 @@ impl LegacyTcpSocket {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         let event_source = unsafe { c::legacyfile_getEventSource(self.as_legacy_file()) };
         let event_source = unsafe { event_source.as_ref() }.unwrap();

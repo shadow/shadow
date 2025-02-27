@@ -18,9 +18,9 @@ use crate::host::memory_manager::MemoryManager;
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
+use crate::utility::HostTreePointer;
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::sockaddr::SockaddrStorage;
-use crate::utility::HostTreePointer;
 
 pub mod abstract_unix_ns;
 pub mod inet;
@@ -47,40 +47,40 @@ pub enum Socket {
 impl Socket {
     pub fn borrow(&self) -> SocketRef {
         match self {
-            Self::Unix(ref f) => SocketRef::Unix(f.borrow()),
-            Self::Inet(ref f) => SocketRef::Inet(f.borrow()),
-            Self::Netlink(ref f) => SocketRef::Netlink(f.borrow()),
+            Self::Unix(f) => SocketRef::Unix(f.borrow()),
+            Self::Inet(f) => SocketRef::Inet(f.borrow()),
+            Self::Netlink(f) => SocketRef::Netlink(f.borrow()),
         }
     }
 
     pub fn try_borrow(&self) -> Result<SocketRef, atomic_refcell::BorrowError> {
         Ok(match self {
-            Self::Unix(ref f) => SocketRef::Unix(f.try_borrow()?),
-            Self::Inet(ref f) => SocketRef::Inet(f.try_borrow()?),
-            Self::Netlink(ref f) => SocketRef::Netlink(f.try_borrow()?),
+            Self::Unix(f) => SocketRef::Unix(f.try_borrow()?),
+            Self::Inet(f) => SocketRef::Inet(f.try_borrow()?),
+            Self::Netlink(f) => SocketRef::Netlink(f.try_borrow()?),
         })
     }
 
     pub fn borrow_mut(&self) -> SocketRefMut {
         match self {
-            Self::Unix(ref f) => SocketRefMut::Unix(f.borrow_mut()),
-            Self::Inet(ref f) => SocketRefMut::Inet(f.borrow_mut()),
-            Self::Netlink(ref f) => SocketRefMut::Netlink(f.borrow_mut()),
+            Self::Unix(f) => SocketRefMut::Unix(f.borrow_mut()),
+            Self::Inet(f) => SocketRefMut::Inet(f.borrow_mut()),
+            Self::Netlink(f) => SocketRefMut::Netlink(f.borrow_mut()),
         }
     }
 
     pub fn try_borrow_mut(&self) -> Result<SocketRefMut, atomic_refcell::BorrowMutError> {
         Ok(match self {
-            Self::Unix(ref f) => SocketRefMut::Unix(f.try_borrow_mut()?),
-            Self::Inet(ref f) => SocketRefMut::Inet(f.try_borrow_mut()?),
-            Self::Netlink(ref f) => SocketRefMut::Netlink(f.try_borrow_mut()?),
+            Self::Unix(f) => SocketRefMut::Unix(f.try_borrow_mut()?),
+            Self::Inet(f) => SocketRefMut::Inet(f.try_borrow_mut()?),
+            Self::Netlink(f) => SocketRefMut::Netlink(f.try_borrow_mut()?),
         })
     }
 
     pub fn canonical_handle(&self) -> usize {
         match self {
             Self::Unix(f) => Arc::as_ptr(f) as usize,
-            Self::Inet(ref f) => f.canonical_handle(),
+            Self::Inet(f) => f.canonical_handle(),
             Self::Netlink(f) => Arc::as_ptr(f) as usize,
         }
     }
@@ -221,7 +221,7 @@ impl SocketRef<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
-            Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::Inet(socket) => socket.getpeername(),
             Self::Netlink(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
@@ -229,7 +229,7 @@ impl SocketRef<'_> {
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
-            Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::Inet(socket) => socket.getsockname(),
             Self::Netlink(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }
@@ -301,7 +301,7 @@ impl SocketRefMut<'_> {
     pub fn getpeername(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
-            Self::Inet(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
+            Self::Inet(socket) => socket.getpeername(),
             Self::Netlink(socket) => socket.getpeername().map(|opt| opt.map(Into::into)),
         }
     }
@@ -309,7 +309,7 @@ impl SocketRefMut<'_> {
     pub fn getsockname(&self) -> Result<Option<SockaddrStorage>, Errno> {
         match self {
             Self::Unix(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
-            Self::Inet(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
+            Self::Inet(socket) => socket.getsockname(),
             Self::Netlink(socket) => socket.getsockname().map(|opt| opt.map(Into::into)),
         }
     }

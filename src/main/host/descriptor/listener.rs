@@ -3,8 +3,8 @@
 use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::descriptor::{FileSignals, FileState};
-use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 use crate::utility::HostTreePointer;
+use crate::utility::callback_queue::{CallbackQueue, EventSource, Handle};
 
 #[derive(Clone, Copy, Debug)]
 pub enum StateListenerFilter {
@@ -120,9 +120,9 @@ impl StateEventSource {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.inner
             .add_listener(move |(state, changed, signals), cb_queue| {
@@ -189,7 +189,7 @@ mod export {
 
     use crate::utility::legacy_callback_queue::RootedRefCell_StateEventSource;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_new() -> *mut RootedRefCell_StateEventSource {
         let event_source = worker::Worker::with_active_host(|host| {
             Box::new(RootedRefCell::new(host.root(), StateEventSource::new()))
@@ -198,13 +198,13 @@ mod export {
         Box::into_raw(event_source)
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_free(event_source: *mut RootedRefCell_StateEventSource) {
         assert!(!event_source.is_null());
         drop(unsafe { Box::from_raw(event_source) });
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_addLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,
@@ -218,7 +218,7 @@ mod export {
         .unwrap();
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn eventsource_removeLegacyListener(
         event_source: *const RootedRefCell_StateEventSource,
         listener: *mut c::StatusListener,

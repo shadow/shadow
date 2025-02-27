@@ -8,13 +8,13 @@ use std::io::Write;
 use std::os::fd::AsRawFd;
 use std::os::unix::prelude::OsStrExt;
 use std::path::PathBuf;
-use std::sync::{atomic, Arc};
+use std::sync::{Arc, atomic};
 
 use linux_api::errno::Errno;
 use linux_api::posix_types::Pid;
 use linux_api::sched::CloneFlags;
 use linux_api::signal::tgkill;
-use log::{debug, error, log_enabled, trace, Level};
+use log::{Level, debug, error, log_enabled, trace};
 use rustix::pipe::PipeFlags;
 use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::ipc::IPCData;
@@ -29,11 +29,11 @@ use vasi_sync::scchannel::SelfContainedChannelError;
 use super::context::ThreadContext;
 use super::host::Host;
 use super::syscall::condition::SyscallCondition;
-use crate::core::worker::{Worker, WORKER_SHARED};
+use crate::core::worker::{WORKER_SHARED, Worker};
 use crate::cshadow;
 use crate::host::syscall::handler::SyscallHandler;
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallReturn};
-use crate::utility::{inject_preloads, syscall, verify_plugin_path, VerifyPluginPathError};
+use crate::utility::{VerifyPluginPathError, inject_preloads, syscall, verify_plugin_path};
 
 /// The ManagedThread's state after having been allowed to execute some code.
 #[derive(Debug)]
@@ -101,7 +101,9 @@ impl ManagedThread {
         log_file: &std::fs::File,
         injected_preloads: &[PathBuf],
     ) -> Result<Self, Errno> {
-        debug!("spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'");
+        debug!(
+            "spawning new mthread '{plugin_path:?}' with environment '{envv:?}', arguments '{argv:?}'"
+        );
 
         let envv = inject_preloads(envv, injected_preloads);
 
@@ -288,7 +290,7 @@ impl ManagedThread {
                         SyscallReturn::Block(b) => {
                             return ResumeResult::Blocked(unsafe {
                                 SyscallCondition::consume_from_c(b.cond)
-                            })
+                            });
                         }
                         SyscallReturn::Done(d) => self.continue_plugin(
                             ctx.host,

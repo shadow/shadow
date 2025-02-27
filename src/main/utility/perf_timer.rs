@@ -1,4 +1,4 @@
-use std::sync::atomic::{compiler_fence, Ordering};
+use std::sync::atomic::{Ordering, compiler_fence};
 use std::time::{Duration, Instant};
 
 /// Intended as a drop-in-replacement for glib's GTimer.

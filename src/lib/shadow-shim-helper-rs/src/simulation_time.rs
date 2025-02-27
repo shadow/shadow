@@ -539,12 +539,12 @@ pub mod export {
     use super::*;
     use crate::notnull::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn simtime_from_timeval(val: libc::timeval) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn simtime_from_timespec(val: libc::timespec) -> CSimulationTime {
         SimulationTime::to_c_simtime(SimulationTime::try_from(val).ok())
     }
@@ -553,7 +553,7 @@ pub mod export {
     ///
     /// Pointer args must be safe to write to.
     #[must_use]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn simtime_to_timeval(
         val: CSimulationTime,
         out: *mut libc::timeval,
@@ -572,7 +572,7 @@ pub mod export {
     ///
     /// Pointer args must be safe to write to.
     #[must_use]
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn simtime_to_timespec(
         val: CSimulationTime,
         out: *mut libc::timespec,

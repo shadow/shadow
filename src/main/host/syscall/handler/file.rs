@@ -4,10 +4,10 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow;
 use crate::host::descriptor::CompatFile;
+use crate::host::syscall::File;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallStringArg;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
-use crate::host::syscall::File;
 
 impl SyscallHandler {
     log_syscall!(

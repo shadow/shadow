@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use nix::sys::signal;
 use nix::sys::signal::Signal;
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum PollFn {
@@ -294,7 +294,16 @@ fn get_poll_args_test(
 ) -> test_utils::ShadowTest<(), String> {
     let test_name = format!(
         "test_poll_args\n\t<fn={:?},pfd_null={},fd_inval={},events={},signal_time={:?},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={},exp_revents={}>",
-        poll_fn, pfd_null, fd_inval, events, signal_time, timeout, nfds, exp_result, exp_error, exp_revents
+        poll_fn,
+        pfd_null,
+        fd_inval,
+        events,
+        signal_time,
+        timeout,
+        nfds,
+        exp_result,
+        exp_error,
+        exp_revents
     );
     test_utils::ShadowTest::new(
         &test_name,

@@ -177,7 +177,9 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
     // branch on memory addresses.
     match disable_aslr() {
         Ok(()) => log::debug!("ASLR disabled for processes forked from this parent process"),
-        Err(e) => log::warn!("Could not disable address space layout randomization. This may affect determinism: {e:#}"),
+        Err(e) => log::warn!(
+            "Could not disable address space layout randomization. This may affect determinism: {e:#}"
+        ),
     };
 
     // check sidechannel mitigations
@@ -370,7 +372,7 @@ fn load_config_file(
             .context("Could not merge '<<' keys")?;
 
         // remove top-level extension fields
-        if let serde_yaml::Value::Mapping(ref mut mapping) = &mut config_file {
+        if let serde_yaml::Value::Mapping(mapping) = &mut config_file {
             // remove entries having a key beginning with "x-" (follows docker's convention:
             // https://docs.docker.com/compose/compose-file/#extension)
             mapping.retain(|key, _value| {
@@ -463,7 +465,7 @@ fn log_environment(args: Vec<&OsStr>) {
 mod export {
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn main_runShadow(
         argc: libc::c_int,
         argv: *const *const libc::c_char,

@@ -4457,7 +4457,11 @@ fn bindgen_test_layout___sifields__bindgen_ty_2() {
 }
 impl ::core::fmt::Debug for linux___sifields__bindgen_ty_2 {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write ! (f , "linux___sifields__bindgen_ty_2 {{ l_tid: {:?}, l_overrun: {:?}, l_sigval: {:?}, l_sys_private: {:?} }}" , self . l_tid , self . l_overrun , self . l_sigval , self . l_sys_private)
+        write!(
+            f,
+            "linux___sifields__bindgen_ty_2 {{ l_tid: {:?}, l_overrun: {:?}, l_sigval: {:?}, l_sys_private: {:?} }}",
+            self.l_tid, self.l_overrun, self.l_sigval, self.l_sys_private
+        )
     }
 }
 #[repr(C)]
@@ -5164,7 +5168,11 @@ fn bindgen_test_layout_siginfo__bindgen_ty_1__bindgen_ty_1() {
 }
 impl ::core::fmt::Debug for linux_siginfo__bindgen_ty_1__bindgen_ty_1 {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write ! (f , "linux_siginfo__bindgen_ty_1__bindgen_ty_1 {{ lsi_signo: {:?}, lsi_errno: {:?}, lsi_code: {:?}, l_sifields: {:?} }}" , self . lsi_signo , self . lsi_errno , self . lsi_code , self . l_sifields)
+        write!(
+            f,
+            "linux_siginfo__bindgen_ty_1__bindgen_ty_1 {{ lsi_signo: {:?}, lsi_errno: {:?}, lsi_code: {:?}, l_sifields: {:?} }}",
+            self.lsi_signo, self.lsi_errno, self.lsi_code, self.l_sifields
+        )
     }
 }
 #[test]
@@ -5735,7 +5743,22 @@ fn bindgen_test_layout__fpstate_64() {
 }
 impl ::core::fmt::Debug for linux__fpstate_64 {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write ! (f , "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, st_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}" , self . cwd , self . swd , self . twd , self . fop , self . rip , self . rdp , self . mxcsr , self . mxcsr_mask , self . st_space , self . xmm_space , self . reserved2 , self . l__bindgen_anon_1)
+        write!(
+            f,
+            "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, st_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}",
+            self.cwd,
+            self.swd,
+            self.twd,
+            self.fop,
+            self.rip,
+            self.rdp,
+            self.mxcsr,
+            self.mxcsr_mask,
+            self.st_space,
+            self.xmm_space,
+            self.reserved2,
+            self.l__bindgen_anon_1
+        )
     }
 }
 #[repr(C)]
@@ -6104,7 +6127,38 @@ fn bindgen_test_layout_sigcontext() {
 }
 impl ::core::fmt::Debug for linux_sigcontext {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write ! (f , "linux_sigcontext {{ r8: {:?}, r9: {:?}, r10: {:?}, r11: {:?}, r12: {:?}, r13: {:?}, r14: {:?}, r15: {:?}, rdi: {:?}, rsi: {:?}, rbp: {:?}, rbx: {:?}, rdx: {:?}, rax: {:?}, rcx: {:?}, rsp: {:?}, rip: {:?}, eflags: {:?}, cs: {:?}, gs: {:?}, fs: {:?}, l__bindgen_anon_1: {:?}, err: {:?}, trapno: {:?}, oldmask: {:?}, cr2: {:?}, fpstate: {:?}, reserved1: {:?} }}" , self . r8 , self . r9 , self . r10 , self . r11 , self . r12 , self . r13 , self . r14 , self . r15 , self . rdi , self . rsi , self . rbp , self . rbx , self . rdx , self . rax , self . rcx , self . rsp , self . rip , self . eflags , self . cs , self . gs , self . fs , self . l__bindgen_anon_1 , self . err , self . trapno , self . oldmask , self . cr2 , self . fpstate , self . reserved1)
+        write!(
+            f,
+            "linux_sigcontext {{ r8: {:?}, r9: {:?}, r10: {:?}, r11: {:?}, r12: {:?}, r13: {:?}, r14: {:?}, r15: {:?}, rdi: {:?}, rsi: {:?}, rbp: {:?}, rbx: {:?}, rdx: {:?}, rax: {:?}, rcx: {:?}, rsp: {:?}, rip: {:?}, eflags: {:?}, cs: {:?}, gs: {:?}, fs: {:?}, l__bindgen_anon_1: {:?}, err: {:?}, trapno: {:?}, oldmask: {:?}, cr2: {:?}, fpstate: {:?}, reserved1: {:?} }}",
+            self.r8,
+            self.r9,
+            self.r10,
+            self.r11,
+            self.r12,
+            self.r13,
+            self.r14,
+            self.r15,
+            self.rdi,
+            self.rsi,
+            self.rbp,
+            self.rbx,
+            self.rdx,
+            self.rax,
+            self.rcx,
+            self.rsp,
+            self.rip,
+            self.eflags,
+            self.cs,
+            self.gs,
+            self.fs,
+            self.l__bindgen_anon_1,
+            self.err,
+            self.trapno,
+            self.oldmask,
+            self.cr2,
+            self.fpstate,
+            self.reserved1
+        )
     }
 }
 #[repr(C)]
@@ -6400,7 +6454,11 @@ fn bindgen_test_layout_ucontext() {
 }
 impl ::core::fmt::Debug for linux_ucontext {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write ! (f , "linux_ucontext {{ uc_flags: {:?}, uc_link: {:?}, uc_stack: {:?}, uc_mcontext: {:?}, uc_sigmask: {:?} }}" , self . uc_flags , self . uc_link , self . uc_stack , self . uc_mcontext , self . uc_sigmask)
+        write!(
+            f,
+            "linux_ucontext {{ uc_flags: {:?}, uc_link: {:?}, uc_stack: {:?}, uc_mcontext: {:?}, uc_sigmask: {:?} }}",
+            self.uc_flags, self.uc_link, self.uc_stack, self.uc_mcontext, self.uc_sigmask
+        )
     }
 }
 #[repr(C)]

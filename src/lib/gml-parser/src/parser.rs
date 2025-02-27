@@ -5,11 +5,11 @@ A nom-based GML parser.
 use std::collections::HashMap;
 
 use nom::{
+    IResult, Parser,
     bytes::complete::{escaped_transform, is_not, tag, take, take_while},
     character::complete::{digit1, multispace0, multispace1, space0},
     combinator::{self, map_res, recognize, verify},
     error::{ErrorKind, FromExternalError, ParseError},
-    IResult, Parser,
 };
 
 use crate::gml::{Edge, Gml, GmlItem, Node, Value};

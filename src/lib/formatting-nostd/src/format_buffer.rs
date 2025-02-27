@@ -236,7 +236,7 @@ impl<const N: usize> Default for FormatBuffer<N> {
 // Ensure the system libc is linked.
 extern crate libc;
 
-extern "C" {
+unsafe extern "C" {
     // Use libc's `vsnprintf` function. The `libc` crate doesn't expose it, so
     // we declare it ourselves.
     //
@@ -327,7 +327,7 @@ mod sprintf_test {
     use super::*;
 
     // Wrapper code we expose to our C test harness.
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     unsafe extern "C-unwind" fn test_format_buffer_valist(
         format_buffer: *mut FormatBuffer<10>,
         fmt: *const core::ffi::c_char,
@@ -338,7 +338,7 @@ mod sprintf_test {
         unsafe { format_buffer.sprintf(fmt, args) };
     }
 
-    extern "C-unwind" {
+    unsafe extern "C-unwind" {
         // Wrapper code that our C test harness exposes to us.
         // It calls `test_format_buffer_valist` and returns the result.
         //

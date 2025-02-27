@@ -1,5 +1,5 @@
-use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::HostId;
+use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
 use super::task::TaskRef;
 use crate::host::host::Host;

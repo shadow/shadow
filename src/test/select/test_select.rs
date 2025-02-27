@@ -7,8 +7,8 @@
 use std::mem;
 use std::time::Duration;
 
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum SelectFn {
@@ -395,7 +395,16 @@ fn get_select_args_test(
 ) -> test_utils::ShadowTest<(), String> {
     let test_name = format!(
         "test_select_args\n\t<fn={:?},readfds_null={},writefds_null={},exceptfds_null={},fd_is_set={},fd_inval={},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={}>",
-        select_fn, readfds_null, writefds_null, exceptfds_null, fd_is_set, fd_inval, timeout, nfds, exp_result, exp_error
+        select_fn,
+        readfds_null,
+        writefds_null,
+        exceptfds_null,
+        fd_is_set,
+        fd_inval,
+        timeout,
+        nfds,
+        exp_result,
+        exp_error
     );
     test_utils::ShadowTest::new(
         &test_name,

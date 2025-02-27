@@ -8,8 +8,8 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 use std::thread::LocalKey;
 
-use crate::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
 use crate::CORE_AFFINITY;
+use crate::pools::bounded::{ParallelismBoundedThreadPool, TaskRunner};
 
 pub trait Host: Debug + Send + 'static {}
 impl<T> Host for T where T: Debug + Send + 'static {}

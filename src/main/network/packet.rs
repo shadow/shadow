@@ -4,8 +4,8 @@ use std::net::{IpAddr, SocketAddrV4};
 use std::sync::Arc;
 
 use crate::host::network::interface::FifoPacketPriority;
-use crate::utility::pcap_writer::PacketDisplay;
 use crate::utility::ObjectCounter;
+use crate::utility::pcap_writer::PacketDisplay;
 
 use atomic_refcell::AtomicRefCell;
 use bytes::Bytes;
@@ -1086,7 +1086,7 @@ mod export {
 
     use super::*;
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_new_tcp(
         host_id: HostId,
         packet_id: u64,
@@ -1128,19 +1128,19 @@ mod export {
         PacketRc::from(packet).into_raw()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_ref(packet_ptr: *mut Packet) {
         assert!(!packet_ptr.is_null());
         unsafe { Arc::increment_strong_count(packet_ptr) };
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_unref(packet_ptr: *mut Packet) {
         assert!(!packet_ptr.is_null());
         unsafe { Arc::decrement_strong_count(packet_ptr) };
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_updateTCP(
         packet_ptr: *mut Packet,
         ack: libc::c_uint,
@@ -1176,7 +1176,7 @@ mod export {
         tcp.header.timestamp_echo = from_legacy_timestamp(ts_echo);
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getTCPHeader(packet_ptr: *const Packet) -> c::PacketTCPHeader {
         let packet = PacketRc::borrow_raw(packet_ptr);
 
@@ -1212,7 +1212,7 @@ mod export {
         c_hdr
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_appendPayloadWithMemoryManager(
         packet_ptr: *mut Packet,
         src: UntypedForeignPtr,
@@ -1262,7 +1262,7 @@ mod export {
         tcp.borrow_mut().payload.push(Bytes::from(dst));
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_copyPayloadWithMemoryManager(
         packet_ptr: *const Packet,
         payload_offset: u64,
@@ -1345,25 +1345,25 @@ mod export {
         i64::try_from(tot_written).unwrap()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getPriority(packet_ptr: *const Packet) -> u64 {
         let packet = PacketRc::borrow_raw(packet_ptr);
         packet.priority()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getPayloadSize(packet_ptr: *const Packet) -> u64 {
         let packet = PacketRc::borrow_raw(packet_ptr);
         packet.payload_len().try_into().unwrap()
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getDestinationIP(packet_ptr: *const Packet) -> libc::in_addr_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
         u32::to_be((*packet.dst_ipv4_address().ip()).into())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getDestinationPort(
         packet_ptr: *const Packet,
     ) -> libc::in_port_t {
@@ -1371,19 +1371,19 @@ mod export {
         u16::to_be(packet.dst_ipv4_address().port())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getSourceIP(packet_ptr: *const Packet) -> libc::in_addr_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
         u32::to_be((*packet.src_ipv4_address().ip()).into())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_getSourcePort(packet_ptr: *const Packet) -> libc::in_port_t {
         let packet = PacketRc::borrow_raw(packet_ptr);
         u16::to_be(packet.src_ipv4_address().port())
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_addDeliveryStatus(
         packet_ptr: *mut Packet,
         status: c::PacketDeliveryStatusFlags,
@@ -1392,7 +1392,7 @@ mod export {
         packet.add_status(PacketStatus::from(status));
     }
 
-    #[no_mangle]
+    #[unsafe(no_mangle)]
     pub extern "C-unwind" fn packet_compareTCPSequence(
         packet_ptr1: *mut Packet,
         packet_ptr2: *mut Packet,

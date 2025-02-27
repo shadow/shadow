@@ -23,7 +23,7 @@ use crate::host::descriptor::{
 use crate::host::memory_manager::MemoryManager;
 use crate::host::network::interface::FifoPacketPriority;
 use crate::host::network::namespace::{AssociationHandle, NetworkNamespace};
-use crate::host::syscall::io::{write_partial, IoVec, IoVecReader, IoVecWriter};
+use crate::host::syscall::io::{IoVec, IoVecReader, IoVecWriter, write_partial};
 use crate::host::syscall::types::SyscallError;
 use crate::network::packet::{PacketRc, PacketStatus};
 use crate::utility::callback_queue::CallbackQueue;
@@ -999,9 +999,9 @@ impl TcpSocket {
         monitoring_signals: FileSignals,
         filter: StateListenerFilter,
         notify_fn: impl Fn(FileState, FileState, FileSignals, &mut CallbackQueue)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) -> StateListenHandle {
         self.event_source
             .add_listener(monitoring_state, monitoring_signals, filter, notify_fn)

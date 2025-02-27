@@ -1,7 +1,7 @@
-use linux_api::close_range::{close_range, close_range_raw, CloseRangeFlags};
+use linux_api::close_range::{CloseRangeFlags, close_range, close_range_raw};
 use linux_api::errno::Errno;
-use test_utils::set;
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::set;
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?

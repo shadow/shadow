@@ -3,9 +3,9 @@
  * See LICENSE for licensing information
  */
 
+use test_utils::TestEnvironment as TestEnv;
 use test_utils::set;
 use test_utils::socket_utils::SockAddr;
-use test_utils::TestEnvironment as TestEnv;
 
 struct BindArguments {
     fd: libc::c_int,
