@@ -201,6 +201,7 @@ deref_pointer_impl!(linux_api::sched::clone_args);
 deref_pointer_impl!(linux_api::time::timespec);
 deref_pointer_impl!(linux_api::time::kernel_timespec);
 deref_pointer_impl!(linux_api::time::kernel_old_timeval);
+deref_pointer_impl!(linux_api::time::kernel_old_itimerval);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
