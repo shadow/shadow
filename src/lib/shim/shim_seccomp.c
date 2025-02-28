@@ -34,6 +34,7 @@ static void* TEXT_END = NULL;
 
 // Handler function that receives syscalls that are stopped by the seccomp filter.
 static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcontext) {
+    ExecutionContext prev_ctx = shim_swapExecutionContext(EXECUTION_CONTEXT_SHADOW);
     ucontext_t* ctx = (ucontext_t*)(voidUcontext);
     if (sig != SIGSYS) {
         abort();
@@ -60,10 +61,11 @@ static void _shim_seccomp_handle_sigsys(int sig, siginfo_t* info, void* voidUcon
     // libc's).  It in turn will either emulate it or (if interposition is
     // disabled), make the call natively. In the latter case, the syscall
     // will be permitted to execute by the seccomp filter.
-    long rv = shim_syscall(ctx, regs[REG_N], regs[REG_ARG1], regs[REG_ARG2], regs[REG_ARG3],
-                           regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
+    long rv = shim_syscall(ctx, prev_ctx, regs[REG_N], regs[REG_ARG1], regs[REG_ARG2],
+                           regs[REG_ARG3], regs[REG_ARG4], regs[REG_ARG5], regs[REG_ARG6]);
     trace("Trapped syscall %lld returning %ld", ctx->uc_mcontext.gregs[REG_RAX], rv);
     ctx->uc_mcontext.gregs[REG_RAX] = rv;
+    shim_swapExecutionContext(prev_ctx);
 }
 
 // TODO: dedupe this with `maps` parsing in `patch_vdso.c` and `proc_maps.rs`,
