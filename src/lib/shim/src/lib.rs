@@ -92,13 +92,13 @@ impl ExecutionContext {
         // require it.
         let prev2 = match (prev, *self) {
             (ExecutionContext::Shadow, ExecutionContext::Application) => {
-                log::debug!("XXX Enable preempt");
+                log::trace!("XXX Enable preempt");
                 unsafe { preempt::enable() };
                 CURRENT_EXECUTION_CONTEXT.get().replace(*self)
             },
             (ExecutionContext::Application, ExecutionContext::Shadow) => {
                 let prev2 = CURRENT_EXECUTION_CONTEXT.get().replace(*self);
-                log::debug!("XXX Disabling preempt");
+                log::trace!("XXX Disabling preempt");
                 unsafe { preempt::disable() };
                 prev2
             }
