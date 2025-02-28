@@ -737,7 +737,7 @@ dependencies = [
  "cbindgen",
  "libc",
  "linux-errno",
- "linux-raw-sys 0.8.0",
+ "linux-raw-sys 0.9.0",
  "linux-syscall",
  "log",
  "memoffset 0.9.1",
@@ -767,9 +767,9 @@ checksum = "78b3ae25bc7c8c38cec158d1f2757ee79e9b3740fbc7ccf0e59e4b08d793fa89"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bbbb933f93c53df320d2bb19124961a8e91fad88d2dd6f4f40e85ab13d4bb5e"
+checksum = "8b713d55b8d76054c84da1d09a53a3509a2618b636cbdc714c65b48d6ea715d9"
 
 [[package]]
 name = "linux-syscall"
@@ -1561,7 +1561,7 @@ dependencies = [
  "formatting-nostd",
  "libc",
  "linux-api",
- "linux-raw-sys 0.8.0",
+ "linux-raw-sys 0.9.0",
  "log",
  "log-c2rust",
  "logger",
