@@ -59,6 +59,9 @@ static CSimulationTime _shim_sys_latency_for_syscall(long n) {
 }
 
 bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
+    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
+        panic("Unexpectedly called from non-shadow context");
+    }
     // This function is called on every syscall operation so be careful not to doing
     // anything too expensive outside of the switch cases.
 
@@ -155,8 +158,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
         uint64_t emulated_time_ms = shim_sys_get_simtime_nanos();
         pid_t tid = shimshmem_getThreadId(shim_threadSharedMem());
 
-        bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
-
         char buf[100] = {0};
         int len = snprintf(buf, sizeof(buf), "%018ld [tid %d] %s(...) = %ld\n", emulated_time_ms,
                            tid, syscallName, *rv);
@@ -177,8 +178,6 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
                 break;
             }
         }
-
-        shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
     }
 
     if (shimshmem_getModelUnblockedSyscallLatency(shim_hostSharedMem())) {
