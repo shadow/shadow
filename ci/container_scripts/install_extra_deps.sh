@@ -64,6 +64,10 @@ source "$HOME/.cargo/env"
 # Pin the Rust toolchain to our pinned stable version.
 ln -s ci/rust-toolchain-stable.toml rust-toolchain.toml
 
+# As of rustup 1.28.0 rustup will no longer automatically install the active
+# toolchain if it is not installed, so we need to install it manually.
+rustup toolchain install
+
 # This forces installation of the toolchain required in Shadow's
 # "rust-toolchain.toml" (if this script is run from the shadow directory). When
 # used with Docker, this causes the rust installation to get "baked in" to the
