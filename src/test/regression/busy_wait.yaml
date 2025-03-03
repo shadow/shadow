@@ -4,6 +4,9 @@ general:
   stop_time: 15s
   model_unblocked_syscall_latency: true
 
+#experimental:
+#  max_unapplied_cpu_latency: 10ms
+
 network:
   graph:
     type: 1_gbit_switch

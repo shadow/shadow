@@ -1,4 +1,5 @@
 use core::arch::x86_64::_rdtsc as rdtsc;
+use std::io::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
@@ -39,7 +40,7 @@ fn test_wait_for_other_thread() {
         std::thread::spawn(move || {
             while !ready_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 // Inline syscall, not going through libc.
-                linux_api::sched::sched_yield().unwrap()
+                //linux_api::sched::sched_yield().unwrap()
             }
         })
     };
@@ -52,7 +53,13 @@ fn test_wait_for_other_thread() {
 }
 
 fn main() {
+    println!("test_wait_for_timeout");
+    std::io::stdout().flush().unwrap();
     test_wait_for_timeout();
+    println!("test_wait_for_rdtsc_timeout");
+    std::io::stdout().flush().unwrap();
     test_wait_for_rdtsc_timeout();
+    println!("test_wait_for_other_thread");
+    std::io::stdout().flush().unwrap();
     test_wait_for_other_thread();
 }

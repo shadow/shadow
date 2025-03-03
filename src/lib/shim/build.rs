@@ -58,6 +58,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
     ];
     config.includes = vec![
         "lib/log-c2rust/rustlogger.h".into(),
+        "lib/linux-api/linux-api.h".into(),
         "lib/shadow-shim-helper-rs/shim_helper.h".into(),
     ];
     config.after_includes = {
