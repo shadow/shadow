@@ -405,15 +405,19 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> IpAssignment<T> {
 
     fn increment_address(addr: &std::net::IpAddr) -> std::net::IpAddr {
         match addr {
-            std::net::IpAddr::V4(x) => loop {
-                // increment the address
-                let x = std::net::Ipv4Addr::from(u32::from(*x) + 1);
-                match x.octets()[3] {
-                    // if the address ends in ".0" or ".255" (broadcast), try the next
-                    0 | 255 => {}
-                    _ => break std::net::IpAddr::V4(x),
+            std::net::IpAddr::V4(x) => {
+                let addr_bits = u32::from(*x);
+                let mut increment = 1;
+                loop {
+                    // increment the address
+                    let next_addr = std::net::Ipv4Addr::from(addr_bits + increment);
+                    match next_addr.octets()[3] {
+                        // if the address ends in ".0" or ".255" (broadcast), try the next
+                        0 | 255 => increment += 1,
+                        _ => break std::net::IpAddr::V4(next_addr),
+                    }
                 }
-            },
+            }
             std::net::IpAddr::V6(_) => unimplemented!(),
         }
     }
@@ -644,5 +648,16 @@ mod tests {
                 assert_eq!(lookup_latency(node_2, node_2), 7777);
             }
         }
+    }
+
+    #[test]
+    fn test_increment_address_skip_broadcast() {
+        let addr = std::net::IpAddr::V4(std::net::Ipv4Addr::new(11, 0, 0, 254));
+        let incremented = IpAssignment::<i32>::increment_address(&addr);
+        assert!(incremented > addr);
+        assert_ne!(
+            incremented,
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(11, 0, 0, 255))
+        );
     }
 }
