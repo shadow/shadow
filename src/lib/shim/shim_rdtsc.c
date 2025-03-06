@@ -19,8 +19,8 @@
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
 
-static uint64_t _shim_rdtsc_nanos(bool allowNative) {
-    if (allowNative) {
+static uint64_t _shim_rdtsc_nanos(ExecutionContext ctx) {
+    if (ctx == EXECUTION_CONTEXT_SHADOW) {
         // To handle this correctly, we'd need to execute a real rdtsc
         // instruction. To do that, we'd need to temporarily allow
         // native rdtsc.  I *think* it's not that hard to implement, but
@@ -32,7 +32,7 @@ static uint64_t _shim_rdtsc_nanos(bool allowNative) {
     // *don't* directly call shim_sys_get_simtime_nanos() here.  We need to go
     // through the syscall code to correctly handle the case where
     // `model_unblocked_syscall_latency` is enabled.
-    long rv = shim_syscall(NULL, SYS_clock_gettime, CLOCK_REALTIME, &t);
+    long rv = shim_syscall(NULL, ctx, SYS_clock_gettime, CLOCK_REALTIME, &t);
     if (rv != 0) {
         panic("emulated SYS_clock_gettime: %s", strerror(-rv));
     }
@@ -40,7 +40,7 @@ static uint64_t _shim_rdtsc_nanos(bool allowNative) {
 }
 
 static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    ExecutionContext prev_ctx = shim_swapExecutionContext(EXECUTION_CONTEXT_SHADOW);
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
     static Tsc tsc;
@@ -67,7 +67,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         unsigned char* insn = (unsigned char*)regs[REG_RIP];
         if (isRdtsc(insn)) {
             trace("Emulating rdtsc");
-            uint64_t nanos = _shim_rdtsc_nanos(oldNativeSyscallFlag);
+            uint64_t nanos = _shim_rdtsc_nanos(prev_ctx);
             uint64_t rax, rdx;
             uint64_t rip = regs[REG_RIP];
             Tsc_emulateRdtsc(&tsc, &rax, &rdx, &rip, nanos);
@@ -77,7 +77,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
             handled = true;
         } else if (isRdtscp(insn)) {
             trace("Emulating rdtscp");
-            uint64_t nanos = _shim_rdtsc_nanos(oldNativeSyscallFlag);
+            uint64_t nanos = _shim_rdtsc_nanos(prev_ctx);
             uint64_t rax, rdx, rcx;
             uint64_t rip = regs[REG_RIP];
             Tsc_emulateRdtscp(&tsc, &rax, &rdx, &rcx, &rip, nanos);
@@ -89,15 +89,12 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
         }
     }
 
-    // Restore the old native-syscalls disposition *before* potentially
-    // delegating to generic handler below, so that it can recognize the whether
-    // SIGSEGV was raised from managed code or shim code.
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
-
     if (!handled) {
         trace("SIGSEGV not recognized as rdtsc; handling as error");
-        shim_handle_hardware_error_signal(SIGSEGV, info, voidUcontext);
+        shim_handle_hardware_error_signal(prev_ctx, SIGSEGV, info, voidUcontext);
     }
+
+    shim_swapExecutionContext(prev_ctx);
 }
 
 void shim_rdtsc_init() {
