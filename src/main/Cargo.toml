@@ -13,7 +13,7 @@ crate-type = ["rlib", "staticlib"]
 anyhow = "1.0.89"
 atomic_refcell = "0.1"
 backtrace = "0.3.74"
-bitflags = "2.8"
+bitflags = "2.9"
 # custom version of the bytes crate required to make the 'try_unsplit' method public
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513
