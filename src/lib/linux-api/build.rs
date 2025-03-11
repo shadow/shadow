@@ -14,6 +14,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
             "linux_siginfo_t".into(),
             "linux___kernel_mode_t".into(),
             "linux_stack_t".into(),
+            "linux_ucontext".into(),
         ],
         // Not sure why cbindgen tries to wrap this. The bindings it generates
         // are broken though because the individual Errno values are translated

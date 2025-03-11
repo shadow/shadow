@@ -5,7 +5,7 @@ use linux_api::ucontext::{sigcontext, ucontext};
 use shadow_shim_helper_rs::shim_event::ShimEventAddThreadReq;
 use shadow_shmem::allocator::ShMemBlockSerialized;
 
-use crate::tls_allow_native_syscalls;
+use crate::ExecutionContext;
 
 /// Used below to validate the offset of `field` from `base`.
 /// TODO: replace with `core::ptr::offset_of` once stabilized.
@@ -112,13 +112,12 @@ unsafe extern "C-unwind" fn set_context(ctx: &sigcontext) -> ! {
 /// `blk` must contained a serialized block of
 /// type `IPCData`, which outlives the current thread.
 unsafe extern "C-unwind" fn tls_ipc_set(blk: *const ShMemBlockSerialized) {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
+
     let blk = unsafe { blk.as_ref().unwrap() };
-    let prev = crate::tls_allow_native_syscalls::swap(true);
 
     // SAFETY: ensured by caller
     unsafe { crate::tls_ipc::set(blk) };
-
-    crate::tls_allow_native_syscalls::swap(prev);
 }
 
 /// Execute a native `clone` syscall to create a new thread in a new process.
@@ -192,7 +191,7 @@ unsafe fn do_clone_process(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64
             if !child_stack.is_null() {
                 // Do the requested stack switch by long jumping out of the
                 // signal handler to an updated context.
-                tls_allow_native_syscalls::swap(false);
+                ExecutionContext::Application.enter_without_restorer();
                 let mut mctx = ctx.uc_mcontext;
                 mctx.rsp = child_stack as u64;
                 unsafe { set_context(&mctx) };
@@ -289,12 +288,20 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
             "cmp rax, 0",
             "jne 2f",
 
+            // Set the current context to shadow
+            "mov rdi, {exe_ctx_shadow}",
+            "call {shim_swapExecutionContext}",
+
             // Initialize the IPC block for this thread
             "mov rdi, {blk}",
             "call {tls_ipc_set}",
 
             // Initialize state for this thread
             "call {shim_init_thread}",
+
+            // Set the current context to application
+            "mov rdi, {exe_ctx_application}",
+            "call {shim_swapExecutionContext}",
 
             // Set CPU state from ctx
             "mov rdi, r12",
@@ -314,6 +321,9 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
             // clone syscall arg5
             in("r8") newtls,
             blk = in(reg) child_ipc_blk,
+            exe_ctx_shadow = const crate::EXECUTION_CONTEXT_SHADOW_CONST,
+            exe_ctx_application = const crate::EXECUTION_CONTEXT_APPLICATION_CONST,
+            shim_swapExecutionContext = sym crate::export::shim_swapExecutionContext,
             tls_ipc_set = sym tls_ipc_set,
             shim_init_thread = sym crate::init_thread,
             // callee-saved register

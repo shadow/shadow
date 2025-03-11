@@ -9,7 +9,7 @@ use log::{trace, warn};
 use shadow_shim_helper_rs::shim_shmem;
 
 use crate::tls::ShimTlsVar;
-use crate::{global_host_shmem, tls_allow_native_syscalls, tls_process_shmem, tls_thread_shmem};
+use crate::{ExecutionContext, global_host_shmem, tls_process_shmem, tls_thread_shmem};
 
 /// Information passed through to the SIGUSR1 signal handler. Contains the info
 /// needed to call a managed code signal handler.
@@ -29,9 +29,14 @@ static SIGUSR1_SIGINFO: ShimTlsVar<Cell<Option<Sigusr1Info>>> =
     ShimTlsVar::new(&crate::SHIM_TLS, || Cell::new(None));
 
 extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core::ffi::c_void) {
+    debug_assert_eq!(
+        ExecutionContext::current(),
+        ExecutionContext::Shadow,
+        "Native sigusr1 unexpectedly raised from non-shadow code"
+    );
+
     let mut info = SIGUSR1_SIGINFO.get().take().unwrap();
     let signo = info.siginfo.signal().unwrap().as_i32();
-    assert!(crate::tls_allow_native_syscalls::swap(false));
     // SAFETY: Should have been initialized correctly in `process_signals`.
     let handler = unsafe { info.action.handler() };
 
@@ -46,7 +51,10 @@ extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core:
     // we don't attempt to analyze or sandbox. A "well behaved" handler should be safe to
     // call here, but it could do anything including things that are unsound in Rust.
     match handler {
-        linux_api::signal::SignalHandler::Handler(handler_fn) => unsafe { handler_fn(signo) },
+        linux_api::signal::SignalHandler::Handler(handler_fn) => {
+            let _prev = ExecutionContext::Application.enter();
+            unsafe { handler_fn(signo) }
+        }
         linux_api::signal::SignalHandler::Action(action_fn) => unsafe {
             // If there's an "earlier" context, we use it. This might be important e.g.
             // when handling a signal like SIGSEGV, where the handler might actually
@@ -62,17 +70,19 @@ extern "C" fn handle_sigusr1(_signo: i32, _info: *mut siginfo_t, ctx: *mut core:
             } else {
                 info.ctx
             };
-            action_fn(signo, &mut info.siginfo, ctx.cast::<core::ffi::c_void>())
+            {
+                let _prev = ExecutionContext::Application.enter();
+                action_fn(signo, &mut info.siginfo, ctx.cast::<core::ffi::c_void>())
+            }
         },
         linux_api::signal::SignalHandler::SigIgn | linux_api::signal::SignalHandler::SigDfl => {
             panic!("No handler")
         }
     }
-    assert!(!crate::tls_allow_native_syscalls::swap(true));
 }
 
 fn die_with_fatal_signal(sig: Signal) -> ! {
-    assert!(crate::tls_allow_native_syscalls::get());
+    assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     if sig == Signal::SIGKILL {
         // No need to restore default action, and trying to do so would fail.
     } else {
@@ -92,15 +102,13 @@ fn die_with_fatal_signal(sig: Signal) -> ! {
 /// Handle pending unblocked signals, and return whether *all* corresponding
 /// signal actions had the SA_RESTART flag set.
 ///
-/// `ucontext` may be NULL.
-///
 /// # Safety
-///
-/// `ucontext` must be dereferenceable if not NULL.
 ///
 /// Configured handlers for all pending unblocked signals must be safe to call. (Which
 /// we basically can't ensure).
 pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
+    debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
+
     let mut host = crate::global_host_shmem::get();
     let mut host_lock = host.protected().lock();
 
@@ -307,6 +315,16 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
         let tid = rustix::thread::gettid();
         linux_api::signal::tgkill(pid.into(), tid.into(), Some(Signal::SIGUSR1)).unwrap();
 
+        // It's not unheard of for a signal handler to use setcontext to jump
+        // out of the signal handler to the point where the signal was raised
+        // instead of returning normally, e.g. for userspace scheduling.
+        // In that case we'll still be in `ExecutionContext::Application`, since
+        // the jump would have skipped over the execution context restorer's
+        // drop impl above. This is done in our `test_signals.rs` test.
+        //
+        // Force back to `ExecutionContext::Shadow`.
+        ExecutionContext::Shadow.enter_without_restorer();
+
         // Reacquire locks and references.
         host = crate::global_host_shmem::get();
         host_lock = host.protected().lock();
@@ -326,16 +344,19 @@ pub unsafe fn process_signals(mut ucontext: Option<&mut ucontext>) -> bool {
     restartable
 }
 
-extern "C" fn handle_hardware_error_signal(
-    signo: i32,
-    info: *mut siginfo_t,
-    ctx: *mut core::ffi::c_void,
+/// Handle a hardware error signal that was raised in `exe_ctx`.
+///
+/// # Safety
+///
+/// Configured handlers for all pending unblocked signals must be safe to call. (Which
+/// we basically can't ensure).
+unsafe fn handle_hardware_error_signal_inner(
+    exe_ctx: ExecutionContext,
+    signal: Signal,
+    info: &mut siginfo_t,
+    uctx: Option<&mut ucontext>,
 ) {
-    let old_native_syscall_flag = tls_allow_native_syscalls::swap(true);
-
-    let signal = Signal::try_from(signo).unwrap();
-
-    if old_native_syscall_flag {
+    if exe_ctx == ExecutionContext::Shadow {
         // Error was raised from shim code.
         die_with_fatal_signal(signal);
     }
@@ -352,16 +373,26 @@ extern "C" fn handle_hardware_error_signal(
         } else {
             let mut thread_protected = thread.protected.borrow_mut(&host_lock.root);
             thread_protected.pending_signals |= signal.into();
-            thread_protected
-                .set_pending_standard_siginfo(signal, unsafe { info.as_ref().unwrap() });
+            thread_protected.set_pending_standard_siginfo(signal, info);
         }
     });
 
-    let ctx = ctx.cast::<ucontext>();
-    // SAFETY: The kernel should have given us a valid `ucontext` here.
-    unsafe { process_signals(ctx.as_mut()) };
+    unsafe { process_signals(uctx) };
+}
 
-    tls_allow_native_syscalls::swap(old_native_syscall_flag);
+unsafe extern "C" fn handle_hardware_error_signal(
+    signo: i32,
+    info: *mut siginfo_t,
+    uctx: *mut core::ffi::c_void,
+) {
+    let prev_ctx = ExecutionContext::Shadow.enter();
+    let signal = Signal::try_from(signo).unwrap();
+    // SAFETY: The kernel should have given us a valid `siginfo_t` here.
+    let info = unsafe { info.as_mut().unwrap() };
+    // SAFETY: The kernel should have given us a valid `ucontext` here.
+    let uctx = unsafe { uctx.cast::<ucontext>().as_mut() };
+    // SAFETY: We can only assume that the signal handlers are sound.
+    unsafe { handle_hardware_error_signal_inner(prev_ctx.ctx(), signal, info, uctx) };
 }
 
 pub fn install_hardware_error_handlers() {
@@ -429,15 +460,30 @@ mod export {
         install_hardware_error_handlers()
     }
 
+    /// Handle a hardware error signal that was raised in `exe_ctx`.
+    ///
     /// More-specialized error handlers (e.g. for rdtsc) can invoke this handler
     /// directly when unable to handle the current signal (e.g. when a SIGSEGV wasn't
-    /// caused by an rdtsc instruction)
+    /// caused by an rdtsc instruction).
+    ///
+    /// # Safety
+    ///
+    /// `info` and `ctx` must be non-NULL and safely dereferenceable.
     #[unsafe(no_mangle)]
     pub unsafe extern "C-unwind" fn shim_handle_hardware_error_signal(
+        exe_ctx: ExecutionContext,
         signo: i32,
         info: *mut siginfo_t,
-        ctx: *mut core::ffi::c_void,
+        uctx: *mut linux_api::ucontext::linux_ucontext,
     ) {
-        handle_hardware_error_signal(signo, info, ctx)
+        let signal = Signal::try_from(signo).unwrap();
+        // SAFETY: Caller ensures.
+        let info = unsafe { info.as_mut().unwrap() };
+        // SAFETY: Caller ensures.
+        let uctx = unsafe { uctx.as_mut() };
+        // SAFETY: We can only assume that the signal handlers are sound.
+        unsafe {
+            handle_hardware_error_signal_inner(exe_ctx, signal, info, uctx);
+        }
     }
 }

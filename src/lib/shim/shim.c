@@ -67,7 +67,9 @@ static void _shim_parent_init_memory_manager_internal() {
 // Tell Shadow to initialize the MemoryManager, which includes remapping the
 // stack.
 static void _shim_parent_init_memory_manager() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
+        panic("Unexpectedly called from non-shadow context");
+    }
 
     // Temporarily allocate some memory for a separate stack. The MemoryManager
     // is going to remap the original stack, and we can't actively use it while
@@ -102,8 +104,6 @@ static void _shim_parent_init_memory_manager() {
     if (munmap(stack, stack_sz) != 0) {
         panic("munmap: %s", strerror(errno));
     }
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 static void _shim_parent_init_seccomp() {
@@ -115,7 +115,9 @@ static void _shim_parent_init_rdtsc_emu() {
 }
 
 void _shim_parent_init_preload() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
+        panic("Unexpectedly called from non-shadow context");
+    }
 
     _shim_parent_init_ipc();
     _shim_ipc_wait_for_start_event();
@@ -131,28 +133,26 @@ void _shim_parent_init_preload() {
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
     _shim_parent_close_stdin();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 void _shim_child_thread_init_preload() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
+        panic("Unexpectedly called from non-shadow context");
+    }
 
     _shim_preload_only_child_ipc_wait_for_start_event();
 
     _shim_init_signal_stack();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 void _shim_child_process_init_preload() {
-    bool oldNativeSyscallFlag = shim_swapAllowNativeSyscalls(true);
+    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
+        panic("Unexpectedly called from non-shadow context");
+    }
 
     _shim_preload_only_child_ipc_wait_for_start_event();
     _shim_init_signal_stack();
     _shim_init_death_signal();
-
-    shim_swapAllowNativeSyscalls(oldNativeSyscallFlag);
 }
 
 void shim_ensure_init() { _shim_load(); }

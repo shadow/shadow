@@ -6,13 +6,15 @@
 #include <sys/ucontext.h>
 
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
+#include "lib/shim/shim_api.h"
 
 // Ask the shim to handle a syscall. Internally decides whether to execute a
-// native syscall or to emulate the syscall through Shadow.
-long shim_syscall(ucontext_t* ctx, long n, ...);
+// native syscall or to emulate the syscall through Shadow based e.g. on the
+// syscall number and the `exe_ctx`.
+long shim_syscall(ucontext_t* ctx, ExecutionContext exe_ctx, long n, ...);
 
 // Same as `shim_syscall()`, but accepts a variable argument list.
-long shim_syscallv(ucontext_t* ctx, long n, va_list args);
+long shim_syscallv(ucontext_t* ctx, ExecutionContext exe_ctx, long n, va_list args);
 
 // Force the native execution of a syscall instruction (using asm so it can't be
 // intercepted).
