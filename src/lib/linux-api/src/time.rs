@@ -63,21 +63,25 @@ pub use bindings::linux_timespec;
 #[allow(non_camel_case_types)]
 pub type timespec = linux_timespec;
 unsafe impl shadow_pod::Pod for timespec {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for timespec {}
 
 pub use bindings::linux___kernel_timespec;
 #[allow(non_camel_case_types)]
 pub type kernel_timespec = linux___kernel_timespec;
 unsafe impl shadow_pod::Pod for kernel_timespec {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for kernel_timespec {}
 
 pub use bindings::linux_timeval;
 #[allow(non_camel_case_types)]
 pub type timeval = linux_timeval;
 unsafe impl shadow_pod::Pod for timeval {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for timeval {}
 
 pub use bindings::linux___kernel_old_timeval;
 #[allow(non_camel_case_types)]
 pub type kernel_old_timeval = linux___kernel_old_timeval;
 unsafe impl shadow_pod::Pod for kernel_old_timeval {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for kernel_old_timeval {}
 
 pub fn clock_gettime_raw(clockid: linux___kernel_clockid_t) -> Result<timespec, Errno> {
     let mut t = shadow_pod::zeroed();
@@ -95,16 +99,19 @@ pub use bindings::linux_itimerspec;
 #[allow(non_camel_case_types)]
 pub type itimerspec = linux_itimerspec;
 unsafe impl shadow_pod::Pod for itimerspec {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for itimerspec {}
 
 pub use bindings::linux_itimerval;
 #[allow(non_camel_case_types)]
 pub type itimerval = linux_itimerval;
 unsafe impl shadow_pod::Pod for itimerval {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for itimerval {}
 
 pub use bindings::linux___kernel_old_itimerval;
 #[allow(non_camel_case_types)]
 pub type kernel_old_itimerval = linux___kernel_old_itimerval;
 unsafe impl shadow_pod::Pod for kernel_old_itimerval {}
+unsafe impl vasi::VirtualAddressSpaceIndependent for kernel_old_itimerval {}
 
 /// Raw `alarm` syscall. Permits u64 arg and return value for generality with
 /// the general syscall ABI, but note that the `alarm` syscall definition itself
