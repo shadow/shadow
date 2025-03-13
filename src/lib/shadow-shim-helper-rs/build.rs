@@ -26,6 +26,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         include: vec![
             "shd_kernel_sigaction".into(),
             "HostId".into(),
+            "ShadowSyscallNum".into(),
             "SyscallArgs".into(),
             "SyscallReg".into(),
             "ManagedPhysicalMemoryAddr".into(),

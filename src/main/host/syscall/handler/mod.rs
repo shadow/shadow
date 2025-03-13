@@ -6,6 +6,7 @@ use std::time::Duration;
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::HostId;
+use shadow_shim_helper_rs::shadow_syscalls::ShadowSyscallNum;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 use shadow_shim_helper_rs::syscall_types::SyscallReg;
@@ -332,12 +333,6 @@ impl SyscallHandler {
 
     #[allow(non_upper_case_globals)]
     fn run_handler(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
-        const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
-        const NR_shadow_init_memory_manager: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
-        const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
-
         let mut ctx = SyscallContext {
             objs: ctx,
             args,
@@ -514,9 +509,17 @@ impl SyscallHandler {
             //
             // CUSTOM SHADOW-SPECIFIC SYSCALLS
             //
-            NR_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
-            NR_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
-            NR_shadow_yield => handle!(shadow_yield),
+            x if ShadowSyscallNum::try_from(x).is_ok() => {
+                match ShadowSyscallNum::try_from(x).expect("Conversion just succeeded above") {
+                    ShadowSyscallNum::hostname_to_addr_ipv4 => {
+                        handle!(shadow_hostname_to_addr_ipv4)
+                    }
+                    ShadowSyscallNum::init_memory_manager => {
+                        handle!(shadow_init_memory_manager)
+                    }
+                    ShadowSyscallNum::shadow_yield => handle!(shadow_yield),
+                }
+            }
             //
             // SHIM-ONLY SYSCALLS
             //

@@ -156,7 +156,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/handler/unistd.h")
         .header("host/syscall/protected.h")
         .header("host/syscall/syscall_condition.h")
-        .header("host/syscall_numbers.h")
         .header("network/legacypacket.h")
         .header("utility/rpath.h")
         .header("utility/utility.h")

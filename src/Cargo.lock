@@ -1591,6 +1591,7 @@ dependencies = [
  "log",
  "logger",
  "nix 0.29.0",
+ "num_enum",
  "once_cell",
  "rand",
  "shadow-build-common",
