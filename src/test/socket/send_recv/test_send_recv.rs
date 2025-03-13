@@ -406,6 +406,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             )]);
         }
 
+        for &flag in &flags {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{s} <sys_method={sys_method:?}, flag={flag}>");
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_dgram_loopback_bound_sendmsg"),
+                move || test_dgram_loopback_bound_sendmsg(sys_method, flag),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
+        }
+
         tests.extend(vec![test_utils::ShadowTest::new(
             &append_args("test_large_buf_udp"),
             move || test_large_buf_udp(sys_method),
@@ -2437,6 +2448,69 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
     }
 
     nix::unistd::close(dst_fd).unwrap();
+
+    Ok(())
+}
+
+// Test the behavior of loopback-bound UDP sockets when sendmsg() is used with an external address
+fn test_dgram_loopback_bound_sendmsg(
+    sys_method: SendRecvMethod,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM | flag, 0) };
+    assert!(fd >= 0);
+
+    // bind the socket to loopback
+    {
+        let addr = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 0u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_LOOPBACK.to_be(),
+            },
+            sin_zero: [0; 8],
+        };
+        let rv = unsafe {
+            libc::bind(
+                fd,
+                std::ptr::from_ref(&addr) as *const libc::sockaddr,
+                std::mem::size_of_val(&addr) as u32,
+            )
+        };
+        eprintln!("errno: {}", test_utils::get_errno());
+        assert_eq!(rv, 0);
+    }
+
+    let other_ip: std::net::Ipv4Addr = if test_utils::running_in_shadow() {
+        // this IP is the IP for the host 'othernode' in the shadow config file
+        "26.153.52.74".parse().unwrap()
+    } else {
+        // if running outside of shadow, we use a local network address here so that the tests
+        // running outside of shadow would only be trying to connect to a server on a local
+        // network rather than some random server on the internet
+        "192.168.1.100".parse().unwrap()
+    };
+
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: u32::from(other_ip).to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
+    let buf_send = vec![1u8; 200];
+    let args = SendtoArguments {
+        fd: fd,
+        len: buf_send.len(),
+        buf: Some(&buf_send),
+        flags: 0,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+
+    check_send_call(&args, sys_method, &[libc::EINVAL], true)?;
 
     Ok(())
 }

@@ -1149,56 +1149,7 @@ fn test_server_close_during_blocking_connect(
     Ok(())
 }
 
-fn check_connect_call(
-    args: &ConnectArguments,
-    expected_errno: Option<libc::c_int>,
-) -> Result<(), String> {
-    // get a pointer to the sockaddr and the size of the structure
-    // careful use of references here makes sure we don't copy memory, leading to stale pointers
-    let (addr_ptr, addr_max_len) = match args.addr {
-        Some(ref x) => (x.as_ptr(), x.ptr_size()),
-        None => (std::ptr::null(), 0),
-    };
-
-    // if the pointer is non-null, make sure the provided size is not greater than the actual
-    // data size so that we don't segfault
-    assert!(addr_ptr.is_null() || args.addr_len <= addr_max_len);
-
-    let rv = unsafe { libc::connect(args.fd, addr_ptr, args.addr_len) };
-
-    let errno = test_utils::get_errno();
-
-    match expected_errno {
-        // if we expect the connect() call to return an error (rv should be -1)
-        Some(expected_errno) => {
-            if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
-            }
-            if errno != expected_errno {
-                return Err(format!(
-                    "Expecting errno {} \"{}\", received {} \"{}\"",
-                    expected_errno,
-                    test_utils::get_errno_message(expected_errno),
-                    errno,
-                    test_utils::get_errno_message(errno)
-                ));
-            }
-        }
-        // if no error is expected (rv should be 0)
-        None => {
-            if rv != 0 {
-                return Err(format!(
-                    "Expecting a return value of 0, received {} \"{}\"",
-                    rv,
-                    test_utils::get_errno_message(errno)
-                ));
-            }
-        }
-    }
-
-    Ok(())
-}
-
+// Test the behavior of loopback-bound sockets when connect() is used with an external address
 fn test_loopback_bound_connect(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
     let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
     assert!(fd >= 0);
@@ -1250,4 +1201,54 @@ fn test_loopback_bound_connect(sock_type: libc::c_int, flag: libc::c_int) -> Res
     };
 
     check_connect_call(&args, Some(libc::EINVAL))
+}
+
+fn check_connect_call(
+    args: &ConnectArguments,
+    expected_errno: Option<libc::c_int>,
+) -> Result<(), String> {
+    // get a pointer to the sockaddr and the size of the structure
+    // careful use of references here makes sure we don't copy memory, leading to stale pointers
+    let (addr_ptr, addr_max_len) = match args.addr {
+        Some(ref x) => (x.as_ptr(), x.ptr_size()),
+        None => (std::ptr::null(), 0),
+    };
+
+    // if the pointer is non-null, make sure the provided size is not greater than the actual
+    // data size so that we don't segfault
+    assert!(addr_ptr.is_null() || args.addr_len <= addr_max_len);
+
+    let rv = unsafe { libc::connect(args.fd, addr_ptr, args.addr_len) };
+
+    let errno = test_utils::get_errno();
+
+    match expected_errno {
+        // if we expect the connect() call to return an error (rv should be -1)
+        Some(expected_errno) => {
+            if rv != -1 {
+                return Err(format!("Expecting a return value of -1, received {}", rv));
+            }
+            if errno != expected_errno {
+                return Err(format!(
+                    "Expecting errno {} \"{}\", received {} \"{}\"",
+                    expected_errno,
+                    test_utils::get_errno_message(expected_errno),
+                    errno,
+                    test_utils::get_errno_message(errno)
+                ));
+            }
+        }
+        // if no error is expected (rv should be 0)
+        None => {
+            if rv != 0 {
+                return Err(format!(
+                    "Expecting a return value of 0, received {} \"{}\"",
+                    rv,
+                    test_utils::get_errno_message(errno)
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
