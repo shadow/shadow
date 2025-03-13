@@ -2502,7 +2502,7 @@ fn test_dgram_loopback_bound_sendmsg(
 
     let buf_send = vec![1u8; 200];
     let args = SendtoArguments {
-        fd: fd,
+        fd,
         len: buf_send.len(),
         buf: Some(&buf_send),
         flags: 0,
