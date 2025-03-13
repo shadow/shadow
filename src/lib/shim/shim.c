@@ -28,7 +28,6 @@
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
-#include "main/host/syscall_numbers.h" // for SYS_shadow_* defs
 
 static void _shim_parent_init_logging() {
     int level = shimshmem_getLogLevel(shim_hostSharedMem());
@@ -61,7 +60,7 @@ static void _shim_init_death_signal() {
 }
 
 static void _shim_parent_init_memory_manager_internal() {
-    syscall(SYS_shadow_init_memory_manager);
+    syscall(SHADOW_SYSCALL_NUM_INIT_MEMORY_MANAGER);
 }
 
 // Tell Shadow to initialize the MemoryManager, which includes remapping the

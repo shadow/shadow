@@ -15,7 +15,6 @@
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_tls.h"
-#include "main/host/syscall_numbers.h"
 
 // Handle to the real syscall function, initialized once at load-time for
 // thread-safety.

@@ -24,7 +24,6 @@
 #include "lib/logger/logger.h"
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_syscall.h"
-#include "main/host/syscall_numbers.h" // For SYS_shadow_hostname_to_addr_ipv4
 
 // Sets `port` to the port specified by `service`, according to the criteria in
 // getaddrinfo(3). Returns 0 on success or the appropriate getaddrinfo error on
@@ -239,8 +238,8 @@ static bool _shim_api_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
     // can intercept it, but we want to send to Shadow through shmem in preload mode. Let
     // shim_syscall figure it out.
     trace("Performing custom shadow syscall SYS_shadow_hostname_to_addr_ipv4 for name %s", node);
-    int rv =
-        shim_api_syscall(SYS_shadow_hostname_to_addr_ipv4, node, strlen(node), addr, sizeof(*addr));
+    int rv = shim_api_syscall(
+        SHADOW_SYSCALL_NUM_HOSTNAME_TO_ADDR_IPV4, node, strlen(node), addr, sizeof(*addr));
 
     if (rv == 0) {
 #ifdef DEBUG

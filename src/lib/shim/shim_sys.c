@@ -20,7 +20,6 @@
 #include "lib/shim/shim.h"
 #include "lib/shim/shim_api.h"
 #include "lib/shim/shim_sys.h"
-#include "main/host/syscall_numbers.h"
 
 static CEmulatedTime _shim_sys_get_time() {
     const ShimShmemHost* mem = shim_hostSharedMem();
@@ -213,7 +212,7 @@ bool shim_sys_handle_syscall_locally(long syscall_num, long* rv, va_list args) {
                 shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
                 trace("Reached maxUnappliedCpuLatency. Yielding. (%ld ns past max)",
                       newTime - maxTime);
-                syscall(SYS_shadow_yield);
+                syscall(SHADOW_SYSCALL_NUM_SHADOW_YIELD);
             }
         } else {
             shimshmemhost_unlock(shim_hostSharedMem(), &host_lock);
