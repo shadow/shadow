@@ -791,23 +791,21 @@ impl LegacyTcpSocket {
                     local_addr.port().to_be(),
                 )
             };
-        } else {
-            if let Some(bound_addr) = socket_ref.getsockname()? {
-                // make sure the new peer address is connectable from the bound interface
-                if !bound_addr.ip().is_unspecified() {
-                    // assume that a socket bound to 0.0.0.0 can connect anywhere, so only check
-                    // localhost
-                    match (
-                        bound_addr.ip() == Ipv4Addr::LOCALHOST,
-                        peer_addr.ip() == &Ipv4Addr::LOCALHOST,
-                    ) {
-                        // bound and peer on loopback interface
-                        (true, true) => {}
-                        // neither bound nor peer on loopback interface (shadow treats any
-                        // non-127.0.0.1 address as an "internet" address)
-                        (false, false) => {}
-                        _ => return Err(Errno::EINVAL.into()),
-                    }
+        } else if let Some(bound_addr) = socket_ref.getsockname()? {
+            // make sure the new peer address is connectable from the bound interface
+            if !bound_addr.ip().is_unspecified() {
+                // assume that a socket bound to 0.0.0.0 can connect anywhere, so only check
+                // localhost
+                match (
+                    bound_addr.ip() == Ipv4Addr::LOCALHOST,
+                    peer_addr.ip() == &Ipv4Addr::LOCALHOST,
+                ) {
+                    // bound and peer on loopback interface
+                    (true, true) => {}
+                    // neither bound nor peer on loopback interface (shadow treats any
+                    // non-127.0.0.1 address as an "internet" address)
+                    (false, false) => {}
+                    _ => return Err(Errno::EINVAL.into()),
                 }
             }
         }
