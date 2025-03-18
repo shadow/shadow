@@ -68,7 +68,6 @@ extern "C" fn handle_timer_signal(signo: i32, _info: *mut siginfo_t, _ctx: *mut 
         },
     };
     unsafe { crate::syscall::emulated_syscall_event(None, &syscall_event) };
-    // If we ended up yielding, the timer is now disabled. reenable.
 }
 
 /// Initialize state for the current native process. This does not yet actually
