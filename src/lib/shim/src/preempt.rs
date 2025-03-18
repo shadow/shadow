@@ -47,14 +47,20 @@ extern "C" fn handle_timer_signal(signo: i32, _info: *mut siginfo_t, _ctx: *mut 
     );
 
     {
-        // Move time forward enough that shadow will preempt this thread when it
-        // gets control again.
+        // Move simulated time forward.
         let host = crate::global_host_shmem::get();
         let mut host_lock = host.protected().lock();
         host_lock.unapplied_cpu_latency += config.sim_duration;
     }
-    // Transfer control to shadow, which should move time forward and reschedule
-    // this thread.
+    // Transfer control to shadow, which will handle the time update and potentially
+    // reschedule this thread.
+    //
+    // We *could* try to apply the cpu-latency here and avoid yielding to shadow
+    // if we haven't yet reached the maximum runahead time, as we do in
+    // `shim_sys_handle_syscall_locally`, but in practice `config.sim_duration`
+    // should be large enough that shadow will always choose to reschedule this
+    // thread anyway, so we wouldn't actually get any performance benefit in
+    // exchange for the additional complexity.
     let syscall_event = ShimEventSyscall {
         syscall_args: SyscallArgs {
             number: i64::from(u32::from(ShadowSyscallNum::shadow_yield)),
