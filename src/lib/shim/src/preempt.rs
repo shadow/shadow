@@ -90,8 +90,6 @@ pub fn process_init() {
 /// Disable preemption for the current thread.
 pub fn disable() {
     debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
-    log::trace!("Disabling preemption");
-
     let Some(manager_shmem) = &crate::global_manager_shmem::try_get() else {
         // Not initialized yet. e.g. we get here the first time we enter the
         // Shadow execution context, before completing initialization.
@@ -102,6 +100,8 @@ pub fn disable() {
         // Not configured.
         return;
     };
+
+    log::trace!("Disabling preemption");
 
     // Disable the itimer, effectively discarding any CPU-time we've spent.
     //
