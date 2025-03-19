@@ -31,5 +31,14 @@ add_shadow_tests(
       TIMEOUT 5
     )
 
+add_linux_tests(BASENAME cpu_busy_wait COMMAND ../../target/debug/test_cpu_busy_wait)
+add_shadow_tests(
+    BASENAME cpu_busy_wait
+    PROPERTIES
+      # This test should be very fast when it succeeds, but will generally take
+      # the full timeout to fail otherwise.
+      TIMEOUT 5
+    )
+    
 add_subdirectory(2210)
 add_subdirectory(3148)

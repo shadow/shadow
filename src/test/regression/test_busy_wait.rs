@@ -32,7 +32,7 @@ fn test_wait_for_rdtsc_timeout() {
 }
 
 // Regression test for https://github.com/shadow/shadow/issues/2681
-fn test_wait_for_other_thread() {
+fn test_wait_for_other_thread_with_inline_sched_yield() {
     let ready_flag = Arc::new(<AtomicBool>::new(false));
     let waiter = {
         let ready_flag = ready_flag.clone();
@@ -52,7 +52,10 @@ fn test_wait_for_other_thread() {
 }
 
 fn main() {
+    println!("test_wait_for_timeout");
     test_wait_for_timeout();
+    println!("test_wait_for_rdtsc_timeout");
     test_wait_for_rdtsc_timeout();
-    test_wait_for_other_thread();
+    println!("test_wait_for_other_thread_with_inline_sched_yield");
+    test_wait_for_other_thread_with_inline_sched_yield();
 }
