@@ -85,7 +85,8 @@ impl ExecutionContext {
     /// Enter this context for the current thread, *without* creating a
     /// restorer. Returns the previous context.
     pub fn enter_without_restorer(&self) -> ExecutionContext {
-        let peeked_prev = CURRENT_EXECUTION_CONTEXT.get().get();
+        let current_execution_ctx = CURRENT_EXECUTION_CONTEXT.get();
+        let peeked_prev = current_execution_ctx.get();
 
         // Potentially enable/disable preemption, being careful that the current
         // context is set to shadow when calling other internal functions that
@@ -99,16 +100,23 @@ impl ExecutionContext {
                 // execution context, so preemption should be disabled for all
                 // other threads in this process.
                 unsafe { preempt::enable() };
-                CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+                current_execution_ctx.replace(*self)
             }
             (ExecutionContext::Application, ExecutionContext::Shadow) => {
                 // Change context to shadow before calling preempt::disable, so
                 // that it can access shim state.
-                let c = CURRENT_EXECUTION_CONTEXT.get().replace(*self);
+                let c = current_execution_ctx.replace(*self);
                 preempt::disable();
                 c
             }
-            _ => CURRENT_EXECUTION_CONTEXT.get().replace(*self),
+            (ExecutionContext::Application, ExecutionContext::Application) => {
+                // No need to actually replace.
+                ExecutionContext::Application
+            }
+            (ExecutionContext::Shadow, ExecutionContext::Shadow) => {
+                // No need to actually replace.
+                ExecutionContext::Shadow
+            }
         };
         // It *shouldn't* be possible for the execution context to have changed
         // out from under us in between the initial peek and the actual
