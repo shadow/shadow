@@ -200,7 +200,7 @@ impl<'a> Manager<'a> {
             log_start_time_micros: unsafe { c::logger_get_global_start_time_micros() },
             native_preemption_config: if config.native_preemption_enabled() {
                 FfiOption::Some(NativePreemptionConfig {
-                    native_duration: config.native_preemption_native_interval(),
+                    native_duration: config.native_preemption_native_interval()?,
                     sim_duration: config.native_preemption_sim_interval(),
                 })
             } else {

@@ -178,13 +178,25 @@ impl ConfigOptions {
         self.experimental.native_preemption_enabled.unwrap()
     }
 
-    pub fn native_preemption_native_interval(&self) -> linux_api::time::kernel_old_timeval {
+    pub fn native_preemption_native_interval(
+        &self,
+    ) -> anyhow::Result<linux_api::time::kernel_old_timeval> {
         let t = self.experimental.native_preemption_native_interval.unwrap();
         let t = core::time::Duration::from(t);
-        linux_api::time::kernel_old_timeval {
+        // TODO: Would be a little nicer to surface this error when we parse the
+        // config. I think ideally we'd update the type such that some bounds
+        // can be enforced at parse time.
+        if t < core::time::Duration::from_micros(1) {
+            return Err(anyhow::anyhow!(
+                "native_preemption_native_interval must be >= 1 microsecond. Got {t:?}."
+            ));
+        }
+        let rv = linux_api::time::kernel_old_timeval {
             tv_sec: t.as_secs().try_into().unwrap(),
             tv_usec: t.subsec_micros().into(),
-        }
+        };
+        assert!(!(rv.tv_sec == 0 && rv.tv_usec == 0));
+        Ok(rv)
     }
 
     pub fn native_preemption_sim_interval(&self) -> SimulationTime {
@@ -495,6 +507,9 @@ pub struct ExperimentalOptions {
     /// When `native_preemption_enabled` is true, amount of native CPU-time to
     /// wait before preempting managed code that hasn't returned control to
     /// shadow.
+    ///
+    /// Only supports microsecond granularity, and values below 1 microsecond
+    /// are rejected.
     #[clap(hide_short_help = true)]
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("native_preemption_native_interval").unwrap().as_str())]

@@ -101,7 +101,9 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
 
       --native-preemption-native-interval <seconds>
           When `native_preemption_enabled` is true, amount of native CPU-time to wait before
-          preempting managed code that hasn't returned control to shadow. [default: "100 ms"]
+          preempting managed code that hasn't returned control to shadow.
+          
+          Only supports microsecond granularity, and values below 1 microsecond are rejected.
 
       --native-preemption-sim-interval <seconds>
           When `native_preemption_enabled` is true, amount of simulated time to consume after

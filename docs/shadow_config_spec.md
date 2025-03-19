@@ -359,6 +359,9 @@ needed (and thereby unnecessarily reducing determinism of the simulation), but
 may cause the simulation to take longer to escape a "CPU-only busy-loop" when it
 *is* needed.
 
+Only supports microsecond granularity, and values below 1 microsecond are
+rejected.
+
 No effect when `native_preemption_enabled` is false.
 
 #### `experimental.native_preemption_sim_interval`
