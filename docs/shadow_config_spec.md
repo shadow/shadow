@@ -377,6 +377,9 @@ Larger values here may mean fewer preemptions, and therefore less real time, are
 required to escape a CPU-only busy loop, but result in larger time-jumps inside
 the simulation, which may have unexpected effects.
 
+For simulation efficiency, this latency is only actually applied when
+`max_unapplied_cpu_latency` is reached.
+
 No effect when `native_preemption_enabled` is false.
 
 #### `experimental.report_errors_to_stderr`
