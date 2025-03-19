@@ -74,6 +74,9 @@ hosts:
 - [`experimental`](#experimental)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
+- [`experimental.native_preemption_enabled`](#experimentalnative_preemption_enabled)
+- [`experimental.native_preemption_native_interval`](#experimentalnative_preemption_native_interval)
+- [`experimental.native_preemption_sim_interval`](#experimentalnative_preemption_sim_interval)
 - [`experimental.report_errors_to_stderr`](#experimentalreport_errors_to_stderr)
 - [`experimental.runahead`](#experimentalrunahead)
 - [`experimental.scheduler`](#experimentalscheduler)
@@ -341,14 +344,7 @@ returning control to shadow (e.g. by making a syscall), shadow preempts
 the managed code and moves simulated time forward.
 
 This usually shouldn't be needed, and breaks simulation determinism, but can be
-used to escape "pure-CPU busy loops".
-
-The primary reason this isn't enabled by default is that when this mechanism
-triggers, the simulation may no longer be deterministic. e.g. if there is a long
-CPU-only operation that can *eventually* complete on its own without this
-mechanism, but may or may not be interrupted by this mechanism depending on the
-host CPU speed, caching effects, etc., then runs of the simulation where the
-preemption triggered may differ from runs where it didn't.
+used to escape "pure-CPU busy-loops". See [limitations.md#cpu-busy-loops].
 
 #### `experimental.native_preemption_native_interval`
 
@@ -360,7 +356,7 @@ before preempting managed code that hasn't returned control to shadow.
 
 Using a relatively long value here avoids triggering preemption when it isn't
 needed (and thereby unnecessarily reducing determinism of the simulation), but
-may cause the simulation to take longer to escape a "CPU-only busy loop" when it
+may cause the simulation to take longer to escape a "CPU-only busy-loop" when it
 *is* needed.
 
 No effect when `native_preemption_enabled` is false.

@@ -126,18 +126,19 @@ the impact on simulation results.
 is more accurate, since syscalls on real systems *do* take non-zero time, but it
 makes the time model more complex to understand and reason about.
 
-### Workaround: have Shadow preempt CPU-only busy-loops
+### Workaround: have Shadow preempt CPU-only busy-loops{#cpu-busy-loops}
 
 In cases where enabling `--model-unblocked-syscall-latency` doesn't get the
-simulation out of the busy loop, it may be because it makes no syscalls or
+simulation out of the busy loop, it may be because the busy-loop makes no syscalls or
 time-checks at all, and instead is waiting indefinitely for another thread to
 modify memory (e.g. to flip a "ready" flag). In Shadow's default mode of
 operation, it will never regain control from such loops, and hence can't move
 the simulation forward.
 
 Such loops can be escaped by enabling the experimental option
-`--native_preemption_enabled`. In this mode of operation, Shadow uses a native
-timer to regain control in such situations and move simulated time forward.
+`--native-preemption-enabled`. In this mode of operation, Shadow uses a native
+Linux timer to preempt the thread in such situations, moving simulated time
+forward and allowing other threads in the process to run.
 
 Drawbacks:
 
