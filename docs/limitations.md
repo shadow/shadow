@@ -82,15 +82,22 @@ where work arrives quickly. However since Shadow normally doesn't advance time
 when making non-blocking syscalls or allow other threads to run, such a loop can
 run indefinitely, deadlocking the whole simulation.
 
-When feasible, it's usually good practice to modify such loops to have a bound
-on the number of iterations instead of or in addition to a bound on wallclock
-time.
+### Ideal solution: modify the managed program
 
-For cases where modifying the loop is infeasible, Shadow provides the option
-`--model-unblocked-syscall-latency`. When this option is enabled, Shadow moves
-time forward a small amount on *every* syscall (and VDSO function call), and
-switches to another thread if one becomes runnable in the meantime (e.g. because
-network data arrived when the clock moved forward, unblocking it).
+Even outside of Shadow, it's usually good practice for such loops to have a
+bound on the number of iterations instead of or in addition to a bound on
+wallclock time. When feasible, modifying the relevant loops to do this, and
+better yet upstreaming that modification, is typically the ideal solution.
+
+### Workaround: have Shadow model unblocked syscall latency
+
+For cases where modifying the loop is infeasible, and the busy loop has a bound
+on wallclock time or contains some other syscall (such as `sched_yield`), Shadow
+provides the option `--model-unblocked-syscall-latency`. When this option is
+enabled, Shadow moves time forward a small amount on *every* syscall (and VDSO
+function call, and time-check via `rdtsc` instruction), and switches to another
+thread if one becomes runnable in the meantime (e.g. because network data
+arrived when the clock moved forward, unblocking it).
 
 This feature should only be used when it's needed to get around such loops. Some
 limitations:
@@ -119,10 +126,54 @@ the impact on simulation results.
 is more accurate, since syscalls on real systems *do* take non-zero time, but it
 makes the time model more complex to understand and reason about.
 
-* It still doesn't account for time spent by the CPU executing code,
-which also means that a busy-loop that makes no syscalls at all can still lead
-to deadlock. Fortunately such busy loops are rare and are generally agreed upon
-to be bugs, since they'd also potentially monopolize a CPU indefinitely when run
-natively.
+### Workaround: have Shadow preempt CPU-only busy-loops{#cpu-busy-loops}
+
+In cases where enabling `--model-unblocked-syscall-latency` doesn't get the
+simulation out of the busy loop, it may be because the busy-loop makes no syscalls or
+time-checks at all, and instead is waiting indefinitely for another thread to
+modify memory (e.g. to flip a "ready" flag). In Shadow's default mode of
+operation, it will never regain control from such loops, and hence can't move
+the simulation forward.
+
+Such loops can be escaped by enabling the experimental option
+`--native-preemption-enabled`. In this mode of operation, Shadow uses a native
+Linux timer to preempt the thread in such situations, moving simulated time
+forward and allowing other threads in the process to run.
+
+Drawbacks:
+
+* Loss of simulation determinism. In different runs of the simulation, the native timer
+  may fire at different times. In cases where it is truly interrupting a
+  CPU-only-busy-loop that would otherwise run indefinitely, this is unlikely to
+  ultimately change the results of the simulation, but *could*, e.g. if the busy
+  loop counts how many times it iterates and that count is used later. Worse,
+  the native timer may fire during long CPU-only operations that *would* finish
+  on their own (e.g. copying, encrypting, or decrypting large chunks of data in
+  memory), firing at different points in some runs of the simulation, or not at
+  all in some runs of the simulation.
+
+* It causes the simulation to run slower.
+
+  * Even when the timer never fires, there is substantial additional overhead
+    for the additional bookkeeping and management of the native timers.
+
+  * As with `--model-unblocked-syscall-latency`, when this feature actually does
+    cause a thread to be rescheduled, there is some performance overhead for that
+    rescheduling.
+
+* It's not meant as an accurate model of CPU-time spent; for that, see
+  [#2060](https://github.com/shadow/shadow/issues/2060). e.g. CPU-time consumed
+  between syscalls still takes 0 simulation time, if not enough time passes for
+  the native timer to fire.
+
+* Nonetheless it *does* affect simulation results (in simulations where the
+  timer actually triggers a preemption). Arguably this makes the simulation
+  somewhat more accurate, since it at least causes some CPU-heavy sections of
+  code that make no syscalls to take some non-zero amount of simulated time
+  instead of zero simulated time, but it also makes the passing of simulated
+  time more complex to understand (and potentially non-deterministic, as noted
+  above).
+
+### Further discussion
 
 For more about this topic, see [#1792](https://github.com/shadow/shadow/issues/1792).

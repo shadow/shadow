@@ -132,6 +132,7 @@ void _shim_parent_init_preload() {
     _shim_parent_init_rdtsc_emu();
     _shim_parent_init_seccomp();
     _shim_parent_close_stdin();
+    preempt_process_init();
 }
 
 void _shim_child_thread_init_preload() {

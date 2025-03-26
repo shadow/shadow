@@ -52,7 +52,7 @@ unsafe fn native_syscall(args: &SyscallArgs) -> SyscallReg {
 /// # Safety
 ///
 /// `ctx` must be valid if provided.
-unsafe fn emulated_syscall_event(
+pub(crate) unsafe fn emulated_syscall_event(
     mut ctx: Option<&mut ucontext>,
     syscall_event: &ShimEventSyscall,
 ) -> SyscallReg {
@@ -70,7 +70,6 @@ unsafe fn emulated_syscall_event(
         log::trace!("waiting for event");
         let res = crate::tls_ipc::with(|ipc| ipc.from_shadow().receive().unwrap());
         log::trace!("got response {res:?}");
-
         match res {
             ShimEventToShim::SyscallComplete(syscall_complete) => {
                 // Shadow has returned a result for the emulated syscall

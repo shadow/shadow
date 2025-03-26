@@ -33,6 +33,7 @@ mod bindings {
 
 pub mod clone;
 pub mod mmap_box;
+pub mod preempt;
 pub mod shimlogger;
 pub mod syscall;
 pub mod tls;
@@ -77,14 +78,51 @@ impl ExecutionContext {
     /// will restore the previous context when dropped.
     pub fn enter(&self) -> ExecutionContextRestorer {
         ExecutionContextRestorer {
-            prev: CURRENT_EXECUTION_CONTEXT.get().replace(*self),
+            prev: self.enter_without_restorer(),
         }
     }
 
     /// Enter this context for the current thread, *without* creating a
     /// restorer. Returns the previous context.
     pub fn enter_without_restorer(&self) -> ExecutionContext {
-        CURRENT_EXECUTION_CONTEXT.get().replace(*self)
+        let current_execution_ctx = CURRENT_EXECUTION_CONTEXT.get();
+        let peeked_prev = current_execution_ctx.get();
+
+        // Potentially enable/disable preemption, being careful that the current
+        // context is set to shadow when calling other internal functions that
+        // require it.
+        let replaced_prev = match (peeked_prev, *self) {
+            (ExecutionContext::Shadow, ExecutionContext::Application) => {
+                // Call preempt::enable before changing context from shadow, so
+                // that it can access shim state.
+                // SAFETY: We only ever switch threads from the shadow execution
+                // context, and we disable preemption when entering the shadow
+                // execution context, so preemption should be disabled for all
+                // other threads in this process.
+                unsafe { preempt::enable() };
+                current_execution_ctx.replace(*self)
+            }
+            (ExecutionContext::Application, ExecutionContext::Shadow) => {
+                // Change context to shadow before calling preempt::disable, so
+                // that it can access shim state.
+                let c = current_execution_ctx.replace(*self);
+                preempt::disable();
+                c
+            }
+            (ExecutionContext::Application, ExecutionContext::Application) => {
+                // No need to actually replace.
+                ExecutionContext::Application
+            }
+            (ExecutionContext::Shadow, ExecutionContext::Shadow) => {
+                // No need to actually replace.
+                ExecutionContext::Shadow
+            }
+        };
+        // It *shouldn't* be possible for the execution context to have changed
+        // out from under us in between the initial peek and the actual
+        // replacement.
+        assert_eq!(peeked_prev, replaced_prev);
+        peeked_prev
     }
 }
 
