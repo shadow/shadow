@@ -34,6 +34,7 @@ mod bindings {
 pub mod clone;
 pub mod mmap_box;
 pub mod preempt;
+pub mod reinit_auxv_at_random;
 pub mod shimlogger;
 pub mod syscall;
 pub mod tls;
