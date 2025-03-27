@@ -11,7 +11,7 @@ pub struct ShimEventStartRes {
     /// in its auxiliary vector.
     // TODO: Consider replacing this with a seed for a shim-side PRNG, particularly
     // when implementing the getrandom vdso (#3362).
-    pub aux_at_random: [u8; 16],
+    pub auxvec_random: [u8; 16],
 }
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]

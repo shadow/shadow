@@ -1,6 +1,6 @@
 /// Returns a pointer to the `AT_RANDOM` data as provided in the auxiliary vector.
 /// See `getauxval(3)`.
-fn get_at_random() -> *mut [u8; 16] {
+fn get_auxvec_random() -> *mut [u8; 16] {
     let r = rustix::fs::open(
         "/proc/self/auxv",
         rustix::fs::OFlags::RDONLY,
@@ -58,11 +58,11 @@ fn get_at_random() -> *mut [u8; 16] {
 ///
 /// * There must be no live rust reference to that data.
 /// * This function must not be called in parallel, e.g. from another thread.
-pub unsafe fn reinit_auxv_at_random(data: &[u8; 16]) {
-    let auxv = get_at_random();
+pub unsafe fn reinit_auxvec_random(data: &[u8; 16]) {
+    let auxv = get_auxvec_random();
     if auxv.is_null() {
         log::warn!("Couldn't find auxvec AT_RANDOM to overwrite");
     } else {
-        unsafe { get_at_random().write(*data) }
+        unsafe { get_auxvec_random().write(*data) }
     }
 }

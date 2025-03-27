@@ -245,7 +245,7 @@ impl ManagedThread {
                     self.continue_plugin(
                         ctx.host,
                         &ShimEventToShim::StartRes(ShimEventStartRes {
-                            aux_at_random: ctx.host.random_mut().random(),
+                            auxvec_random: ctx.host.random_mut().random(),
                         }),
                     )
                 }

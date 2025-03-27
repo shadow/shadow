@@ -34,7 +34,7 @@ mod bindings {
 pub mod clone;
 pub mod mmap_box;
 pub mod preempt;
-pub mod reinit_auxv_at_random;
+pub mod reinit_auxvec_random;
 pub mod shimlogger;
 pub mod syscall;
 pub mod tls;
@@ -552,7 +552,7 @@ fn wait_for_start_event(is_first_thread: bool) {
         // SAFETY: We're ensuring serial execution in this process, and no other
         // Rust code in this library should have tried accessing the auxiliary
         // vector yet, so no references should exist.
-        unsafe { reinit_auxv_at_random::reinit_auxv_at_random(&res.aux_at_random) };
+        unsafe { reinit_auxvec_random::reinit_auxvec_random(&res.auxvec_random) };
     }
 
     // SAFETY: shadow should have initialized
