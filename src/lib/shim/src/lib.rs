@@ -515,16 +515,17 @@ fn init_process() {
     log::trace!("Finished shim global init");
 }
 
-/// Wait for "start" event from Shadow, use it to initialize the thread shared
-/// memory block, and optionally to initialize the process shared memory block.
-fn wait_for_start_event(get_initial_working_dir: bool) {
+/// Wait for "start" event from Shadow, using it to set things up for the
+/// current thread, and if `is_first_thread` is true then also for the current
+/// process.
+fn wait_for_start_event(is_first_thread: bool) {
     debug_assert_eq!(ExecutionContext::current(), ExecutionContext::Shadow);
     log::trace!("waiting for start event");
 
     let mut working_dir = [0u8; linux_api::limits::PATH_MAX];
     let working_dir_ptr;
     let working_dir_len;
-    if get_initial_working_dir {
+    if is_first_thread {
         working_dir_ptr = ForeignPtr::from_raw_ptr(working_dir.as_mut_ptr());
         working_dir_len = working_dir.len();
     } else {
@@ -567,7 +568,7 @@ fn wait_for_start_event(get_initial_working_dir: bool) {
     // TODO: Instead use posix_spawn_file_actions_addchdir_np in the shadow process,
     // which was added in glibc 2.29. Currently this is blocked on debian-10, which
     // uses glibc 2.28.
-    if get_initial_working_dir {
+    if is_first_thread {
         let working_dir = CStr::from_bytes_until_nul(&working_dir).unwrap();
         rustix::process::chdir(working_dir).unwrap();
     }
