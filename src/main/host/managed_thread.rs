@@ -15,12 +15,13 @@ use linux_api::posix_types::Pid;
 use linux_api::sched::CloneFlags;
 use linux_api::signal::tgkill;
 use log::{Level, debug, error, log_enabled, trace};
+use rand::Rng as _;
 use rustix::pipe::PipeFlags;
 use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::ipc::IPCData;
 use shadow_shim_helper_rs::shim_event::{
-    ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventSyscall, ShimEventSyscallComplete,
-    ShimEventToShadow, ShimEventToShim,
+    ShimEventAddThreadReq, ShimEventAddThreadRes, ShimEventStartRes, ShimEventSyscall,
+    ShimEventSyscallComplete, ShimEventToShadow, ShimEventToShim,
 };
 use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallArgs, SyscallReg};
 use shadow_shmem::allocator::ShMemBlock;
@@ -241,7 +242,12 @@ impl ManagedThread {
 
                     // send the message to the shim to call main().
                     trace!("sending start event code to shim");
-                    self.continue_plugin(ctx.host, &ShimEventToShim::StartRes)
+                    self.continue_plugin(
+                        ctx.host,
+                        &ShimEventToShim::StartRes(ShimEventStartRes {
+                            aux_at_random: ctx.host.random_mut().random(),
+                        }),
+                    )
                 }
                 ShimEventToShadow::ProcessDeath => {
                     // The native threads are all dead or zombies. Nothing to do but

@@ -544,7 +544,15 @@ fn wait_for_start_event(get_initial_working_dir: bool) {
         ipc.to_shadow().send(start_req);
         ipc.from_shadow().receive().unwrap()
     });
-    assert!(matches!(res, ShimEventToShim::StartRes));
+    let ShimEventToShim::StartRes(res) = res else {
+        panic!("Unexpected response: {res:?}");
+    };
+    if is_first_thread {
+        // SAFETY: We're ensuring serial execution in this process, and no other
+        // Rust code in this library should have tried accessing the auxiliary
+        // vector yet, so no references should exist.
+        unsafe { reinit_auxv_at_random::reinit_auxv_at_random(&res.aux_at_random) };
+    }
 
     // SAFETY: shadow should have initialized
     let thread_blk_serialized = unsafe { thread_blk_serialized.assume_init() };

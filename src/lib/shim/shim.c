@@ -133,11 +133,6 @@ void _shim_parent_init_preload() {
     _shim_parent_init_seccomp();
     _shim_parent_close_stdin();
     preempt_process_init();
-    // XXX generating this pseudorandomly. We don't actually want a fixed value
-    // here; it should vary across processes, with different shadow prng seeds,
-    // etc.
-    uint8_t data[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-    reinit_auxv_at_random(&data);
 }
 
 void _shim_child_thread_init_preload() {

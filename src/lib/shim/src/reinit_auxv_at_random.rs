@@ -66,19 +66,3 @@ pub unsafe fn reinit_auxv_at_random(data: &[u8; 16]) {
         unsafe { get_at_random().write(*data) }
     }
 }
-
-mod export {
-    /// (Re)initialize the 16 random "`AT_RANDOM`" bytes that the kernel provides
-    /// via the auxiliary vector.  See `getauxval(3)`
-    ///
-    /// # Safety
-    ///
-    /// There must be no concurrent access to the `AT_RANDOM` data, including:
-    ///
-    /// * There must be no live rust reference to that data.
-    /// * This function must not be called in parallel, e.g. from another thread.
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C-unwind" fn reinit_auxv_at_random(data: &[u8; 16]) {
-        unsafe { super::reinit_auxv_at_random(data) }
-    }
-}
