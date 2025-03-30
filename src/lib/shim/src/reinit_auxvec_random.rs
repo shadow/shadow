@@ -1,9 +1,10 @@
 use core::{ffi::c_ulong, ptr};
 
-/// Returns a pointer to the `AT_RANDOM` data as provided in the auxiliary
-/// vector.  We locate this data via `/proc/self/auxv` (see proc(5)). For more
-/// about this data itself see `getauxval(3)`.
-fn get_auxvec_random() -> *mut [u8; 16] {
+use linux_api::auxvec::AuxVecTag;
+
+/// Analogous to libc's `getauxval(3)`, but reads from `/proc/self/auxv` (see
+/// `proc(5)`) instead of using libc.
+fn getauxval(tag: AuxVecTag) -> Option<c_ulong> {
     let r = rustix::fs::open(
         "/proc/self/auxv",
         rustix::fs::OFlags::RDONLY,
@@ -11,7 +12,7 @@ fn get_auxvec_random() -> *mut [u8; 16] {
     );
     let Ok(auxv_file) = r else {
         log::warn!("Couldn't open /proc/self/auxv: {r:?}");
-        return ptr::null_mut();
+        return None;
     };
     // The auxv data are (tag, value) pairs of core::ffi::c_ulong.
     // Experimentally, on my system this is 368 bytes (`wc -c /proc/self/auxv`).
@@ -20,7 +21,7 @@ fn get_auxvec_random() -> *mut [u8; 16] {
     let r = rustix::io::read(&auxv_file, &mut auxv_data);
     let Ok(bytes_read) = r else {
         log::warn!("Couldn't read /proc/self/auxv: {r:?}");
-        return ptr::null_mut();
+        return None;
     };
     // Intentionally shadow array with a slice of the initd part.
     let auxv_data = &auxv_data[..bytes_read];
@@ -28,7 +29,7 @@ fn get_auxvec_random() -> *mut [u8; 16] {
     let r = rustix::io::read(auxv_file, &mut [0; 1]);
     if r != Ok(0) {
         log::warn!("Expected EOF reading /proc/self/auxv. Instead got: {r:?}");
-        return ptr::null_mut();
+        return None;
     };
     let mut tag_val_iter = auxv_data
         .chunks_exact(2 * size_of::<c_ulong>())
@@ -37,9 +38,16 @@ fn get_auxvec_random() -> *mut [u8; 16] {
             let value = c_ulong::from_ne_bytes(chunk[size_of::<c_ulong>()..].try_into().unwrap());
             (tag, value)
         });
-    let Some((_tag, val)) =
-        tag_val_iter.find(|(tag, _val)| *tag == u64::from(linux_api::auxvec::AuxVecTag::AT_RANDOM))
-    else {
+    tag_val_iter
+        .find(|(this_tag, _val)| *this_tag == u64::from(tag))
+        .map(|(_tag, value)| value)
+}
+
+/// Returns a pointer to the `AT_RANDOM` data as provided in the auxiliary
+/// vector.  We locate this data via `/proc/self/auxv` (see proc(5)). For more
+/// about this data itself see `getauxval(3)`.
+fn get_auxvec_random() -> *mut [u8; 16] {
+    let Some(val) = getauxval(AuxVecTag::AT_RANDOM) else {
         log::warn!("Couldn't find AT_RANDOM");
         return ptr::null_mut();
     };
@@ -74,5 +82,24 @@ pub unsafe fn reinit_auxvec_random(data: &[u8; 16]) {
         );
     } else {
         unsafe { get_auxvec_random().write(*data) }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use linux_api::auxvec::AuxVecTag;
+
+    #[test]
+    // Can't call libc::getauxval from miri
+    #[cfg(not(miri))]
+    fn test_getauxvec() {
+        // Test consistency with libc
+        assert_eq!(super::getauxval(AuxVecTag::AT_RANDOM).unwrap(), unsafe {
+            libc::getauxval(libc::AT_RANDOM)
+        });
+        assert_eq!(
+            super::getauxval(AuxVecTag::AT_MINSIGSTKSZ).unwrap(),
+            unsafe { libc::getauxval(libc::AT_MINSIGSTKSZ) }
+        );
     }
 }
