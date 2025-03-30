@@ -1189,15 +1189,10 @@ fn test_loopback_bound_connect(sock_type: libc::c_int, flag: libc::c_int) -> Res
         assert_eq!(rv, 0);
     }
 
-    let other_ip: std::net::Ipv4Addr = if test_utils::running_in_shadow() {
-        // this IP is the IP for the host 'othernode' in the shadow config file
-        "26.153.52.74".parse().unwrap()
-    } else {
-        // if running outside of shadow, we use a local network address here so that the tests
-        // running outside of shadow would only be trying to connect to a server on a local
-        // network rather than some random server on the internet
-        "192.168.1.100".parse().unwrap()
-    };
+    // we use a local network address here so that the tests
+    // running outside of shadow would only be trying to connect to a server on a local
+    // network rather than some random server on the internet
+    let other_ip: std::net::Ipv4Addr = "192.168.1.100".parse().unwrap();
 
     let addr = libc::sockaddr_in {
         sin_family: libc::AF_INET as u16,
@@ -1217,7 +1212,7 @@ fn test_loopback_bound_connect(sock_type: libc::c_int, flag: libc::c_int) -> Res
     check_connect_call(&args, Some(libc::EINVAL))
 }
 
-// Test the behavior of loopback-bound sockets when connect() is used with an external address
+// Test the behavior of loopback-bound listening sockets when connect() is used with an external address
 fn test_loopback_listening_connect(
     sock_type: libc::c_int,
     flag: libc::c_int,
@@ -1246,6 +1241,7 @@ fn test_loopback_listening_connect(
         assert_eq!(rv, 0);
     }
 
+    // listen for connections
     {
         let rv = unsafe { libc::listen(fd, 10) };
         eprintln!("errno: {}", test_utils::get_errno());
@@ -1272,6 +1268,7 @@ fn test_loopback_listening_connect(
         addr_len: std::mem::size_of_val(&addr) as u32,
     };
 
+    // expects EISCONN instead of EINVAL
     check_connect_call(&args, Some(libc::EISCONN))
 }
 

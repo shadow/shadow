@@ -726,6 +726,7 @@ impl LegacyTcpSocket {
             }
         }
 
+        // if the socket is already listening, return EISCONN
         let is_valid_listener = unsafe { c::tcp_isValidListener(socket_ref.as_legacy_tcp()) } == 1;
         if is_valid_listener {
             return Err(Errno::EISCONN.into());
