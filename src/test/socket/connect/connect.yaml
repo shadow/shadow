@@ -16,3 +16,9 @@ hosts:
     ip_addr: 26.153.52.74
     processes:
     - path: "true"
+  # another dummy host that we can send packets to
+  anothernode:
+    network_node_id: 0
+    ip_addr: 192.168.1.100
+    processes:
+    - path: "true"

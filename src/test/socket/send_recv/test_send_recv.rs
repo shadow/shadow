@@ -2481,15 +2481,10 @@ fn test_dgram_loopback_bound_sendmsg(
         assert_eq!(rv, 0);
     }
 
-    let other_ip: std::net::Ipv4Addr = if test_utils::running_in_shadow() {
-        // this IP is the IP for the host 'othernode' in the shadow config file
-        "26.153.52.74".parse().unwrap()
-    } else {
-        // if running outside of shadow, we use a local network address here so that the tests
-        // running outside of shadow would only be trying to connect to a server on a local
-        // network rather than some random server on the internet
-        "192.168.1.100".parse().unwrap()
-    };
+    // we use a local network address here so that the tests
+    // running outside of shadow would only be trying to connect to a server on a local
+    // network rather than some random server on the internet
+    let other_ip: std::net::Ipv4Addr = "192.168.1.100".parse().unwrap();
 
     let addr = libc::sockaddr_in {
         sin_family: libc::AF_INET as u16,
