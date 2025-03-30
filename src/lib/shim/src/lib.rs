@@ -552,6 +552,11 @@ fn wait_for_start_event(is_first_thread: bool) {
         // SAFETY: We're ensuring serial execution in this process, and no other
         // Rust code in this library should have tried accessing the auxiliary
         // vector yet, so no references should exist.
+        //
+        // WARNING: It's possible that the dynamic linker/loader or constructors
+        // in other dynamically linked libraries *have* run, and that rewriting
+        // this value here will violate safety assumptions in those objects.
+        // Fortunately we haven't observed this in practice.
         unsafe { reinit_auxvec_random::reinit_auxvec_random(&res.auxvec_random) };
     }
 

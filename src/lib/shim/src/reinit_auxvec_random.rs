@@ -1,5 +1,8 @@
-/// Returns a pointer to the `AT_RANDOM` data as provided in the auxiliary vector.
-/// See `getauxval(3)`.
+use core::{ffi::c_ulong, ptr};
+
+/// Returns a pointer to the `AT_RANDOM` data as provided in the auxiliary
+/// vector.  We locate this data via `/proc/self/auxv` (see proc(5)). For more
+/// about this data itself see `getauxval(3)`.
 fn get_auxvec_random() -> *mut [u8; 16] {
     let r = rustix::fs::open(
         "/proc/self/auxv",
@@ -7,44 +10,38 @@ fn get_auxvec_random() -> *mut [u8; 16] {
         rustix::fs::Mode::empty(),
     );
     let Ok(auxv_file) = r else {
-        log::warn!("Couldn't read /proc/self/auxv: {r:?}");
-        return core::ptr::null_mut();
+        log::warn!("Couldn't open /proc/self/auxv: {r:?}");
+        return ptr::null_mut();
     };
     // The auxv data are (tag, value) pairs of core::ffi::c_ulong.
     // Experimentally, on my system this is 368 bytes (`wc -c /proc/self/auxv`).
     // Leave some room for future growth.
     let mut auxv_data = [0u8; 368 * 2];
     let r = rustix::io::read(&auxv_file, &mut auxv_data);
-    if r.is_err() {
+    let Ok(bytes_read) = r else {
         log::warn!("Couldn't read /proc/self/auxv: {r:?}");
-        return core::ptr::null_mut();
-    }
+        return ptr::null_mut();
+    };
+    // Intentionally shadow array with a slice of the initd part.
+    let auxv_data = &auxv_data[..bytes_read];
     // We should have gotten it all in one read, so we should get 0 bytes here.
     let r = rustix::io::read(auxv_file, &mut [0; 1]);
     if r != Ok(0) {
-        log::warn!("Unexpectedly not at EOF of /proc/self/auxv. Read result: {r:?}");
-        return core::ptr::null_mut();
+        log::warn!("Expected EOF reading /proc/self/auxv. Instead got: {r:?}");
+        return ptr::null_mut();
     };
     let mut tag_val_iter = auxv_data
-        .chunks_exact(2 * core::mem::size_of::<core::ffi::c_ulong>())
+        .chunks_exact(2 * size_of::<c_ulong>())
         .map(|chunk| {
-            let tag = core::ffi::c_ulong::from_le_bytes(
-                chunk[..core::mem::size_of::<core::ffi::c_ulong>()]
-                    .try_into()
-                    .unwrap(),
-            );
-            let value = core::ffi::c_ulong::from_le_bytes(
-                chunk[core::mem::size_of::<core::ffi::c_ulong>()..]
-                    .try_into()
-                    .unwrap(),
-            );
+            let tag = c_ulong::from_ne_bytes(chunk[..size_of::<c_ulong>()].try_into().unwrap());
+            let value = c_ulong::from_ne_bytes(chunk[size_of::<c_ulong>()..].try_into().unwrap());
             (tag, value)
         });
     let Some((_tag, val)) =
         tag_val_iter.find(|(tag, _val)| *tag == u64::from(linux_api::auxvec::AuxVecTag::AT_RANDOM))
     else {
         log::warn!("Couldn't find AT_RANDOM");
-        return core::ptr::null_mut();
+        return ptr::null_mut();
     };
     val as *mut [u8; 16]
 }
@@ -58,10 +55,23 @@ fn get_auxvec_random() -> *mut [u8; 16] {
 ///
 /// * There must be no live rust reference to that data.
 /// * This function must not be called in parallel, e.g. from another thread.
+/// * The data must be writable. (This isn't explicitly guaranteed by the Linux
+///   docs, but seems to be the case).
+/// * Overwriting this process-global value must not violate safety requirements
+///   of other code running in the same address-space, such as they dynamic
+///   linker/loader and other dynamically linked libraries. The best way to ensure
+///   this is to call this before other such code gets a chance to run.
+///
+/// Because this data is a process-wide global initialized by the kernel, code
+/// outside of this library may access it. The above safety requirements likely
+/// apply to that code as well. Additionally, changing this data after some code
+/// has already read it might violate assumptions in that code.
 pub unsafe fn reinit_auxvec_random(data: &[u8; 16]) {
     let auxv = get_auxvec_random();
     if auxv.is_null() {
-        log::warn!("Couldn't find auxvec AT_RANDOM to overwrite");
+        log::warn!(
+            "Couldn't find auxvec AT_RANDOM to overwrite. May impact simulation determinism."
+        );
     } else {
         unsafe { get_auxvec_random().write(*data) }
     }
