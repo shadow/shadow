@@ -57,6 +57,7 @@ to sort out in the case that `stdout` and `stderr` are merged. (#3428)
   vector, fixing (#3539). This improves determinism, especially for golang
   programs (#2693), including tor simulations that include golang programs such
   as the obfs4proxy pluggable transport (#3538). (#3542)
+* Fix the behavior of sockets bound to the loopback interface: Shadow no longer panics in some cases where `connect` and `sendmsg` syscalls are used with a non-loopback address. (#3531)
 
 Full changelog since v3.2.0:
 
