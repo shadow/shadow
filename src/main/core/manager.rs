@@ -17,7 +17,8 @@ use scheduler::thread_per_host::ThreadPerHostSched;
 use scheduler::{HostIter, Scheduler};
 use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
-use shadow_shim_helper_rs::shim_shmem::ManagerShmem;
+use shadow_shim_helper_rs::option::FfiOption;
+use shadow_shim_helper_rs::shim_shmem::{ManagerShmem, NativePreemptionConfig};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::ShMemBlock;
 
@@ -197,6 +198,14 @@ impl<'a> Manager<'a> {
 
         let shmem = shadow_shmem::allocator::shmalloc(ManagerShmem {
             log_start_time_micros: unsafe { c::logger_get_global_start_time_micros() },
+            native_preemption_config: if config.native_preemption_enabled() {
+                FfiOption::Some(NativePreemptionConfig {
+                    native_duration: config.native_preemption_native_interval()?,
+                    sim_duration: config.native_preemption_sim_interval(),
+                })
+            } else {
+                FfiOption::None
+            },
         });
 
         Ok(Self {

@@ -1,4 +1,5 @@
 use linux_api::syscall::SyscallNum;
+use shadow_shim_helper_rs::shadow_syscalls::ShadowSyscallNum;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
@@ -12,7 +13,7 @@ pub mod types;
 
 /// Is the syscall a Shadow-specific syscall?
 fn is_shadow_syscall(n: SyscallNum) -> bool {
-    n.val() >= c::ShadowSyscallNum_SYS_shadow_min && n.val() <= c::ShadowSyscallNum_SYS_shadow_max
+    ShadowSyscallNum::try_from(n).is_ok()
 }
 
 // The helpers defined here are syscall-related but not handler-specific.

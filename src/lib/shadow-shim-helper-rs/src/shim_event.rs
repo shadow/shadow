@@ -5,6 +5,17 @@ use crate::syscall_types::{ForeignPtr, SyscallArgs, SyscallReg, UntypedForeignPt
 
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
+/// Data for [`ShimEventToShim::StartRes`]
+pub struct ShimEventStartRes {
+    /// Pseudorandom data to be used to overwrite the data linux provides
+    /// in its auxiliary vector.
+    // TODO: Consider replacing this with a seed for a shim-side PRNG, particularly
+    // when implementing the getrandom vdso (#3362).
+    pub auxvec_random: [u8; 16],
+}
+
+#[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
+#[repr(C)]
 /// Data for [`ShimEventToShim::Syscall`] and [`ShimEventToShadow::Syscall`]
 pub struct ShimEventSyscall {
     pub syscall_args: SyscallArgs,
@@ -97,7 +108,7 @@ pub enum ShimEventToShadow {
 pub enum ShimEventToShim {
     /// First message from shadow, indicating that it is ready for
     /// the shim to start executing.
-    StartRes,
+    StartRes(ShimEventStartRes),
     /// Request to execute the given syscall natively.
     Syscall(ShimEventSyscall),
     /// Request from Shadow to Shim to take the included shared memory block,

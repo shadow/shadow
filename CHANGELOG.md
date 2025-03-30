@@ -38,6 +38,7 @@ to be unique as with any other IP address assignment. (#3414)
   using this option. (#3478)
 * Converted the network interface and queuing disciplines to Rust and removed the legacy C implementations. (#3480)
 * Converted the legacy C packet and payload structs to Rust for safer reference counting. This also eliminates a payload copy in Rust TCP and UDP code. (#3492)
+* Added the experimental option `--native-preemption-enabled` for escaping pure-CPU busy-loops. (#3520)
 
 PATCH changes (bugfixes):
 
@@ -52,6 +53,10 @@ reports errors in a different format on `stderr` to make the duplication easier
 to sort out in the case that `stdout` and `stderr` are merged. (#3428)
 * Sending a packet to an unknown IP address no longer causes Shadow to panic. (#3411)
 * Improved the "deterministic" strace logging mode by hiding some non-deterministic syscall arguments. (#3473)
+* Shadow now overwrites the 16 bytes of random data that the Linux kernel provides in the auxiliary
+  vector, fixing (#3539). This improves determinism, especially for golang
+  programs (#2693), including tor simulations that include golang programs such
+  as the obfs4proxy pluggable transport (#3538). (#3542)
 
 Full changelog since v3.2.0:
 

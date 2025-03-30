@@ -11,6 +11,7 @@ pub mod ipc;
 pub mod notnull;
 pub mod option;
 pub mod rootedcell;
+pub mod shadow_syscalls;
 pub mod shim_event;
 pub mod shim_shmem;
 pub mod simulation_time;

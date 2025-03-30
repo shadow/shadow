@@ -24,6 +24,7 @@ vasi-sync = { path = "../vasi-sync" }
 linux-api = { path = "../linux-api" }
 tcp = { path = "../tcp" }
 bytemuck = "1.22.0"
+num_enum = { version="0.7.3", default-features = false }
 
 [build-dependencies]
 cc = { version = "1.2", features = ["parallel"] }

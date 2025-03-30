@@ -6,6 +6,7 @@ use std::time::Duration;
 use linux_api::errno::Errno;
 use linux_api::syscall::SyscallNum;
 use shadow_shim_helper_rs::HostId;
+use shadow_shim_helper_rs::shadow_syscalls::ShadowSyscallNum;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::SyscallArgs;
 use shadow_shim_helper_rs::syscall_types::SyscallReg;
@@ -267,53 +268,53 @@ impl SyscallHandler {
                 .expect("flushing syscall ptrs");
         }
 
-        if ctx.host.shim_shmem().model_unblocked_syscall_latency
-            && ctx.process.is_running()
-            && !matches!(rv, Err(SyscallError::Blocked(_)))
-        {
-            let max_unapplied_cpu_latency = ctx.host.shim_shmem().max_unapplied_cpu_latency;
+        if ctx.process.is_running() && !matches!(rv, Err(SyscallError::Blocked(_))) {
+            let host_shmem = ctx.host.shim_shmem();
+            let mut host_shmem_prot = ctx.host.shim_shmem_lock_borrow_mut().unwrap();
 
             // increment unblocked syscall latency, but only for non-shadow-syscalls, since the
             // latter are part of Shadow's internal plumbing; they shouldn't necessarily "consume"
             // time
-            if !is_shadow_syscall(syscall) {
-                ctx.host
-                    .shim_shmem_lock_borrow_mut()
-                    .unwrap()
-                    .unapplied_cpu_latency += ctx.host.shim_shmem().unblocked_syscall_latency;
+            if ctx.host.shim_shmem().model_unblocked_syscall_latency && !is_shadow_syscall(syscall)
+            {
+                host_shmem_prot.unapplied_cpu_latency += host_shmem.unblocked_syscall_latency;
             }
-
-            let unapplied_cpu_latency = ctx
-                .host
-                .shim_shmem_lock_borrow()
-                .unwrap()
-                .unapplied_cpu_latency;
 
             log::trace!(
                 "Unapplied CPU latency amt={}ns max={}ns",
-                unapplied_cpu_latency.as_nanos(),
-                max_unapplied_cpu_latency.as_nanos()
+                host_shmem_prot.unapplied_cpu_latency.as_nanos(),
+                host_shmem.max_unapplied_cpu_latency.as_nanos()
             );
 
-            if unapplied_cpu_latency > max_unapplied_cpu_latency {
-                let new_time = Worker::current_time().unwrap() + unapplied_cpu_latency;
-                let max_time = Worker::max_event_runahead_time(ctx.host);
-
-                if new_time <= max_time {
-                    log::trace!("Reached unblocked syscall limit; Incrementing time");
-
-                    ctx.host
-                        .shim_shmem_lock_borrow_mut()
-                        .unwrap()
-                        .unapplied_cpu_latency = SimulationTime::ZERO;
+            if host_shmem_prot.unapplied_cpu_latency > host_shmem.max_unapplied_cpu_latency {
+                let new_time = Worker::current_time().unwrap()
+                    + core::mem::replace(
+                        &mut host_shmem_prot.unapplied_cpu_latency,
+                        SimulationTime::ZERO,
+                    );
+                if new_time <= Worker::max_event_runahead_time(ctx.host) {
+                    // The new time is early enough that we can safely just increment to that time.
+                    // i.e. there are no threads or other events scheduled to
+                    // run on this worker before `new_time`.
+                    log::trace!(
+                        "Reached max-unapplied-cpu-latency, but not max runahead; Incrementing time"
+                    );
                     Worker::set_current_time(new_time);
                 } else {
-                    log::trace!("Reached unblocked syscall limit; Yielding");
+                    // We can't safely increment to the new time, e.g. because
+                    // there are other events or the end of the current
+                    // scheduler round scheduled to happen first.  Reschedule
+                    // the current thread to run at the new time instead of
+                    // incrementing it.
+                    log::trace!(
+                        "Reached max-unapplied-cpu-latency, and max runahead; Rescheduling"
+                    );
 
-                    // block instead, but save the result so that we can return it later instead of
-                    // re-executing the syscall
+                    // Save the syscall result so that we can return it later
+                    // instead of re-executing the syscall.
                     assert!(self.pending_result.is_none());
                     self.pending_result = Some(rv);
+
                     rv = Err(SyscallError::new_blocked_until(new_time, false));
                 }
             }
@@ -332,12 +333,6 @@ impl SyscallHandler {
 
     #[allow(non_upper_case_globals)]
     fn run_handler(&mut self, ctx: &ThreadContext, args: &SyscallArgs) -> SyscallResult {
-        const NR_shadow_yield: SyscallNum = SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_yield);
-        const NR_shadow_init_memory_manager: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_init_memory_manager);
-        const NR_shadow_hostname_to_addr_ipv4: SyscallNum =
-            SyscallNum::new(c::ShadowSyscallNum_SYS_shadow_hostname_to_addr_ipv4);
-
         let mut ctx = SyscallContext {
             objs: ctx,
             args,
@@ -514,9 +509,17 @@ impl SyscallHandler {
             //
             // CUSTOM SHADOW-SPECIFIC SYSCALLS
             //
-            NR_shadow_hostname_to_addr_ipv4 => handle!(shadow_hostname_to_addr_ipv4),
-            NR_shadow_init_memory_manager => handle!(shadow_init_memory_manager),
-            NR_shadow_yield => handle!(shadow_yield),
+            x if ShadowSyscallNum::try_from(x).is_ok() => {
+                match ShadowSyscallNum::try_from(x).expect("Conversion just succeeded above") {
+                    ShadowSyscallNum::hostname_to_addr_ipv4 => {
+                        handle!(shadow_hostname_to_addr_ipv4)
+                    }
+                    ShadowSyscallNum::init_memory_manager => {
+                        handle!(shadow_init_memory_manager)
+                    }
+                    ShadowSyscallNum::shadow_yield => handle!(shadow_yield),
+                }
+            }
             //
             // SHIM-ONLY SYSCALLS
             //

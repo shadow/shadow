@@ -93,6 +93,23 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
           accumulated-but-unapplied latency is discarded when a thread is blocked on a syscall.
           [default: "1 μs"]
 
+      --native-preemption-enabled <bool>
+          When true, and when managed code runs for an extended time without returning control to
+          shadow (e.g. by making a syscall), shadow preempts the managed code and moves simulated
+          time forward. This can be used to escape "pure-CPU busy-loops", but isn't usually needed,
+          breaks simulation determinism, and significantly affects simulation performance. [default:
+          false]
+
+      --native-preemption-native-interval <seconds>
+          When `native_preemption_enabled` is true, amount of native CPU-time to wait before
+          preempting managed code that hasn't returned control to shadow. Only supports microsecond
+          granularity, and values below 1 microsecond are rejected. [default: "100 ms"]
+
+      --native-preemption-sim-interval <seconds>
+          When `native_preemption_enabled` is true, amount of simulated time to consume after
+          `native_preemption_native_interval` has elapsed without returning control to shadow.
+          [default: "10 ms"]
+
       --report-errors-to-stderr <bool>
           When true, report error-level messages to stderr in addition to logging to stdout.
           [default: true]
