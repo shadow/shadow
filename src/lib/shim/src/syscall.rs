@@ -165,7 +165,7 @@ pub(crate) unsafe fn emulated_syscall_event(
                         }))
                 })
             }
-            e @ ShimEventToShim::StartRes => {
+            e @ ShimEventToShim::StartRes(_) => {
                 panic!("Unexpected event: {e:?}");
             }
         }

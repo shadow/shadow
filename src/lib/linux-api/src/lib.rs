@@ -51,6 +51,7 @@
 #[allow(unused)]
 mod bindings;
 
+pub mod auxvec;
 pub mod capability;
 pub mod close_range;
 pub mod epoll;

@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/auxv.h>
 #include <sys/types.h>
 #include <syscall.h>
 #include <unistd.h>
@@ -83,6 +84,20 @@ static int _test_open() {
 //    if(test_randomOpenRead("/dev/srandom") == EXIT_FAILURE) {
 //        return EXIT_FAILURE;
 //    }
+    return EXIT_SUCCESS;
+}
+
+static int _test_aux_at_random() {
+    uint8_t* at_random = (void*)getauxval(AT_RANDOM);
+    if (at_random == NULL) {
+        fprintf(stdout, "getauxval(AT_RANDOM) is NULL\n");
+        return EXIT_FAILURE;
+    }
+    printf("*AT_RANDOM (via libc): ");
+    for (int i = 0; i < 16; ++i) {
+        printf(" %02x", at_random[i]);
+    }
+    printf("\n");
     return EXIT_SUCCESS;
 }
 
@@ -236,6 +251,13 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     fprintf(stdout, "_test_nameAddress() passed\n");
+
+    fprintf(stdout, "starting _test_aux_at_random()\n");
+    if (_test_aux_at_random() < 0) {
+        fprintf(stdout, "########## _test_aux_at_random() failed\n");
+        return EXIT_FAILURE;
+    }
+    fprintf(stdout, "_test_aux_at_random() passed\n");
 
     fprintf(stdout, "########## determinism test passed! ##########\n");
 

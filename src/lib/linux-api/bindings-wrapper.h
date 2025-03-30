@@ -2,6 +2,7 @@
  * See `gen-kernel-bindings.sh`.
  */
 
+#include <linux/auxvec.h>
 #include <linux/capability.h>
 #include <linux/close_range.h>
 #include <linux/errno.h>

@@ -33,6 +33,36 @@ impl<T> ::core::fmt::Debug for linux___IncompleteArrayField<T> {
         fmt.write_str("linux___IncompleteArrayField")
     }
 }
+pub const LINUX_AT_SYSINFO_EHDR: u32 = 33;
+pub const LINUX_AT_VECTOR_SIZE_ARCH: u32 = 3;
+pub const LINUX_AT_NULL: u32 = 0;
+pub const LINUX_AT_IGNORE: u32 = 1;
+pub const LINUX_AT_EXECFD: u32 = 2;
+pub const LINUX_AT_PHDR: u32 = 3;
+pub const LINUX_AT_PHENT: u32 = 4;
+pub const LINUX_AT_PHNUM: u32 = 5;
+pub const LINUX_AT_PAGESZ: u32 = 6;
+pub const LINUX_AT_BASE: u32 = 7;
+pub const LINUX_AT_FLAGS: u32 = 8;
+pub const LINUX_AT_ENTRY: u32 = 9;
+pub const LINUX_AT_NOTELF: u32 = 10;
+pub const LINUX_AT_UID: u32 = 11;
+pub const LINUX_AT_EUID: u32 = 12;
+pub const LINUX_AT_GID: u32 = 13;
+pub const LINUX_AT_EGID: u32 = 14;
+pub const LINUX_AT_PLATFORM: u32 = 15;
+pub const LINUX_AT_HWCAP: u32 = 16;
+pub const LINUX_AT_CLKTCK: u32 = 17;
+pub const LINUX_AT_SECURE: u32 = 23;
+pub const LINUX_AT_BASE_PLATFORM: u32 = 24;
+pub const LINUX_AT_RANDOM: u32 = 25;
+pub const LINUX_AT_HWCAP2: u32 = 26;
+pub const LINUX_AT_RSEQ_FEATURE_SIZE: u32 = 27;
+pub const LINUX_AT_RSEQ_ALIGN: u32 = 28;
+pub const LINUX_AT_HWCAP3: u32 = 29;
+pub const LINUX_AT_HWCAP4: u32 = 30;
+pub const LINUX_AT_EXECFN: u32 = 31;
+pub const LINUX_AT_MINSIGSTKSZ: u32 = 51;
 pub const LINUX___BITS_PER_LONG: u32 = 64;
 pub const LINUX___BITS_PER_LONG_LONG: u32 = 64;
 pub const LINUX___FD_SETSIZE: u32 = 1024;
