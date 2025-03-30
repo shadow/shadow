@@ -174,7 +174,26 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                         set![TestEnv::Libc, TestEnv::Shadow]
                     },
                 ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_loopback_bound_connect"),
+                    move || test_loopback_bound_connect(sock_type, flag),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
             ]);
+        }
+    }
+
+    // TCP-only tests
+    for &sock_type in [libc::SOCK_STREAM].iter() {
+        for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
+            // add details to the test names to avoid duplicates
+            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+
+            tests.extend(vec![test_utils::ShadowTest::new(
+                &append_args("test_loopback_listening_connect"),
+                move || test_loopback_listening_connect(sock_type, flag),
+                set![TestEnv::Libc, TestEnv::Shadow],
+            )]);
         }
     }
 
@@ -1142,6 +1161,115 @@ fn test_server_close_during_blocking_connect(
     thread.join().unwrap()?;
 
     Ok(())
+}
+
+// Test the behavior of loopback-bound sockets when connect() is used with an external address
+fn test_loopback_bound_connect(sock_type: libc::c_int, flag: libc::c_int) -> Result<(), String> {
+    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    // bind the socket to loopback
+    {
+        let addr = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 0u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_LOOPBACK.to_be(),
+            },
+            sin_zero: [0; 8],
+        };
+        let rv = unsafe {
+            libc::bind(
+                fd,
+                std::ptr::from_ref(&addr) as *const libc::sockaddr,
+                std::mem::size_of_val(&addr) as u32,
+            )
+        };
+        eprintln!("errno: {}", test_utils::get_errno());
+        assert_eq!(rv, 0);
+    }
+
+    // we use a local network address here so that the tests
+    // running outside of shadow would only be trying to connect to a server on a local
+    // network rather than some random server on the internet
+    let other_ip: std::net::Ipv4Addr = "192.168.1.100".parse().unwrap();
+
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: u32::from(other_ip).to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
+    let args = ConnectArguments {
+        fd,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+
+    check_connect_call(&args, Some(libc::EINVAL))
+}
+
+// Test the behavior of loopback-bound listening sockets when connect() is used with an external address
+fn test_loopback_listening_connect(
+    sock_type: libc::c_int,
+    flag: libc::c_int,
+) -> Result<(), String> {
+    let fd = unsafe { libc::socket(libc::AF_INET, sock_type | flag, 0) };
+    assert!(fd >= 0);
+
+    // bind the socket to loopback
+    {
+        let addr = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 0u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: libc::INADDR_LOOPBACK.to_be(),
+            },
+            sin_zero: [0; 8],
+        };
+        let rv = unsafe {
+            libc::bind(
+                fd,
+                std::ptr::from_ref(&addr) as *const libc::sockaddr,
+                std::mem::size_of_val(&addr) as u32,
+            )
+        };
+        eprintln!("errno: {}", test_utils::get_errno());
+        assert_eq!(rv, 0);
+    }
+
+    // listen for connections
+    {
+        let rv = unsafe { libc::listen(fd, 10) };
+        eprintln!("errno: {}", test_utils::get_errno());
+        assert_eq!(rv, 0);
+    }
+
+    // we use a local network address here so that the tests
+    // running outside of shadow would only be trying to connect to a server on a local
+    // network rather than some random server on the internet
+    let other_ip: std::net::Ipv4Addr = "192.168.1.100".parse().unwrap();
+
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: u32::from(other_ip).to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+
+    let args = ConnectArguments {
+        fd,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+
+    // expects EISCONN instead of EINVAL
+    check_connect_call(&args, Some(libc::EISCONN))
 }
 
 fn check_connect_call(

@@ -10,3 +10,9 @@ hosts:
     - path: ../../../target/debug/test_send_recv
       args: --shadow-passing
       start_time: 1
+  # a dummy host that we can send packets to
+  othernode:
+    network_node_id: 0
+    ip_addr: 192.168.1.100
+    processes:
+    - path: "true"
