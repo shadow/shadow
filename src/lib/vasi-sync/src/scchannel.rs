@@ -246,7 +246,7 @@ impl<T> SelfContainedChannel<T> {
                 }
             };
             let expected = sleeper_state.into();
-            match sync::futex_wait(&self.state.0, expected) {
+            match sync::futex_wait(&self.state.0, expected, None) {
                 Ok(_) | Err(rustix::io::Errno::INTR) | Err(rustix::io::Errno::AGAIN) => {
                     // Something changed; clear the sleeper bit and try again.
                     let mut updated_state = self

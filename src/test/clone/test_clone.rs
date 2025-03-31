@@ -150,7 +150,7 @@ fn wait_for_clear_tid(tid: &AtomicU32) {
         if current == 0 {
             break;
         }
-        match futex_wait(tid, current) {
+        match futex_wait(tid, current, None) {
             Ok(0) => (),
             Err(rustix::io::Errno::AGAIN) | Err(rustix::io::Errno::INTR) => {
                 // try again

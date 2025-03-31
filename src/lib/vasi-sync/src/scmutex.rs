@@ -222,7 +222,7 @@ impl<T> SelfContainedMutex<T> {
                 if current.lock_state == UNLOCKED {
                     break;
                 }
-                match sync::futex_wait(&self.futex.0, current.into()) {
+                match sync::futex_wait(&self.futex.0, current.into(), None) {
                     Ok(_) | Err(rustix::io::Errno::INTR) => break,
                     Err(rustix::io::Errno::AGAIN) => {
                         // We may have gotten this because another thread is
