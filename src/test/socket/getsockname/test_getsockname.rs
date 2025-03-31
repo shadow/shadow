@@ -101,12 +101,17 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                     move || test_bound_connected_socket(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 ),
+                test_utils::ShadowTest::new(
+                    &append_args("test_implicit_bind_sendto"),
+                    move || test_implicit_bind_sendto(domain, sock_type),
+                    set![TestEnv::Libc, TestEnv::Shadow],
+                ),
             ]);
 
             if [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].contains(&sock_type) {
                 tests.extend(vec![test_utils::ShadowTest::new(
-                    &append_args("test_implicit_bind"),
-                    move || test_implicit_bind(domain, sock_type),
+                    &append_args("test_implicit_bind_listen"),
+                    move || test_implicit_bind_listen(domain, sock_type),
                     set![TestEnv::Libc, TestEnv::Shadow],
                 )]);
             }
@@ -688,14 +693,116 @@ fn test_bound_connected_socket(domain: libc::c_int, sock_type: libc::c_int) -> R
     Ok(())
 }
 
+/// Test getsockname after sendto() using a socket without binding (an implicit bind).
+fn test_implicit_bind_sendto(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+    let fd_client = unsafe { libc::socket(domain, sock_type, 0) };
+    let fd_server = unsafe { libc::socket(domain, sock_type, 0) };
+    assert!(fd_client >= 0);
+    assert!(fd_server >= 0);
+
+    let (server_addr, server_addr_len) = autobind_helper(fd_server, domain);
+
+    // errors we expect from the sendto() call
+    let expected_errors = match (domain, sock_type) {
+        (libc::AF_INET, libc::SOCK_STREAM) => &[libc::EPIPE][..],
+        (libc::AF_INET, libc::SOCK_DGRAM) => &[][..],
+        (libc::AF_UNIX, libc::SOCK_STREAM) => &[libc::ENOTSUP][..],
+        (libc::AF_UNIX, libc::SOCK_DGRAM) => &[][..],
+        (libc::AF_UNIX, libc::SOCK_SEQPACKET) => &[libc::ENOTCONN][..],
+        _ => unimplemented!(),
+    };
+
+    // send a message to the server address
+    let msg = [0u8; 1];
+    let bytes_sent = test_utils::check_system_call!(
+        || unsafe {
+            libc::sendto(
+                fd_client,
+                msg.as_ptr() as *const core::ffi::c_void,
+                msg.len(),
+                0,
+                server_addr.as_ptr(),
+                server_addr_len,
+            )
+        },
+        expected_errors,
+    )?;
+
+    // if we got an expected error, then exit gracefully since this socket doesn't support sendto
+    if !expected_errors.is_empty() {
+        return Ok(());
+    }
+
+    // we expect that the message was sent
+    assert_eq!(usize::try_from(bytes_sent), Ok(msg.len()));
+
+    // fill the sockaddr with dummy data
+    let addr = match domain {
+        libc::AF_INET => SockAddr::dummy_init_inet(),
+        libc::AF_UNIX => SockAddr::dummy_init_unix(),
+        _ => unimplemented!(),
+    };
+
+    // getsockname() may mutate addr and addr_len
+    let mut args = GetsocknameArguments {
+        fd: fd_client,
+        addr: Some(addr),
+        addr_len: Some(addr.ptr_size()),
+    };
+
+    test_utils::run_and_close_fds(&[fd_client, fd_server], || {
+        check_getsockname_call(&mut args, None)
+    })?;
+
+    if domain == libc::AF_INET {
+        // check that the returned length is expected
+        test_utils::result_assert_eq(
+            args.addr_len.unwrap() as usize,
+            std::mem::size_of::<libc::sockaddr_in>(),
+            "Unexpected addr length",
+        )?;
+
+        // check that the returned client address is expected (except the port which is not
+        // deterministic)
+        test_utils::result_assert_eq(
+            args.addr.unwrap().as_inet().unwrap().sin_family,
+            libc::AF_INET as u16,
+            "Unexpected family",
+        )?;
+        test_utils::result_assert_eq(
+            args.addr.unwrap().as_inet().unwrap().sin_addr.s_addr,
+            libc::INADDR_ANY.to_be(),
+            "Unexpected address",
+        )?;
+        test_utils::result_assert(
+            args.addr.unwrap().as_inet().unwrap().sin_port > 0,
+            "Unexpected port",
+        )?;
+        test_utils::result_assert_eq(
+            args.addr.unwrap().as_inet().unwrap().sin_zero,
+            [0; 8],
+            "Unexpected padding",
+        )?;
+    } else if domain == libc::AF_UNIX {
+        // check that the returned length is something reasonable
+        assert!(args.addr_len.unwrap() > 0);
+        assert_eq!(
+            args.addr.unwrap().as_unix().unwrap().sun_family,
+            libc::AF_UNIX as u16,
+        );
+    }
+
+    Ok(())
+}
+
 /// Test getsockname using a listening socket without binding (an implicit bind).
-fn test_implicit_bind(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
+fn test_implicit_bind_listen(domain: libc::c_int, sock_type: libc::c_int) -> Result<(), String> {
     let fd = unsafe { libc::socket(domain, sock_type, 0) };
     assert!(fd >= 0);
 
     let rv = unsafe { libc::listen(fd, 100) };
     if domain == libc::AF_INET {
-        // only inet sockets seem to support implicit binds
+        // only inet sockets seem to support implicit binds with listen()
         assert_eq!(rv, 0);
     } else {
         assert_ne!(rv, 0);
