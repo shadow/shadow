@@ -157,6 +157,30 @@ where
     }
 }
 
+/// Return a formatted error message if `a < b` is not true.
+pub fn result_assert_lt<T>(a: T, b: T, message: &str) -> Result<(), String>
+where
+    T: std::fmt::Debug + std::cmp::PartialOrd,
+{
+    if a < b {
+        Ok(())
+    } else {
+        Err(format!("!({:?} < {:?}) -- {}", a, b, message))
+    }
+}
+
+/// Return a formatted error message if `a > b` is not true.
+pub fn result_assert_gt<T>(a: T, b: T, message: &str) -> Result<(), String>
+where
+    T: std::fmt::Debug + std::cmp::PartialOrd,
+{
+    if a > b {
+        Ok(())
+    } else {
+        Err(format!("!({:?} > {:?}) -- {}", a, b, message))
+    }
+}
+
 /// Run the function and then close any given file descriptors, even if there was an error.
 pub fn run_and_close_fds<'a, I, F, U>(fds: I, f: F) -> U
 where

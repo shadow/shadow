@@ -303,7 +303,11 @@ fn test_siocgstamp(init_method: SocketInitMethod, sock_type: libc::c_int) -> Res
 
                 // since it was sent over localhost, the difference between the send time and
                 // receive time should be very small
-                test_utils::result_assert(difference < threshold, "Time difference was too large")?;
+                test_utils::result_assert_lt(
+                    difference,
+                    threshold,
+                    "Time difference was too large",
+                )?;
             }
             Some(e) => test_utils::result_assert_eq(
                 ioctl_siocgstamp(fd_peer),
