@@ -36,7 +36,6 @@
 - [Developer Guide]()
     - [Coding](coding.md)
     - [Debugging](debugging.md)
-    - [Profiling](profiling.md)
     - [Testing for Nondeterminism](testing_determinism.md)
     - [Extra Tests](extra_tests.md)
     - [Continuous integration tests](ci.md)
