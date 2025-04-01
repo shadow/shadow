@@ -152,6 +152,7 @@ where
                     match sync::futex_wait(
                         &self.init_state,
                         InitState::InitializingWithSleepers.into(),
+                        None,
                     ) {
                         Ok(_) | Err(rustix::io::Errno::INTR) | Err(rustix::io::Errno::AGAIN) => (),
                         Err(e) => panic!("Unexpected error: {e:?}"),

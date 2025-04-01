@@ -543,7 +543,7 @@ fn wait_for_start_event(is_first_thread: bool) {
     });
     let res = tls_ipc::with(|ipc| {
         ipc.to_shadow().send(start_req);
-        ipc.from_shadow().receive().unwrap()
+        ipc.from_shadow().receive(None).unwrap()
     });
     let ShimEventToShim::StartRes(res) = res else {
         panic!("Unexpected response: {res:?}");
