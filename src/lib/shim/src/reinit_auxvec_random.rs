@@ -97,9 +97,18 @@ mod test {
         assert_eq!(super::getauxval(AuxVecTag::AT_RANDOM).unwrap(), unsafe {
             libc::getauxval(libc::AT_RANDOM)
         });
-        assert_eq!(
-            super::getauxval(AuxVecTag::AT_MINSIGSTKSZ).unwrap(),
-            unsafe { libc::getauxval(libc::AT_MINSIGSTKSZ) }
-        );
+        for value in 0..100 {
+            if value == libc::AT_HWCAP || value == libc::AT_HWCAP2 {
+                // libc handles AT_HWCAP and AT_HWCAP2 differently
+                continue;
+            }
+            if let Ok(tag) = AuxVecTag::try_from(value) {
+                assert_eq!(
+                    super::getauxval(tag).unwrap_or(0),
+                    unsafe { libc::getauxval(value) },
+                    "value mismatch for type {tag:?}",
+                );
+            }
+        }
     }
 }
