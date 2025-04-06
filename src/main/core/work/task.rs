@@ -182,7 +182,7 @@ pub mod export {
     /// # Safety
     ///
     /// * `object` and `argument` must meet the requirements
-    ///    for `HostTreePointer::new`.
+    ///   for `HostTreePointer::new`.
     /// * Given that the host lock is held when execution of a callback
     ///   starts, they must not cause `object` or `argument` to be dereferenced
     ///   without the host lock held. (e.g. by releasing the host lock or exfiltrating
