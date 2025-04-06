@@ -55,7 +55,7 @@ fn get_running_pid_set(dir_path: &Path) -> anyhow::Result<HashSet<i32>> {
 // part after the '-', e.g., 2738869 in the example file name:
 // `shadow_shmemfile_6379761.950298775-2738869`
 fn pid_from_shadow_shm_file_name(file_name: &str) -> anyhow::Result<i32> {
-    let pid_str = file_name.split('-').last().context(format!(
+    let pid_str = file_name.split('-').next_back().context(format!(
         "Parsing PID separator '-' from shm file name {:?}",
         file_name
     ))?;
