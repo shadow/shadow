@@ -590,13 +590,7 @@ impl FuzzError {
 
 /// Returns `FuzzError` items for the results where we expect errors.
 pub fn filter_discard_valid(results: &[FuzzResult]) -> Vec<&FuzzError> {
-    results
-        .iter()
-        .filter_map(|v| match v {
-            Err(verify) => Some(verify),
-            _ => None,
-        })
-        .collect()
+    results.iter().filter_map(|x| x.as_ref().err()).collect()
 }
 
 /// Check that the actual syscall retval and errno matches the expected results.
