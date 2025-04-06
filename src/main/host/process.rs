@@ -328,7 +328,7 @@ impl RunnableProcess {
         // that address. This mechanism is typically used in `pthread_join` etc.
         // See `set_tid_address(2)`.
         let clear_child_tid_pvp = thread.get_tid_address();
-        if !clear_child_tid_pvp.is_null() && self.threads.borrow().len() > 0 {
+        if !clear_child_tid_pvp.is_null() && !self.threads.borrow().is_empty() {
             self.memory_manager
                 .borrow_mut()
                 .write(clear_child_tid_pvp, &0)
