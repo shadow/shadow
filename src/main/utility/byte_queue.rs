@@ -67,7 +67,7 @@ impl ByteQueue {
             self.total_allocations += 1;
         }
 
-        BytesMut::from_iter(std::iter::repeat(0).take(size))
+        BytesMut::from_iter(std::iter::repeat_n(0, size))
     }
 
     /// Push stream data onto the queue. The data may be merged into the previous stream chunk.

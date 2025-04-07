@@ -21,6 +21,6 @@ fn main() {
 
     let ld_preload =
         std::env::var("LD_PRELOAD").expect("Environment variable 'LD_PRELOAD' not set");
-    let ld_preload = ld_preload.split(':');
-    assert!(ld_preload.last().unwrap() == "/my/custom/ld/preload/path.so");
+    let mut ld_preload = ld_preload.split(':');
+    assert!(ld_preload.next_back().unwrap() == "/my/custom/ld/preload/path.so");
 }

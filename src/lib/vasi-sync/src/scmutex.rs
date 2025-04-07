@@ -252,7 +252,7 @@ impl<T> SelfContainedMutex<T> {
         }
     }
 
-    pub fn lock_pinned<'a>(self: Pin<&'a Self>) -> Pin<SelfContainedMutexGuard<'a, T>> {
+    pub fn lock_pinned(self: Pin<&Self>) -> Pin<SelfContainedMutexGuard<'_, T>> {
         // SAFETY: `SelfContainedMutexGuard` doesn't provide DerefMut when `T`
         // is `!Unpin`.
         unsafe { Pin::new_unchecked(self.get_ref().lock()) }

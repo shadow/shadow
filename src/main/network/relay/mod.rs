@@ -302,13 +302,13 @@ fn create_token_bucket(bytes_per_second: u64) -> TokenBucket {
 /// A downside of the `CONFIG_MTU` burst allowance is that the sending rate
 /// could possibly become "bursty" with a behavior such as:
 /// - interval 1: send `refill_size` + `CONFIG_MTU` bytes, sending over the
-///      allowance by 1500 bytes
+///   allowance by 1500 bytes
 /// - refill: `refill_size` token gets added to the bucket
 /// - interval 2: send `refill_size` - `CONFIG_MTU` bytes, sending under the
-///       allowance by 1500 bytes
+///   allowance by 1500 bytes
 /// - refill: `refill_size` token gets added to the bucket
 /// - interval 3: send `refill_size` + `CONFIG_MTU` bytes, sending over the
-///      allowance by 1500 bytes
+///   allowance by 1500 bytes
 /// - repeat
 ///
 /// So it could become less smooth and more "bursty" even though the long term
