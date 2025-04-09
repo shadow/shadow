@@ -439,6 +439,7 @@ impl From<SyscallReg> for linux_api::fcntl::OFlag {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::eventfd::EfdFlags {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
@@ -453,6 +454,7 @@ impl TryFrom<SyscallReg> for linux_api::socket::AddressFamily {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::socket::MsgFlags {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
@@ -460,6 +462,7 @@ impl TryFrom<SyscallReg> for nix::sys::socket::MsgFlags {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::stat::Mode {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {

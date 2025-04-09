@@ -1619,6 +1619,7 @@ dependencies = [
  "num_enum",
  "once_cell",
  "rand",
+ "rustix",
  "shadow-build-common",
  "shadow-pod",
  "shadow_shmem",
