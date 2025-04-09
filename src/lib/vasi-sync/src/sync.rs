@@ -56,9 +56,18 @@ unsafe fn futex(
     futex_word: &AtomicU32,
     futex_operation: FutexOperation,
     val: u32,
+    timeout: Option<core::time::Duration>,
 ) -> rustix::io::Result<usize> {
     #[cfg(not(miri))]
     {
+        let timeout = timeout.map(|t| rustix::event::Timespec {
+            tv_sec: t.as_secs().try_into().unwrap(),
+            tv_nsec: t.subsec_nanos().into(),
+        });
+        let timeout_ptr = match &timeout {
+            Some(t) => core::ptr::from_ref(t),
+            None => core::ptr::null(),
+        };
         let futex_operation = match futex_operation {
             FutexOperation::Wait => rustix::thread::FutexOperation::Wait,
             FutexOperation::Wake => rustix::thread::FutexOperation::Wake,
@@ -70,7 +79,7 @@ unsafe fn futex(
                 futex_operation,
                 rustix::thread::FutexFlags::empty(),
                 val,
-                core::ptr::null(),
+                timeout_ptr,
                 core::ptr::null_mut(),
                 0u32,
             )
@@ -80,6 +89,14 @@ unsafe fn futex(
     // futex syscalls made through libc.
     #[cfg(miri)]
     {
+        let timeout = timeout.map(|t| libc::timespec {
+            tv_sec: t.as_secs().try_into().unwrap(),
+            tv_nsec: t.subsec_nanos().try_into().unwrap(),
+        });
+        let timeout_ptr = match &timeout {
+            Some(t) => core::ptr::from_ref(t),
+            None => core::ptr::null(),
+        };
         let futex_operation = match futex_operation {
             FutexOperation::Wait => libc::FUTEX_WAIT,
             FutexOperation::Wake => libc::FUTEX_WAKE,
@@ -90,7 +107,7 @@ unsafe fn futex(
                 futex_word.as_ptr(),
                 futex_operation,
                 val,
-                core::ptr::null() as *const libc::timespec,
+                timeout_ptr,
                 core::ptr::null_mut() as *mut u32,
                 0u32,
             )
@@ -106,12 +123,16 @@ unsafe fn futex(
 }
 
 #[inline]
-pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize> {
+pub fn futex_wait(
+    futex_word: &AtomicU32,
+    val: u32,
+    timeout: Option<core::time::Duration>,
+) -> rustix::io::Result<usize> {
     // In "production" we use linux_syscall to avoid going through libc, and to
     // avoid touching libc's `errno` in particular.
     #[cfg(not(loom))]
     {
-        unsafe { futex(futex_word, FutexOperation::Wait, val) }
+        unsafe { futex(futex_word, FutexOperation::Wait, val, timeout) }
     }
     #[cfg(loom)]
     {
@@ -135,7 +156,14 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize>
             .clone();
         // We could get a spurious wakeup here, but that's ok.
         // Futexes are subject to spurious wakeups too.
-        condvar.wait(hashmap).unwrap();
+        match timeout {
+            Some(t) => {
+                condvar.wait_timeout(hashmap, t).unwrap();
+            }
+            None => {
+                condvar.wait(hashmap).unwrap();
+            }
+        };
         Ok(0)
     }
 }
@@ -144,7 +172,7 @@ pub fn futex_wait(futex_word: &AtomicU32, val: u32) -> rustix::io::Result<usize>
 pub fn futex_wake_one(futex_word: &AtomicU32) -> rustix::io::Result<()> {
     #[cfg(not(loom))]
     {
-        unsafe { futex(futex_word, FutexOperation::Wake, 1) }.map(|_| ())
+        unsafe { futex(futex_word, FutexOperation::Wake, 1, None) }.map(|_| ())
     }
     // loom doesn't understand syscalls; emulate via loom primitives.
     #[cfg(loom)]
@@ -169,6 +197,7 @@ pub fn futex_wake_all(futex_word: &AtomicU32) -> rustix::io::Result<()> {
                 futex_word,
                 FutexOperation::Wake,
                 u32::try_from(i32::MAX).unwrap(),
+                None,
             )
         }
         .map(|_| ())
