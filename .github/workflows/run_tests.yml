@@ -20,8 +20,6 @@ jobs:
     strategy:
       matrix:
         container:
-          # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:20.04'
           # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
           - 'ubuntu:22.04'
           # End of standard support: June 2029 https://wiki.ubuntu.com/Releases

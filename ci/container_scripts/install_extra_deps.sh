@@ -34,22 +34,6 @@ case "$CC" in
     clang)
         install_packages clang
         ;;
-    clang-12)
-        case "$CONTAINER" in
-            ubuntu:*|debian:*)
-                curl https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /usr/share/keyrings/llvm-archive-keyring.gpg
-        esac
-        case "$CONTAINER" in
-            ubuntu:20.04)
-                echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main" \
-                  >> /etc/apt/sources.list
-        esac
-        case "$CONTAINER" in
-            ubuntu:*|debian:*)
-                apt-get update
-        esac
-        install_packages clang-12
-        ;;
     *)
         echo "Unhandled cc $CC"
         exit 1
