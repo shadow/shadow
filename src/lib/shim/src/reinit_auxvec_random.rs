@@ -111,26 +111,48 @@ mod test {
             (AuxVecTag::AT_GID, libc::AT_GID),
             (AuxVecTag::AT_EGID, libc::AT_EGID),
             (AuxVecTag::AT_PLATFORM, libc::AT_PLATFORM),
-            // libc doesn't return the raw value: (AuxVecTag::AT_HWCAP, libc::AT_HWCAP),
+            // glibc appears to get this elsewhere, *and* experimentally
+            // these values don't match.
+            // <https://github.com/bminor/glibc/blob/12a497c716f0a06be5946cabb8c3ec22a079771e/misc/getauxval.c#L32>
+            // (AuxVecTag::AT_HWCAP, libc::AT_HWCAP),
             (AuxVecTag::AT_CLKTCK, libc::AT_CLKTCK),
             (AuxVecTag::AT_SECURE, libc::AT_SECURE),
             (AuxVecTag::AT_BASE_PLATFORM, libc::AT_BASE_PLATFORM),
             (AuxVecTag::AT_RANDOM, libc::AT_RANDOM),
-            (AuxVecTag::AT_HWCAP2, libc::AT_HWCAP2),
-            // No libc constant: (AuxVecTag::AT_RSEQ_FEATURE_SIZE, libc::AT_RSEQ_FEATURE_SIZE),
-            // No libc constant: (AuxVecTag::AT_RSEQ_ALIGN, libc::AT_RSEQ_ALIGN),
-            // No libc constant: (AuxVecTag::AT_HWCAP3, libc::AT_HWCAP3),
-            // No libc constant: (AuxVecTag::AT_HWCAP4, libc::AT_HWCAP4),
+            // glibc handles AT_HWCAP2 specially. Experimentally it seems to
+            // ultimately return the same value, but unclear whether that'll
+            // always be the case.
+            // <https://github.com/bminor/glibc/blob/12a497c716f0a06be5946cabb8c3ec22a079771e/misc/getauxval.c#L37>
+            // (AuxVecTag::AT_HWCAP2, libc::AT_HWCAP2),
+
+            // These constants don't exist in the libc crate:
+            /*
+            (AuxVecTag::AT_RSEQ_FEATURE_SIZE, libc::AT_RSEQ_FEATURE_SIZE),
+            (AuxVecTag::AT_RSEQ_ALIGN, libc::AT_RSEQ_ALIGN),
+            (AuxVecTag::AT_HWCAP3, libc::AT_HWCAP3),
+            (AuxVecTag::AT_HWCAP4, libc::AT_HWCAP4),
+            */
             (AuxVecTag::AT_EXECFN, libc::AT_EXECFN),
             (AuxVecTag::AT_MINSIGSTKSZ, libc::AT_MINSIGSTKSZ),
         ];
         for (linux_tag, libc_tag) in tags {
-            assert_eq!(
-                // libc returns 0 for tags that aren't present in the auxvec
-                super::getauxval(linux_tag).unwrap_or(0),
-                unsafe { libc::getauxval(libc_tag) },
-                "value mismatch for type {linux_tag:?}",
-            );
+            // Ensure errno *isn't* set to ENOENT so that we can distinguish
+            // between libc returning value 0 and ENOENT.
+            unsafe { *libc::__errno_location() = libc::ENOENT + 1 };
+
+            let linux_res = super::getauxval(linux_tag);
+            let libc_res = unsafe { libc::getauxval(libc_tag) };
+            let libc_errno = unsafe { *libc::__errno_location() };
+            println!("{linux_tag:?}: {linux_res:?}");
+            match linux_res {
+                Some(v) => {
+                    assert_eq!(v, libc_res, "for {linux_tag:?}")
+                }
+                None => {
+                    assert_eq!(libc_res, 0, "for {linux_tag:?}");
+                    assert_eq!(libc_errno, libc::ENOENT, "for {linux_tag:?}");
+                }
+            }
         }
     }
 }
