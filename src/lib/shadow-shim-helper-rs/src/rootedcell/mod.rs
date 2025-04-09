@@ -1,4 +1,4 @@
-use std::{
+use core::{
     marker::PhantomData,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -7,6 +7,8 @@ use once_cell::sync::OnceCell;
 use vasi::VirtualAddressSpaceIndependent;
 
 pub mod cell;
+// Uses allocation.
+#[cfg(feature = "alloc")]
 pub mod rc;
 pub mod refcell;
 
@@ -81,7 +83,7 @@ impl Default for Tag {
 #[repr(C)]
 pub struct Root {
     tag: Tag,
-    _notsync: std::marker::PhantomData<std::cell::Cell<()>>,
+    _notsync: core::marker::PhantomData<core::cell::Cell<()>>,
 }
 
 impl Root {

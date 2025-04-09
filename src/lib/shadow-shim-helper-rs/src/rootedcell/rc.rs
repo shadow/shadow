@@ -1,7 +1,11 @@
-use std::{
+extern crate alloc;
+
+use core::{
     cell::{Cell, UnsafeCell},
     ptr::NonNull,
 };
+
+use alloc::boxed::Box;
 
 use crate::explicit_drop::ExplicitDrop;
 
@@ -124,6 +128,15 @@ impl<T> RootedRcCommon<T> {
     }
 }
 
+#[cfg(feature = "std")]
+fn already_panicking() -> bool {
+    std::thread::panicking()
+}
+#[cfg(not(feature = "std"))]
+fn already_panicking() -> bool {
+    false
+}
+
 impl<T> Drop for RootedRcCommon<T> {
     #[inline]
     fn drop(&mut self) {
@@ -142,7 +155,7 @@ impl<T> Drop for RootedRcCommon<T> {
             // a call to `safely_drop` got skipped, and panicking again would
             // just obscure the original panic.
             #[cfg(debug_assertions)]
-            if !std::thread::panicking() {
+            if !already_panicking() {
                 panic!("Dropped without calling `explicit_drop`");
             }
         }
@@ -239,7 +252,7 @@ impl<T> ExplicitDrop for RootedRc<T> {
     }
 }
 
-impl<T> std::ops::Deref for RootedRc<T> {
+impl<T> core::ops::Deref for RootedRc<T> {
     type Target = T;
 
     #[inline]

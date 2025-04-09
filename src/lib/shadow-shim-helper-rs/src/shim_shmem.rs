@@ -316,7 +316,7 @@ impl ThreadShmem {
                         Signal::STANDARD_MAX.as_i32() as usize],
                     blocked_signals: sigset_t::EMPTY,
                     sigaltstack: StackWrapper(stack_t {
-                        ss_sp: std::ptr::null_mut(),
+                        ss_sp: core::ptr::null_mut(),
                         ss_flags: libc::SS_DISABLE,
                         ss_size: 0,
                     }),
@@ -384,7 +384,7 @@ impl ThreadShmemProtected {
     /// # Safety
     ///
     /// `stack_t::ss_sp` must not be dereferenced except from corresponding
-    /// managed thread. Must be set to either std::ptr::null_mut, or a pointer valid
+    /// managed thread. Must be set to either core::ptr::null_mut, or a pointer valid
     /// in the managed thread.
     pub unsafe fn sigaltstack_mut(&mut self) -> &mut stack_t {
         &mut self.sigaltstack.0
@@ -431,7 +431,7 @@ pub fn take_pending_unblocked_signal(
 }
 
 pub mod export {
-    use std::sync::atomic::Ordering;
+    use core::sync::atomic::Ordering;
 
     use bytemuck::TransparentWrapper;
     use linux_api::signal::{linux_sigaction, linux_sigset_t, linux_stack_t};
@@ -458,7 +458,7 @@ pub mod export {
         let host = unsafe { host.as_ref().unwrap() };
         let mut guard: SelfContainedMutexGuard<ShimShmemHostLock> = host.protected().lock();
         let lock: &mut ShimShmemHostLock = &mut guard;
-        let lock = std::ptr::from_mut(lock);
+        let lock = core::ptr::from_mut(lock);
         guard.disconnect();
         lock
     }
@@ -476,7 +476,7 @@ pub mod export {
         assert_eq!(host.host_id, guard.host_id);
 
         let p_lock = unsafe { lock.as_mut().unwrap() };
-        *p_lock = std::ptr::null_mut();
+        *p_lock = core::ptr::null_mut();
     }
 
     /// # Safety
@@ -603,7 +603,7 @@ pub mod export {
 
     #[unsafe(no_mangle)]
     pub extern "C-unwind" fn shimshmemthread_size() -> usize {
-        std::mem::size_of::<ThreadShmem>()
+        core::mem::size_of::<ThreadShmem>()
     }
 
     /// # Safety

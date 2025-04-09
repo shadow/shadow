@@ -1,14 +1,14 @@
-use std::cell::UnsafeCell;
+use core::cell::UnsafeCell;
 
 use vasi::VirtualAddressSpaceIndependent;
 
 use super::{Root, Tag};
 
-/// Analagous to [std::cell::Cell]. In particular like [std::cell::Cell], it
+/// Analagous to [core::cell::Cell]. In particular like [core::cell::Cell], it
 /// doesn't perform any atomic operations internally, making it relatively
 /// inexpensive.
 ///
-/// Unlike [std::cell::Cell], this type is [Send] and [Sync] if `T` is
+/// Unlike [core::cell::Cell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to access.
 #[derive(Debug, VirtualAddressSpaceIndependent)]
