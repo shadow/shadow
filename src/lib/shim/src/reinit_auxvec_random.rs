@@ -94,12 +94,43 @@ mod test {
     #[cfg(not(miri))]
     fn test_getauxvec() {
         // Test consistency with libc
-        assert_eq!(super::getauxval(AuxVecTag::AT_RANDOM).unwrap(), unsafe {
-            libc::getauxval(libc::AT_RANDOM)
-        });
-        assert_eq!(
-            super::getauxval(AuxVecTag::AT_MINSIGSTKSZ).unwrap(),
-            unsafe { libc::getauxval(libc::AT_MINSIGSTKSZ) }
-        );
+        let tags = [
+            (AuxVecTag::AT_NULL, libc::AT_NULL),
+            (AuxVecTag::AT_IGNORE, libc::AT_IGNORE),
+            (AuxVecTag::AT_EXECFD, libc::AT_EXECFD),
+            (AuxVecTag::AT_PHDR, libc::AT_PHDR),
+            (AuxVecTag::AT_PHENT, libc::AT_PHENT),
+            (AuxVecTag::AT_PHNUM, libc::AT_PHNUM),
+            (AuxVecTag::AT_PAGESZ, libc::AT_PAGESZ),
+            (AuxVecTag::AT_BASE, libc::AT_BASE),
+            (AuxVecTag::AT_FLAGS, libc::AT_FLAGS),
+            (AuxVecTag::AT_ENTRY, libc::AT_ENTRY),
+            (AuxVecTag::AT_NOTELF, libc::AT_NOTELF),
+            (AuxVecTag::AT_UID, libc::AT_UID),
+            (AuxVecTag::AT_EUID, libc::AT_EUID),
+            (AuxVecTag::AT_GID, libc::AT_GID),
+            (AuxVecTag::AT_EGID, libc::AT_EGID),
+            (AuxVecTag::AT_PLATFORM, libc::AT_PLATFORM),
+            // libc doesn't return the raw value: (AuxVecTag::AT_HWCAP, libc::AT_HWCAP),
+            (AuxVecTag::AT_CLKTCK, libc::AT_CLKTCK),
+            (AuxVecTag::AT_SECURE, libc::AT_SECURE),
+            (AuxVecTag::AT_BASE_PLATFORM, libc::AT_BASE_PLATFORM),
+            (AuxVecTag::AT_RANDOM, libc::AT_RANDOM),
+            (AuxVecTag::AT_HWCAP2, libc::AT_HWCAP2),
+            // No libc constant: (AuxVecTag::AT_RSEQ_FEATURE_SIZE, libc::AT_RSEQ_FEATURE_SIZE),
+            // No libc constant: (AuxVecTag::AT_RSEQ_ALIGN, libc::AT_RSEQ_ALIGN),
+            // No libc constant: (AuxVecTag::AT_HWCAP3, libc::AT_HWCAP3),
+            // No libc constant: (AuxVecTag::AT_HWCAP4, libc::AT_HWCAP4),
+            (AuxVecTag::AT_EXECFN, libc::AT_EXECFN),
+            (AuxVecTag::AT_MINSIGSTKSZ, libc::AT_MINSIGSTKSZ),
+        ];
+        for (linux_tag, libc_tag) in tags {
+            assert_eq!(
+                // libc returns 0 for tags that aren't present in the auxvec
+                super::getauxval(linux_tag).unwrap_or(0),
+                unsafe { libc::getauxval(libc_tag) },
+                "value mismatch for type {linux_tag:?}",
+            );
+        }
     }
 }
