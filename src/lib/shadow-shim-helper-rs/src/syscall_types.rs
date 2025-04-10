@@ -29,7 +29,7 @@ pub struct ForeignPtr<T> {
     // `ForeignPtr` behaves as if it holds a pointer to a `T`, and we want this `ForeignPtr` to be
     // `Send` + `Sync`
     #[unsafe_assume_virtual_address_space_independent]
-    _phantom: std::marker::PhantomData<SyncSendPointer<T>>,
+    _phantom: core::marker::PhantomData<SyncSendPointer<T>>,
 }
 
 unsafe impl<T> shadow_pod::Pod for ForeignPtr<T> where T: 'static {}
@@ -38,7 +38,7 @@ impl<T> ForeignPtr<T> {
     const fn new_with_type_inference(val: usize) -> Self {
         Self {
             val,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -95,14 +95,14 @@ impl<T> ForeignPtr<T> {
     #[inline]
     pub const fn add(&self, count: usize) -> Self {
         let val = self.val;
-        Self::new_with_type_inference(val + count * std::mem::size_of::<T>())
+        Self::new_with_type_inference(val + count * core::mem::size_of::<T>())
     }
 
     /// Subtract an offset from a pointer. `count` is in units of `T`.
     #[inline]
     pub const fn sub(&self, count: usize) -> Self {
         let val = self.val;
-        Self::new_with_type_inference(val - count * std::mem::size_of::<T>())
+        Self::new_with_type_inference(val - count * core::mem::size_of::<T>())
     }
 
     /// Convert to a raw pointer. "safe" in itself, but keep in mind that it
@@ -167,19 +167,19 @@ impl<T> Clone for ForeignPtr<T> {
     }
 }
 
-impl<T> std::fmt::Debug for ForeignPtr<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> core::fmt::Debug for ForeignPtr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // this will also show the generic type
-        f.debug_struct(std::any::type_name::<Self>())
+        f.debug_struct(core::any::type_name::<Self>())
             .field("val", &self.val)
             .finish()
     }
 }
 
-impl<T> std::fmt::Pointer for ForeignPtr<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> core::fmt::Pointer for ForeignPtr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let ptr = self.val as *const libc::c_void;
-        std::fmt::Pointer::fmt(&ptr, f)
+        core::fmt::Pointer::fmt(&ptr, f)
     }
 }
 
@@ -412,8 +412,8 @@ impl From<()> for SyscallReg {
     }
 }
 
-impl std::fmt::Debug for SyscallReg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for SyscallReg {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // prepare the pointer for formatting
         let as_ptr = DebugFormatter(move |fmt| write!(fmt, "{:p}", unsafe { self.as_ptr }));
 
@@ -439,6 +439,7 @@ impl From<SyscallReg> for linux_api::fcntl::OFlag {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::eventfd::EfdFlags {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
@@ -453,6 +454,7 @@ impl TryFrom<SyscallReg> for linux_api::socket::AddressFamily {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::socket::MsgFlags {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
@@ -460,6 +462,7 @@ impl TryFrom<SyscallReg> for nix::sys::socket::MsgFlags {
     }
 }
 
+#[cfg(feature = "nix")]
 impl TryFrom<SyscallReg> for nix::sys::stat::Mode {
     type Error = ();
     fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {

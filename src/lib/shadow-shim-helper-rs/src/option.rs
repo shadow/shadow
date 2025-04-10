@@ -36,13 +36,13 @@ impl<T> FfiOption<T> {
 
     pub fn take(&mut self) -> Self {
         let mut other = Self::None;
-        std::mem::swap(self, &mut other);
+        core::mem::swap(self, &mut other);
         other
     }
 
     pub fn replace(&mut self, value: T) -> Self {
         let mut other = Self::Some(value);
-        std::mem::swap(self, &mut other);
+        core::mem::swap(self, &mut other);
         other
     }
 

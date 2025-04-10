@@ -52,8 +52,8 @@ pub struct TimePartsFmtHrMinSec<'a> {
     time: &'a TimeParts,
 }
 
-impl std::fmt::Display for TimePartsFmtHrMinSec<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for TimePartsFmtHrMinSec<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "{:02}:{:02}:{:02}",
@@ -66,8 +66,8 @@ pub struct TimePartsFmtHrMinSecMilli<'a> {
     time: &'a TimeParts,
 }
 
-impl std::fmt::Display for TimePartsFmtHrMinSecMilli<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for TimePartsFmtHrMinSecMilli<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "{:02}:{:02}:{:02}.{:03}",
@@ -83,8 +83,8 @@ pub struct TimePartsFmtHrMinSecNano<'a> {
     time: &'a TimeParts,
 }
 
-impl std::fmt::Display for TimePartsFmtHrMinSecNano<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for TimePartsFmtHrMinSecNano<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "{:02}:{:02}:{:02}.{:09}",

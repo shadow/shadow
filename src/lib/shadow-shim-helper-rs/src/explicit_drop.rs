@@ -76,7 +76,7 @@ where
     }
 }
 
-impl<DropFn, Value> std::ops::Deref for ExplicitDropper<DropFn, Value>
+impl<DropFn, Value> core::ops::Deref for ExplicitDropper<DropFn, Value>
 where
     DropFn: FnOnce(Value),
 {
@@ -88,7 +88,7 @@ where
     }
 }
 
-impl<DropFn, Value> std::ops::DerefMut for ExplicitDropper<DropFn, Value>
+impl<DropFn, Value> core::ops::DerefMut for ExplicitDropper<DropFn, Value>
 where
     DropFn: FnOnce(Value),
 {

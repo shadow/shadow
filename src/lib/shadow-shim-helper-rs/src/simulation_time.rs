@@ -9,7 +9,7 @@ This module contains some identically-named constants defined as C macros in
 `main/core/definitions.h`.
 */
 
-use std::time::Duration;
+use core::time::Duration;
 
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -53,7 +53,7 @@ impl SimulationTime {
 
     /// Convert a [`Duration`] to a [`SimulationTime`]. This function exists as a `const`
     /// alternative to `SimulationTime::try_from(duration)`. May panic if the duration is too large.
-    pub const fn from_duration(val: std::time::Duration) -> Self {
+    pub const fn from_duration(val: core::time::Duration) -> Self {
         if SIMTIME_ONE_NANOSECOND != 1 {
             unreachable!();
         }
@@ -189,7 +189,7 @@ impl SimulationTime {
     }
 }
 
-impl std::ops::Add<SimulationTime> for SimulationTime {
+impl core::ops::Add<SimulationTime> for SimulationTime {
     type Output = SimulationTime;
 
     fn add(self, other: Self) -> Self::Output {
@@ -197,13 +197,13 @@ impl std::ops::Add<SimulationTime> for SimulationTime {
     }
 }
 
-impl std::ops::AddAssign<SimulationTime> for SimulationTime {
+impl core::ops::AddAssign<SimulationTime> for SimulationTime {
     fn add_assign(&mut self, rhs: SimulationTime) {
         *self = *self + rhs;
     }
 }
 
-impl std::ops::Sub<SimulationTime> for SimulationTime {
+impl core::ops::Sub<SimulationTime> for SimulationTime {
     type Output = SimulationTime;
 
     fn sub(self, other: Self) -> Self::Output {
@@ -211,13 +211,13 @@ impl std::ops::Sub<SimulationTime> for SimulationTime {
     }
 }
 
-impl std::ops::SubAssign<SimulationTime> for SimulationTime {
+impl core::ops::SubAssign<SimulationTime> for SimulationTime {
     fn sub_assign(&mut self, rhs: SimulationTime) {
         *self = *self - rhs;
     }
 }
 
-impl std::ops::Mul<u32> for SimulationTime {
+impl core::ops::Mul<u32> for SimulationTime {
     type Output = SimulationTime;
 
     fn mul(self, other: u32) -> Self::Output {
@@ -225,13 +225,13 @@ impl std::ops::Mul<u32> for SimulationTime {
     }
 }
 
-impl std::ops::MulAssign<u32> for SimulationTime {
+impl core::ops::MulAssign<u32> for SimulationTime {
     fn mul_assign(&mut self, rhs: u32) {
         *self = self.checked_mul(rhs.into()).unwrap();
     }
 }
 
-impl std::ops::Div<u32> for SimulationTime {
+impl core::ops::Div<u32> for SimulationTime {
     type Output = SimulationTime;
 
     fn div(self, other: u32) -> Self::Output {
@@ -239,13 +239,13 @@ impl std::ops::Div<u32> for SimulationTime {
     }
 }
 
-impl std::ops::DivAssign<u32> for SimulationTime {
+impl core::ops::DivAssign<u32> for SimulationTime {
     fn div_assign(&mut self, rhs: u32) {
         *self = self.checked_div(rhs.into()).unwrap();
     }
 }
 
-impl std::ops::Rem<SimulationTime> for SimulationTime {
+impl core::ops::Rem<SimulationTime> for SimulationTime {
     type Output = SimulationTime;
 
     fn rem(self, other: SimulationTime) -> Self::Output {
@@ -253,10 +253,10 @@ impl std::ops::Rem<SimulationTime> for SimulationTime {
     }
 }
 
-impl std::convert::TryFrom<std::time::Duration> for SimulationTime {
+impl core::convert::TryFrom<core::time::Duration> for SimulationTime {
     type Error = ();
 
-    fn try_from(val: std::time::Duration) -> Result<Self, Self::Error> {
+    fn try_from(val: core::time::Duration) -> Result<Self, Self::Error> {
         debug_assert_eq!(SIMTIME_ONE_NANOSECOND, 1);
         let val = val.as_nanos();
         if val > SIMTIME_MAX.into() {
@@ -267,20 +267,20 @@ impl std::convert::TryFrom<std::time::Duration> for SimulationTime {
     }
 }
 
-impl std::convert::From<SimulationTime> for std::time::Duration {
-    fn from(val: SimulationTime) -> std::time::Duration {
+impl core::convert::From<SimulationTime> for core::time::Duration {
+    fn from(val: SimulationTime) -> core::time::Duration {
         debug_assert_eq!(SIMTIME_ONE_NANOSECOND, 1);
         Duration::from_nanos(val.0)
     }
 }
 
-impl std::convert::From<SimulationTime> for CSimulationTime {
+impl core::convert::From<SimulationTime> for CSimulationTime {
     fn from(val: SimulationTime) -> CSimulationTime {
         val.0
     }
 }
 
-impl std::convert::TryFrom<libc::timespec> for SimulationTime {
+impl core::convert::TryFrom<libc::timespec> for SimulationTime {
     type Error = ();
 
     fn try_from(value: libc::timespec) -> Result<Self, Self::Error> {
@@ -293,7 +293,7 @@ impl std::convert::TryFrom<libc::timespec> for SimulationTime {
     }
 }
 
-impl std::convert::TryFrom<SimulationTime> for libc::timespec {
+impl core::convert::TryFrom<SimulationTime> for libc::timespec {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
@@ -304,7 +304,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timespec {
     }
 }
 
-impl std::convert::TryFrom<linux_api::time::timespec> for SimulationTime {
+impl core::convert::TryFrom<linux_api::time::timespec> for SimulationTime {
     type Error = ();
 
     fn try_from(value: linux_api::time::timespec) -> Result<Self, Self::Error> {
@@ -317,7 +317,7 @@ impl std::convert::TryFrom<linux_api::time::timespec> for SimulationTime {
     }
 }
 
-impl std::convert::TryFrom<SimulationTime> for linux_api::time::timespec {
+impl core::convert::TryFrom<SimulationTime> for linux_api::time::timespec {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
@@ -328,7 +328,7 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timespec {
     }
 }
 
-impl std::convert::TryFrom<libc::timeval> for SimulationTime {
+impl core::convert::TryFrom<libc::timeval> for SimulationTime {
     type Error = ();
 
     fn try_from(value: libc::timeval) -> Result<Self, Self::Error> {
@@ -341,7 +341,7 @@ impl std::convert::TryFrom<libc::timeval> for SimulationTime {
     }
 }
 
-impl std::convert::TryFrom<SimulationTime> for libc::timeval {
+impl core::convert::TryFrom<SimulationTime> for libc::timeval {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
@@ -352,7 +352,7 @@ impl std::convert::TryFrom<SimulationTime> for libc::timeval {
     }
 }
 
-impl std::convert::TryFrom<linux_api::time::timeval> for SimulationTime {
+impl core::convert::TryFrom<linux_api::time::timeval> for SimulationTime {
     type Error = ();
 
     fn try_from(value: linux_api::time::timeval) -> Result<Self, Self::Error> {
@@ -365,7 +365,7 @@ impl std::convert::TryFrom<linux_api::time::timeval> for SimulationTime {
     }
 }
 
-impl std::convert::TryFrom<linux_api::time::kernel_old_timeval> for SimulationTime {
+impl core::convert::TryFrom<linux_api::time::kernel_old_timeval> for SimulationTime {
     type Error = ();
 
     fn try_from(value: linux_api::time::kernel_old_timeval) -> Result<Self, Self::Error> {
@@ -378,7 +378,7 @@ impl std::convert::TryFrom<linux_api::time::kernel_old_timeval> for SimulationTi
     }
 }
 
-impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
+impl core::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
@@ -389,7 +389,7 @@ impl std::convert::TryFrom<SimulationTime> for linux_api::time::timeval {
     }
 }
 
-impl std::convert::TryFrom<SimulationTime> for linux_api::time::kernel_old_timeval {
+impl core::convert::TryFrom<SimulationTime> for linux_api::time::kernel_old_timeval {
     type Error = ();
 
     fn try_from(value: SimulationTime) -> Result<Self, Self::Error> {
@@ -564,7 +564,7 @@ pub mod export {
         let Ok(tv) = libc::timeval::try_from(simtime) else {
             return false;
         };
-        unsafe { std::ptr::write(notnull_mut(out), tv) };
+        unsafe { core::ptr::write(notnull_mut(out), tv) };
         true
     }
 
@@ -583,7 +583,7 @@ pub mod export {
         let Ok(ts) = libc::timespec::try_from(simtime) else {
             return false;
         };
-        unsafe { std::ptr::write(out, ts) };
+        unsafe { core::ptr::write(out, ts) };
         true
     }
 }

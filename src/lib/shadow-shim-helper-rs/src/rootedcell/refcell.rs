@@ -1,4 +1,4 @@
-use std::cell::{Cell, UnsafeCell};
+use core::cell::{Cell, UnsafeCell};
 
 use vasi::VirtualAddressSpaceIndependent;
 
@@ -6,11 +6,11 @@ use crate::explicit_drop::ExplicitDrop;
 
 use super::{Root, Tag};
 
-/// Analagous to [std::cell::RefCell]. In particular like [std::cell::RefCell]
+/// Analagous to [core::cell::RefCell]. In particular like [core::cell::RefCell]
 /// and unlike [std::sync::Mutex], it  doesn't perform any atomic operations
 /// internally, making it relatively inexpensive.
 ///
-/// Unlike [std::cell::RefCell], this type is [Send] and [Sync] if `T` is
+/// Unlike [core::cell::RefCell], this type is [Send] and [Sync] if `T` is
 /// [Send]. This is safe because the owner is required to prove access to the
 /// associated [Root], which is `![Sync]`, to borrow.
 #[derive(Debug, VirtualAddressSpaceIndependent)]
@@ -96,7 +96,7 @@ pub struct RootedRefCellRef<'a, T> {
     guard: &'a RootedRefCell<T>,
 }
 
-impl<T> std::ops::Deref for RootedRefCellRef<'_, T> {
+impl<T> core::ops::Deref for RootedRefCellRef<'_, T> {
     type Target = T;
 
     #[inline]
@@ -118,7 +118,7 @@ pub struct RootedRefCellRefMut<'a, T> {
     guard: &'a RootedRefCell<T>,
 }
 
-impl<T> std::ops::Deref for RootedRefCellRefMut<'_, T> {
+impl<T> core::ops::Deref for RootedRefCellRefMut<'_, T> {
     type Target = T;
 
     #[inline]
@@ -127,7 +127,7 @@ impl<T> std::ops::Deref for RootedRefCellRefMut<'_, T> {
     }
 }
 
-impl<T> std::ops::DerefMut for RootedRefCellRefMut<'_, T> {
+impl<T> core::ops::DerefMut for RootedRefCellRefMut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.guard.val.get().as_mut().unwrap() }

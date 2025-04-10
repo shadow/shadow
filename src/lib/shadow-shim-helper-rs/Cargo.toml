@@ -8,20 +8,26 @@ publish.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+[features]
+alloc = []
+std = ["alloc", "log/std", "once_cell/std"]
+nix = ["dep:nix", "std"]
+
 [dependencies]
 libc = "0.2"
-nix = { version = "0.29.0", features = ["event", "fs", "socket"] }
+nix = { version = "0.29.0", features = ["event", "fs", "socket"], optional=true }
 # don't log debug or trace levels in release mode
-log = { version = "0.4", features = ["release_max_level_debug"] }
+log = { version = "0.4", default-features=false, features=["release_max_level_debug"] }
 logger = { path = "../logger" }
-once_cell = "1.21.0"
+once_cell = { version="1.21.0", default-features=false }
 shadow-pod = { path = "../pod" }
-rand = "0.9.0"
+rustix = { version = "0.38.44", default-features = false, features = ["rand"] }
 shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 vasi-sync = { path = "../vasi-sync" }
 linux-api = { path = "../linux-api" }
+# TODO: make no_std, or remove as dependency here.
 tcp = { path = "../tcp" }
 bytemuck = "1.22.0"
 num_enum = { version="0.7.3", default-features = false }

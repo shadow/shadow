@@ -54,15 +54,15 @@ impl<T> SyncSendPointer<T> {
     }
 }
 
-impl<T> std::fmt::Debug for SyncSendPointer<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> core::fmt::Debug for SyncSendPointer<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", self.ptr())
     }
 }
 
 impl<T> PartialEq for SyncSendPointer<T> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.ptr(), other.ptr())
+        core::ptr::eq(self.ptr(), other.ptr())
     }
 }
 
@@ -98,30 +98,30 @@ impl<T> SendPointer<T> {
     }
 }
 
-impl<T> std::fmt::Debug for SendPointer<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> core::fmt::Debug for SendPointer<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", self.ptr())
     }
 }
 
 impl<T> PartialEq for SendPointer<T> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.ptr(), other.ptr())
+        core::ptr::eq(self.ptr(), other.ptr())
     }
 }
 
 impl<T> Eq for SendPointer<T> {}
 
-/// Implements [`Debug`](std::fmt::Debug) using the provided closure.
+/// Implements [`Debug`](core::fmt::Debug) using the provided closure.
 pub struct DebugFormatter<F>(pub F)
 where
-    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    F: Fn(&mut core::fmt::Formatter<'_>) -> core::fmt::Result;
 
-impl<F> std::fmt::Debug for DebugFormatter<F>
+impl<F> core::fmt::Debug for DebugFormatter<F>
 where
-    F: Fn(&mut std::fmt::Formatter<'_>) -> std::fmt::Result,
+    F: Fn(&mut core::fmt::Formatter<'_>) -> core::fmt::Result,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0(f)
     }
 }

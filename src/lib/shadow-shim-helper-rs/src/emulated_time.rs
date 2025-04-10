@@ -2,13 +2,13 @@
 Deals with instances of time in a Shadow simulation.
 */
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use vasi::VirtualAddressSpaceIndependent;
 
 use crate::simulation_time::{self, CSimulationTime, SimulationTime};
 
-/// An instant in time (analagous to std::time::Instant) in the Shadow
+/// An instant in time (analagous to core::time::Instant) in the Shadow
 /// simulation.
 // Internally represented as Duration since the Unix Epoch.
 #[derive(
@@ -118,7 +118,7 @@ impl EmulatedTime {
     }
 }
 
-impl std::ops::Add<SimulationTime> for EmulatedTime {
+impl core::ops::Add<SimulationTime> for EmulatedTime {
     type Output = EmulatedTime;
 
     fn add(self, other: SimulationTime) -> Self {
@@ -126,13 +126,13 @@ impl std::ops::Add<SimulationTime> for EmulatedTime {
     }
 }
 
-impl std::ops::AddAssign<SimulationTime> for EmulatedTime {
+impl core::ops::AddAssign<SimulationTime> for EmulatedTime {
     fn add_assign(&mut self, rhs: SimulationTime) {
         *self = *self + rhs;
     }
 }
 
-impl std::ops::Sub<SimulationTime> for EmulatedTime {
+impl core::ops::Sub<SimulationTime> for EmulatedTime {
     type Output = EmulatedTime;
 
     fn sub(self, other: SimulationTime) -> Self {
@@ -140,7 +140,7 @@ impl std::ops::Sub<SimulationTime> for EmulatedTime {
     }
 }
 
-impl std::ops::Sub<EmulatedTime> for EmulatedTime {
+impl core::ops::Sub<EmulatedTime> for EmulatedTime {
     type Output = SimulationTime;
 
     fn sub(self, other: EmulatedTime) -> Self::Output {
@@ -148,7 +148,7 @@ impl std::ops::Sub<EmulatedTime> for EmulatedTime {
     }
 }
 
-impl std::ops::SubAssign<SimulationTime> for EmulatedTime {
+impl core::ops::SubAssign<SimulationTime> for EmulatedTime {
     fn sub_assign(&mut self, rhs: SimulationTime) {
         *self = self.checked_sub(rhs).unwrap();
     }
