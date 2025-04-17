@@ -124,12 +124,14 @@ impl AtomicChannelState {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SelfContainedChannelError {
     WriterIsClosed,
+    Timeout,
 }
 
 impl Display for SelfContainedChannelError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SelfContainedChannelError::WriterIsClosed => write!(f, "WriterIsClosed"),
+            SelfContainedChannelError::Timeout => write!(f, "Timeout"),
         }
     }
 }
@@ -209,14 +211,22 @@ impl<T> SelfContainedChannel<T> {
         }
     }
 
-    /// Blocks until either the channel contains a message, or the writer has
-    /// closed the channel.
+    /// Blocks until either the channel contains a message, the writer has
+    /// closed the channel, or `timeout` has expired.
     ///
     /// Returns `Ok(T)` if a message was received, or
     /// `Err(SelfContainedMutexError::WriterIsClosed)` if the writer is closed.
     ///
+    /// `timeout`, if provided, is a loose bound. Internally, spurious
+    /// notifications caused e.g. by another thread successfully calling
+    /// `receive` in between this thread being notified data is ready and this
+    /// thread waking up to try to read it resets the deadline.
+    ///
     /// Panics if another thread is already trying to receive on this channel.
-    pub fn receive(&self) -> Result<T, SelfContainedChannelError> {
+    pub fn receive(
+        &self,
+        timeout: Option<core::time::Duration>,
+    ) -> Result<T, SelfContainedChannelError> {
         let mut state = self.state.load(sync::atomic::Ordering::Relaxed);
         loop {
             if state.contents_state == ChannelContentsState::Ready {
@@ -246,7 +256,16 @@ impl<T> SelfContainedChannel<T> {
                 }
             };
             let expected = sleeper_state.into();
-            match sync::futex_wait(&self.state.0, expected) {
+            // TODO: consider tracking a cumulative timeout so that we don't
+            // reset the timeout on spurious wakeups. Unclear this is worth the
+            // complexity though, particularly since we're in a `no_std`
+            // environment and may have to implement it differently when running
+            // under loom or miri.
+            //
+            // Alternatively we could push this down a level by having
+            // `futex_wait` take an absolute deadline, but then we'd have to
+            // solve the same problem there.
+            match sync::futex_wait(&self.state.0, expected, timeout) {
                 Ok(_) | Err(rustix::io::Errno::INTR) | Err(rustix::io::Errno::AGAIN) => {
                     // Something changed; clear the sleeper bit and try again.
                     let mut updated_state = self
@@ -264,6 +283,7 @@ impl<T> SelfContainedChannel<T> {
                     state = updated_state;
                     continue;
                 }
+                Err(rustix::io::Errno::TIMEDOUT) => return Err(SelfContainedChannelError::Timeout),
                 Err(e) => panic!("Unexpected futex error {:?}", e),
             };
         }

@@ -135,7 +135,7 @@ impl ManagedThread {
             "waiting for start event from shim with native pid {:?}",
             native_pid
         );
-        let start_req = ipc_shmem.from_plugin().receive().unwrap();
+        let start_req = ipc_shmem.from_plugin().receive(None).unwrap();
         match &start_req {
             ShimEventToShadow::StartReq(_) => {
                 // Expected result; shim is ready to initialize.
@@ -390,7 +390,7 @@ impl ManagedThread {
             "waiting for start event from shim with native tid {:?}",
             child_native_tid
         );
-        let start_req = child_ipc_shmem.from_plugin().receive().unwrap();
+        let start_req = child_ipc_shmem.from_plugin().receive(None).unwrap();
         match &start_req {
             ShimEventToShadow::StartReq(_) => (),
             other => panic!("Unexpected result from shim: {other:?}"),
@@ -451,9 +451,12 @@ impl ManagedThread {
 
         self.ipc_shmem.to_plugin().send(*event);
 
-        let event = match self.ipc_shmem.from_plugin().receive() {
+        let event = match self.ipc_shmem.from_plugin().receive(None) {
             Ok(e) => e,
             Err(SelfContainedChannelError::WriterIsClosed) => ShimEventToShadow::ProcessDeath,
+            Err(SelfContainedChannelError::Timeout) => {
+                panic!("Got a timeout when we didn't provide one")
+            }
         };
 
         // Reacquire the shared memory lock, now that the shim has yielded control
