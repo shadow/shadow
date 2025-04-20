@@ -1,0 +1,53 @@
+general:
+  stop_time: 10 seconds
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket
+          server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          server.bind(('0.0.0.0', 8080))
+          server.listen(100)
+          (s, _) = server.accept()
+          server.close()
+          print("Accepted socket")
+
+          bytes = s.recv(1)
+          print("First recv:", bytes)
+          assert bytes == b'0', str(bytes)
+
+          # expect that the client's SHUT_WR will send a FIN, so we should receive an EOF
+          bytes = s.recv(1)
+          print("Second recv:", bytes)
+          assert bytes == b'', str(bytes)
+          s.close()
+  client:
+    network_node_id: 0
+    processes:
+    - path: python3
+      start_time: 100 ms
+      expected_final_state: running
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket, time
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          s.connect(('server', 8080))
+          print("Connected")
+
+          s.send(b'0')
+          s.shutdown(socket.SHUT_WR)
+
+          # don't close the socket, we want to keep the socket open until the
+          # end of the simulation so that closing the socket doesn't send a FIN
+          print("Sleeping")
+          time.sleep(100000)

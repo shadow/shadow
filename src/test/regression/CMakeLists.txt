@@ -41,4 +41,5 @@ add_shadow_tests(
     )
     
 add_subdirectory(2210)
+add_subdirectory(3100)
 add_subdirectory(3148)
