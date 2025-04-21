@@ -86,7 +86,6 @@ fn main() -> Result<(), String> {
                 libc::SOCK_SEQPACKET,
                 libc::SOCK_RAW,
                 libc::SOCK_RDM,
-                libc::SOCK_PACKET,
             ]),
             flag: Cond::Any,
             protocol: Cond::Any,
@@ -164,22 +163,6 @@ fn main() -> Result<(), String> {
             protocol: Cond::Any,
             expected_errno: Some(libc::EPERM), // assuming we don't have the privileges
         },
-        // if we use the SOCK_PACKET type with AF_INET
-        ErrorCondition {
-            domain: Cond::Only(&[libc::AF_INET]),
-            sock_type: Cond::Only(&[libc::SOCK_PACKET]),
-            flag: Cond::Any,
-            protocol: Cond::Any,
-            expected_errno: Some(libc::EPERM), // assuming we don't have the privileges
-        },
-        // if we use the SOCK_PACKET type with AF_INET6
-        ErrorCondition {
-            domain: Cond::Only(&[libc::AF_INET6]),
-            sock_type: Cond::Only(&[libc::SOCK_PACKET]),
-            flag: Cond::Any,
-            protocol: Cond::Any,
-            expected_errno: Some(libc::ESOCKTNOSUPPORT),
-        },
         // if we use the TCP protocol without AF_INET{,6}
         ErrorCondition {
             domain: Cond::Not(&[libc::AF_INET, libc::AF_INET6]),
@@ -219,14 +202,6 @@ fn main() -> Result<(), String> {
             flag: Cond::Any,
             protocol: Cond::Only(&[libc::IPPROTO_UDP]),
             expected_errno: Some(libc::EPROTONOSUPPORT),
-        },
-        // if we use the SOCK_PACKET type
-        ErrorCondition {
-            domain: Cond::Any,
-            sock_type: Cond::Only(&[libc::SOCK_PACKET]),
-            flag: Cond::Any,
-            protocol: Cond::Any,
-            expected_errno: Some(libc::ESOCKTNOSUPPORT),
         },
     ];
 
@@ -283,15 +258,14 @@ fn get_all_tests() -> Vec<(SocketFn, SocketArguments)> {
         libc::AF_INET6,
         0xABBA,
     ];
-    // since the behaviour when using SOCK_RAW or SOCK_PACKET depends on the user's privileges,
-    // we don't test them
+    // since the behaviour when using SOCK_RAW depends on the user's privileges,
+    // we don't test it
     let sock_types = [
         libc::SOCK_STREAM,
         libc::SOCK_DGRAM,
         libc::SOCK_SEQPACKET,
         //libc::SOCK_RAW,
         libc::SOCK_RDM,
-        //libc::SOCK_PACKET,
         0xABBA,
     ];
     let flags = [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC, 0xABBA];
