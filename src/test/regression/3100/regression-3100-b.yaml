@@ -1,0 +1,63 @@
+general:
+  stop_time: 60 seconds
+  # disable this explicitly since the default may change to 'true' in the future,
+  # and if this were enabled it might mask the issue by inserting a delay between the send and the close
+  model_unblocked_syscall_latency: false
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          host_bandwidth_up "1 Mbit"
+          host_bandwidth_down "1 Mbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "500 ms"
+          packet_loss 0.0
+        ]
+      ]
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket, time
+          server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          server.bind(('0.0.0.0', 8080))
+          server.listen(100)
+          (s, _) = server.accept()
+          server.close()
+          print("Accepted socket")
+
+          # read bytes until EOF
+          while True:
+            n = len(s.recv(1000))
+            if n == 0:
+              break
+  client:
+    network_node_id: 0
+    processes:
+    - path: python3
+      start_time: 100 ms
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket, time
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          s.connect(('server', 8080))
+          print("Connected")
+
+          # send some bytes and then immediately close,
+          # which should send a FIN after the bytes
+          s.send(b'hello')
+          s.close()

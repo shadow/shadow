@@ -59,7 +59,7 @@ to sort out in the case that `stdout` and `stderr` are merged. (#3428)
   as the obfs4proxy pluggable transport (#3538). (#3542)
 * Fixed the behavior of sockets bound to the loopback interface: Shadow no longer panics in some cases where `connect` and `sendmsg` syscalls are used with a non-loopback address. (#3531)
 * Fixed the behaviour of an implicit bind during a `sendmsg` syscall for UDP sockets. (#3545)
-* Fixed a bug in `shutdown()` for TCP sockets, causing the FIN packet to be sent out of order. (#3562)
+* Fixed a TCP socket bug causing the FIN packet to be sent out of order. (#3562, #3570)
 
 Full changelog since v3.2.0:
 
