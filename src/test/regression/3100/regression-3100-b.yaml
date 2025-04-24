@@ -1,5 +1,8 @@
 general:
   stop_time: 60 seconds
+  # disable this explicitly since the default may change to 'true' in the future,
+  # and if this were enabled it might mask the issue by inserting a delay between the send and the close
+  model_unblocked_syscall_latency: false
 host_option_defaults:
   pcap_enabled: true
 network:

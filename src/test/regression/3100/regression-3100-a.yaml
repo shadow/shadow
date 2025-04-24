@@ -1,5 +1,8 @@
 general:
   stop_time: 10 seconds
+  # disable this explicitly since the default may change to 'true' in the future,
+  # and if this were enabled it might mask the issue by inserting a delay between the send and the shutdown
+  model_unblocked_syscall_latency: false
 network:
   graph:
     type: 1_gbit_switch
