@@ -914,9 +914,11 @@ static Packet* _tcp_createPacketWithoutPayload(TCP* tcp, const Host* host, Proto
     gboolean isFinNotAck = ((flags & PTCP_FIN) && !(flags & PTCP_ACK));
     guint sequence = !isEmpty || isFinNotAck || (flags & PTCP_SYN) ? tcp->send.next : 0;
 
-    /* empty (control) packets get priority 0, data packets get the next priority sequence. */
+    /* control packets get priority 0, data packets get the next priority sequence. */
+    /* we want to make sure any packets with a sequence number get a priority, so that packets with
+     * a higher sequence number are not sent before other packets with a lower sequence nubmer. */
     uint64_t priority = 0;
-    if (!isEmpty) {
+    if (sequence != 0) {
         priority = host_getNextPacketPriority(host);
     }
 
