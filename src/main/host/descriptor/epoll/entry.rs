@@ -176,6 +176,9 @@ impl Entry {
         if state.intersects(FileState::WRITABLE) {
             events.insert(EpollEvents::EPOLLOUT);
         }
+        if state.intersects(FileState::RDHUP) {
+            events.insert(EpollEvents::EPOLLRDHUP);
+        }
 
         events
     }
@@ -188,6 +191,9 @@ impl Entry {
         }
         if events.intersects(EpollEvents::EPOLLOUT) {
             state.insert(FileState::WRITABLE)
+        }
+        if events.intersects(EpollEvents::EPOLLRDHUP) {
+            state.insert(FileState::RDHUP)
         }
 
         state

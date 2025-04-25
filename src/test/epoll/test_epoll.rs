@@ -490,9 +490,11 @@ fn main() -> anyhow::Result<()> {
         for use_rdhup in [UseEPOLLRDHUP::Yes, UseEPOLLRDHUP::No] {
             for make_readable in [MakeReadable::Yes, MakeReadable::No] {
                 for fd_type in [FdType::Pipe, FdType::TcpStream] {
-                    let passing = match (fd_type, use_rdhup) {
-                        (FdType::TcpStream, UseEPOLLRDHUP::No) => all_envs.clone(),
-                        _ => set![TestEnvironment::Libc],
+                    let passing = match fd_type {
+                        FdType::TcpStream => all_envs.clone(),
+                        // pipes should get EPOLLHUP events but these aren't implemented.
+                        // https://github.com/shadow/shadow/issues/2181
+                        FdType::Pipe => set![TestEnvironment::Libc],
                     };
                     tests.push(ShadowTest::new(
                         &format!("threads-eof-edge:{use_edge:?}-rdhup:{use_rdhup:?}-readable:{make_readable:?}-type:{fd_type:?}"),

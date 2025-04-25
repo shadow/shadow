@@ -60,6 +60,10 @@ to sort out in the case that `stdout` and `stderr` are merged. (#3428)
 * Fixed the behavior of sockets bound to the loopback interface: Shadow no longer panics in some cases where `connect` and `sendmsg` syscalls are used with a non-loopback address. (#3531)
 * Fixed the behaviour of an implicit bind during a `sendmsg` syscall for UDP sockets. (#3545)
 * Fixed a TCP socket bug causing the FIN packet to be sent out of order. (#3562, #3570)
+* Fixed (lack of) `EPOLLRDHUP` reporting in `epoll` for TCP sockets (#3574), which in turn
+fixes network connections sometimes trying to read indefinitely after the other
+end has closed the connection in Rust's tokio async runtime (as in
+https://gitlab.torproject.org/tpo/core/arti/-/issues/1972).
 
 Full changelog since v3.2.0:
 

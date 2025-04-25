@@ -2086,6 +2086,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
         if(!(tcp->state & TCPS_LISTEN) && !(tcp->error & TCPE_CONNECTION_RESET)) {
             tcp->error |= TCPE_CONNECTION_RESET;
             tcp->flags |= TCPF_REMOTE_CLOSED;
+            legacyfile_adjustStatus((LegacyFile*)tcp, FileState_RDHUP, TRUE, 0);
 
             _tcp_setState(tcp, host, TCPS_TIMEWAIT);
 
@@ -2234,6 +2235,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
 
                 /* other side of connection closed */
                 tcp->flags |= TCPF_REMOTE_CLOSED;
+                legacyfile_adjustStatus((LegacyFile*)tcp, FileState_RDHUP, TRUE, 0);
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 _tcp_setState(tcp, host, TCPS_CLOSEWAIT);
 
@@ -2254,6 +2256,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
+                legacyfile_adjustStatus((LegacyFile*)tcp, FileState_RDHUP, TRUE, 0);
                 _tcp_setState(tcp, host, TCPS_CLOSING);
 
                 /* it will send no more user data after this sequence */
@@ -2268,6 +2271,7 @@ static void _tcp_processPacket(LegacySocket* socket, const Host* host, Packet* p
                 flags |= TCP_PF_PROCESSED;
                 responseFlags |= (PTCP_FIN|PTCP_ACK);
                 tcp->flags |= TCPF_REMOTE_CLOSED;
+                legacyfile_adjustStatus((LegacyFile*)tcp, FileState_RDHUP, TRUE, 0);
                 _tcp_setState(tcp, host, TCPS_TIMEWAIT);
 
                 /* it will send no more user data after this sequence */

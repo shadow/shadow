@@ -136,6 +136,9 @@ bitflags::bitflags! {
         /// A listening socket is allowing connections. Only applicable to connection-oriented unix
         /// sockets.
         const SOCKET_ALLOWING_CONNECT = 1 << 6;
+        /// "read hangup" - Stream socket peer has shut down connection for
+        /// writing (or completely closed it), as for EPOLLRDHUP.
+        const RDHUP = 1 << 7;
     }
 }
 
