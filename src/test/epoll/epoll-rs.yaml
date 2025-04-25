@@ -8,3 +8,4 @@ hosts:
     network_node_id: 0
     processes:
     - path: ../../target/debug/test_epoll
+      args: --shadow-passing
