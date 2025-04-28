@@ -75,7 +75,7 @@ fn test_threads_edge() -> anyhow::Result<()> {
 
         // One of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|x| x.events.len());
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));
@@ -184,7 +184,7 @@ fn test_threads_eof(
         // With edge-triggering, only one of the threads should have gotten an
         // event, but we don't know which one.  Sort results by number of events
         // received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|x| x.events.len());
 
         let expected_mask = match (fd_type, use_rdhup, make_readable) {
             (FdType::Pipe, _, MakeReadable::Yes) => EpollFlags::EPOLLHUP | EpollFlags::EPOLLIN,
@@ -297,7 +297,7 @@ fn test_threads_level_with_late_read() -> anyhow::Result<()> {
 
         // One of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|x| x.events.len());
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));
