@@ -1,3 +1,4 @@
+use std::os::fd::IntoRawFd;
 use std::time::Duration;
 
 use nix::errno::Errno;
@@ -74,7 +75,7 @@ fn test_threads_edge() -> anyhow::Result<()> {
 
         // One of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|x| x.events.len());
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));
@@ -85,6 +86,133 @@ fn test_threads_edge() -> anyhow::Result<()> {
         ensure_ord!(results[1].duration, <, timeout);
         ensure_ord!(results[1].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
 
+        Ok(())
+    })
+}
+
+#[derive(Copy, Clone, Debug)]
+enum UseEPOLLET {
+    Yes,
+    No,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum UseEPOLLRDHUP {
+    Yes,
+    No,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum MakeReadable {
+    Yes,
+    No,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum FdType {
+    Pipe,
+    TcpStream,
+}
+
+// Test various combination of behavior when EOF is reached.
+// Notably, the Rust async runtime tokio seems to rely on receiving EPOLLRDHUP for sockets.
+fn test_threads_eof(
+    use_edge: UseEPOLLET,
+    use_rdhup: UseEPOLLRDHUP,
+    make_readable: MakeReadable,
+    fd_type: FdType,
+) -> anyhow::Result<()> {
+    let (readfd, writefd) = match fd_type {
+        FdType::Pipe => {
+            let (readfd, writefd) = unistd::pipe()?;
+            (readfd, writefd)
+        }
+        FdType::TcpStream => {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+            let server = listener.accept().unwrap();
+            (client.into_raw_fd(), server.0.into_raw_fd())
+        }
+    };
+
+    let epollfd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epollfd, readfd], || {
+        // We don't need to subscribe to EPOLLHUP; those events should
+        // be generated regardless.
+        // from epoll_ctl(2):
+        // > epoll_wait(2) will always wait for this event; it is not necessary
+        // > to set it in events when calling epoll_ctl().
+        let mut events = EpollFlags::EPOLLIN;
+        match use_rdhup {
+            UseEPOLLRDHUP::Yes => events |= EpollFlags::EPOLLRDHUP,
+            UseEPOLLRDHUP::No => (),
+        };
+        match use_edge {
+            UseEPOLLET::Yes => events |= EpollFlags::EPOLLET,
+            UseEPOLLET::No => (),
+        };
+        let mut event = epoll::EpollEvent::new(events, 0);
+        epoll::epoll_ctl(
+            epollfd,
+            epoll::EpollOp::EpollCtlAdd,
+            readfd,
+            Some(&mut event),
+        )?;
+
+        // We do the close and (optional) write *before* calling epoll_wait to
+        // be sure that the result has both events (when we do the optional
+        // write).
+
+        // Optionally make the read-end readable.
+        match make_readable {
+            MakeReadable::Yes => {
+                unistd::write(writefd, &[0])?;
+            }
+            MakeReadable::No => {}
+        }
+        unistd::close(writefd)?;
+
+        let timeout = Duration::from_millis(100);
+        let threads = [
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+        ];
+
+        let mut results = threads.map(|t| t.join().unwrap());
+
+        // With edge-triggering, only one of the threads should have gotten an
+        // event, but we don't know which one.  Sort results by number of events
+        // received.
+        results.sort_by_key(|x| x.events.len());
+
+        let expected_mask = match (fd_type, use_rdhup, make_readable) {
+            (FdType::Pipe, _, MakeReadable::Yes) => EpollFlags::EPOLLHUP | EpollFlags::EPOLLIN,
+            (FdType::Pipe, _, MakeReadable::No) => EpollFlags::EPOLLHUP,
+            (FdType::TcpStream, UseEPOLLRDHUP::Yes, _) => {
+                EpollFlags::EPOLLRDHUP | EpollFlags::EPOLLIN
+            }
+            (FdType::TcpStream, UseEPOLLRDHUP::No, _) => EpollFlags::EPOLLIN,
+        };
+
+        match use_edge {
+            UseEPOLLET::No => {
+                // Both threads get the event
+                ensure_ord!(results[0].epoll_res, ==, Ok(1));
+                ensure_ord!(results[0].duration, <, timeout);
+                ensure_ord!(results[0].events[0], ==, epoll::EpollEvent::new(expected_mask, 0));
+            }
+            UseEPOLLET::Yes => {
+                // One thread should have timed out with no events received.
+                ensure_ord!(results[0].epoll_res, ==, Ok(0));
+                ensure_ord!(results[0].duration, >=, timeout);
+            }
+        }
+
+        // The other should have gotten a single event.
+        ensure_ord!(results[1].epoll_res, ==, Ok(1));
+        ensure_ord!(results[1].duration, <, timeout);
+        ensure_ord!(results[1].events[0], ==, epoll::EpollEvent::new(expected_mask, 0));
         Ok(())
     })
 }
@@ -169,7 +297,7 @@ fn test_threads_level_with_late_read() -> anyhow::Result<()> {
 
         // One of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|x| x.events.len());
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));
@@ -356,9 +484,27 @@ fn main() -> anyhow::Result<()> {
             test_wait_negative_timeout,
             all_envs.clone(),
         ),
-        ShadowTest::new("test_ctl_invalid_op", test_ctl_invalid_op, all_envs),
+        ShadowTest::new("test_ctl_invalid_op", test_ctl_invalid_op, all_envs.clone()),
     ];
-
+    for use_edge in [UseEPOLLET::Yes, UseEPOLLET::No] {
+        for use_rdhup in [UseEPOLLRDHUP::Yes, UseEPOLLRDHUP::No] {
+            for make_readable in [MakeReadable::Yes, MakeReadable::No] {
+                for fd_type in [FdType::Pipe, FdType::TcpStream] {
+                    let passing = match fd_type {
+                        FdType::TcpStream => all_envs.clone(),
+                        // pipes should get EPOLLHUP events but these aren't implemented.
+                        // https://github.com/shadow/shadow/issues/2181
+                        FdType::Pipe => set![TestEnvironment::Libc],
+                    };
+                    tests.push(ShadowTest::new(
+                        &format!("threads-eof-edge:{use_edge:?}-rdhup:{use_rdhup:?}-readable:{make_readable:?}-type:{fd_type:?}"),
+                        move || test_threads_eof(use_edge, use_rdhup, make_readable, fd_type),
+                        passing,
+                    ));
+                }
+            }
+        }
+    }
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
