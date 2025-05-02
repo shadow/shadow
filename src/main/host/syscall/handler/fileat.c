@@ -297,7 +297,7 @@ SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SyscallArgs* a
         regularfile_utimensat(dir_desc, pathname, times, flags, plugin_cwd));
 }
 
-SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SyscallArgs* args) {
+SyscallReturn syscallhandler_faccessat2(SyscallHandler* sys, const SyscallArgs* args) {
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int mode = args->args[2].as_i64;
