@@ -301,6 +301,27 @@ SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SyscallArgs* a
     int dirfd = args->args[0].as_i64;
     UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
     int mode = args->args[2].as_i64;
+
+    /* Validate params. */
+    RegularFile* dir_desc = NULL;
+    const char* pathname;
+
+    int errcode = _syscallhandler_validateDirAndPathnameHelper(
+        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
+
+    return syscallreturn_makeDoneI64(
+        regularfile_faccessat(dir_desc, pathname, mode, 0, plugin_cwd));
+}
+
+SyscallReturn syscallhandler_faccessat2(SyscallHandler* sys, const SyscallArgs* args) {
+    int dirfd = args->args[0].as_i64;
+    UntypedForeignPtr pathnamePtr = args->args[1].as_ptr; // const char*
+    int mode = args->args[2].as_i64;
     int flags = args->args[3].as_i64;
 
     /* Validate params. */

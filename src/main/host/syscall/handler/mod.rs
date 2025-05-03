@@ -399,6 +399,7 @@ impl SyscallHandler {
             SyscallNum::NR_execveat => handle!(execveat),
             SyscallNum::NR_exit_group => handle!(exit_group),
             SyscallNum::NR_faccessat => handle!(faccessat),
+            SyscallNum::NR_faccessat2 => handle!(faccessat2),
             SyscallNum::NR_fadvise64 => handle!(fadvise64),
             SyscallNum::NR_fallocate => handle!(fallocate),
             SyscallNum::NR_fchmod => handle!(fchmod),

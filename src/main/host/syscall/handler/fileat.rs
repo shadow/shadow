@@ -30,6 +30,11 @@ impl SyscallHandler {
         Self::legacy_syscall(cshadow::syscallhandler_faccessat, ctx)
     }
 
+    log_syscall!(faccessat2, /* rv */ std::ffi::c_int);
+    pub fn faccessat2(ctx: &mut SyscallContext) -> SyscallResult {
+        Self::legacy_syscall(cshadow::syscallhandler_faccessat2, ctx)
+    }
+
     log_syscall!(fchmodat, /* rv */ std::ffi::c_int);
     pub fn fchmodat(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_fchmodat, ctx)

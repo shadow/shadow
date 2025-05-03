@@ -9,6 +9,7 @@
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(faccessat);
+SYSCALL_HANDLER(faccessat2);
 SYSCALL_HANDLER(fchmodat);
 SYSCALL_HANDLER(fchmodat2);
 SYSCALL_HANDLER(fchownat);
