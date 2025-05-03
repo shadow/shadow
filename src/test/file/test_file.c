@@ -15,12 +15,19 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include "test/test_glib_helpers.h"
+
+#include "test/test_common.h"
+
+#ifndef SYS_faccessat2
+#define SYS_faccessat2 439
+#endif
 
 // For use in conjunction with g_auto so that the files/dirs will delete themselves on function
 // exit.
@@ -689,6 +696,82 @@ static void _test_fstatat() {
     closedir(dir);
 }
 
+int faccessat_syscall(int dirfd, const char* pathname, int mode, int flags) {
+    // Emulate libc functionality of interpreting flags here... but we don't
+    // actually test their functionality. Just validate that they're valid.
+    if (flags & ~(AT_EACCESS | AT_SYMLINK_NOFOLLOW)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    // syscall, intentionally providing junk for the flags parameter, which
+    // should be ignored. (Regression for a previous unfiled bug that we had
+    // implemented the faccessat *syscall* with the *faccessat *libc* interface).
+    return syscall(SYS_faccessat, dirfd, pathname, mode, 0xffffffff);
+}
+
+int faccessat2_syscall(int dirfd, const char* pathname, int mode, int flags) {
+    return syscall(SYS_faccessat2, dirfd, pathname, mode, flags);
+}
+
+static void _test_faccessat_helper(int (*faccessat_fn)(int, const char*, int, int)) {
+    // faccessat2 was added in Linux 5.8, which is newer than the oldest kernel
+    // we currently support.
+    if (!running_in_shadow() && faccessat_fn == faccessat2_syscall) {
+        syscall(SYS_faccessat2, 0, 0, 0, 0, 0, 0);
+        if (errno == ENOSYS) {
+            g_test_skip("kernel doesn't support faccessat2 syscall");
+            return;
+        }
+    }
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+
+    assert_nonneg_errno(chmod(adf.name, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+
+    DIR* dir;
+    assert_nonnull_errno(dir = opendir(dirname(adf.name)));
+
+    int this_dirfd;
+    assert_nonneg_errno(this_dirfd = dirfd(dir));
+
+    // Check permissions we expect to have.
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), F_OK, 0));
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), R_OK, 0));
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), W_OK, 0));
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), F_OK | R_OK | W_OK, 0));
+
+    // These flags are no-ops effectively no-ops in this case.
+    // Just validate that they are accepted.
+    // TODO: actually test these functionalities.
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), F_OK, 0));
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), F_OK, AT_EACCESS));
+    assert_nonneg_errno(faccessat_fn(this_dirfd, basename(adf.name), F_OK, AT_SYMLINK_NOFOLLOW));
+    assert_nonneg_errno(
+        faccessat_fn(this_dirfd, basename(adf.name), F_OK, AT_EACCESS | AT_SYMLINK_NOFOLLOW));
+
+    // *Not* executable
+    g_assert_cmpint(faccessat_fn(this_dirfd, basename(adf.name), X_OK, 0), ==, -1);
+    assert_errno_is(EACCES);
+
+    // Bad flags
+    g_assert_cmpint(faccessat_fn(this_dirfd, basename(adf.name), F_OK, 0xffffffff), ==, -1);
+    assert_errno_is(EINVAL);
+
+    // Bad mode
+    g_assert_cmpint(faccessat_fn(this_dirfd, basename(adf.name), 0xffffffff, 0), ==, -1);
+    assert_errno_is(EINVAL);
+
+    // success!
+    closedir(dir);
+}
+
+// faccessat libc function may use either of faccessat or faccessat2 syscalls.
+static void _test_faccessat() { _test_faccessat_helper(faccessat); }
+
+// Test both syscalls directly
+static void _test_faccessat_syscall() { _test_faccessat_helper(faccessat_syscall); }
+static void _test_faccessat2_syscall() { _test_faccessat_helper(faccessat2_syscall); }
+
 static void _test_dir() {
     g_auto(AutoDeleteFile) adf = _create_auto_dir();
     DIR* dir;
@@ -1007,6 +1090,9 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/chmod", _test_fchmod);
     g_test_add_func("/file/fstat", _test_fstat);
     g_test_add_func("/file/fstatat", _test_fstatat);
+    g_test_add_func("/file/faccessat", _test_faccessat);
+    g_test_add_func("/file/faccessat_syscall", _test_faccessat_syscall);
+    g_test_add_func("/file/faccessat2_syscall", _test_faccessat2_syscall);
     g_test_add_func("/file/stat", _test_stat);
 
     g_test_add_func("/file/dir", _test_dir);

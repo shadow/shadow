@@ -1,5 +1,5 @@
 include_directories(${GLIB_INCLUDE_DIRS})
 link_libraries(${GLIB_LIBRARIES})
-add_executable(test-file test_file.c)
+add_executable(test-file test_file.c ../test_common.c)
 add_linux_tests(BASENAME file COMMAND test-file)
 add_shadow_tests(BASENAME file)
