@@ -279,6 +279,8 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+            // TODO: should we block on the READABLE, HUP, and RDHUP states?
+            // https://github.com/shadow/shadow/issues/2181
             return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
                 FileState::READABLE,
@@ -552,6 +554,8 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+            // TODO: should we block on the WRITABLE and HUP states?
+            // https://github.com/shadow/shadow/issues/2181
             return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
                 FileState::WRITABLE,
