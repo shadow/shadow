@@ -109,9 +109,15 @@ impl FileMode {
 }
 
 bitflags::bitflags! {
-    /// Flags representing the state of a file. Listeners can subscribe to state changes using
-    /// [`FileRefMut::add_listener`] (or similar methods on [`SocketRefMut`][socket::SocketRefMut],
-    /// [`Pipe`][pipe::Pipe], etc).
+    /// Flags representing the state of a file.
+    ///
+    /// Listeners can subscribe to state changes using [`FileRefMut::add_listener`] (or similar
+    /// methods on [`SocketRefMut`][socket::SocketRefMut], [`Pipe`][pipe::Pipe], etc).
+    ///
+    /// When setting these flags on a file, they should match the result of an epoll-wait on the
+    /// file. For example if an epoll-wait on a file would return `EPOLLIN`, then the file should
+    /// have the `READABLE` state flag. If an epoll-wait would *not* return `EPOLLIN`, then the file
+    /// should not have the `READABLE` state flag.
     #[derive(Default, Copy, Clone, Debug)]
     #[repr(transparent)]
     pub struct FileState: u16 {

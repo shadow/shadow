@@ -279,9 +279,16 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+            // TODO: should we block on the READABLE, HUP, and RDHUP states?
+            // https://github.com/shadow/shadow/issues/2181
+            let wait_for = FileState::READABLE;
+
+            // check that we're not already in the state that we're going to wait for
+            debug_assert!(!file.borrow().state().intersects(wait_for));
+
             return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
-                FileState::READABLE,
+                wait_for,
                 file.borrow().supports_sa_restart(),
             ));
         }
@@ -552,9 +559,16 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+            // TODO: should we block on the WRITABLE and HUP states?
+            // https://github.com/shadow/shadow/issues/2181
+            let wait_for = FileState::WRITABLE;
+
+            // check that we're not already in the state that we're going to wait for
+            debug_assert!(!file.borrow().state().intersects(wait_for));
+
             return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
-                FileState::WRITABLE,
+                wait_for,
                 file.borrow().supports_sa_restart(),
             ));
         }
