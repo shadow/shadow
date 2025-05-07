@@ -787,9 +787,9 @@ dependencies = [
 
 [[package]]
 name = "linux-errno"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "583acc33595c32cf8b0702115d4abdafecfabf257d28513499b93140db38a523"
+checksum = "e3fb7f5d1d983421e02a44690025b1133e83f0e9d2ee60953217498a2bfdd34e"
 dependencies = [
  "posix-errno",
 ]
@@ -1193,9 +1193,9 @@ dependencies = [
 
 [[package]]
 name = "posix-errno"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c3ed686be262618484b930cdbdf0db6e991de9a74aebb0855bfde058600927c"
+checksum = "e01299f73b0da867ebfaafe4bd75455d5f9b85534efe58ca10966e084c7f90ec"
 
 [[package]]
 name = "powerfmt"
