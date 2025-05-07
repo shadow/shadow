@@ -808,9 +808,9 @@ checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "linux-syscall"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7790fa6d9fc453afb432e2c1a91d02b05f90426f48b692939bd0fb3c1ed0986e"
+checksum = "bfc206dfa125f5702516b686c2e4d8cfbae346e8364343cc79c7a12af2daba1c"
 dependencies = [
  "linux-errno",
 ]
