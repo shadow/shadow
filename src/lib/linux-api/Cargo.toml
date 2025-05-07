@@ -21,7 +21,7 @@ num_enum = { version = "0.7.3", default-features = false }
 memoffset = "0.9.1"
 bytemuck = "1.23.0"
 linux-syscall = "1.1.0"
-linux-errno = "1.0.1"
+linux-errno = "1.1.0"
 naked-function = "0.1.5"
 linux-raw-sys = "0.9.0"
 rustix = { optional = true, version = "0.38.44", default-features = false, features = ["process"] }
