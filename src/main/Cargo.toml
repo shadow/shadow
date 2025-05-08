@@ -31,7 +31,7 @@ scheduler = { path = "../lib/scheduler" }
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs", features = ["nix", "std"] }
 lzma-rs = "0.3"
 memoffset = "0.9.1"
-merge = "0.1"
+merge = "0.2"
 neli = "0.6.4"
 nix = { version = "0.29.0", features = ["feature", "ioctl", "mman", "net", "personality", "resource", "sched", "signal", "socket", "time", "uio", "user"] }
 shadow-pod = { path = "../lib/pod" }
