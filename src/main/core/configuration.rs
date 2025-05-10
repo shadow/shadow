@@ -225,6 +225,7 @@ static GENERAL_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[clap(next_help_heading = "General (Override configuration file options)")]
 #[clap(next_display_order = None)]
 #[serde(deny_unknown_fields)]
+#[merge(strategy = merge::option::overwrite_none)]
 pub struct GeneralOptions {
     /// The simulated time at which simulated processes are sent a SIGKILL signal
     #[clap(long, value_name = "seconds")]
@@ -310,6 +311,7 @@ static NETWORK_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[clap(next_help_heading = "Network (Override network options)")]
 #[clap(next_display_order = None)]
 #[serde(deny_unknown_fields)]
+#[merge(strategy = merge::option::overwrite_none)]
 pub struct NetworkOptions {
     /// The network topology graph
     #[clap(skip)]
@@ -342,6 +344,7 @@ static EXP_HELP: Lazy<std::collections::HashMap<String, String>> =
 )]
 #[clap(next_display_order = None)]
 #[serde(default, deny_unknown_fields)]
+#[merge(strategy = merge::option::overwrite_none)]
 pub struct ExperimentalOptions {
     /// Use the SCHED_FIFO scheduler. Requires CAP_SYS_NICE. See sched(7), capabilities(7)
     #[clap(hide_short_help = true)]
@@ -587,6 +590,7 @@ static HOST_HELP: Lazy<std::collections::HashMap<String, String>> =
 #[serde(default, deny_unknown_fields)]
 // serde will default all fields to `None`, but in the cli help we want the actual defaults
 #[schemars(default = "HostDefaultOptions::new_with_defaults")]
+#[merge(strategy = merge::option::overwrite_none)]
 pub struct HostDefaultOptions {
     /// Log level at which to print node messages
     #[clap(long = "host-log-level", name = "host-log-level")]
