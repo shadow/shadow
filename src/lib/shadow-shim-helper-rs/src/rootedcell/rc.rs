@@ -128,11 +128,11 @@ impl<T> RootedRcCommon<T> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", debug_assertions))]
 fn already_panicking() -> bool {
     std::thread::panicking()
 }
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), debug_assertions))]
 fn already_panicking() -> bool {
     false
 }
