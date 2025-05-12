@@ -9,6 +9,10 @@ if(SHADOW_EXTRA_TESTS STREQUAL ON)
   set(TEST_FEATURES "${TEST_FEATURES} extra_tests")
 endif()
 
+if(SHADOW_WERROR STREQUAL ON)
+  set(RUSTFLAGS "${RUSTFLAGS} -Dwarnings")
+endif()
+
 # Propagate global C and C++ flags to the Rust build
 set(RUST_CFLAGS "${CMAKE_C_FLAGS}")
 set(RUST_CXXFLAGS "${CMAKE_CXX_FLAGS}")
