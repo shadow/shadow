@@ -19,7 +19,7 @@ class TestShadowExecCLI(unittest.TestCase):
                 "shadowtools.shadow_exec",
                 f"--shadow-bin={SHADOW_BIN}",
                 "--preserve=on-error",
-                "--no-model-unblocked-syscall-latency",
+                "--shadow-args=--model-unblocked-syscall-latency=false",
                 "--",
                 "date",
                 "-Ins",
@@ -36,7 +36,7 @@ class TestShadowExecCLI(unittest.TestCase):
                 "shadowtools.shadow_exec",
                 f"--shadow-bin={SHADOW_BIN}",
                 "--preserve=on-error",
-                "--no-model-unblocked-syscall-latency",
+                "--shadow-args=--model-unblocked-syscall-latency=false",
                 "--",
                 "bash",
                 "-c",
@@ -54,7 +54,7 @@ class TestShadowExecCLI(unittest.TestCase):
                 "shadowtools.shadow_exec",
                 f"--shadow-bin={SHADOW_BIN}",
                 "--preserve=on-error",
-                "--no-model-unblocked-syscall-latency",
+                "--shadow-args=--model-unblocked-syscall-latency=false",
                 "--",
                 "bash",
                 "-c",
@@ -66,3 +66,37 @@ class TestShadowExecCLI(unittest.TestCase):
             res,
             "2000-01-01T00:00:00,000000000+00:00\n2000-01-01T00:00:01,001000000+00:00\n",
         )
+
+    def test_extra_shadow_args(self) -> None:
+        # Pass through a `--seed` argument and validate that it was used.
+        res1 = subprocess.check_output(
+            [
+                "python3",
+                "-m",
+                "shadowtools.shadow_exec",
+                f"--shadow-bin={SHADOW_BIN}",
+                "--preserve=on-error",
+                "--shadow-args=--seed 2",
+                "--",
+                "bash",
+                "-c",
+                "set -euo pipefail; head -c 8 /dev/urandom | base64",
+            ],
+            text=True,
+        )
+        res2 = subprocess.check_output(
+            [
+                "python3",
+                "-m",
+                "shadowtools.shadow_exec",
+                f"--shadow-bin={SHADOW_BIN}",
+                "--preserve=on-error",
+                "--shadow-args=--seed 3",
+                "--",
+                "bash",
+                "-c",
+                "set -euo pipefail; head -c 8 /dev/urandom | base64",
+            ],
+            text=True,
+        )
+        self.assertNotEqual(res1, res2)
