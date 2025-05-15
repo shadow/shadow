@@ -50,7 +50,6 @@ def _main(
     stdout: BinaryIO = sys.stdout.buffer,
     stderr: TextIO = sys.stderr,
     shadow_bin: Path = Path("shadow"),
-    model_unblocked_syscall_latency: bool = True,
     shadow_args: List[str] = [],
 ) -> int:
     """
@@ -64,7 +63,6 @@ def _main(
     stdout -- Destination for the simulated program's merged stdout and stderr.
     stderr -- Destination for other "meta" output.
     shadow_bin -- Shadow binary basename or path.
-    model_unblocked_syscall_latency -- Whether to set shadow's --model-unblocked-syscall-latency.
     """
 
     tmpdir = Path(tempfile.mkdtemp(prefix=f"{progname}-", dir=temp_dir))
@@ -91,7 +89,6 @@ def _main(
             stop_time="100h",
             log_level="warning",
             heartbeat_interval=None,
-            model_unblocked_syscall_latency=model_unblocked_syscall_latency,
         ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
         hosts={
@@ -261,29 +258,6 @@ def __main__() -> None:
         default="",
         help=("Shell-encoded list of arguments to pass through to shadow."),
     )
-    if sys.version_info >= (3, 9):
-        parser.add_argument(
-            "--model-unblocked-syscall-latency",
-            action=argparse.BooleanOptionalAction,
-            default=True,
-            help="set shadow's --model-unblocked-syscall-latency",
-        )
-    else:
-        # No argparse.BooleanOptionalAction; emulate it.  Should function the
-        # same, but the help text is a little less nice since the two flags
-        # aren't collapsed together.
-        parser.add_argument(
-            "--model-unblocked-syscall-latency",
-            action="store_true",
-            help="set shadow's --model-unblocked-syscall-latency (default)",
-            default=True,
-        )
-        parser.add_argument(
-            "--no-model-unblocked-syscall-latency",
-            action="store_false",
-            dest="model_unblocked_syscall_latency",
-            help="unset shadow's --model-unblocked-syscall-latency",
-        )
     parser.add_argument("args", nargs="+", help="command and arguments to execute")
     res = parser.parse_args()
     rv = _main(
@@ -293,7 +267,6 @@ def __main__() -> None:
         preserve=PreserveChoice[res.preserve.upper().translate({ord("-"): "_"})],
         shadow_bin=res.shadow_bin,
         temp_dir=res.temp_dir,
-        model_unblocked_syscall_latency=res.model_unblocked_syscall_latency,
         shadow_args=shlex.split(res.shadow_args),
     )
     sys.exit(rv)
