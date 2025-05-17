@@ -192,7 +192,7 @@ impl DescriptorTable {
     /// Remove and return all descriptors.
     pub fn remove_all(&mut self) -> impl Iterator<Item = Descriptor> {
         // reset the descriptor table
-        let old_self = std::mem::replace(self, Self::new());
+        let old_self = std::mem::take(self);
         // return the old descriptors
         old_self.descriptors.into_values()
     }

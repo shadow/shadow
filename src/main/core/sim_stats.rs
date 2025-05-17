@@ -92,16 +92,10 @@ impl SimStatsForOutput {
     pub fn new(stats: &SharedSimStats) -> Self {
         Self {
             objects: ObjectStatsForOutput {
-                alloc_counts: std::mem::replace(
-                    &mut stats.alloc_counts.lock().unwrap(),
-                    Counter::new(),
-                ),
-                dealloc_counts: std::mem::replace(
-                    &mut stats.dealloc_counts.lock().unwrap(),
-                    Counter::new(),
-                ),
+                alloc_counts: std::mem::take(&mut stats.alloc_counts.lock().unwrap()),
+                dealloc_counts: std::mem::take(&mut stats.dealloc_counts.lock().unwrap()),
             },
-            syscalls: std::mem::replace(&mut stats.syscall_counts.lock().unwrap(), Counter::new()),
+            syscalls: std::mem::take(&mut stats.syscall_counts.lock().unwrap()),
         }
     }
 }
