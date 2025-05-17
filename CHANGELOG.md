@@ -65,6 +65,7 @@ fixes network connections sometimes trying to read indefinitely after the other
 end has closed the connection in Rust's tokio async runtime (as in
 https://gitlab.torproject.org/tpo/core/arti/-/issues/1972).
 * Fixed the `faccessat` syscall handler to not incorrectly take a `flags` parameter, and added support the `faccessat2` syscall which *does* take a `flags` parameter. (#3578)
+* Flags passed to the `setup` script will now pass "OFF" to CMake explicitly, rather than omitting the value and letting CMake choose whether it's "ON" or "OFF". (#3592)
 
 Full changelog since v3.2.0:
 
