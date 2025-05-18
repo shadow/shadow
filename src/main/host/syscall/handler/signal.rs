@@ -264,15 +264,18 @@ impl SyscallHandler {
         oact: ForeignPtr<linux_api::signal::sigaction>,
         sigsetsize: libc::size_t,
     ) -> Result<(), Errno> {
-        if sig < 1 || sig > 64 {
+        // rt_sigaction(2):
+        // > Consequently, a new system call, rt_sigaction(), was added to support an enlarged
+        // > sigset_t type. The new system call takes a fourth argument, size_t sigsetsize, which
+        // > specifies the size in bytes of the signal sets in act.sa_mask and oldact.sa_mask. This
+        // > argument is currently required to have the value sizeof(sigset_t) (or the error EINVAL
+        // > results)
+        // Assuming by "sizeof(sigset_t)" it means the kernel's `linux_sigset_t` and not glibc's
+        // `sigset_t`...
+        if sigsetsize != size_of::<linux_api::signal::sigset_t>() {
             return Err(Errno::EINVAL);
         }
 
-        if sigsetsize != 64 / 8 {
-            return Err(Errno::EINVAL);
-        }
-
-        // TODO: is there a better way to do the above checks in rust?
         let Ok(sig) = Signal::try_from(sig) else {
             return Err(Errno::EINVAL);
         };
