@@ -112,7 +112,7 @@ impl std::io::Seek for MemoryWriterCursor<'_> {
     }
 }
 
-enum CopiedOrMapped<'a, T: Debug + Pod> {
+enum CopiedOrMapped<'a, T: Pod> {
     // Data copied from plugin memory.
     Copied(Vec<T>),
     // Data memory-mapped from plugin memory.
@@ -128,9 +128,9 @@ enum CopiedOrMapped<'a, T: Debug + Pod> {
 /// assert_eq!(pmr.len(), 10);
 /// let x = pmr[5];
 /// ```
-pub struct ProcessMemoryRef<'a, T: Debug + Pod>(CopiedOrMapped<'a, T>);
+pub struct ProcessMemoryRef<'a, T: Pod>(CopiedOrMapped<'a, T>);
 
-impl<'a, T: Debug + Pod> ProcessMemoryRef<'a, T> {
+impl<'a, T: Pod> ProcessMemoryRef<'a, T> {
     fn new_copied(v: Vec<T>) -> Self {
         Self(CopiedOrMapped::Copied(v))
     }
@@ -150,7 +150,7 @@ impl ProcessMemoryRef<'_, u8> {
 
 impl<T> Deref for ProcessMemoryRef<'_, T>
 where
-    T: Debug + Pod,
+    T: Pod,
 {
     type Target = [T];
 
@@ -163,7 +163,7 @@ where
 }
 
 #[derive(Debug)]
-enum CopiedOrMappedMut<'a, T: Debug + Pod> {
+enum CopiedOrMappedMut<'a, T: Pod> {
     // Data copied from process memory, to be written back.
     Copied(MemoryCopier, ForeignArrayPtr<T>, Vec<T>),
     // Memory-mapped process memory.
@@ -183,12 +183,12 @@ enum CopiedOrMappedMut<'a, T: Debug + Pod> {
 /// The object must be disposed of by calling `flush` or `noflush`.  Dropping
 /// the object without doing so will result in a panic.
 #[derive(Debug)]
-pub struct ProcessMemoryRefMut<'a, T: Debug + Pod> {
+pub struct ProcessMemoryRefMut<'a, T: Pod> {
     copied_or_mapped: CopiedOrMappedMut<'a, T>,
     dirty: bool,
 }
 
-impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
+impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
     fn new_copied(copier: MemoryCopier, ptr: ForeignArrayPtr<T>, v: Vec<T>) -> Self {
         Self {
             copied_or_mapped: CopiedOrMappedMut::Copied(copier, ptr, v),
@@ -237,7 +237,7 @@ impl<'a, T: Debug + Pod> ProcessMemoryRefMut<'a, T> {
     }
 }
 
-impl<T: Debug + Pod> Drop for ProcessMemoryRefMut<'_, T> {
+impl<T: Pod> Drop for ProcessMemoryRefMut<'_, T> {
     fn drop(&mut self) {
         // Dropping without flushing is a bug.
         assert!(!self.dirty);
@@ -246,7 +246,7 @@ impl<T: Debug + Pod> Drop for ProcessMemoryRefMut<'_, T> {
 
 impl<T> Deref for ProcessMemoryRefMut<'_, T>
 where
-    T: Debug + Pod,
+    T: Pod,
 {
     type Target = [T];
 
@@ -260,7 +260,7 @@ where
 
 impl<T> DerefMut for ProcessMemoryRefMut<'_, T>
 where
-    T: Debug + Pod,
+    T: Pod,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match &mut self.copied_or_mapped {
@@ -331,7 +331,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_ref<T: Pod + Debug>(&self, ptr: ForeignArrayPtr<T>) -> Option<&[T]> {
+    fn mapped_ref<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Option<&[T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No mutable refs to process memory exist by preconditions of
         // MemoryManager::new + we have a reference.
@@ -341,7 +341,7 @@ impl MemoryManager {
     // Internal helper for getting a reference to memory via the
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
-    fn mapped_mut<T: Pod + Debug>(&mut self, ptr: ForeignArrayPtr<T>) -> Option<&mut [T]> {
+    fn mapped_mut<T: Pod>(&mut self, ptr: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         let mm = self.memory_mapper.as_ref()?;
         // SAFETY: No other refs to process memory exist by preconditions of
         // MemoryManager::new + we have an exclusive reference.
@@ -350,7 +350,7 @@ impl MemoryManager {
 
     /// Returns a reference to the given memory, copying to a local buffer if
     /// the memory isn't mapped into Shadow.
-    pub fn memory_ref<T: Pod + Debug>(
+    pub fn memory_ref<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
@@ -367,7 +367,7 @@ impl MemoryManager {
     /// pointer to the last address in the pointer that's accessible. Useful for
     /// accessing string data of unknown size. The data is copied to a local
     /// buffer if the memory isn't mapped into Shadow.
-    pub fn memory_ref_prefix<T: Pod + Debug>(
+    pub fn memory_ref_prefix<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRef<T>, Errno> {
@@ -428,7 +428,7 @@ impl MemoryManager {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn read<T: Pod + Debug>(&self, ptr: ForeignPtr<T>) -> Result<T, Errno> {
+    pub fn read<T: Pod>(&self, ptr: ForeignPtr<T>) -> Result<T, Errno> {
         let ptr = ptr.cast::<MaybeUninit<T>>();
         let mut res: MaybeUninit<T> = MaybeUninit::uninit();
 
@@ -453,12 +453,12 @@ impl MemoryManager {
     /// ```
     // take a `&T` rather than a `T` since all `Pod` types are `Copy`, and it's probably more
     // performant to accept a reference than copying the type here if `T` is large
-    pub fn write<T: Pod + Debug>(&mut self, ptr: ForeignPtr<T>, val: &T) -> Result<(), Errno> {
+    pub fn write<T: Pod>(&mut self, ptr: ForeignPtr<T>, val: &T) -> Result<(), Errno> {
         self.copy_to_ptr(ForeignArrayPtr::new(ptr, 1), std::slice::from_ref(val))
     }
 
     /// Similar to `read`, but saves a copy if you already have a `dst` to copy the data into.
-    pub fn copy_from_ptr<T: Debug + Pod>(
+    pub fn copy_from_ptr<T: Pod>(
         &self,
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
@@ -474,7 +474,7 @@ impl MemoryManager {
     // in the pointer that's accessible. Not exposed as a public interface
     // because this is generally only useful for strings, and
     // `copy_str_from_ptr` provides a more convenient interface.
-    fn copy_prefix_from_ptr<T: Debug + Pod>(
+    fn copy_prefix_from_ptr<T: Pod>(
         &self,
         buf: &mut [T],
         ptr: ForeignArrayPtr<T>,
@@ -507,7 +507,7 @@ impl MemoryManager {
     /// Returns a mutable reference to the given memory. If the memory isn't
     /// mapped into Shadow, copies the data to a local buffer, which is written
     /// back into the process if and when the reference is flushed.
-    pub fn memory_ref_mut<T: Pod + Debug>(
+    pub fn memory_ref_mut<T: Pod>(
         &mut self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
@@ -536,7 +536,7 @@ impl MemoryManager {
     // overwrites the data.
     // TODO: return ProcessMemoryRefMut<MaybeUninit<T>> instead.
     #[inline(always)]
-    pub fn memory_ref_mut_uninit<T: Pod + Debug>(
+    pub fn memory_ref_mut_uninit<T: Pod>(
         &mut self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
@@ -574,11 +574,7 @@ impl MemoryManager {
     /// Writes the memory from a local copy. If `src` doesn't already exist,
     /// using `memory_ref_mut_uninit` and initializing the data in that
     /// reference saves a copy.
-    pub fn copy_to_ptr<T: Pod + Debug>(
-        &mut self,
-        dst: ForeignArrayPtr<T>,
-        src: &[T],
-    ) -> Result<(), Errno> {
+    pub fn copy_to_ptr<T: Pod>(&mut self, dst: ForeignArrayPtr<T>, src: &[T]) -> Result<(), Errno> {
         if let Some(dst) = self.mapped_mut(dst) {
             dst.copy_from_slice(src);
             return Ok(());
