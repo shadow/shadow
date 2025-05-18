@@ -30,57 +30,6 @@ static int _shim_handled_signals[] = {SIGSYS, SIGSEGV};
 // System Calls
 ///////////////////////////////////////////////////////////
 
-static SyscallReturn _rt_sigaction(SyscallHandler* sys, int signum, UntypedForeignPtr actPtr,
-                                   UntypedForeignPtr oldActPtr, size_t masksize) {
-    utility_debugAssert(sys);
-
-    if (signum < 1 || signum > 64) {
-        return syscallreturn_makeDoneErrno(EINVAL);
-    }
-
-    if (masksize != 64 / 8) {
-        return syscallreturn_makeDoneErrno(EINVAL);
-    }
-
-    if (oldActPtr.val) {
-        struct linux_sigaction old_action = shimshmem_getSignalAction(
-            host_getShimShmemLock(rustsyscallhandler_getHost(sys)),
-            process_getSharedMem(rustsyscallhandler_getProcess(sys)), signum);
-        int rv = process_writePtr(
-            rustsyscallhandler_getProcess(sys), oldActPtr, &old_action, sizeof(old_action));
-        if (rv != 0) {
-            return syscallreturn_makeDoneErrno(-rv);
-        }
-    }
-
-    if (actPtr.val) {
-        if (signum == SIGKILL || signum == SIGSTOP) {
-            return syscallreturn_makeDoneErrno(EINVAL);
-        }
-
-        struct linux_sigaction new_action;
-        int rv = process_readPtr(
-            rustsyscallhandler_getProcess(sys), &new_action, actPtr, sizeof(new_action));
-        if (rv != 0) {
-            return syscallreturn_makeDoneErrno(-rv);
-        }
-        shimshmem_setSignalAction(host_getShimShmemLock(rustsyscallhandler_getHost(sys)),
-                                  process_getSharedMem(rustsyscallhandler_getProcess(sys)), signum,
-                                  &new_action);
-    }
-
-    return syscallreturn_makeDoneI64(0);
-}
-
-SyscallReturn syscallhandler_rt_sigaction(SyscallHandler* sys, const SyscallArgs* args) {
-    utility_debugAssert(sys && args);
-    SyscallReturn ret =
-        _rt_sigaction(sys, /*signum=*/(int)args->args[0].as_i64,
-                      /*actPtr=*/args->args[1].as_ptr,
-                      /*oldActPtr=*/args->args[2].as_ptr, /*masksize=*/args->args[3].as_u64);
-    return ret;
-}
-
 SyscallReturn syscallhandler_sigaltstack(SyscallHandler* sys, const SyscallArgs* args) {
     utility_debugAssert(sys && args);
     UntypedForeignPtr ss_ptr = args->args[0].as_ptr;
