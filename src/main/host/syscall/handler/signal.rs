@@ -286,7 +286,9 @@ impl SyscallHandler {
     ) -> Result<(), Errno> {
         // From sigprocmask(2): This argument is currently required to have a fixed architecture
         // specific value (equal to sizeof(kernel_sigset_t)).
-        if sigsetsize != 64 / 8 {
+        // We use `sigset_t` from `linux_api`, which is a wrapper around `linux_sigset_t` from
+        // the kernel and should be equivalent to `kernel_sigset_t`.
+        if sigsetsize != size_of::<linux_api::signal::sigset_t>() {
             warn_once_then_debug!("Bad sigsetsize {sigsetsize}");
             return Err(Errno::EINVAL);
         }
