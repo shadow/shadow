@@ -8,7 +8,6 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(rt_sigaction);
 SYSCALL_HANDLER(sigaltstack);
 
 #endif

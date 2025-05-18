@@ -259,13 +259,48 @@ impl SyscallHandler {
     );
     pub fn rt_sigaction(
         ctx: &mut SyscallContext,
-        _sig: std::ffi::c_int,
-        _act: ForeignPtr<linux_api::signal::sigaction>,
-        _oact: ForeignPtr<linux_api::signal::sigaction>,
-        _sigsetsize: libc::size_t,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigaction, ctx)?;
-        assert_eq!(rv, 0);
+        sig: std::ffi::c_int,
+        act: ForeignPtr<linux_api::signal::sigaction>,
+        oact: ForeignPtr<linux_api::signal::sigaction>,
+        sigsetsize: libc::size_t,
+    ) -> Result<(), Errno> {
+        if sig < 1 || sig > 64 {
+            return Err(Errno::EINVAL);
+        }
+
+        if sigsetsize != 64 / 8 {
+            return Err(Errno::EINVAL);
+        }
+
+        // TODO: is there a better way to do the above checks in rust?
+        let Ok(sig) = Signal::try_from(sig) else {
+            return Err(Errno::EINVAL);
+        };
+
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let process_shmem = ctx.objs.process.shmem();
+        let mut process_protected = process_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        if !oact.is_null() {
+            let old_action = unsafe { process_protected.signal_action(sig) };
+            ctx.objs
+                .process
+                .memory_borrow_mut()
+                .write(oact, old_action)?;
+        }
+
+        if act.is_null() {
+            // nothing left to do
+            return Ok(());
+        }
+
+        if sig == Signal::SIGKILL || sig == Signal::SIGSTOP {
+            return Err(Errno::EINVAL);
+        }
+
+        let new_action = ctx.objs.process.memory_borrow().read(act)?;
+        unsafe { *process_protected.signal_action_mut(sig) = new_action };
+
         Ok(())
     }
 
