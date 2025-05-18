@@ -1015,7 +1015,7 @@ impl MemoryMapper {
 
     // Get a raw pointer to the plugin's memory, if it's been remapped into Shadow.
     // Panics if called with zero-length `src`.
-    fn get_mapped_ptr<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
+    fn get_mapped_ptr<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         assert!(!src.is_empty());
 
         if usize::from(src.ptr()) % std::mem::align_of::<T>() != 0 {
@@ -1059,7 +1059,7 @@ impl MemoryMapper {
         Some(ptr)
     }
 
-    fn get_mapped_ptr_and_count<T: Pod + Debug>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
+    fn get_mapped_ptr_and_count<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<*mut T> {
         let res = self.get_mapped_ptr(src);
         if res.is_none() {
             self.inc_misses(src);
@@ -1067,7 +1067,7 @@ impl MemoryMapper {
         res
     }
 
-    pub unsafe fn get_ref<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&[T]> {
+    pub unsafe fn get_ref<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&[T]> {
         if src.is_empty() {
             return Some(&[]);
         }
@@ -1075,7 +1075,7 @@ impl MemoryMapper {
         Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
-    pub unsafe fn get_mut<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
+    pub unsafe fn get_mut<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         if src.is_empty() {
             return Some(&mut []);
         }
@@ -1084,7 +1084,7 @@ impl MemoryMapper {
     }
 
     /// Counts accesses where we had to fall back to the thread's (slow) apis.
-    fn inc_misses<T: Debug + Pod>(&self, src: ForeignArrayPtr<T>) {
+    fn inc_misses<T: Pod>(&self, src: ForeignArrayPtr<T>) {
         let key = match self.regions.get(usize::from(src.ptr())) {
             Some((_, original_path)) => format!("{:?}", original_path),
             None => "not found".to_string(),

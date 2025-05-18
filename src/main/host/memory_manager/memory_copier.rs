@@ -23,10 +23,7 @@ impl MemoryCopier {
     /// Copy the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
     #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem<T: Pod + Debug>(
-        &self,
-        ptr: ForeignArrayPtr<T>,
-    ) -> Result<Vec<T>, Errno> {
+    pub unsafe fn clone_mem<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Result<Vec<T>, Errno> {
         let mut v = Vec::with_capacity(ptr.len());
         unsafe { v.set_len(v.capacity()) };
         unsafe { self.copy_from_ptr(&mut v, ptr)? };
@@ -36,7 +33,7 @@ impl MemoryCopier {
     /// Copy the readable prefix of the region.
     /// SAFETY: A mutable reference to the process memory must not exist.
     #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem_prefix<T: Pod + Debug>(
+    pub unsafe fn clone_mem_prefix<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<Vec<T>, Errno> {
@@ -55,7 +52,7 @@ impl MemoryCopier {
         src: ForeignArrayPtr<T>,
     ) -> Result<usize, Errno>
     where
-        T: Pod + Debug,
+        T: Pod,
     {
         // Convert to u8
         // SAFETY: We do not write uninitialized data into `buf`.
@@ -98,7 +95,7 @@ impl MemoryCopier {
 
     // Copy `dst` into `src`.
     /// SAFETY: A mutable reference to the process memory must not exist.
-    pub unsafe fn copy_from_ptr<T: Pod + Debug>(
+    pub unsafe fn copy_from_ptr<T: Pod>(
         &self,
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
@@ -195,7 +192,7 @@ impl MemoryCopier {
     // Low level helper for writing directly to `dst`. Panics if the
     // MemoryManager's process isn't currently active.
     /// SAFETY: A reference to the process memory must not exist.
-    pub unsafe fn copy_to_ptr<T: Pod + Debug>(
+    pub unsafe fn copy_to_ptr<T: Pod>(
         &self,
         dst: ForeignArrayPtr<T>,
         src: &[T],
