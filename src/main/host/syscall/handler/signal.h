@@ -9,7 +9,6 @@
 #include "main/host/syscall/protected.h"
 
 SYSCALL_HANDLER(rt_sigaction);
-SYSCALL_HANDLER(rt_sigprocmask);
 SYSCALL_HANDLER(sigaltstack);
 
 #endif
