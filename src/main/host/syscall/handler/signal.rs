@@ -1,5 +1,7 @@
 use linux_api::errno::Errno;
-use linux_api::signal::{LinuxDefaultAction, Signal, SignalHandler, defaultaction, siginfo_t};
+use linux_api::signal::{
+    LinuxDefaultAction, SigProcMaskAction, Signal, SignalHandler, defaultaction, siginfo_t,
+};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -277,13 +279,47 @@ impl SyscallHandler {
     );
     pub fn rt_sigprocmask(
         ctx: &mut SyscallContext,
-        _how: std::ffi::c_int,
-        _nset: ForeignPtr<linux_api::signal::sigset_t>,
-        _oset: ForeignPtr<linux_api::signal::sigset_t>,
-        _sigsetsize: libc::size_t,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigprocmask, ctx)?;
-        assert_eq!(rv, 0);
+        how: std::ffi::c_int,
+        nset: ForeignPtr<linux_api::signal::sigset_t>,
+        oset: ForeignPtr<linux_api::signal::sigset_t>,
+        sigsetsize: libc::size_t,
+    ) -> Result<(), Errno> {
+        // From sigprocmask(2): This argument is currently required to have a fixed architecture
+        // specific value (equal to sizeof(kernel_sigset_t)).
+        if sigsetsize != 64 / 8 {
+            warn_once_then_debug!("Bad sigsetsize {sigsetsize}");
+            return Err(Errno::EINVAL);
+        }
+
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let thread_shmem = ctx.objs.thread.shmem();
+        let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        let current_set = thread_protected.blocked_signals;
+
+        if !oset.is_null() {
+            ctx.objs
+                .process
+                .memory_borrow_mut()
+                .write(oset, &current_set)?;
+        }
+
+        if nset.is_null() {
+            // nothing left to do
+            return Ok(());
+        }
+
+        let set = ctx.objs.process.memory_borrow().read(nset)?;
+
+        let set = match SigProcMaskAction::try_from(how) {
+            Ok(SigProcMaskAction::SIG_BLOCK) => set | current_set,
+            Ok(SigProcMaskAction::SIG_UNBLOCK) => !set & current_set,
+            Ok(SigProcMaskAction::SIG_SETMASK) => set,
+            Err(_) => return Err(Errno::EINVAL),
+        };
+
+        thread_protected.blocked_signals = set;
+
         Ok(())
     }
 
