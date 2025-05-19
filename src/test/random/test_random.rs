@@ -60,7 +60,7 @@ fn check_randomness(fracs: &[f64]) -> Result<(), String> {
         buckets[j] += 1;
     }
 
-    let fail = buckets.iter().any(|&i| i == 0);
+    let fail = buckets.contains(&0);
     println!("bucket values:");
     for (i, val) in buckets.iter().enumerate() {
         println!("bucket[{}] = {}", i, val);

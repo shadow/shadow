@@ -812,6 +812,10 @@ impl ZombieProcess {
 }
 
 /// Inner implementation of a simulated process.
+// We could box the variants, but it's unclear whether it's really worth the extra code and extra
+// allocations. Most of the values of this type will be in the larger `Runnable` variant rather than
+// the smaller `Zombie` variant anyways.
+#[allow(clippy::large_enum_variant)]
 enum ProcessState {
     Runnable(RunnableProcess),
     Zombie(ZombieProcess),

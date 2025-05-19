@@ -22,7 +22,7 @@ pub const S_IRGRP: u32 = S_IRUSR >> 3;
 pub const S_IWGRP: u32 = S_IWUSR >> 3;
 
 fn null_terminated(string: &[u8]) -> bool {
-    string.iter().any(|x| *x == 0)
+    string.contains(&0)
 }
 
 /// # Safety

@@ -12,8 +12,8 @@ enum Cond<'a, T> {
 impl<T: std::cmp::Eq> Cond<'_, T> {
     fn matches(&self, compare: T) -> bool {
         match self {
-            Cond::Only(vals) => vals.iter().any(|val| *val == compare),
-            Cond::Not(vals) => vals.iter().all(|val| *val != compare),
+            Cond::Only(vals) => vals.contains(&compare),
+            Cond::Not(vals) => !vals.contains(&compare),
             Cond::Any => true,
         }
     }
