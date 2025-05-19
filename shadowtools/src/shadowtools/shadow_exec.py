@@ -79,6 +79,7 @@ def _main(
         """
     )
 
+    data_dir = tmpdir.joinpath("shadow.data")
     config = scfg.Config(
         general=scfg.General(
             # It'd be nice to set a higher stop-time here, but some simulations
@@ -89,6 +90,8 @@ def _main(
             stop_time="100h",
             log_level="warning",
             heartbeat_interval=None,
+            progress=False,
+            data_directory=str(data_dir),
         ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
         hosts={
@@ -109,7 +112,6 @@ def _main(
     config_path = tmpdir.joinpath("shadow.yaml")
     config_path.write_text(yaml.safe_dump(config))
 
-    data_dir = tmpdir.joinpath("shadow.data")
     if any((re.match(r"^--data-directory(=|$)|^-d", s) for s in shadow_args)):
         # It wouldn't be *terribly* hard to support this, but not today.
         # Naively allowing this override would break our stdout pass-through
@@ -119,10 +121,6 @@ def _main(
             file=stderr,
         )
         sys.exit(1)
-    else:
-        shadow_args.append(f"--data-directory={data_dir}")
-    if not any((re.match(r"^--progress(=|$)", s) for s in shadow_args)):
-        shadow_args.append(f"--progress=false")
     shadow_args.extend(["--", str(config_path)])
 
     shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
