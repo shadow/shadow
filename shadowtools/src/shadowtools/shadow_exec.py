@@ -20,6 +20,7 @@ Sat Jan  1 00:16:40 GMT 2000
 """
 
 import argparse
+import re
 import enum
 import subprocess
 import shlex
@@ -30,7 +31,7 @@ import textwrap
 import yaml
 
 from pathlib import Path
-from typing import TextIO, BinaryIO, Final, Optional, List
+from typing import TextIO, BinaryIO, Final, Optional, List, Iterable
 
 import shadowtools.config as scfg
 
@@ -43,13 +44,13 @@ class PreserveChoice(enum.Enum):
 
 def _main(
     progname: str,
-    args: List[str],
+    args: Iterable[str],
     preserve: PreserveChoice = PreserveChoice.NEVER,
     temp_dir: Optional[Path] = None,
     stdout: BinaryIO = sys.stdout.buffer,
     stderr: TextIO = sys.stderr,
     shadow_bin: Path = Path("shadow"),
-    model_unblocked_syscall_latency: bool = True,
+    shadow_args: Iterable[str] = (),
 ) -> int:
     """
     Run a program under shadow.
@@ -62,7 +63,6 @@ def _main(
     stdout -- Destination for the simulated program's merged stdout and stderr.
     stderr -- Destination for other "meta" output.
     shadow_bin -- Shadow binary basename or path.
-    model_unblocked_syscall_latency -- Whether to set shadow's --model-unblocked-syscall-latency.
     """
 
     tmpdir = Path(tempfile.mkdtemp(prefix=f"{progname}-", dir=temp_dir))
@@ -79,6 +79,7 @@ def _main(
         """
     )
 
+    data_dir = tmpdir.joinpath("shadow.data")
     config = scfg.Config(
         general=scfg.General(
             # It'd be nice to set a higher stop-time here, but some simulations
@@ -89,7 +90,8 @@ def _main(
             stop_time="100h",
             log_level="warning",
             heartbeat_interval=None,
-            model_unblocked_syscall_latency=model_unblocked_syscall_latency,
+            progress=False,
+            data_directory=str(data_dir),
         ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
         hosts={
@@ -110,20 +112,22 @@ def _main(
     config_path = tmpdir.joinpath("shadow.yaml")
     config_path.write_text(yaml.safe_dump(config))
 
-    data_dir = tmpdir.joinpath("shadow.data")
-    shadow_args = [
-        f"--data-directory={data_dir}",
-        "--progress=false",
-        str(config_path),
-    ]
-
+    if any((re.match(r"^--data-directory(=|$)|^-d", s) for s in shadow_args)):
+        # It wouldn't be *terribly* hard to support this, but not today.
+        # Naively allowing this override would break our stdout pass-through
+        # below.
+        print(
+            f"ERROR: Overriding shadow's --data-directory currently unsupported.",
+            file=stderr,
+        )
+        sys.exit(1)
     shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
     shadow_stderr_path = tmpdir.joinpath("shadow.stderr")
     with shadow_stdout_path.open("w") as shadow_stdout_file, shadow_stderr_path.open(
         "w"
     ) as shadow_stderr_file:
         shadow_ps = subprocess.Popen(
-            [str(shadow_bin)] + shadow_args,
+            [str(shadow_bin)] + list(shadow_args) + ["--", str(config_path)],
             stdout=shadow_stdout_file,
             stderr=shadow_stderr_file,
         )
@@ -240,29 +244,16 @@ def __main__() -> None:
         type=Path,
         help="shadow binary basename or path",
     )
-    if sys.version_info >= (3, 9):
-        parser.add_argument(
-            "--model-unblocked-syscall-latency",
-            action=argparse.BooleanOptionalAction,
-            default=True,
-            help="set shadow's --model-unblocked-syscall-latency",
-        )
-    else:
-        # No argparse.BooleanOptionalAction; emulate it.  Should function the
-        # same, but the help text is a little less nice since the two flags
-        # aren't collapsed together.
-        parser.add_argument(
-            "--model-unblocked-syscall-latency",
-            action="store_true",
-            help="set shadow's --model-unblocked-syscall-latency (default)",
-            default=True,
-        )
-        parser.add_argument(
-            "--no-model-unblocked-syscall-latency",
-            action="store_false",
-            dest="model_unblocked_syscall_latency",
-            help="unset shadow's --model-unblocked-syscall-latency",
-        )
+    # We take a single shell-encoded string here and split it instead of taking
+    # multiple strings, because otherwise argparse will try to interpret tokens
+    # starting with - as a new option for itself.
+    parser.add_argument(
+        "-a",
+        "--shadow-args",
+        type=str,
+        default="",
+        help=("Shell-encoded list of arguments to pass through to shadow."),
+    )
     parser.add_argument("args", nargs="+", help="command and arguments to execute")
     res = parser.parse_args()
     rv = _main(
@@ -272,7 +263,7 @@ def __main__() -> None:
         preserve=PreserveChoice[res.preserve.upper().translate({ord("-"): "_"})],
         shadow_bin=res.shadow_bin,
         temp_dir=res.temp_dir,
-        model_unblocked_syscall_latency=res.model_unblocked_syscall_latency,
+        shadow_args=shlex.split(res.shadow_args),
     )
     sys.exit(rv)
 
