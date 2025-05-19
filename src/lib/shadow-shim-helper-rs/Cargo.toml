@@ -21,7 +21,7 @@ log = { version = "0.4", default-features=false, features=["release_max_level_de
 logger = { path = "../logger" }
 once_cell = { version="1.21.0", default-features=false }
 shadow-pod = { path = "../pod" }
-rustix = { version = "0.38.44", default-features = false, features = ["rand"] }
+rustix = { version = "1.0.5", default-features = false, features = ["rand"] }
 shadow_shmem = { path = "../shmem" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
