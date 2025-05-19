@@ -192,13 +192,17 @@ def build(args, remaining):
     # build up args string for the cmake command
     cmake_cmd = ["cmake", rootdir, "-D", "CMAKE_INSTALL_PREFIX=" + installdir]
 
+    # returns "ON" if truthy, else "OFF"
+    def on_off(b):
+        return "ON" if b else "OFF"
+
     # other cmake options
     cmake_cmd.extend(["-D", "CMAKE_BUILD_TYPE=" + ("Debug" if args.do_debug else "Release")])
     if args.do_verbose: os.putenv("VERBOSE", "1")
-    if args.do_test: cmake_cmd.extend(["-D", "SHADOW_TEST=ON"])
-    if args.do_werror: cmake_cmd.extend(["-D", "SHADOW_WERROR=ON"])
-    if args.do_extra_test: cmake_cmd.extend(["-D", "SHADOW_EXTRA_TESTS=ON"])
-    if args.do_use_perf_timers: cmake_cmd.extend(["-D", "SHADOW_USE_PERF_TIMERS=ON"])
+    cmake_cmd.extend(["-D", "SHADOW_TEST=" + on_off(args.do_test)])
+    cmake_cmd.extend(["-D", "SHADOW_WERROR=" + on_off(args.do_werror)])
+    cmake_cmd.extend(["-D", "SHADOW_EXTRA_TESTS=" + on_off(args.do_extra_test)])
+    cmake_cmd.extend(["-D", "SHADOW_USE_PERF_TIMERS=" + on_off(args.do_use_perf_timers)])
 
     # add extra search directories as absolution paths
     make_paths_absolute(args.search_prefix)
