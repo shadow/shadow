@@ -1,14 +1,13 @@
 use linux_api::errno::Errno;
 use linux_api::signal::{
-    LinuxDefaultAction, SigProcMaskAction, Signal, SignalHandler, defaultaction, siginfo_t,
+    LinuxDefaultAction, SigAltStackFlags, SigProcMaskAction, Signal, SignalHandler, defaultaction,
+    siginfo_t,
 };
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
-use crate::cshadow as c;
 use crate::host::process::Process;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
-use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 impl SyscallHandler {
@@ -371,11 +370,89 @@ impl SyscallHandler {
     );
     pub fn sigaltstack(
         ctx: &mut SyscallContext,
-        _uss: ForeignPtr<linux_api::signal::stack_t>,
-        _uoss: ForeignPtr<linux_api::signal::stack_t>,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_sigaltstack, ctx)?;
-        assert_eq!(rv, 0);
+        uss: ForeignPtr<linux_api::signal::stack_t>,
+        uoss: ForeignPtr<linux_api::signal::stack_t>,
+    ) -> Result<(), Errno> {
+        log::trace!("sigaltstack({uss:p}, {uoss:p})");
+
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let thread_shmem = ctx.objs.thread.shmem();
+        let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        let old_ss = unsafe { *thread_protected.sigaltstack() };
+
+        if !uss.is_null() {
+            if old_ss.flags_retain().contains(SigAltStackFlags::SS_ONSTACK) {
+                // sigaltstack(2): EPERM An attempt was made to change the
+                // alternate signal stack while it was active.
+                return Err(Errno::EPERM);
+            }
+
+            let mut new_ss = ctx.objs.process.memory_borrow().read(uss)?;
+            if new_ss.flags_retain().contains(SigAltStackFlags::SS_DISABLE) {
+                // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
+                // as SS_DISABLE. In this case, the kernel ignores any other flags
+                // in ss.ss_flags and the remaining fields in ss.
+                new_ss = shadow_pod::zeroed();
+                new_ss.ss_flags = SigAltStackFlags::SS_DISABLE.bits();
+            }
+
+            let unrecognized_flags = new_ss
+                .flags_retain()
+                .difference(SigAltStackFlags::SS_DISABLE | SigAltStackFlags::SS_AUTODISARM);
+
+            if !unrecognized_flags.is_empty() {
+                log::debug!(
+                    "Unrecognized signal stack flags {unrecognized_flags:?} in {:?}",
+                    new_ss.flags_retain(),
+                );
+                // Unrecognized flag.
+                return Err(Errno::EINVAL);
+            }
+
+            *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
+        }
+
+        // TODO: should we move this before we modify the alt stack, so that we don't return EFAULT
+        // after we have already made the modification?
+        if !uoss.is_null() {
+            ctx.objs.process.memory_borrow_mut().write(uoss, &old_ss)?;
+        }
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// The bitflags crate does some weird things with unrecognized flags, so this test ensures that
+    /// they work as expected for how we use them above.
+    #[test]
+    fn unrecognized_flags_difference() {
+        let foo = 1 << 28;
+        // ensure this flag is unused
+        assert_eq!(SigAltStackFlags::from_bits(foo), None);
+        let foo = SigAltStackFlags::from_bits_retain(foo);
+        assert_eq!(
+            foo.difference(SigAltStackFlags::SS_DISABLE).bits(),
+            (1 << 28) & !SigAltStackFlags::SS_DISABLE.bits(),
+        );
+        assert_eq!(
+            (foo - SigAltStackFlags::SS_DISABLE).bits(),
+            (1 << 28) & !SigAltStackFlags::SS_DISABLE.bits(),
+        );
+    }
+
+    #[test]
+    fn unrecognized_flags_empty() {
+        let foo = 1 << 28;
+        assert_ne!(foo, 0);
+        // ensure this flag is unused
+        assert_eq!(SigAltStackFlags::from_bits(foo), None);
+        let foo = SigAltStackFlags::from_bits_retain(foo);
+        assert_ne!(foo.bits(), 0);
+        assert!(!foo.is_empty());
     }
 }
