@@ -822,7 +822,7 @@ pub type linux_sigset_t = bindings::linux_sigset_t;
 #[repr(transparent)]
 #[allow(non_camel_case_types)]
 pub struct sigset_t(linux_sigset_t);
-unsafe impl shadow_pod::Pod for sigset_t {}
+unsafe impl Pod for sigset_t {}
 
 impl sigset_t {
     pub const EMPTY: Self = Self(0);
@@ -1037,7 +1037,7 @@ static_assertions::const_assert_eq!(bindings::LINUX___NR_rt_sigreturn, 15);
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct sigaction(linux_sigaction);
-unsafe impl shadow_pod::Pod for sigaction {}
+unsafe impl Pod for sigaction {}
 
 impl sigaction {
     // Bindgen doesn't succesfully bind these constants; maybe because
@@ -1450,6 +1450,7 @@ mod rt_sigaction_tests {
 pub use bindings::linux_stack_t;
 #[allow(non_camel_case_types)]
 pub type stack_t = linux_stack_t;
+unsafe impl Pod for stack_t {}
 
 impl stack_t {
     pub fn new(sp: *mut core::ffi::c_void, flags: SigAltStackFlags, size: usize) -> Self {
