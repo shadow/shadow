@@ -151,7 +151,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/handler/ioctl.h")
         .header("host/syscall/handler/poll.h")
         .header("host/syscall/handler/select.h")
-        .header("host/syscall/handler/signal.h")
         .header("host/syscall/handler/uio.h")
         .header("host/syscall/handler/unistd.h")
         .header("host/syscall/protected.h")
@@ -348,7 +347,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/handler/ioctl.c",
         "host/syscall/handler/poll.c",
         "host/syscall/handler/select.c",
-        "host/syscall/handler/signal.c",
         "host/syscall/handler/unistd.c",
         "host/syscall/handler/uio.c",
         "host/syscall/protected.c",
