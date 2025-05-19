@@ -8,6 +8,4 @@
 
 #include "main/host/syscall/protected.h"
 
-SYSCALL_HANDLER(sigaltstack);
-
 #endif
