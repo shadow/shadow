@@ -388,37 +388,35 @@ impl SyscallHandler {
             return Ok(());
         }
 
-        {
-            if old_ss.flags_retain().contains(SigAltStackFlags::SS_ONSTACK) {
-                // sigaltstack(2): EPERM An attempt was made to change the
-                // alternate signal stack while it was active.
-                return Err(Errno::EPERM);
-            }
-
-            let mut new_ss = ctx.objs.process.memory_borrow().read(uss)?;
-            if new_ss.flags_retain().contains(SigAltStackFlags::SS_DISABLE) {
-                // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
-                // as SS_DISABLE. In this case, the kernel ignores any other flags
-                // in ss.ss_flags and the remaining fields in ss.
-                new_ss = shadow_pod::zeroed();
-                new_ss.ss_flags = SigAltStackFlags::SS_DISABLE.bits();
-            }
-
-            let unrecognized_flags = new_ss
-                .flags_retain()
-                .difference(SigAltStackFlags::SS_DISABLE | SigAltStackFlags::SS_AUTODISARM);
-
-            if !unrecognized_flags.is_empty() {
-                warn_once_then_debug!(
-                    "Unrecognized signal stack flags {unrecognized_flags:?} in {:?}",
-                    new_ss.flags_retain(),
-                );
-                // Unrecognized flag.
-                return Err(Errno::EINVAL);
-            }
-
-            *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
+        if old_ss.flags_retain().contains(SigAltStackFlags::SS_ONSTACK) {
+            // sigaltstack(2): EPERM An attempt was made to change the
+            // alternate signal stack while it was active.
+            return Err(Errno::EPERM);
         }
+
+        let mut new_ss = ctx.objs.process.memory_borrow().read(uss)?;
+        if new_ss.flags_retain().contains(SigAltStackFlags::SS_DISABLE) {
+            // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
+            // as SS_DISABLE. In this case, the kernel ignores any other flags
+            // in ss.ss_flags and the remaining fields in ss.
+            new_ss = shadow_pod::zeroed();
+            new_ss.ss_flags = SigAltStackFlags::SS_DISABLE.bits();
+        }
+
+        let unrecognized_flags = new_ss
+            .flags_retain()
+            .difference(SigAltStackFlags::SS_DISABLE | SigAltStackFlags::SS_AUTODISARM);
+
+        if !unrecognized_flags.is_empty() {
+            warn_once_then_debug!(
+                "Unrecognized signal stack flags {unrecognized_flags:?} in {:?}",
+                new_ss.flags_retain(),
+            );
+            // Unrecognized flag.
+            return Err(Errno::EINVAL);
+        }
+
+        *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
 
         Ok(())
     }
