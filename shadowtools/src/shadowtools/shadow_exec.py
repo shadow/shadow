@@ -31,7 +31,7 @@ import textwrap
 import yaml
 
 from pathlib import Path
-from typing import TextIO, BinaryIO, Final, Optional, List
+from typing import TextIO, BinaryIO, Final, Optional, List, Iterable
 
 import shadowtools.config as scfg
 
@@ -44,13 +44,13 @@ class PreserveChoice(enum.Enum):
 
 def _main(
     progname: str,
-    args: List[str],
+    args: Iterable[str],
     preserve: PreserveChoice = PreserveChoice.NEVER,
     temp_dir: Optional[Path] = None,
     stdout: BinaryIO = sys.stdout.buffer,
     stderr: TextIO = sys.stderr,
     shadow_bin: Path = Path("shadow"),
-    shadow_args: List[str] = [],
+    shadow_args: Iterable[str] = (),
 ) -> int:
     """
     Run a program under shadow.
@@ -121,15 +121,13 @@ def _main(
             file=stderr,
         )
         sys.exit(1)
-    shadow_args.extend(["--", str(config_path)])
-
     shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
     shadow_stderr_path = tmpdir.joinpath("shadow.stderr")
     with shadow_stdout_path.open("w") as shadow_stdout_file, shadow_stderr_path.open(
         "w"
     ) as shadow_stderr_file:
         shadow_ps = subprocess.Popen(
-            [str(shadow_bin)] + shadow_args,
+            [str(shadow_bin)] + list(shadow_args) + ["--", str(config_path)],
             stdout=shadow_stdout_file,
             stderr=shadow_stderr_file,
         )
