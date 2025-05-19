@@ -373,15 +373,22 @@ impl SyscallHandler {
         uss: ForeignPtr<linux_api::signal::stack_t>,
         uoss: ForeignPtr<linux_api::signal::stack_t>,
     ) -> Result<(), Errno> {
-        log::trace!("sigaltstack({uss:p}, {uoss:p})");
-
         let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
         let thread_shmem = ctx.objs.thread.shmem();
         let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
 
         let old_ss = unsafe { *thread_protected.sigaltstack() };
 
-        if !uss.is_null() {
+        if !uoss.is_null() {
+            ctx.objs.process.memory_borrow_mut().write(uoss, &old_ss)?;
+        }
+
+        if uss.is_null() {
+            // nothing left to do
+            return Ok(());
+        }
+
+        {
             if old_ss.flags_retain().contains(SigAltStackFlags::SS_ONSTACK) {
                 // sigaltstack(2): EPERM An attempt was made to change the
                 // alternate signal stack while it was active.
@@ -402,7 +409,7 @@ impl SyscallHandler {
                 .difference(SigAltStackFlags::SS_DISABLE | SigAltStackFlags::SS_AUTODISARM);
 
             if !unrecognized_flags.is_empty() {
-                log::debug!(
+                warn_once_then_debug!(
                     "Unrecognized signal stack flags {unrecognized_flags:?} in {:?}",
                     new_ss.flags_retain(),
                 );
@@ -411,12 +418,6 @@ impl SyscallHandler {
             }
 
             *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
-        }
-
-        // TODO: should we move this before we modify the alt stack, so that we don't return EFAULT
-        // after we have already made the modification?
-        if !uoss.is_null() {
-            ctx.objs.process.memory_borrow_mut().write(uoss, &old_ss)?;
         }
 
         Ok(())
