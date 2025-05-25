@@ -773,8 +773,11 @@ fn test_sigaltstack_configured_but_unused() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
@@ -811,8 +814,11 @@ fn test_sigaltstack_used() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
@@ -850,8 +856,11 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
