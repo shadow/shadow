@@ -411,6 +411,8 @@ impl SyscallHandler {
             *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
         }
 
+        // It may look wrong that we can return EFAULT here even after we updated the alt stack
+        // above, but this is how Linux behaves.
         if !uoss.is_null() {
             ctx.objs.process.memory_borrow_mut().write(uoss, &old_ss)?;
         }
