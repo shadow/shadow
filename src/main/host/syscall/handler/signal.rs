@@ -1,12 +1,13 @@
 use linux_api::errno::Errno;
-use linux_api::signal::{LinuxDefaultAction, Signal, SignalHandler, defaultaction, siginfo_t};
+use linux_api::signal::{
+    LinuxDefaultAction, SigAltStackFlags, SigProcMaskAction, Signal, SignalHandler, defaultaction,
+    siginfo_t,
+};
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
-use crate::cshadow as c;
 use crate::host::process::Process;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler, ThreadContext};
-use crate::host::syscall::types::SyscallError;
 use crate::host::thread::Thread;
 
 impl SyscallHandler {
@@ -257,13 +258,51 @@ impl SyscallHandler {
     );
     pub fn rt_sigaction(
         ctx: &mut SyscallContext,
-        _sig: std::ffi::c_int,
-        _act: ForeignPtr<linux_api::signal::sigaction>,
-        _oact: ForeignPtr<linux_api::signal::sigaction>,
-        _sigsetsize: libc::size_t,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigaction, ctx)?;
-        assert_eq!(rv, 0);
+        sig: std::ffi::c_int,
+        act: ForeignPtr<linux_api::signal::sigaction>,
+        oact: ForeignPtr<linux_api::signal::sigaction>,
+        sigsetsize: libc::size_t,
+    ) -> Result<(), Errno> {
+        // rt_sigaction(2):
+        // > Consequently, a new system call, rt_sigaction(), was added to support an enlarged
+        // > sigset_t type. The new system call takes a fourth argument, size_t sigsetsize, which
+        // > specifies the size in bytes of the signal sets in act.sa_mask and oldact.sa_mask. This
+        // > argument is currently required to have the value sizeof(sigset_t) (or the error EINVAL
+        // > results)
+        // Assuming by "sizeof(sigset_t)" it means the kernel's `linux_sigset_t` and not glibc's
+        // `sigset_t`...
+        if sigsetsize != size_of::<linux_api::signal::sigset_t>() {
+            return Err(Errno::EINVAL);
+        }
+
+        let Ok(sig) = Signal::try_from(sig) else {
+            return Err(Errno::EINVAL);
+        };
+
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let process_shmem = ctx.objs.process.shmem();
+        let mut process_protected = process_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        if !oact.is_null() {
+            let old_action = unsafe { process_protected.signal_action(sig) };
+            ctx.objs
+                .process
+                .memory_borrow_mut()
+                .write(oact, old_action)?;
+        }
+
+        if act.is_null() {
+            // nothing left to do
+            return Ok(());
+        }
+
+        if sig == Signal::SIGKILL || sig == Signal::SIGSTOP {
+            return Err(Errno::EINVAL);
+        }
+
+        let new_action = ctx.objs.process.memory_borrow().read(act)?;
+        unsafe { *process_protected.signal_action_mut(sig) = new_action };
+
         Ok(())
     }
 
@@ -277,13 +316,49 @@ impl SyscallHandler {
     );
     pub fn rt_sigprocmask(
         ctx: &mut SyscallContext,
-        _how: std::ffi::c_int,
-        _nset: ForeignPtr<linux_api::signal::sigset_t>,
-        _oset: ForeignPtr<linux_api::signal::sigset_t>,
-        _sigsetsize: libc::size_t,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_rt_sigprocmask, ctx)?;
-        assert_eq!(rv, 0);
+        how: std::ffi::c_int,
+        nset: ForeignPtr<linux_api::signal::sigset_t>,
+        oset: ForeignPtr<linux_api::signal::sigset_t>,
+        sigsetsize: libc::size_t,
+    ) -> Result<(), Errno> {
+        // From sigprocmask(2): This argument is currently required to have a fixed architecture
+        // specific value (equal to sizeof(kernel_sigset_t)).
+        // We use `sigset_t` from `linux_api`, which is a wrapper around `linux_sigset_t` from
+        // the kernel and should be equivalent to `kernel_sigset_t`.
+        if sigsetsize != size_of::<linux_api::signal::sigset_t>() {
+            warn_once_then_debug!("Bad sigsetsize {sigsetsize}");
+            return Err(Errno::EINVAL);
+        }
+
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let thread_shmem = ctx.objs.thread.shmem();
+        let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        let current_set = thread_protected.blocked_signals;
+
+        if !oset.is_null() {
+            ctx.objs
+                .process
+                .memory_borrow_mut()
+                .write(oset, &current_set)?;
+        }
+
+        if nset.is_null() {
+            // nothing left to do
+            return Ok(());
+        }
+
+        let set = ctx.objs.process.memory_borrow().read(nset)?;
+
+        let set = match SigProcMaskAction::try_from(how) {
+            Ok(SigProcMaskAction::SIG_BLOCK) => set | current_set,
+            Ok(SigProcMaskAction::SIG_UNBLOCK) => !set & current_set,
+            Ok(SigProcMaskAction::SIG_SETMASK) => set,
+            Err(_) => return Err(Errno::EINVAL),
+        };
+
+        thread_protected.blocked_signals = set;
+
         Ok(())
     }
 
@@ -295,11 +370,85 @@ impl SyscallHandler {
     );
     pub fn sigaltstack(
         ctx: &mut SyscallContext,
-        _uss: ForeignPtr<linux_api::signal::stack_t>,
-        _uoss: ForeignPtr<linux_api::signal::stack_t>,
-    ) -> Result<(), SyscallError> {
-        let rv: i32 = Self::legacy_syscall(c::syscallhandler_sigaltstack, ctx)?;
-        assert_eq!(rv, 0);
+        uss: ForeignPtr<linux_api::signal::stack_t>,
+        uoss: ForeignPtr<linux_api::signal::stack_t>,
+    ) -> Result<(), Errno> {
+        let shmem_lock = ctx.objs.host.shim_shmem_lock_borrow().unwrap();
+        let thread_shmem = ctx.objs.thread.shmem();
+        let mut thread_protected = thread_shmem.protected.borrow_mut(&shmem_lock.root);
+
+        let old_ss = unsafe { *thread_protected.sigaltstack() };
+
+        if !uss.is_null() {
+            if old_ss.flags_retain().contains(SigAltStackFlags::SS_ONSTACK) {
+                // sigaltstack(2): EPERM An attempt was made to change the
+                // alternate signal stack while it was active.
+                return Err(Errno::EPERM);
+            }
+
+            let mut new_ss = ctx.objs.process.memory_borrow().read(uss)?;
+            if new_ss.flags_retain().contains(SigAltStackFlags::SS_DISABLE) {
+                // sigaltstack(2): To disable an existing stack, specify ss.ss_flags
+                // as SS_DISABLE. In this case, the kernel ignores any other flags
+                // in ss.ss_flags and the remaining fields in ss.
+                new_ss = shadow_pod::zeroed();
+                new_ss.ss_flags = SigAltStackFlags::SS_DISABLE.bits();
+            }
+
+            let unrecognized_flags = new_ss
+                .flags_retain()
+                .difference(SigAltStackFlags::SS_DISABLE | SigAltStackFlags::SS_AUTODISARM);
+
+            if !unrecognized_flags.is_empty() {
+                warn_once_then_debug!(
+                    "Unrecognized signal stack flags {unrecognized_flags:?} in {:?}",
+                    new_ss.flags_retain(),
+                );
+                // Unrecognized flag.
+                return Err(Errno::EINVAL);
+            }
+
+            *unsafe { thread_protected.sigaltstack_mut() } = new_ss;
+        }
+
+        if !uoss.is_null() {
+            ctx.objs.process.memory_borrow_mut().write(uoss, &old_ss)?;
+        }
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// The bitflags crate does some weird things with unrecognized flags, so this test ensures that
+    /// they work as expected for how we use them above.
+    #[test]
+    fn unrecognized_flags_difference() {
+        let foo = 1 << 28;
+        // ensure this flag is unused
+        assert_eq!(SigAltStackFlags::from_bits(foo), None);
+        let foo = SigAltStackFlags::from_bits_retain(foo);
+        assert_eq!(
+            foo.difference(SigAltStackFlags::SS_DISABLE).bits(),
+            (1 << 28) & !SigAltStackFlags::SS_DISABLE.bits(),
+        );
+        assert_eq!(
+            (foo - SigAltStackFlags::SS_DISABLE).bits(),
+            (1 << 28) & !SigAltStackFlags::SS_DISABLE.bits(),
+        );
+    }
+
+    #[test]
+    fn unrecognized_flags_empty() {
+        let foo = 1 << 28;
+        assert_ne!(foo, 0);
+        // ensure this flag is unused
+        assert_eq!(SigAltStackFlags::from_bits(foo), None);
+        let foo = SigAltStackFlags::from_bits_retain(foo);
+        assert_ne!(foo.bits(), 0);
+        assert!(!foo.is_empty());
     }
 }
