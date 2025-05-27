@@ -21,15 +21,12 @@ use test_utils::setitimer;
 
 const SS_AUTODISARM: libc::c_int = 1 << 31;
 
-fn sigaltstack(new: Option<&libc::stack_t>, old: Option<&mut libc::stack_t>) -> Result<(), Errno> {
-    let new = match new {
-        Some(r) => std::ptr::from_ref(r),
-        None => std::ptr::null(),
-    };
-    let old = match old {
-        Some(r) => std::ptr::from_mut(r),
-        None => std::ptr::null_mut(),
-    };
+fn sigaltstack(
+    new: Option<*const libc::stack_t>,
+    old: Option<*mut libc::stack_t>,
+) -> Result<(), Errno> {
+    let new = new.unwrap_or(std::ptr::null());
+    let old = old.unwrap_or(std::ptr::null_mut());
     Errno::result(unsafe { libc::sigaltstack(new, old) })?;
     Ok(())
 }
@@ -773,8 +770,11 @@ fn test_sigaltstack_configured_but_unused() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
@@ -811,8 +811,11 @@ fn test_sigaltstack_used() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
@@ -850,8 +853,11 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     };
 
     // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
     const STACK_SZ: usize = 1 << 20;
-    let mut stack_space = Box::new([0u8; STACK_SZ]);
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
     let stack_range_start = std::ptr::from_ref(&stack_space[0]) as usize;
     let stack_range = stack_range_start..(stack_range_start + STACK_SZ);
     let altstack = libc::stack_t {
@@ -886,6 +892,51 @@ fn test_sigaltstack_autodisarm() -> Result<(), Box<dyn Error>> {
     };
     sigaltstack(None, Some(&mut final_altstack)).unwrap();
     assert_eq!(final_altstack, altstack);
+
+    Ok(())
+}
+
+fn test_sigaltstack_old_efault() -> Result<(), Box<dyn Error>> {
+    let signal = Signal::SIGUSR1;
+    unsafe {
+        signal::sigaction(
+            signal,
+            &signal::SigAction::new(
+                signal::SigHandler::SigAction(sigaltstack_action),
+                signal::SaFlags::SA_ONSTACK,
+                signal::SigSet::empty(),
+            ),
+        )
+        .unwrap()
+    };
+
+    // Configure an altstack.
+    // We leak the stack space so that (1) we don't drop the Box while its still being used as the
+    // alt stack, and (2) so that the same stack memory address will not be used for future tests if
+    // the memory allocator were to reuse the same address.
+    const STACK_SZ: usize = 1 << 20;
+    let stack_space = Box::leak(Box::new([0u8; STACK_SZ]));
+    let altstack = libc::stack_t {
+        ss_sp: std::ptr::from_mut(&mut stack_space[0]) as *mut libc::c_void,
+        ss_flags: 0,
+        ss_size: STACK_SZ,
+    };
+
+    // Sanity check.
+    let mut old = unsafe { std::mem::zeroed() };
+    sigaltstack(None, Some(&mut old))?;
+    assert_ne!(old.ss_sp, altstack.ss_sp);
+
+    // This should return EFAULT since `dangling_mut()` is an invalid address.
+    assert_eq!(
+        sigaltstack(Some(&altstack), Some(std::ptr::dangling_mut())),
+        Err(Errno::EFAULT),
+    );
+
+    // New alt stack was set even though above returned EFAULT.
+    let mut old = unsafe { std::mem::zeroed() };
+    sigaltstack(None, Some(&mut old))?;
+    assert_eq!(old.ss_sp, altstack.ss_sp);
 
     Ok(())
 }
@@ -1328,6 +1379,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         ShadowTest::new(
             "sigaltstack autodisarm",
             test_sigaltstack_autodisarm,
+            all_envs.clone(),
+        ),
+        ShadowTest::new(
+            "sigaltstack_old_efault",
+            test_sigaltstack_old_efault,
             all_envs.clone(),
         ),
         ShadowTest::new("sa_restart", test_restart, all_envs.clone()),
