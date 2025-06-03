@@ -22,12 +22,8 @@ classifiers = [
 license = {file = "LICENSE"}
 readme = "README.md"
 
-# We attempt to support using packages from the system package manager, by here
-# specifying compatibility with the oldest version available on one of shadow's
-# supported platforms.
 dependencies = [
-    # Version of python3-yaml on ubuntu 20.04.
-    "pyyaml ~= 5.3",
+    "pyyaml ~= 6.0",
 ]
 
 [project.urls]
