@@ -98,7 +98,7 @@ fn test_clone_minimal() -> Result<(), Box<dyn Error>> {
         )
     };
     let child = Pid::from_raw(child).unwrap();
-    THREAD_DONE_CHANNEL.receive().unwrap();
+    THREAD_DONE_CHANNEL.receive(None).unwrap();
     // Wait until thread has exited before deallocating its stack.
     wait_for_thread_exit(child);
     Ok(())
@@ -150,7 +150,7 @@ fn wait_for_clear_tid(tid: &AtomicU32) {
         if current == 0 {
             break;
         }
-        match futex_wait(tid, current) {
+        match futex_wait(tid, current, None) {
             Ok(0) => (),
             Err(rustix::io::Errno::AGAIN) | Err(rustix::io::Errno::INTR) => {
                 // try again
@@ -386,7 +386,7 @@ fn test_parent(use_clone_parent_flag: bool) -> Result<(), Box<dyn Error>> {
     // Wait to be notified of child exit via futex wake on `CHILD_TID`.
     wait_for_clear_tid(&child_tid);
 
-    let res = ppid_channel.receive().unwrap();
+    let res = ppid_channel.receive(None).unwrap();
 
     // When creating a thread (CLONE_THREAD), the parent of the child is always
     // the same as the parent of the parent, regardless of whether CLONE_PARENT

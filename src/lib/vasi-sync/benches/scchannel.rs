@@ -38,7 +38,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
                 rustix::process::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
             }
             loop {
-                if ipc.0.receive().is_err() {
+                if ipc.0.receive(None).is_err() {
                     break;
                 }
                 ipc.1.send(());
@@ -48,7 +48,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
 
     bencher.iter(|| {
         ipc.0.send(());
-        ipc.1.receive().unwrap();
+        ipc.1.receive(None).unwrap();
     });
 
     ipc.0.close_writer();

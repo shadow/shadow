@@ -10,7 +10,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
 
 [dependencies]
 num_enum = { version = "0.7.3", default-features = false }
-rustix = { version = "0.38.44", default-features = false, features = ["fs", "thread", "process"] }
+rustix = { version = "0.38.44", default-features = false, features = ["event", "fs", "thread", "process"] }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
 rustc-hash = { version = "2.1.0", default-features = false }
