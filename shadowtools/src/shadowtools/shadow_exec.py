@@ -93,6 +93,12 @@ def _main(
             progress=False,
             data_directory=str(data_dir),
         ),
+        experimental=scfg.Experimental(
+            # For the sort of small simulations this tool is meant for, cpu
+            # pinning is probably more trouble than its worth. e.g. multiple
+            # simulations run at once will pin to the same cpu.
+            use_cpu_pinning=False,
+        ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
         hosts={
             "host": scfg.Host(
