@@ -3,6 +3,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 use crate::cshadow;
 use crate::host::descriptor::CompatFile;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallStringArg;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 
 impl SyscallHandler {
@@ -49,7 +50,14 @@ impl SyscallHandler {
         Self::legacy_syscall(cshadow::syscallhandler_fstatfs, ctx)
     }
 
-    log_syscall!(newfstatat, /* rv */ std::ffi::c_int);
+    log_syscall!(
+        newfstatat,
+        /* rv */ std::ffi::c_int,
+        /* dirfd */ std::ffi::c_int,
+        /* path */ SyscallStringArg,
+        /* statbuf */ *const linux_api::stat::stat,
+        /* flag */ std::ffi::c_int,
+    );
     pub fn newfstatat(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_newfstatat, ctx)
     }
