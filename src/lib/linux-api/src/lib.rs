@@ -78,6 +78,7 @@ pub mod stat;
 pub mod syscall;
 pub mod sysinfo;
 pub mod time;
+pub mod types;
 pub mod ucontext;
 pub mod utsname;
 pub mod wait;

@@ -18,6 +18,10 @@ pub use bindings::linux___kernel_off_t;
 #[allow(non_camel_case_types)]
 pub type kernel_off_t = linux___kernel_off_t;
 
+pub use bindings::linux___kernel_loff_t;
+#[allow(non_camel_case_types)]
+pub type kernel_loff_t = linux___kernel_loff_t;
+
 pub use bindings::linux___kernel_size_t;
 #[allow(non_camel_case_types)]
 pub type kernel_size_t = linux___kernel_size_t;
@@ -25,6 +29,14 @@ pub type kernel_size_t = linux___kernel_size_t;
 pub use bindings::linux___kernel_fd_set;
 #[allow(non_camel_case_types)]
 pub type kernel_fd_set = linux___kernel_fd_set;
+
+pub use bindings::linux___kernel_uid32_t;
+#[allow(non_camel_case_types)]
+pub type kernel_uid32_t = linux___kernel_uid32_t;
+
+pub use bindings::linux___kernel_gid32_t;
+#[allow(non_camel_case_types)]
+pub type kernel_gid32_t = linux___kernel_gid32_t;
 
 /// Type-safe wrapper around [`kernel_pid_t`]. Value is strictly positive.
 /// Interface inspired by `rustix::process::Pid`.
