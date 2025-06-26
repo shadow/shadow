@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use log::*;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
@@ -16,7 +16,7 @@ pub const FD_MAX: u32 = i32::MAX as u32;
 /// [`Thread`][crate::host::thread::Thread].
 #[derive(Clone)]
 pub struct DescriptorTable {
-    descriptors: HashMap<DescriptorHandle, Descriptor>,
+    descriptors: BTreeMap<DescriptorHandle, Descriptor>,
 
     // Indices less than `next_index` known to be available.
     available_indices: BTreeSet<u32>,
@@ -31,7 +31,7 @@ pub struct DescriptorTable {
 impl DescriptorTable {
     pub fn new() -> Self {
         DescriptorTable {
-            descriptors: HashMap::new(),
+            descriptors: Default::default(),
             available_indices: BTreeSet::new(),
             next_index: 0,
             _counter: ObjectCounter::new("DescriptorTable"),
