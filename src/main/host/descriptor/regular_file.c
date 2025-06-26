@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/limits.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -290,6 +291,8 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
      * an absolute path to compare for special files. */
     char* abspath = _regularfile_getAbsolutePath(dir, pathname, workingDir);
 
+    const char* proc_prefix = "/proc/";
+
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
         file->type = FILE_TYPE_RANDOM;
@@ -316,6 +319,48 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         char content[] = "0\n";
         // size - 1 to strip the \0;
         return _regularfile_initRoInMemoryFile(file, flags, mode, sizeof(content) - 1, content);
+    } else if (!strncmp(proc_prefix, abspath, strlen(proc_prefix))) {
+        file->type = FILE_TYPE_REGULAR;
+        if (!strcmp(abspath, "/proc/self/maps")) {
+            // Should work as intended, with the /proc/self remapping below.
+            // The contents aren't *quite* 100% deterministic, because we'll
+            // have mapped in different `/dev/shm/shadow_shmemfile_*` files on
+            // each run.  These differences are unlikely to cascade into further
+            // non-determinism, though.
+        } else if (!strcmp(abspath, "/proc/self/exe")) {
+            // Should work as intended, with the /proc/self remapping below.
+        } else {
+            // Might work out ok, but we haven't specifically vetted.
+            warning("Opening unsupported proc file. Contents may incorrectly refer to native "
+                    "process instead of emulated, and/or have nondeterministic contents: %s",
+                    abspath);
+        }
+        // Remap `/proc/self/` prefixes.
+        const char* proc_self_prefix = "/proc/self/";
+        if (!strncmp(proc_self_prefix, abspath, strlen(proc_self_prefix))) {
+            const Process* proc = worker_getCurrentProcess();
+            pid_t pid = process_getNativePid(proc);
+            char* new_path = malloc(PATH_MAX);
+            int rv = snprintf(
+                new_path, PATH_MAX, "/proc/%d/%s", pid, &abspath[strlen(proc_self_prefix)]);
+            if (rv >= PATH_MAX) {
+                warning("Couldn't replace `self` with pid; result was too long: %s", abspath);
+                file->type = FILE_TYPE_NOTSET;
+                return -ENAMETOOLONG;
+            }
+            debug("Rewriting `openat` path '%s' to '%s'", abspath, new_path);
+            free(abspath);
+            abspath = new_path;
+        }
+        // TODO:
+        // * Remap /proc/thread-self/*
+        // * Remap /proc/[tid]/*
+        // * Remap /proc/[tid]/task/[tid]/*
+        // * Handle a lot of these as special files or directories instead of
+        //   allowing direct access. Notably including:
+        //   * /proc/[tid]/task/ Needs to list virtual child [tid]s
+        //   * /proc/[tid]/fd/ Needs to list virtual file descriptors
+        // * Probably much more ...
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
