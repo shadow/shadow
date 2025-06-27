@@ -8,6 +8,7 @@ use core::mem::MaybeUninit;
 
 use crate::tls::ShimTlsVar;
 
+use linux_api::prctl::ArchPrctlOp;
 use linux_api::signal::{SigProcMaskAction, rt_sigprocmask};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use shadow_shim_helper_rs::ipc::IPCData;
@@ -484,6 +485,102 @@ pub unsafe fn release_and_exit_current_thread(exit_status: i32) -> ! {
     unreachable!()
 }
 
+mod cpuid {
+    use core::arch::x86_64::{__cpuid, __cpuid_count};
+
+    use super::*;
+
+    const RDRAND_FLAG: u32 = 1 << 30;
+    const RDSEED_FLAG: u32 = 1 << 18;
+
+    /// Initialize CPUID interception.
+    pub unsafe fn init() {
+        let supports_rdrand = (unsafe { __cpuid(1) }.ecx & RDRAND_FLAG) != 0;
+        let supports_rdseed = (unsafe { __cpuid_count(7, 0) }.ebx & RDSEED_FLAG) != 0;
+        if !supports_rdrand && !supports_rdseed {
+            log::debug!(
+                "Neither RDRAND nor RDSEED appear to be supported. No need to emulate cpuid."
+            );
+            // Return without disabling CPUID support.
+            return;
+        }
+        // Disable CPUID support. Doing so means that when a CPUID instruction
+        // is executed, a SIGSEGV will be raised. We emulate the result in our
+        // SIGSEGV handler.
+        match unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 0) } {
+            Ok(_) => {
+                log::debug!("Disabled cpuid");
+            }
+            Err(e) => {
+                let supported_str = match (supports_rdrand, supports_rdseed) {
+                    (true, true) => "RDRAND and RDSEED",
+                    (true, false) => "RDRAND",
+                    (false, true) => "RDSEED",
+                    (false, false) => unreachable!("Returned earlier in this case"),
+                };
+                log::warn!(
+                    "Can't disable cpuid ({e:?}), so can't lie about supporting {supported_str}. This may break determinism."
+                );
+            }
+        };
+    }
+
+    /// Emulate the cpuid instruction. Takes the current values of rax-rdx,
+    /// which are mutated to the updated values.
+    pub fn emulate(
+        rax: &mut core::ffi::c_longlong,
+        rbx: &mut core::ffi::c_longlong,
+        rcx: &mut core::ffi::c_longlong,
+        rdx: &mut core::ffi::c_longlong,
+    ) {
+        // Intentionally allow dropping the high 32 bits here. The `cpuid`
+        // instruction is specified as only paying attention to the low 32 bits
+        // (e.g. eax not rax).
+        let leaf = *rax as u32;
+        let sub_leaf = *rcx as u32;
+
+        // Re-enable cpuid; execute a native cpuid; Re-disable cpuid.
+        // TODO: consider caching results to save ourselvs 2 syscalls here.
+        // This is a little tricky though since we currently don't support
+        // `alloc` in the shim, so don't have easy access to flexible data
+        // structures. To cache we'd need to keep in mind:
+        //
+        // * We need to key by both the leaf (eax) and sub-leaf (rcx), not just
+        //   eax.
+        // * Would need to support "extended" leafs too "e.g. eax=0x8000_0001".
+        // * "If a value entered for CPUID.EAX is higher than the maximum input
+        //   value for basic or extended function for that processor then the data
+        //   for the highest basic information leaf is returned."
+        //   <https://www.felixcloutier.com/x86/cpuid>
+        // * "If a value entered for CPUID.EAX is less than or equal to the
+        //   maximum input value and the leaf is not supported on that processor
+        //   then 0 is returned in all the registers."
+        //   <https://www.felixcloutier.com/x86/cpuid>
+        unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 1) }
+            .unwrap_or_else(|e| panic!("Couldn't re-enable cpuid: {e:?}"));
+        let mut res = unsafe { __cpuid_count(leaf, sub_leaf) };
+        unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 0) }
+            .unwrap_or_else(|e| panic!("Couldn't re-disable cpuid: {e:?}"));
+
+        // Potentially mess with the results.
+        match (leaf, sub_leaf) {
+            (1, _) => {
+                // Always say we don't support rdrand (which breaks shadow's determinism).
+                res.ecx &= !RDRAND_FLAG;
+            }
+            (7, 0) => {
+                // Always say we don't support rdseed (which breaks shadow's determinism).
+                res.ebx &= !RDSEED_FLAG;
+            }
+            _ => (),
+        }
+        *rax = res.eax.into();
+        *rbx = res.ebx.into();
+        *rcx = res.ecx.into();
+        *rdx = res.edx.into();
+    }
+}
+
 /// Perform once-per-thread initialization for the shim.
 ///
 /// Unlike `init_process` this must only be called once - we do so explicitly
@@ -512,6 +609,9 @@ fn init_process() {
     STARTED_INIT.force();
 
     unsafe { bindings::_shim_parent_init_preload() };
+
+    unsafe { cpuid::init() };
+
     log::trace!("Finished shim global init");
 }
 
@@ -819,5 +919,26 @@ pub mod export {
     #[unsafe(no_mangle)]
     pub extern "C-unwind" fn _shim_parent_close_stdin() {
         unsafe { rustix::io::close(libc::STDIN_FILENO) };
+    }
+
+    /// Emulate the cpuid instruction. Takes the current values of rax-rdx,
+    /// which are mutated to the updated values.
+    ///
+    /// # Safety
+    ///
+    /// Parameters must be safely dereferenceable and writable.
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C-unwind" fn _shim_emulate_cpuid(
+        rax: *mut core::ffi::c_longlong,
+        rbx: *mut core::ffi::c_longlong,
+        rcx: *mut core::ffi::c_longlong,
+        rdx: *mut core::ffi::c_longlong,
+    ) {
+        cpuid::emulate(
+            unsafe { rax.as_mut() }.unwrap(),
+            unsafe { rbx.as_mut() }.unwrap(),
+            unsafe { rcx.as_mut() }.unwrap(),
+            unsafe { rdx.as_mut() }.unwrap(),
+        );
     }
 }
