@@ -221,6 +221,25 @@ static int _test_nameAddress() {
     return EXIT_SUCCESS;
 }
 
+static int _print_whole_file(const char* filename) {
+    unsigned char buf[4096];
+
+    printf("Contents of %s:\n", filename);
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return EXIT_FAILURE;
+    }
+    ssize_t sz;
+    while ((sz = read(fd, buf, sizeof(buf)))) {
+        fwrite(buf, 1, sz, stdout);
+    }
+    printf("\n");
+    close(fd);
+
+    return EXIT_SUCCESS;
+}
+
 int main(int argc, char* argv[]) {
     fprintf(stdout, "########## determinism test starting ##########\n");
 
@@ -258,6 +277,15 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     fprintf(stdout, "_test_aux_at_random() passed\n");
+
+    // TODO: do something similar above to dedupe.
+    const char* testname = "test /proc/sys/kernel/random/uuid";
+    fprintf(stdout, "starting %s\n", testname);
+    if (_print_whole_file("/proc/sys/kernel/random/uuid") < 0) {
+        fprintf(stdout, "########## %s failed\n", testname);
+        return EXIT_FAILURE;
+    }
+    fprintf(stdout, "%s passed\n", testname);
 
     fprintf(stdout, "########## determinism test passed! ##########\n");
 

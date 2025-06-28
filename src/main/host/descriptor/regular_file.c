@@ -29,10 +29,21 @@
 #include "main/host/descriptor/descriptor.h"
 #include "main/host/syscall/kernel_types.h"
 #include "main/utility/utility.h"
+#include "regular_file.h"
 
 #define OSFILE_INVALID -1
 
 const int SHADOW_FLAG_MASK = O_CLOEXEC;
+
+/* Callback to (re)-generate contents of a `FILE_TYPE_IN_MEMORY` file.
+ *
+ * Should set `contents` to a malloc'd pointer containing the new contents, and
+ * `contentsLen` to its length.
+ *
+ * Future uses might need more parameters or other flexibility, but let's not
+ * add complexity we don't need yet.
+ */
+typedef void (*_generateInMemoryFileContentCbType)(char** contents, size_t* contentLen);
 
 struct _RegularFile {
     /* File is a sub-type of a descriptor. */
@@ -52,6 +63,7 @@ struct _RegularFile {
             /* The path of the file when it was opened. */
             char* absPathAtOpen;
         } osfile;
+        // For type=FILE_TYPE_IN_MEMORY
         struct {
             off_t cursor;
             ssize_t contentLen;
@@ -60,7 +72,16 @@ struct _RegularFile {
             int flagsAtOpen;
             /* The permission mode the file was opened with. */
             mode_t modeAtOpen;
-            /* The path of the file when it was opened. */
+            /* Callback to (re)-generate contents. */
+            _generateInMemoryFileContentCbType generate_contents_cb;
+            /* Whether contents should be re-generated on an lseek operation.
+             * Typical for (some? all?) proc files
+             *
+             * TODO: Actually implement lseek for inMemoryFile and use this flag
+             * to trigger regeneration via `generate_contents_cb`. lseek for
+             * inMemoryFile currently just returns an error.
+             */
+            bool regen_after_lseek;
         } inMemoryFile;
     };
     MAGIC_DECLARE;
@@ -255,7 +276,9 @@ static void _regularfile_print_flags(int flags) {
 #undef CHECK_FLAG
 #endif
 
-int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode, size_t contentLen, const char* content) {
+int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode,
+                                    _generateInMemoryFileContentCbType generate_contents_cb,
+                                    bool regen_after_lseek) {
     if (flags & O_DIRECTORY) {
         return -ENOTDIR;
     }
@@ -264,14 +287,46 @@ int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode, s
         return -EPERM;
     }
 
+    size_t contentLen = 0;
+    char* content = NULL;
+    generate_contents_cb(&content, &contentLen);
+    utility_alwaysAssert(content != NULL);
+
     file->type = FILE_TYPE_IN_MEMORY;
     file->inMemoryFile.cursor = 0;
+    file->inMemoryFile.cursor = 0;
     file->inMemoryFile.contentLen = contentLen;
-    file->inMemoryFile.content = (char*) malloc(contentLen);
-    memcpy(file->inMemoryFile.content, content, contentLen);
+    file->inMemoryFile.content = content;
     file->inMemoryFile.flagsAtOpen = flags;
     file->inMemoryFile.modeAtOpen = mode;
+    file->inMemoryFile.generate_contents_cb = generate_contents_cb;
+    file->inMemoryFile.regen_after_lseek = regen_after_lseek;
+
     return 0;
+}
+
+// For populating "/sys/devices/system/cpu/possible" and "/sys/devices/system/cpu/online".
+void _generate_cpu_possible_or_online(char** contents, size_t* contents_len) {
+    *contents = malloc(2);
+    (*contents)[0] = '0';
+    (*contents)[1] = '\n';
+    *contents_len = 2;
+}
+
+// For populating "/proc/sys/kernel/random/uuid"
+void _generate_random_uuid(char** contents, size_t* contents_len) {
+    unsigned char bytes[16] = {0};
+    host_rngNextNBytes(worker_getCurrentHost(), bytes, sizeof(bytes));
+
+    *contents_len = 16 /*bytes*/ * 2 /*chars-per-byte*/ + 4 /*dashes*/ + 1 /*newline*/;
+    *contents = malloc(*contents_len + 1); /* allocate enough room for the NUL byte, too */
+    int n = snprintf(*contents, *contents_len + 1,
+                     "%02hhx%02hhx%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx"
+                     "%02hhx%02hhx%02hhx%02hhx\n",
+                     bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                     bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14],
+                     bytes[15]);
+    utility_alwaysAssert(n == *contents_len);
 }
 
 int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname, int flags,
@@ -316,9 +371,13 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         if (abspath) {
             free(abspath);
         }
-        char content[] = "0\n";
-        // size - 1 to strip the \0;
-        return _regularfile_initRoInMemoryFile(file, flags, mode, sizeof(content) - 1, content);
+        return _regularfile_initRoInMemoryFile(
+            file, flags, mode, _generate_cpu_possible_or_online, false);
+    } else if (!strcmp("/proc/sys/kernel/random/uuid", abspath)) {
+        if (abspath) {
+            free(abspath);
+        }
+        return _regularfile_initRoInMemoryFile(file, flags, mode, _generate_random_uuid, true);
     } else if (!strncmp(proc_prefix, abspath, strlen(proc_prefix))) {
         file->type = FILE_TYPE_REGULAR;
         if (!strcmp(abspath, "/proc/self/maps")) {
