@@ -66,6 +66,7 @@ pub struct ManagerShmem {
     pub log_start_time_micros: i64,
     pub native_preemption_config: FfiOption<NativePreemptionConfig>,
 }
+assert_shmem_safe!(ManagerShmem, _managershmem_test_fn);
 
 #[derive(VirtualAddressSpaceIndependent)]
 #[repr(C)]
