@@ -86,6 +86,12 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
             regs[REG_RCX] = rcx;
             regs[REG_RIP] = rip;
             handled = true;
+        } else if (insn[0] == 0x0f && insn[1] == 0xa2) {
+            trace("Emulating cpuid; rax=%llx", regs[REG_RAX]);
+            _shim_emulate_cpuid(&regs[REG_RAX], &regs[REG_RBX], &regs[REG_RCX], &regs[REG_RDX]);
+            regs[REG_RIP] += 2;
+            handled=true;
+            info("XXX Emulated cpuid; rax=%llx", regs[REG_RAX]);
         }
     }
 

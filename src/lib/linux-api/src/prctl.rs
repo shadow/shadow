@@ -1,3 +1,7 @@
+use linux_syscall::Result64;
+use linux_syscall::syscall;
+
+use crate::errno::Errno;
 use crate::{bindings, const_conversions};
 
 /// Options for `man 2 prctl`.
@@ -217,4 +221,55 @@ impl From<i32> for PrctlOp {
     fn from(val: i32) -> Self {
         Self::new(val)
     }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct ArchPrctlOp(i32);
+
+impl ArchPrctlOp {
+    pub const ARCH_SET_CPUID: Self = Self::from_u32(bindings::LINUX_ARCH_SET_CPUID);
+    pub const ARCH_GET_CPUID: Self = Self::from_u32(bindings::LINUX_ARCH_GET_CPUID);
+    pub const ARCH_SET_FS: Self = Self::from_u32(bindings::LINUX_ARCH_SET_FS);
+    pub const ARCH_GET_FS: Self = Self::from_u32(bindings::LINUX_ARCH_GET_FS);
+    pub const ARCH_SET_GS: Self = Self::from_u32(bindings::LINUX_ARCH_SET_GS);
+    pub const ARCH_GET_GS: Self = Self::from_u32(bindings::LINUX_ARCH_GET_GS);
+
+    pub const fn new(val: i32) -> Self {
+        Self(val)
+    }
+
+    const fn from_u32(val: u32) -> Self {
+        Self::new(const_conversions::i32_from_u32(val))
+    }
+}
+
+impl From<ArchPrctlOp> for core::ffi::c_int {
+    fn from(value: ArchPrctlOp) -> Self {
+        value.0
+    }
+}
+
+/// Execute the `arch_prctl` syscall.
+///
+/// # Safety
+///
+/// Some operations may change OS behavior in a way that violates assumptions
+/// that other code relies on.
+pub unsafe fn arch_prctl_raw(
+    option: core::ffi::c_int,
+    arg2: core::ffi::c_long,
+) -> Result<i64, Errno> {
+    unsafe { syscall!(linux_syscall::SYS_arch_prctl, option, arg2) }
+        .try_i64()
+        .map_err(Errno::from)
+}
+
+/// Execute the `arch_prctl` syscall.
+///
+/// # Safety
+///
+/// Some operations may change OS behavior in a way that violates assumptions
+/// that other code relies on.
+pub unsafe fn arch_prctl(option: ArchPrctlOp, arg2: i64) -> Result<i64, Errno> {
+    unsafe { arch_prctl_raw(option.into(), arg2) }
 }
