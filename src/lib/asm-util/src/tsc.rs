@@ -1,4 +1,4 @@
-use crate::c_internal;
+use crate::{c_internal, ip_matches};
 
 /// Emulates an x86-64 processor's timestamp counter, as read by rdtsc and
 /// rdtscp.
@@ -75,25 +75,6 @@ impl Tsc {
         *rcx = 0x806eb479;
     }
 
-    /// SAFETY: `ip` must be a dereferenceable pointer, pointing to the beginning
-    /// of a valid x86_64 instruction, and `insn` must be a valid x86_64 instruction.
-    unsafe fn ip_matches(ip: *const u8, insn: &[u8]) -> bool {
-        // SAFETY:
-        // * Caller has guaranteed that `ip` points to some valid instruction.
-        // * Caller has guaranteed that `insn` is a valid instruction.
-        // * No instruction can be a prefix of another, so `insn` can't be a prefix
-        //   of some *other* instruction at `ip`.
-        // * [`std::Iterator::all`] is short-circuiting.
-        //
-        // e.g. consider the case where `ip` points to a 1-byte `ret`
-        // instruction, and the next byte of memory isn't accessible. That
-        // single byte *cannot* match the first byte of `insn`, so we'll never
-        // dereference `ip.offset(1)`, which would be unsound.
-        insn.iter()
-            .enumerate()
-            .all(|(offset, byte)| unsafe { *ip.add(offset) == *byte })
-    }
-
     /// Whether `ip` points to an rdtsc instruction.
     ///
     /// # Safety
@@ -101,7 +82,7 @@ impl Tsc {
     /// `ip` must be a dereferenceable pointer, pointing to the
     /// beginning of a valid x86_64 instruction.
     pub unsafe fn ip_is_rdtsc(ip: *const u8) -> bool {
-        unsafe { Self::ip_matches(ip, &Self::RDTSC) }
+        unsafe { ip_matches(ip, &Self::RDTSC) }
     }
 
     /// Whether `ip` points to an rdtscp instruction.
@@ -111,7 +92,7 @@ impl Tsc {
     /// `ip` must be a dereferenceable pointer, pointing to the
     /// beginning of a valid x86_64 instruction.
     pub unsafe fn ip_is_rdtscp(ip: *const u8) -> bool {
-        unsafe { Self::ip_matches(ip, &Self::RDTSCP) }
+        unsafe { ip_matches(ip, &Self::RDTSCP) }
     }
 }
 
