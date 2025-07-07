@@ -39,7 +39,7 @@ static uint64_t _shim_rdtsc_nanos(ExecutionContext ctx) {
     return (uint64_t)t.tv_nsec + (uint64_t)t.tv_sec * 1000000000;
 }
 
-static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
+static void _shim_insn_emu_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
     ExecutionContext prev_ctx = shim_swapExecutionContext(EXECUTION_CONTEXT_SHADOW);
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
@@ -97,7 +97,7 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
     shim_swapExecutionContext(prev_ctx);
 }
 
-void shim_rdtsc_init() {
+void shim_insn_emu_init() {
     // Force a SEGV on any rdtsc or rdtscp instruction.
     if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV) < 0) {
         panic("pctl: %s", strerror(errno));
@@ -106,7 +106,7 @@ void shim_rdtsc_init() {
     // Install our own handler to emulate.
     if (sigaction(SIGSEGV,
                   &(struct sigaction){
-                      .sa_sigaction = _shim_rdtsc_handle_sigsegv,
+                      .sa_sigaction = _shim_insn_emu_handle_sigsegv,
                       // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
                       // "rethrow" the SIGSEGV and in case of a bug in the
                       // handler.

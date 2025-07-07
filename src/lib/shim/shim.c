@@ -24,7 +24,7 @@
 #include "lib/shadow-shim-helper-rs/shim_helper.h"
 #include "lib/shim/patch_vdso.h"
 #include "lib/shim/shim_api.h"
-#include "lib/shim/shim_rdtsc.h"
+#include "lib/shim/shim_insn_emu.h"
 #include "lib/shim/shim_seccomp.h"
 #include "lib/shim/shim_sys.h"
 #include "lib/shim/shim_syscall.h"
@@ -109,8 +109,8 @@ static void _shim_parent_init_seccomp() {
     shim_seccomp_init();
 }
 
-static void _shim_parent_init_rdtsc_emu() {
-    shim_rdtsc_init();
+static void _shim_parent_init_insn_emu() {
+    shim_insn_emu_init();
 }
 
 void _shim_parent_init_preload() {
@@ -129,7 +129,7 @@ void _shim_parent_init_preload() {
     _shim_init_signal_stack();
     _shim_init_death_signal();
     _shim_parent_init_memory_manager();
-    _shim_parent_init_rdtsc_emu();
+    _shim_parent_init_insn_emu();
     _shim_parent_init_seccomp();
     _shim_parent_close_stdin();
     preempt_process_init();
