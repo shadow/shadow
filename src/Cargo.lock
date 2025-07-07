@@ -95,6 +95,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
+name = "asm_util"
+version = "0.0.0"
+dependencies = [
+ "bindgen",
+ "cbindgen",
+ "cc",
+ "logger",
+ "shadow-build-common",
+ "system-deps",
+]
+
+[[package]]
 name = "atomic_refcell"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1544,6 +1556,7 @@ name = "shadow-rs"
 version = "3.2.0"
 dependencies = [
  "anyhow",
+ "asm_util",
  "atomic_refcell",
  "backtrace",
  "bindgen",
@@ -1585,7 +1598,6 @@ dependencies = [
  "shadow-pod",
  "shadow-shim-helper-rs",
  "shadow_shmem",
- "shadow_tsc",
  "signal-hook",
  "static_assertions",
  "std-util",
@@ -1601,6 +1613,7 @@ dependencies = [
 name = "shadow-shim"
 version = "0.0.0"
 dependencies = [
+ "asm_util",
  "bindgen",
  "cbindgen",
  "cc",
@@ -1618,7 +1631,6 @@ dependencies = [
  "shadow-pod",
  "shadow-shim-helper-rs",
  "shadow_shmem",
- "shadow_tsc",
  "static_assertions",
  "system-deps",
  "test-log",
@@ -1690,18 +1702,6 @@ dependencies = [
  "static_assertions",
  "vasi",
  "vasi-sync",
-]
-
-[[package]]
-name = "shadow_tsc"
-version = "0.0.0"
-dependencies = [
- "bindgen",
- "cbindgen",
- "cc",
- "logger",
- "shadow-build-common",
- "system-deps",
 ]
 
 [[package]]

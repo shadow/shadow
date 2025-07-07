@@ -73,7 +73,7 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     LOG_BUILD OFF
 )
-foreach(LIBRARY shadow-shim-helper-rs logger shadow-shmem shadow-tsc shadow-rs)
+foreach(LIBRARY shadow-shim-helper-rs logger shadow-shmem asm-util shadow-rs)
   add_library(${LIBRARY} STATIC IMPORTED GLOBAL)
   add_dependencies(${LIBRARY} rust-workspace-project)
   string(REPLACE "-" "_" LIBRARY_FILE "lib${LIBRARY}.a")

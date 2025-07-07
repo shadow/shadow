@@ -442,11 +442,11 @@ mod tls_process_shmem {
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
 // https://github.com/rust-lang/cargo/issues/9391
+extern crate asm_util;
 extern crate log_c2rust;
 extern crate logger;
 extern crate shadow_shim_helper_rs;
 extern crate shadow_shmem;
-extern crate shadow_tsc;
 
 /// Global instance of thread local storage for use in the shim.
 ///

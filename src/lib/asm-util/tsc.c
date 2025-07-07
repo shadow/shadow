@@ -1,4 +1,4 @@
-#include "lib/tsc/tsc_internal.h"
+#include "lib/asm-util/tsc_internal.h"
 
 #include <assert.h>
 #include <cpuid.h>

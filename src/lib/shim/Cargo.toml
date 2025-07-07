@@ -18,7 +18,7 @@ linux-api = { path = "../linux-api", features = ["rustix"] }
 num_enum = { version = "0.7.3", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
-shadow_tsc = { path = "../tsc" }
+asm_util = { path = "../asm-util" }
 logger = { path = "../logger" }
 log = { version = "0.4.22", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
