@@ -65,6 +65,7 @@ pub struct NativePreemptionConfig {
 pub struct ManagerShmem {
     pub log_start_time_micros: i64,
     pub native_preemption_config: FfiOption<NativePreemptionConfig>,
+    pub emulate_cpuid: bool,
 }
 assert_shmem_safe!(ManagerShmem, _managershmem_test_fn);
 
@@ -780,5 +781,18 @@ pub mod export {
     ) -> i64 {
         let manager = unsafe { manager.as_ref().unwrap() };
         manager.log_start_time_micros
+    }
+
+    /// Get whether cpuid emulation is enabled.
+    ///
+    /// # Safety
+    ///
+    /// Pointer args must be safely dereferenceable.
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C-unwind" fn shimshmem_getEmulateCpuid(
+        manager: *const ShimShmemManager,
+    ) -> bool {
+        let manager = unsafe { manager.as_ref().unwrap() };
+        manager.emulate_cpuid
     }
 }
