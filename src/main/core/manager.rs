@@ -77,7 +77,8 @@ impl<'a> Manager<'a> {
             default_freq
         });
 
-        let native_tsc_frequency = if let Some(f) = shadow_tsc::Tsc::native_cycles_per_second() {
+        let native_tsc_frequency = if let Some(f) = shadow_tsc::tsc::Tsc::native_cycles_per_second()
+        {
             f
         } else {
             warn!(
