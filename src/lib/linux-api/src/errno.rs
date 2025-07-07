@@ -94,6 +94,7 @@ impl From<Errno> for i64 {
 
 const fn errno_to_str(e: Errno) -> Option<&'static str> {
     match e {
+        Errno::ENODEV => Some("ENODEV"),
         Errno::EINVAL => Some("EINVAL"),
         Errno::EDEADLK => Some("EDEADLK"),
         Errno::ENAMETOOLONG => Some("ENAMETOOLONG"),
@@ -234,6 +235,7 @@ impl core::fmt::Display for Errno {
 }
 
 impl Errno {
+    pub const ENODEV: Self = Self::from_u32_const(bindings::LINUX_ENODEV);
     pub const EINVAL: Self = Self::from_u32_const(bindings::LINUX_EINVAL);
     pub const EDEADLK: Self = Self::from_u32_const(bindings::LINUX_EDEADLK);
     pub const ENAMETOOLONG: Self = Self::from_u32_const(bindings::LINUX_ENAMETOOLONG);

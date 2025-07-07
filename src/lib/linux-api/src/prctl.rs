@@ -265,11 +265,62 @@ impl ArchPrctlOp {
     const fn from_u32(val: u32) -> Self {
         Self::new(const_conversions::i32_from_u32(val))
     }
+
+    pub const fn to_str(&self) -> Option<&'static str> {
+        match *self {
+            Self::ARCH_SET_CPUID => Some("ARCH_SET_CPUID"),
+            Self::ARCH_GET_CPUID => Some("ARCH_GET_CPUID"),
+            Self::ARCH_GET_FS => Some("ARCH_GET_FS"),
+            Self::ARCH_SET_FS => Some("ARCH_SET_FS"),
+            Self::ARCH_GET_GS => Some("ARCH_GET_GS"),
+            Self::ARCH_SET_GS => Some("ARCH_SET_GS"),
+            Self::ARCH_GET_XCOMP_SUPP => Some("ARCH_GET_XCOMP_SUPP"),
+            Self::ARCH_GET_XCOMP_PERM => Some("ARCH_GET_XCOMP_PERM"),
+            Self::ARCH_REQ_XCOMP_PERM => Some("ARCH_REQ_XCOMP_PERM"),
+            Self::ARCH_GET_XCOMP_GUEST_PERM => Some("ARCH_GET_XCOMP_GUEST_PERM"),
+            Self::ARCH_REQ_XCOMP_GUEST_PERM => Some("ARCH_REQ_XCOMP_GUEST_PERM"),
+            Self::ARCH_XCOMP_TILECFG => Some("ARCH_XCOMP_TILECFG"),
+            Self::ARCH_XCOMP_TILEDATA => Some("ARCH_XCOMP_TILEDATA"),
+            Self::ARCH_MAP_VDSO_X32 => Some("ARCH_MAP_VDSO_X32"),
+            Self::ARCH_MAP_VDSO_32 => Some("ARCH_MAP_VDSO_32"),
+            Self::ARCH_MAP_VDSO_64 => Some("ARCH_MAP_VDSO_64"),
+            Self::ARCH_GET_UNTAG_MASK => Some("ARCH_GET_UNTAG_MASK"),
+            Self::ARCH_ENABLE_TAGGED_ADDR => Some("ARCH_ENABLE_TAGGED_ADDR"),
+            Self::ARCH_GET_MAX_TAG_BITS => Some("ARCH_GET_MAX_TAG_BITS"),
+            Self::ARCH_FORCE_TAGGED_SVA => Some("ARCH_FORCE_TAGGED_SVA"),
+            Self::ARCH_SHSTK_ENABLE => Some("ARCH_SHSTK_ENABLE"),
+            Self::ARCH_SHSTK_DISABLE => Some("ARCH_SHSTK_DISABLE"),
+            Self::ARCH_SHSTK_LOCK => Some("ARCH_SHSTK_LOCK"),
+            Self::ARCH_SHSTK_UNLOCK => Some("ARCH_SHSTK_UNLOCK"),
+            Self::ARCH_SHSTK_STATUS => Some("ARCH_SHSTK_STATUS"),
+            Self::ARCH_SHSTK_SHSTK => Some("ARCH_SHSTK_SHSTK"),
+            Self::ARCH_SHSTK_WRSS => Some("ARCH_SHSTK_WRSS"),
+            _ => None,
+        }
+    }
 }
 
 impl From<ArchPrctlOp> for core::ffi::c_int {
     fn from(value: ArchPrctlOp) -> Self {
         value.0
+    }
+}
+
+impl core::fmt::Display for ArchPrctlOp {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "(unknown arch_prctl option {})", self.0),
+        }
+    }
+}
+
+impl core::fmt::Debug for ArchPrctlOp {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => write!(formatter, "ArchPrctlOp::{s}"),
+            None => write!(formatter, "ArchPrctlOp::<{}>", self.0),
+        }
     }
 }
 

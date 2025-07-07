@@ -1,5 +1,5 @@
 use linux_api::errno::Errno;
-use linux_api::prctl::PrctlOp;
+use linux_api::prctl::{ArchPrctlOp, PrctlOp};
 use linux_api::sched::SuidDump;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -107,6 +107,58 @@ impl SyscallHandler {
             }
             _ => {
                 log::warn!("Unknown prctl operation {option}");
+                Err(Errno::EINVAL.into())
+            }
+        }
+    }
+
+    log_syscall!(
+        arch_prctl,
+        /* rv */ std::ffi::c_ulong,
+        /* option */ ArchPrctlOp,
+        // Sometimes a pointer; sometimes a small integer, depending on the
+        // operation. Probably most conveniently formatted as a pointer.
+        /* value */
+        *const std::ffi::c_void,
+    );
+    pub fn arch_prctl(
+        _ctx: &mut SyscallContext,
+        option: ArchPrctlOp,
+        _arg: std::ffi::c_ulong,
+    ) -> Result<std::ffi::c_ulong, SyscallError> {
+        match option {
+            ArchPrctlOp::ARCH_GET_CPUID => {
+                // Always *say* that cpuid is allowed. The shim actually
+                // arranges to trap and emulate it, but the managed program
+                // doesn't need to know that.
+                Ok(1u64)
+            }
+            ArchPrctlOp::ARCH_SET_CPUID => {
+                // Don't allow the managed program to try trapping cpuid itself.
+                // arch_prctl(2): "ENODEV: ARCH_SET_CPUID was requested, but the underlying hardware does not support CPUID faulting."
+                //
+                // It could be reasonable to return Ok(0) here when the argument
+                // is 1 (i.e. to allow cpuid, which would be a no-op), but
+                // experimentally linux returns ENODEV here in that case too.
+                // (At least in shadow's github CI, though it's possible that
+                // docker or something is intercepting the arch_prctl and we're
+                // inadvertently modeling *that* behavior.)
+                Err(Errno::ENODEV.into())
+            }
+            ArchPrctlOp::ARCH_SET_FS
+            | ArchPrctlOp::ARCH_GET_FS
+            | ArchPrctlOp::ARCH_SET_GS
+            | ArchPrctlOp::ARCH_GET_GS => {
+                // Potentially used by threading libraries. Allow natively.
+                Err(SyscallError::Native)
+            }
+            x => {
+                // The kernel headers (and ArchPrctlOp) have more values defined
+                // that aren't in the libc man pages.  It'd take some work to
+                // hunt down corresponding documentation and figure out how
+                // they'd interact with shadow. In the meantime conservatively
+                // block everything else.
+                log::warn!("Unknown or unsupported arch_prctl operation {x:?}");
                 Err(Errno::EINVAL.into())
             }
         }
