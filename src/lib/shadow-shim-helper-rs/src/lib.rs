@@ -6,6 +6,7 @@
 
 use vasi::VirtualAddressSpaceIndependent;
 
+pub mod cpuid;
 pub mod emulated_time;
 pub mod explicit_drop;
 pub mod ipc;
