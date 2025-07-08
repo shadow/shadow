@@ -1,5 +1,7 @@
 use std::{ffi::CStr, io::Read};
 
+use rand::RngCore as _;
+
 fn test_open_read(filename: &str) {
     let mut f = std::fs::File::open(filename).unwrap();
     let mut buf = [0u8; 4];
@@ -89,6 +91,26 @@ fn test_uuid() {
     );
 }
 
+fn test_tor_llcrypto() {
+    if unsafe { asm_util::cpuid::supports_rdrand() }
+        || unsafe { asm_util::cpuid::supports_rdseed() }
+    {
+        // Really we want to know if the host platform supports trapping cpuid,
+        // and only skip this test if it doesn't. We can't check that from here
+        // within shadow, though, since shadow always reports that it doesn't
+        // support it to arch_prctl.
+        // TODO: cmake plumbing to compile and run a test program to determine
+        // this, and then pass through e.g. a command-line parameter to this
+        // test.
+        println!(
+            "cpuid reports rdrand or rdseed support, possibly because platform doesn't support trapping cpuid. Skipping tor_llcrypto test"
+        );
+        return;
+    }
+    let mut rng = tor_llcrypto::rng::CautiousRng;
+    println!("cautiousrng: {:x}", rng.next_u64())
+}
+
 pub fn main() {
     test_open_read("/dev/random");
     test_open_read("/dev/urandom");
@@ -96,4 +118,5 @@ pub fn main() {
     test_threads();
     test_name_address();
     test_uuid();
+    test_tor_llcrypto();
 }
