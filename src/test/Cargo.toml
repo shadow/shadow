@@ -27,6 +27,10 @@ name = "test_fork"
 path = "clone/test_fork.rs"
 
 [[bin]]
+name = "test_determinism"
+path = "determinism/test_determinism.rs"
+
+[[bin]]
 name = "test_epoll"
 path = "epoll/test_epoll.rs"
 
