@@ -519,3 +519,9 @@ impl From<SyscallReg> for linux_api::prctl::PrctlOp {
         Self::new(reg.into())
     }
 }
+
+impl From<SyscallReg> for linux_api::prctl::ArchPrctlOp {
+    fn from(reg: SyscallReg) -> Self {
+        Self::new(reg.into())
+    }
+}

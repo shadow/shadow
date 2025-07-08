@@ -7,6 +7,7 @@ use log::warn;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::ForeignArrayPtr;
 use crate::host::thread::ThreadId;
 
@@ -19,7 +20,9 @@ impl SyscallHandler {
     log_syscall!(
         sched_getaffinity,
         /* rv */ i32,
-        /* pid */ kernel_pid_t,
+        // Non-deterministic due to https://github.com/shadow/shadow/issues/3626
+        /* pid */
+        SyscallNonDeterministicArg<kernel_pid_t>,
         /* cpusetsize */ usize,
         /* mask */ *const std::ffi::c_void,
     );

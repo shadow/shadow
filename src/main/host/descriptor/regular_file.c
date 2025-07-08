@@ -283,7 +283,7 @@ int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode,
         return -ENOTDIR;
     }
 
-    if (mode != O_RDONLY) {
+    if (flags & O_WRONLY || flags & O_RDWR) {
         return -EPERM;
     }
 

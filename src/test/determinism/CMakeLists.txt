@@ -1,9 +1,5 @@
 ## TEST 1 (Basic tests)
 
-## build the test as a dynamic executable that plugs into shadow
-add_executable(test-determinism test_determinism.c)
-target_link_libraries(test-determinism ${CMAKE_THREAD_LIBS_INIT})
-
 ## We need to run twice to make sure the 'random' output is the same both times
 add_shadow_tests(
     BASENAME determinism1a

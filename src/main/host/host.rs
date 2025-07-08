@@ -9,6 +9,7 @@ use std::os::unix::prelude::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use asm_util::tsc::Tsc;
 use atomic_refcell::AtomicRefCell;
 use linux_api::signal::{Signal, siginfo_t};
 use log::{debug, trace};
@@ -26,7 +27,6 @@ use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::shim_shmem::{HostShmem, HostShmemProtected, ManagerShmem};
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shmem::allocator::ShMemBlock;
-use shadow_tsc::Tsc;
 use vasi_sync::scmutex::SelfContainedMutexGuard;
 
 use crate::core::configuration::{ProcessFinalState, QDiscMode};
