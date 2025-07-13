@@ -13,6 +13,7 @@ pub type robust_list_head = linux_robust_list_head;
 unsafe impl shadow_pod::Pod for robust_list_head {}
 
 pub const FUTEX_CMD_MASK: i32 = bindings::LINUX_FUTEX_CMD_MASK;
+pub const FUTEX_BITSET_MATCH_ANY: u32 = bindings::LINUX_FUTEX_BITSET_MATCH_ANY;
 
 bitflags::bitflags! {
     /// Flags that can be used in the `op` argument for the [`futex`] syscall.
