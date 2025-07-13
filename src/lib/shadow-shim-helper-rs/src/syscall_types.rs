@@ -220,6 +220,13 @@ impl From<ManagedPhysicalMemoryAddr> for u64 {
     }
 }
 
+impl core::fmt::Pointer for ManagedPhysicalMemoryAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let ptr = self.val as *const libc::c_void;
+        core::fmt::Pointer::fmt(&ptr, f)
+    }
+}
+
 #[derive(Copy, Clone, Debug, VirtualAddressSpaceIndependent)]
 #[repr(C)]
 pub struct SyscallArgs {
