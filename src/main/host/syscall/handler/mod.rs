@@ -650,6 +650,20 @@ impl SyscallHandler {
         self.blocked_syscall.is_some()
     }
 
+    pub fn did_listen_timeout_expire(&self) -> bool {
+        // will be `None` if the syscall condition doesn't exist or there's no timeout
+        let timeout = Worker::with_active_thread(|t| {
+            assert_eq!(t.id(), self.thread_id);
+            t.syscall_condition().and_then(|x| x.timeout())
+        })
+        .unwrap();
+
+        // true if there is a timeout and it's before or at the current time
+        timeout
+            .map(|timeout| Worker::current_time().unwrap() >= timeout)
+            .unwrap_or(false)
+    }
+
     /// Internal helper that returns the `Descriptor` for the fd if it exists, otherwise returns
     /// EBADF.
     fn get_descriptor(
@@ -941,18 +955,7 @@ mod export {
         sys: *const SyscallHandler,
     ) -> bool {
         let sys = unsafe { sys.as_ref() }.unwrap();
-
-        // will be `None` if the syscall condition doesn't exist or there's no timeout
-        let timeout = Worker::with_active_thread(|t| {
-            assert_eq!(t.id(), sys.thread_id);
-            t.syscall_condition().and_then(|x| x.timeout())
-        })
-        .unwrap();
-
-        // true if there is a timeout and it's before or at the current time
-        timeout
-            .map(|timeout| Worker::current_time().unwrap() >= timeout)
-            .unwrap_or(false)
+        sys.did_listen_timeout_expire()
     }
 
     #[unsafe(no_mangle)]
