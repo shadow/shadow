@@ -11,6 +11,7 @@ use shadow_shim_helper_rs::syscall_types::{ForeignPtr, SyscallReg};
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
+use crate::host::futex_table::FutexRef;
 use crate::host::syscall::Trigger;
 use crate::host::syscall::condition::SyscallCondition;
 
@@ -224,6 +225,13 @@ impl SyscallError {
     pub fn new_blocked_on_child(restartable: bool) -> Self {
         Self::Blocked(Blocked {
             condition: SyscallCondition::new(Trigger::child()),
+            restartable,
+        })
+    }
+
+    pub fn new_blocked_on_futex(futex: FutexRef, restartable: bool) -> Self {
+        Self::Blocked(Blocked {
+            condition: SyscallCondition::new(Trigger::from_futex(futex)),
             restartable,
         })
     }
