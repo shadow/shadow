@@ -3,6 +3,7 @@
  * See LICENSE for licensing information
  */
 
+#include <asm/prctl.h>
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
@@ -18,6 +19,12 @@
 #include "lib/shim/shim_syscall.h"
 #include "lib/shim/shim_tls.h"
 #include "lib/tsc/tsc.h"
+
+// Declare glibc's arch_prctl.
+// arch_prctl(2): As of version 2.7, glibc provides no prototype for
+// arch_prctl(). You have to declare it yourself  for  now.
+
+int arch_prctl(int code, unsigned long addr);
 
 static uint64_t _shim_rdtsc_nanos(ExecutionContext ctx) {
     if (ctx == EXECUTION_CONTEXT_SHADOW) {
@@ -39,7 +46,7 @@ static uint64_t _shim_rdtsc_nanos(ExecutionContext ctx) {
     return (uint64_t)t.tv_nsec + (uint64_t)t.tv_sec * 1000000000;
 }
 
-static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
+static void _shim_insn_emu_handle_sigsegv(int sig, siginfo_t* info, void* voidUcontext) {
     ExecutionContext prev_ctx = shim_swapExecutionContext(EXECUTION_CONTEXT_SHADOW);
     trace("Trapped sigsegv");
     static bool tsc_initd = false;
@@ -86,6 +93,11 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
             regs[REG_RCX] = rcx;
             regs[REG_RIP] = rip;
             handled = true;
+        } else if (isCpuid(insn)) {
+            trace("Emulating cpuid");
+            _shim_emulate_cpuid(&regs[REG_RAX], &regs[REG_RBX], &regs[REG_RCX], &regs[REG_RDX]);
+            regs[REG_RIP] += 2;
+            handled=true;
         }
     }
 
@@ -97,16 +109,23 @@ static void _shim_rdtsc_handle_sigsegv(int sig, siginfo_t* info, void* voidUcont
     shim_swapExecutionContext(prev_ctx);
 }
 
-void shim_rdtsc_init() {
+void shim_insn_emu_init() {
     // Force a SEGV on any rdtsc or rdtscp instruction.
     if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV) < 0) {
         panic("pctl: %s", strerror(errno));
     }
 
+    if (shimshmem_getEmulateCpuid(shim_managerSharedMem())) {
+        // Force a SEGV on any cpuid instruction.
+        if (arch_prctl(ARCH_SET_CPUID, 0) < 0) {
+            panic("arch_pctl: %s", strerror(errno));
+        }
+    }
+
     // Install our own handler to emulate.
     if (sigaction(SIGSEGV,
                   &(struct sigaction){
-                      .sa_sigaction = _shim_rdtsc_handle_sigsegv,
+                      .sa_sigaction = _shim_insn_emu_handle_sigsegv,
                       // SA_NODEFER: Handle recursive SIGSEGVs, so that it can
                       // "rethrow" the SIGSEGV and in case of a bug in the
                       // handler.

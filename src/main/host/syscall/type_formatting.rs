@@ -219,6 +219,7 @@ simple_debug_impl!(nix::sys::stat::Mode);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
 
+simple_display_impl!(linux_api::prctl::ArchPrctlOp);
 simple_display_impl!(linux_api::prctl::PrctlOp);
 simple_display_impl!(linux_api::socket::AddressFamily);
 

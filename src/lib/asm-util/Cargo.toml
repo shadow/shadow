@@ -1,5 +1,5 @@
 [package]
-name = "shadow_tsc"
+name = "asm_util"
 edition.workspace = true
 publish.workspace = true
 

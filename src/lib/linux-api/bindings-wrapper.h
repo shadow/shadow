@@ -28,6 +28,7 @@
 #include <linux/wait.h>
 
 #include <asm/ioctls.h>
+#include <asm/prctl.h>
 #include <asm/sigcontext.h>
 // linux defines "struct stat" differently in both "asm/stat.h" and "asm-generic/stat.h"; not sure
 // which we're supposed to use, but "asm/stat.h" *seems* to be the right version for x86-64, since

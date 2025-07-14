@@ -1,3 +1,7 @@
+use linux_syscall::Result64;
+use linux_syscall::syscall;
+
+use crate::errno::Errno;
 use crate::{bindings, const_conversions};
 
 /// Options for `man 2 prctl`.
@@ -217,4 +221,130 @@ impl From<i32> for PrctlOp {
     fn from(val: i32) -> Self {
         Self::new(val)
     }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct ArchPrctlOp(i32);
+
+impl ArchPrctlOp {
+    pub const ARCH_SET_CPUID: Self = Self::from_u32(bindings::LINUX_ARCH_SET_CPUID);
+    pub const ARCH_GET_CPUID: Self = Self::from_u32(bindings::LINUX_ARCH_GET_CPUID);
+    pub const ARCH_SET_FS: Self = Self::from_u32(bindings::LINUX_ARCH_SET_FS);
+    pub const ARCH_GET_FS: Self = Self::from_u32(bindings::LINUX_ARCH_GET_FS);
+    pub const ARCH_SET_GS: Self = Self::from_u32(bindings::LINUX_ARCH_SET_GS);
+    pub const ARCH_GET_GS: Self = Self::from_u32(bindings::LINUX_ARCH_GET_GS);
+    pub const ARCH_GET_XCOMP_SUPP: Self = Self::from_u32(bindings::LINUX_ARCH_GET_XCOMP_SUPP);
+    pub const ARCH_GET_XCOMP_PERM: Self = Self::from_u32(bindings::LINUX_ARCH_GET_XCOMP_PERM);
+    pub const ARCH_REQ_XCOMP_PERM: Self = Self::from_u32(bindings::LINUX_ARCH_REQ_XCOMP_PERM);
+    pub const ARCH_GET_XCOMP_GUEST_PERM: Self =
+        Self::from_u32(bindings::LINUX_ARCH_GET_XCOMP_GUEST_PERM);
+    pub const ARCH_REQ_XCOMP_GUEST_PERM: Self =
+        Self::from_u32(bindings::LINUX_ARCH_REQ_XCOMP_GUEST_PERM);
+    pub const ARCH_XCOMP_TILECFG: Self = Self::from_u32(bindings::LINUX_ARCH_XCOMP_TILECFG);
+    pub const ARCH_XCOMP_TILEDATA: Self = Self::from_u32(bindings::LINUX_ARCH_XCOMP_TILEDATA);
+    pub const ARCH_MAP_VDSO_X32: Self = Self::from_u32(bindings::LINUX_ARCH_MAP_VDSO_X32);
+    pub const ARCH_MAP_VDSO_32: Self = Self::from_u32(bindings::LINUX_ARCH_MAP_VDSO_32);
+    pub const ARCH_MAP_VDSO_64: Self = Self::from_u32(bindings::LINUX_ARCH_MAP_VDSO_64);
+    pub const ARCH_GET_UNTAG_MASK: Self = Self::from_u32(bindings::LINUX_ARCH_GET_UNTAG_MASK);
+    pub const ARCH_ENABLE_TAGGED_ADDR: Self =
+        Self::from_u32(bindings::LINUX_ARCH_ENABLE_TAGGED_ADDR);
+    pub const ARCH_GET_MAX_TAG_BITS: Self = Self::from_u32(bindings::LINUX_ARCH_GET_MAX_TAG_BITS);
+    pub const ARCH_FORCE_TAGGED_SVA: Self = Self::from_u32(bindings::LINUX_ARCH_FORCE_TAGGED_SVA);
+    pub const ARCH_SHSTK_ENABLE: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_ENABLE);
+    pub const ARCH_SHSTK_DISABLE: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_DISABLE);
+    pub const ARCH_SHSTK_LOCK: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_LOCK);
+    pub const ARCH_SHSTK_UNLOCK: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_UNLOCK);
+    pub const ARCH_SHSTK_STATUS: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_STATUS);
+    pub const ARCH_SHSTK_SHSTK: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_SHSTK);
+    pub const ARCH_SHSTK_WRSS: Self = Self::from_u32(bindings::LINUX_ARCH_SHSTK_WRSS);
+
+    pub const fn new(val: i32) -> Self {
+        Self(val)
+    }
+
+    const fn from_u32(val: u32) -> Self {
+        Self::new(const_conversions::i32_from_u32(val))
+    }
+
+    pub const fn to_str(&self) -> Option<&'static str> {
+        match *self {
+            Self::ARCH_SET_CPUID => Some("ARCH_SET_CPUID"),
+            Self::ARCH_GET_CPUID => Some("ARCH_GET_CPUID"),
+            Self::ARCH_GET_FS => Some("ARCH_GET_FS"),
+            Self::ARCH_SET_FS => Some("ARCH_SET_FS"),
+            Self::ARCH_GET_GS => Some("ARCH_GET_GS"),
+            Self::ARCH_SET_GS => Some("ARCH_SET_GS"),
+            Self::ARCH_GET_XCOMP_SUPP => Some("ARCH_GET_XCOMP_SUPP"),
+            Self::ARCH_GET_XCOMP_PERM => Some("ARCH_GET_XCOMP_PERM"),
+            Self::ARCH_REQ_XCOMP_PERM => Some("ARCH_REQ_XCOMP_PERM"),
+            Self::ARCH_GET_XCOMP_GUEST_PERM => Some("ARCH_GET_XCOMP_GUEST_PERM"),
+            Self::ARCH_REQ_XCOMP_GUEST_PERM => Some("ARCH_REQ_XCOMP_GUEST_PERM"),
+            Self::ARCH_XCOMP_TILECFG => Some("ARCH_XCOMP_TILECFG"),
+            Self::ARCH_XCOMP_TILEDATA => Some("ARCH_XCOMP_TILEDATA"),
+            Self::ARCH_MAP_VDSO_X32 => Some("ARCH_MAP_VDSO_X32"),
+            Self::ARCH_MAP_VDSO_32 => Some("ARCH_MAP_VDSO_32"),
+            Self::ARCH_MAP_VDSO_64 => Some("ARCH_MAP_VDSO_64"),
+            Self::ARCH_GET_UNTAG_MASK => Some("ARCH_GET_UNTAG_MASK"),
+            Self::ARCH_ENABLE_TAGGED_ADDR => Some("ARCH_ENABLE_TAGGED_ADDR"),
+            Self::ARCH_GET_MAX_TAG_BITS => Some("ARCH_GET_MAX_TAG_BITS"),
+            Self::ARCH_FORCE_TAGGED_SVA => Some("ARCH_FORCE_TAGGED_SVA"),
+            Self::ARCH_SHSTK_ENABLE => Some("ARCH_SHSTK_ENABLE"),
+            Self::ARCH_SHSTK_DISABLE => Some("ARCH_SHSTK_DISABLE"),
+            Self::ARCH_SHSTK_LOCK => Some("ARCH_SHSTK_LOCK"),
+            Self::ARCH_SHSTK_UNLOCK => Some("ARCH_SHSTK_UNLOCK"),
+            Self::ARCH_SHSTK_STATUS => Some("ARCH_SHSTK_STATUS"),
+            Self::ARCH_SHSTK_SHSTK => Some("ARCH_SHSTK_SHSTK"),
+            Self::ARCH_SHSTK_WRSS => Some("ARCH_SHSTK_WRSS"),
+            _ => None,
+        }
+    }
+}
+
+impl From<ArchPrctlOp> for core::ffi::c_int {
+    fn from(value: ArchPrctlOp) -> Self {
+        value.0
+    }
+}
+
+impl core::fmt::Display for ArchPrctlOp {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => formatter.write_str(s),
+            None => write!(formatter, "(unknown arch_prctl option {})", self.0),
+        }
+    }
+}
+
+impl core::fmt::Debug for ArchPrctlOp {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self.to_str() {
+            Some(s) => write!(formatter, "ArchPrctlOp::{s}"),
+            None => write!(formatter, "ArchPrctlOp::<{}>", self.0),
+        }
+    }
+}
+
+/// Execute the `arch_prctl` syscall.
+///
+/// # Safety
+///
+/// Some operations may change OS behavior in a way that violates assumptions
+/// that other code relies on.
+pub unsafe fn arch_prctl_raw(
+    option: core::ffi::c_int,
+    arg2: core::ffi::c_ulong,
+) -> Result<i64, Errno> {
+    unsafe { syscall!(linux_syscall::SYS_arch_prctl, option, arg2) }
+        .try_i64()
+        .map_err(Errno::from)
+}
+
+/// Execute the `arch_prctl` syscall.
+///
+/// # Safety
+///
+/// Some operations may change OS behavior in a way that violates assumptions
+/// that other code relies on.
+pub unsafe fn arch_prctl(option: ArchPrctlOp, arg2: u64) -> Result<i64, Errno> {
+    unsafe { arch_prctl_raw(option.into(), arg2) }
 }

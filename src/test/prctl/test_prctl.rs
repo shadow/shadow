@@ -1,3 +1,4 @@
+use linux_api::prctl::ArchPrctlOp;
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{assert_with_errno, set};
 
@@ -40,6 +41,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new("test_name", test_name, set![TestEnv::Libc, TestEnv::Shadow]),
+        test_utils::ShadowTest::new(
+            "test_trap_cpuid",
+            test_trap_cpuid,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
     ];
 
     tests
@@ -80,6 +86,20 @@ fn test_tid_addr() -> Result<(), String> {
         // printing the value so that DCE doesn't optimize out the read (`read_volatile` and
         // `black_box` aren't enough)
         println!("{}", unsafe { *addr });
+    }
+
+    Ok(())
+}
+
+fn test_trap_cpuid() -> Result<(), String> {
+    // It should *look like* cpuid is permitted, whether or not we're running under shadow.
+    let res = unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_GET_CPUID, 0) };
+    assert_eq!(res, Ok(1));
+
+    // If we're running under shadow, trying to trap cpuid should fail.
+    if test_utils::running_in_shadow() {
+        let res = unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 0) };
+        assert_eq!(res, Err(linux_api::errno::Errno::ENODEV));
     }
 
     Ok(())

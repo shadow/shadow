@@ -116,7 +116,7 @@ fn main() {
             "shim_api_addrinfo.c",
             "shim_api_ifaddrs.c",
             "shim_api_syscall.c",
-            "shim_rdtsc.c",
+            "shim_insn_emu.c",
             "shim_seccomp.c",
             "shim_sys.c",
             "shim_syscall.c",

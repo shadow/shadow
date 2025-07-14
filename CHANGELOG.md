@@ -69,6 +69,7 @@ https://gitlab.torproject.org/tpo/core/arti/-/issues/1972).
 * Ensure file descriptors are processed in deterministic (sorted) order when bulk-closing, e.g. via `close_range` or when terminating a simulated process. (#3614)
 * Fix opening `/proc/self/*` so that they open the file corresponding to the caller's process instead of shadow's. (#3613)
 * Intercept reads to `/proc/sys/kernel/random/uuid` and return a simulated pseudorandom result instead of letting the host systerm return an actually-random result. (#3617, fixing #3188).
+* Trap and emulate the `cpuid` instruction where the platform supports it (currently on relatively new intel processors), to report that the `rdrand` and `rdseed` instructions are unavailable. (#3619, fixing #1561 and #3610)
 
 Full changelog since v3.2.0:
 

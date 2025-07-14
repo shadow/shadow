@@ -39,8 +39,8 @@ pub mod shadow;
 // Force cargo to link against crates that aren't (yet) referenced from Rust
 // code (but are referenced from this crate's C code).
 // https://github.com/rust-lang/cargo/issues/9391
+extern crate asm_util;
 extern crate shadow_shmem;
-extern crate shadow_tsc;
 
 // shadow re-exports this definition from /usr/include/linux/tcp.h
 // TODO: Provide this via the linux-api crate instead.

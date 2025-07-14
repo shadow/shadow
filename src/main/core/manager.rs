@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use atomic_refcell::AtomicRefCell;
-use log::warn;
+use linux_api::prctl::ArchPrctlOp;
+use log::{debug, warn};
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use scheduler::thread_per_core::ThreadPerCoreSched;
@@ -77,7 +78,7 @@ impl<'a> Manager<'a> {
             default_freq
         });
 
-        let native_tsc_frequency = if let Some(f) = shadow_tsc::Tsc::native_cycles_per_second() {
+        let native_tsc_frequency = if let Some(f) = asm_util::tsc::Tsc::native_cycles_per_second() {
             f
         } else {
             warn!(
@@ -196,6 +197,46 @@ impl<'a> Manager<'a> {
         let meminfo_file =
             std::fs::File::open("/proc/meminfo").context("Failed to open '/proc/meminfo'")?;
 
+        // Determind whether we can and should emulate cpuid in the shim.
+        let emulate_cpuid = {
+            // SAFETY: we don't support running in esoteric environments where cpuid isn't available.
+            let supports_rdrand = unsafe { asm_util::cpuid::supports_rdrand() };
+            let supports_rdseed = unsafe { asm_util::cpuid::supports_rdseed() };
+            if !(supports_rdrand || supports_rdseed) {
+                // No need to emulate cpuid.
+                debug!(
+                    "No rdrand nor rdseed support. cpuid emulation is unnecessary, so skipping."
+                );
+                false
+            } else {
+                // CPU has `rdrand` and/or `rdseed`, which produce
+                // non-deterministic results by design.  We want to trap and
+                // emulate `cpuid` in the shim to mask this support so that
+                // managed programs (hopefully) don't use it.
+
+                // Test whether the current platform actually supports intercepting cpuid.
+                // This is dependent on the CPU model and kernel version.
+                let res = unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 0) };
+                match res {
+                    Ok(_) => {
+                        // Re-enable cpuid for ourselves.
+                        unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 1) }
+                            .unwrap_or_else(|e| panic!("Couldn't re-enable cpuid: {e:?}"));
+                        debug!(
+                            "CPU supports rdrand and/or rdseed, and platform supports intercepting cpuid. Enabling cpuid emulation."
+                        );
+                        true
+                    }
+                    Err(e) => {
+                        warn!(
+                            "CPU appears to support rdrand and/or rdseed, but platform doesn't support emulating cpuid ({e:?}). This may break determinism."
+                        );
+                        false
+                    }
+                }
+            }
+        };
+
         let shmem = shadow_shmem::allocator::shmalloc(ManagerShmem {
             log_start_time_micros: unsafe { c::logger_get_global_start_time_micros() },
             native_preemption_config: if config.native_preemption_enabled() {
@@ -206,6 +247,7 @@ impl<'a> Manager<'a> {
             } else {
                 FfiOption::None
             },
+            emulate_cpuid,
         });
 
         Ok(Self {

@@ -129,7 +129,10 @@ fn format_shmem_name(buf: &mut PathBuf) {
     let mut fb = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
     write!(
         &mut fb,
-        "/dev/shm/shadow_shmemfile_{}.{}-{}",
+        // Ensure consistent *size* of the formatted name, so that the size
+        // of /proc/self/maps of managed programs doesn't change depending
+        // on the number of digits in the nanoseconds or pid here.
+        "/dev/shm/shadow_shmemfile_{}.{:09}-{:010}",
         ts.tv_sec, ts.tv_nsec, pid
     )
     .unwrap();

@@ -24,7 +24,7 @@ hosts:
   testnode1: &host
     network_node_id: 0
     processes:
-    - path: ./test-determinism
+    - path: ../../target/debug/test_determinism
       start_time: 1
   testnode2: *host
   testnode3: *host
