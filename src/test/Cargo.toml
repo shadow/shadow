@@ -248,7 +248,7 @@ asm_util = { path = "../lib/asm-util" }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
 linux-api = { path = "../lib/linux-api", features = ["rustix", "std", "libc"] }
-neli = "0.6.4"
+neli = "0.7.0"
 nix = { version = "0.26.4", features = ["event", "feature", "fs", "poll", "process", "sched", "signal", "socket", "uio"] }
 rand = { version = "0.9.0", features = ["small_rng"] }
 rustix = { version = "0.38.44", default-features = false, features = ["fs", "mm", "pipe", "time", "thread"] }
