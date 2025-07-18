@@ -48,6 +48,7 @@ impl FutexTable {
 }
 
 /// An owned reference to a [`Futex`][c::Futex].
+#[derive(Debug)]
 pub struct FutexRef(SyncSendPointer<c::Futex>);
 
 impl FutexRef {
@@ -71,6 +72,28 @@ impl FutexRef {
 
     pub fn wake(&self, num_wakeups: libc::c_uint) -> libc::c_uint {
         unsafe { c::futex_wake(self.ptr(), num_wakeups) }
+    }
+
+    pub fn listener_count(&self) -> libc::c_uint {
+        unsafe { c::futex_getListenerCount(self.ptr()) }
+    }
+
+    /// Ownership of the reference is transferred to the returned pointer.
+    ///
+    /// In otherwords, `self` is dropped without changing the futex's refcount, and the returned
+    /// pointer can be safely used. The refcount should be decremented when the returned pointer is
+    /// no longer used.
+    pub fn into_c_ptr(self) -> *mut c::Futex {
+        let ptr = self.ptr();
+        unsafe { c::futex_ref(self.0.ptr()) };
+        ptr
+    }
+}
+
+impl Clone for FutexRef {
+    fn clone(&self) -> Self {
+        unsafe { c::futex_ref(self.0.ptr()) };
+        Self(self.0)
     }
 }
 

@@ -147,7 +147,6 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .header("host/syscall/handler/fcntl.h")
         .header("host/syscall/handler/file.h")
         .header("host/syscall/handler/fileat.h")
-        .header("host/syscall/handler/futex.h")
         .header("host/syscall/handler/ioctl.h")
         .header("host/syscall/handler/poll.h")
         .header("host/syscall/handler/select.h")
@@ -343,7 +342,6 @@ fn build_shadow_c(build_common: &ShadowBuildCommon) {
         "host/syscall/handler/fcntl.c",
         "host/syscall/handler/file.c",
         "host/syscall/handler/fileat.c",
-        "host/syscall/handler/futex.c",
         "host/syscall/handler/ioctl.c",
         "host/syscall/handler/poll.c",
         "host/syscall/handler/select.c",

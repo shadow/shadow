@@ -58,6 +58,12 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
 
     worker_count_allocation(SysCallCondition);
 
+    // NOTE: we're inconsistent with how we handle ref counting here. Some types assume the refcount
+    // hasn't been increased, and some assume it has. This is a consequence of different patterns
+    // being nicer in C or Rust. Ideally we'd update our C code to increase the refcount when the
+    // `Trigger` is constructed (such as for `TRIGGER_DESCRIPTOR`), but since we hope to get rid of
+    // this code in the future, I'm leaving as-is for now. Our object counter code will detect if we
+    // make a mistake in the meantime and we leak memory.
     if (cond->trigger.object.as_pointer) {
         switch (cond->trigger.type) {
             case TRIGGER_DESCRIPTOR: {
@@ -71,7 +77,7 @@ SysCallCondition* syscallcondition_new(Trigger trigger) {
                 return cond;
             }
             case TRIGGER_FUTEX: {
-                futex_ref(cond->trigger.object.as_futex);
+                /* The `Trigger` should already own the reference. */
                 return cond;
             }
             case TRIGGER_CHILD: {

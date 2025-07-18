@@ -3,6 +3,7 @@ use shadow_shim_helper_rs::shadow_syscalls::ShadowSyscallNum;
 
 use crate::cshadow as c;
 use crate::host::descriptor::{File, FileState};
+use crate::host::futex_table::FutexRef;
 
 pub mod condition;
 pub mod formatter;
@@ -40,6 +41,16 @@ impl Trigger {
             type_: c::_TriggerType_TRIGGER_FILE,
             object: c::TriggerObject { as_file: file_ptr },
             state,
+        })
+    }
+
+    pub fn from_futex(futex: FutexRef) -> Self {
+        let futex = futex.into_c_ptr();
+
+        Self(c::Trigger {
+            type_: c::_TriggerType_TRIGGER_FUTEX,
+            object: c::TriggerObject { as_futex: futex },
+            state: FileState::FUTEX_WAKEUP,
         })
     }
 
