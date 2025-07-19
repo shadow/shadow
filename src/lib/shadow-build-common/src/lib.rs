@@ -42,12 +42,15 @@ impl ShadowBuildCommon {
         println!("cargo:rerun-if-env-changed=CFLAGS");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
 
+        // Build with support for C11 on platforms that default to C99 or C89.
         match compiler {
             Compiler::C => {
+                b.std("gnu11");
             }
             Compiler::CPP => {
                 // Switch to C++ library compilation.
                 b.cpp(true);
+                b.std("c++11");
             }
         }
 
