@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use shadow_build_common::{CBindgenExt, ShadowBuildCommon};
+use shadow_build_common::{CBindgenExt, Compiler, ShadowBuildCommon};
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let base_config = {
@@ -317,15 +317,14 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
 
 fn build_remora(build_common: &ShadowBuildCommon) {
     build_common
-        .cc_build()
-        .cpp(true) // Switch to C++ library compilation.
+        .cc_build(Compiler::CPP)
         .file("host/descriptor/tcp_retransmit_tally.cc")
         .cpp_link_stdlib("stdc++")
         .compile("libremora.a");
 }
 
 fn build_shadow_c(build_common: &ShadowBuildCommon) {
-    let mut build = build_common.cc_build();
+    let mut build = build_common.cc_build(Compiler::C);
 
     build.files(&[
         "core/affinity.c",

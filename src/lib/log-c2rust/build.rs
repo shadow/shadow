@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use shadow_build_common::ShadowBuildCommon;
+use shadow_build_common::{Compiler, ShadowBuildCommon};
 
 // Generate rustlogger.h, exposing this crate's implementation of a rustlogger
 // to this crate's C code.
@@ -33,7 +33,7 @@ fn main() {
     // Our Rust code doesn't call *into* this library. It implements the C wrapper code
     // that client code calls.
     build_common
-        .cc_build()
+        .cc_build(Compiler::C)
         .files(&["log-c2rust.c"])
         .compile("log_c2rust");
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use shadow_build_common::ShadowBuildCommon;
+use shadow_build_common::{Compiler, ShadowBuildCommon};
 
 fn run_bindgen(build_common: &ShadowBuildCommon) {
     let bindings = build_common
@@ -109,7 +109,7 @@ fn main() {
     run_bindgen(&build_common);
 
     build_common
-        .cc_build()
+        .cc_build(Compiler::C)
         .files(&[
             "patch_vdso.c",
             "shim.c",

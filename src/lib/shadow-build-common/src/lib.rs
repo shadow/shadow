@@ -35,12 +35,21 @@ impl ShadowBuildCommon {
         }
     }
 
-    pub fn cc_build(&self) -> cc::Build {
+    pub fn cc_build(&self, compiler: Compiler) -> cc::Build {
         let mut b = cc::Build::new();
         println!("cargo:rerun-if-env-changed=CC");
         println!("cargo:rerun-if-env-changed=CXX");
         println!("cargo:rerun-if-env-changed=CFLAGS");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
+
+        match compiler {
+            Compiler::C => {
+            }
+            Compiler::CPP => {
+                // Switch to C++ library compilation.
+                b.cpp(true);
+            }
+        }
 
         // When adding flags here, consider using `add_compile_options`
         // in the root CMakeLists.txt instead, where they will be picked
@@ -181,4 +190,9 @@ impl CBindgenExt for cbindgen::Config {
     fn get_mut(&mut self) -> &mut cbindgen::Config {
         self
     }
+}
+
+pub enum Compiler {
+    C,
+    CPP,
 }

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use shadow_build_common::ShadowBuildCommon;
+use shadow_build_common::{Compiler, ShadowBuildCommon};
 
 fn run_cbindgen(build_common: &ShadowBuildCommon) {
     let mut config = build_common.cbindgen_base_config();
@@ -44,5 +44,8 @@ fn main() {
     run_cbindgen(&build_common);
     run_bindgen(&build_common);
 
-    build_common.cc_build().file("tsc.c").compile("tsc_c");
+    build_common
+        .cc_build(Compiler::C)
+        .file("tsc.c")
+        .compile("tsc_c");
 }
