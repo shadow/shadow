@@ -1034,8 +1034,16 @@ impl UdpSocket {
         let readable = !self.recv_buffer.is_empty();
         let writable = self.send_buffer.has_space();
 
-        let readable = readable.then_some(FileState::READABLE).unwrap_or_default();
-        let writable = writable.then_some(FileState::WRITABLE).unwrap_or_default();
+        let readable = if readable {
+            FileState::READABLE
+        } else {
+            Default::default()
+        };
+        let writable = if writable {
+            FileState::WRITABLE
+        } else {
+            Default::default()
+        };
 
         self.update_state(
             /* mask= */ FileState::READABLE | FileState::WRITABLE,
