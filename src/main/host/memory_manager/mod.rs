@@ -342,7 +342,7 @@ impl MemoryManager {
     // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
     // on failure.
     fn mapped_mut<T: Pod>(&mut self, ptr: ForeignArrayPtr<T>) -> Option<&mut [T]> {
-        let mm = self.memory_mapper.as_ref()?;
+        let mm = self.memory_mapper.as_mut()?;
         // SAFETY: No other refs to process memory exist by preconditions of
         // MemoryManager::new + we have an exclusive reference.
         unsafe { mm.get_mut(ptr) }
