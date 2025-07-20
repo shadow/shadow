@@ -103,10 +103,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                 for &bind in bind_addresses.iter() {
                     // add details to the test names to avoid duplicates
                     let append_args = |s| {
-                        format!(
-                            "{} <domain={},type={},flag={},bind={:?}>",
-                            s, domain, sock_type, flag, bind
-                        )
+                        format!("{s} <domain={domain},type={sock_type},flag={flag},bind={bind:?}>")
                     };
 
                     tests.extend(vec![
@@ -140,7 +137,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             }
 
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain},type={sock_type}>");
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_negative_backlog_connect"),
@@ -153,7 +150,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
         for &sock_type in [libc::SOCK_STREAM, libc::SOCK_SEQPACKET].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain},type={sock_type}>");
 
             // skip tests that use SOCK_SEQPACKET with INET sockets
             if domain == libc::AF_INET && sock_type == libc::SOCK_SEQPACKET {
@@ -162,8 +159,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+                let append_args = |s| format!("{s} <domain={domain},type={sock_type},flag={flag}>");
 
                 tests.extend(vec![
                     test_utils::ShadowTest::new(
@@ -714,7 +710,7 @@ fn check_listen_call(
         // if we expect the socket() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

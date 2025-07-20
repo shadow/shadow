@@ -56,7 +56,7 @@ impl SyscallHandler {
                 let socket_type = match UnixSocketType::try_from(socket_type) {
                     Ok(x) => x,
                     Err(e) => {
-                        warn!("{}", e);
+                        warn!("{e}");
                         return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
@@ -64,8 +64,7 @@ impl SyscallHandler {
                 // unix sockets don't support any protocols
                 if protocol != 0 {
                     warn!(
-                        "Unsupported socket protocol {}, we only support default protocol 0",
-                        protocol
+                        "Unsupported socket protocol {protocol}, we only support default protocol 0"
                     );
                     return Err(Errno::EPROTONOSUPPORT);
                 }
@@ -111,14 +110,14 @@ impl SyscallHandler {
                 let socket_type = match NetlinkSocketType::try_from(socket_type) {
                     Ok(x) => x,
                     Err(e) => {
-                        warn!("{}", e);
+                        warn!("{e}");
                         return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
                 let family = match NetlinkFamily::try_from(protocol) {
                     Ok(x) => x,
                     Err(e) => {
-                        warn!("{}", e);
+                        warn!("{e}");
                         return Err(Errno::EPROTONOSUPPORT);
                     }
                 };
@@ -174,7 +173,7 @@ impl SyscallHandler {
 
         let addr = io::read_sockaddr(&ctx.objs.process.memory_borrow(), addr_ptr, addr_len)?;
 
-        log::trace!("Attempting to bind fd {} to {:?}", fd, addr);
+        log::trace!("Attempting to bind fd {fd} to {addr:?}");
 
         let mut rng = ctx.objs.host.random_mut();
         let net_ns = ctx.objs.host.network_namespace_borrow();
@@ -233,7 +232,7 @@ impl SyscallHandler {
 
         let addr = io::read_sockaddr(&mem, addr_ptr, addr_len)?;
 
-        log::trace!("Attempting to send {} bytes to {:?}", buf_len, addr);
+        log::trace!("Attempting to send {buf_len} bytes to {addr:?}");
 
         let iov = IoVec {
             base: buf_ptr,
@@ -382,7 +381,7 @@ impl SyscallHandler {
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        log::trace!("Attempting to recv {} bytes", buf_len);
+        log::trace!("Attempting to recv {buf_len} bytes");
 
         let iov = IoVec {
             base: buf_ptr,
@@ -540,7 +539,7 @@ impl SyscallHandler {
             socket.getsockname()?
         };
 
-        debug!("Returning socket address of {:?}", addr_to_write);
+        debug!("Returning socket address of {addr_to_write:?}");
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
@@ -589,7 +588,7 @@ impl SyscallHandler {
             addr_to_write
         };
 
-        debug!("Returning peer address of {:?}", addr_to_write);
+        debug!("Returning peer address of {addr_to_write:?}");
         io::write_sockaddr_and_len(
             &mut ctx.objs.process.memory_borrow_mut(),
             addr_to_write.as_ref(),
@@ -748,7 +747,7 @@ impl SyscallHandler {
             Some(x) => x,
             None => {
                 // linux doesn't return an error if there are unexpected flags
-                warn!("Invalid recvfrom flags: {}", flags);
+                warn!("Invalid recvfrom flags: {flags}");
                 SockFlag::from_bits_truncate(flags)
             }
         };
@@ -1051,9 +1050,7 @@ impl SyscallHandler {
         if optlen_new > optlen {
             // this is probably a bug in the socket's getsockopt implementation
             log::warn!(
-                "Attempting to return an optlen {} that's greater than the provided optlen {}",
-                optlen_new,
-                optlen
+                "Attempting to return an optlen {optlen_new} that's greater than the provided optlen {optlen}"
             );
             optlen_new = optlen;
         }

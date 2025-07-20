@@ -61,8 +61,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<Option<[libc::c_int; 2]>, String>> 
                     // add details to the test names to avoid duplicates
                     let append_args = |s| {
                         format!(
-                            "{} <domain={},type={},flag={},protocol={}>",
-                            s, domain, sock_type, flag, protocol
+                            "{s} <domain={domain},type={sock_type},flag={flag},protocol={protocol}>",
                         )
                     };
 
@@ -254,7 +253,7 @@ fn check_socketpair_call(
         // if we expect the socketpair() call to return an error (rv should be -1)
         Some(expected_errnos) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if !expected_errnos.contains(&errno) {
                 return Err(format!(

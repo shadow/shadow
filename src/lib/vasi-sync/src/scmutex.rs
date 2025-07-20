@@ -238,7 +238,7 @@ impl<T> SelfContainedMutex<T> {
                         // ourselves from the sleeper count.
                         current = self.futex.load(sync::Ordering::Relaxed)
                     }
-                    Err(e) => panic!("Unexpected futex error {:?}", e),
+                    Err(e) => panic!("Unexpected futex error {e:?}"),
                 };
             }
             // Since decrementing is a read-modify-write operation, this does

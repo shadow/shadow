@@ -75,8 +75,7 @@ fn test_pipe() -> Result<(), String> {
             return Err("error: select failed".to_string());
         } else if ready > 0 && fd_is_readable {
             return Err(format!(
-                "error: select unexpectedly marked fd {} readable. result={}",
-                pfd_read, ready
+                "error: select unexpectedly marked fd {pfd_read} readable. result={ready}",
             ));
         }
 
@@ -106,7 +105,7 @@ fn test_pipe() -> Result<(), String> {
 
         // Make sure we got a read event
         if ready != 1 {
-            return Err(format!("error: select returned {} instead of 1", ready));
+            return Err(format!("error: select returned {ready} instead of 1"));
         }
 
         // Make sure the event is set for the correct fd
@@ -114,8 +113,7 @@ fn test_pipe() -> Result<(), String> {
 
         if !fd_is_readable {
             return Err(format!(
-                "error: select did not mark fd {} as readable",
-                pfd_read
+                "error: select did not mark fd {pfd_read} as readable",
             ));
         }
 
@@ -157,8 +155,7 @@ fn test_regular_file() -> Result<(), String> {
             // Note: Even though the file is 0 bytes, has no data inside of it, it is still instantly
             // available for 'reading' the EOF.
             return Err(format!(
-                "error: expected EOF to be readable from empty file fd={}",
-                fd
+                "error: expected EOF to be readable from empty file fd={fd}",
             ));
         }
 
@@ -201,11 +198,11 @@ fn test_regular_file() -> Result<(), String> {
         let fd_is_readable = unsafe { libc::FD_ISSET(fd, &readfds) };
 
         if ready != 1 {
-            return Err(format!("error: select returned {} instead of 1", ready));
+            return Err(format!("error: select returned {ready} instead of 1"));
         }
 
         if !fd_is_readable {
-            return Err(format!("error: fd {} is not readable", fd));
+            return Err(format!("error: fd {fd} is not readable"));
         }
 
         // Make sure we got what expected back
@@ -355,8 +352,7 @@ fn test_select_args_common(
         };
 
         let result_string = format!(
-            "{:?} returned an unexpected result: expected {}, got {}",
-            select_fn, exp_result, result
+            "{select_fn:?} returned an unexpected result: expected {exp_result}, got {result}",
         );
         test_utils::result_assert_eq(exp_result, result, &result_string)?;
 
@@ -366,10 +362,7 @@ fn test_select_args_common(
             let elapsed = instant_before.elapsed();
             test_utils::result_assert(
                 elapsed >= timeout,
-                &format!(
-                    "No events with timeout of {:?}, but only {:?} elapsed",
-                    timeout, elapsed
-                ),
+                &format!("No events with timeout of {timeout:?}, but only {elapsed:?} elapsed"),
             )?;
         }
 
@@ -394,17 +387,10 @@ fn get_select_args_test(
     exp_error: libc::c_int,
 ) -> test_utils::ShadowTest<(), String> {
     let test_name = format!(
-        "test_select_args\n\t<fn={:?},readfds_null={},writefds_null={},exceptfds_null={},fd_is_set={},fd_inval={},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={}>",
-        select_fn,
-        readfds_null,
-        writefds_null,
-        exceptfds_null,
-        fd_is_set,
-        fd_inval,
-        timeout,
-        nfds,
-        exp_result,
-        exp_error
+        "test_select_args\n\t<fn={select_fn:?},readfds_null={readfds_null},\
+        writefds_null={writefds_null},exceptfds_null={exceptfds_null},fd_is_set={fd_is_set}\
+        ,fd_inval={fd_inval},timeout={timeout:?},nfds={nfds}>\n\t-> <exp_result={exp_result},\
+        exp_errno={exp_error}>",
     );
     test_utils::ShadowTest::new(
         &test_name,

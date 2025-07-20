@@ -34,7 +34,7 @@ impl SyscallHandler {
         /* fd */ std::ffi::c_int,
     );
     pub fn close(ctx: &mut SyscallContext, fd: std::ffi::c_int) -> Result<(), SyscallError> {
-        trace!("Trying to close fd {}", fd);
+        trace!("Trying to close fd {fd}");
 
         let fd = fd.try_into().or(Err(linux_api::errno::Errno::EBADF))?;
 

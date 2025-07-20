@@ -588,10 +588,7 @@ impl InitialState {
 
         // get the netlink address
         let Some(addr) = addr.and_then(|x| x.as_netlink()) else {
-            log::warn!(
-                "Attempted to bind netlink socket to non-netlink address {:?}",
-                addr
-            );
+            log::warn!("Attempted to bind netlink socket to non-netlink address {addr:?}");
             return Err(Errno::EINVAL.into());
         };
 
@@ -635,12 +632,12 @@ impl InitialState {
             };
             // Sending to non-kernel address is not supported
             if addr.pid() != 0 {
-                log::warn!("Attempted to send to non-kernel netlink address {:?}", addr);
+                log::warn!("Attempted to send to non-kernel netlink address {addr:?}");
                 return Err(Errno::EINVAL.into());
             }
             // Sending to groups is not supported
             if addr.groups() != 0 {
-                log::warn!("Attempted to send to netlink groups {:?}", addr);
+                log::warn!("Attempted to send to netlink groups {addr:?}");
                 return Err(Errno::EINVAL.into());
             }
         }

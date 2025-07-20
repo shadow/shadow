@@ -210,7 +210,7 @@ impl MemoryCopier {
         assert_eq!(src.len(), dst.len());
 
         let towrite = src.len();
-        trace!("write_ptr writing {} bytes", towrite);
+        trace!("write_ptr writing {towrite} bytes");
         let local = [std::io::IoSlice::new(src)];
         let remote = [nix::sys::uio::RemoteIoVec {
             base: usize::from(dst.ptr()),

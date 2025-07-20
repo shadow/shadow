@@ -116,7 +116,7 @@ impl ShmFile {
 
     /// De-allocate space in the file for the given interval.
     fn dealloc(&self, interval: &Interval) {
-        trace!("dealloc {:?}", interval);
+        trace!("dealloc {interval:?}");
         rustix::fs::fallocate(
             &self.shm_file,
             FallocateFlags::PUNCH_HOLE | FallocateFlags::KEEP_SIZE,
@@ -327,7 +327,7 @@ impl Drop for MemoryMapper {
                 "MemoryManager misses: (consider extending MemoryManager to remap regions with a high miss count)"
             );
             for (path, count) in misses.iter() {
-                debug!("\t{} in {}", count, path);
+                debug!("\t{count} in {path}");
             }
         }
 
@@ -338,7 +338,7 @@ impl Drop for MemoryMapper {
             if let Mutation::Removed(interval, region) = m {
                 if !region.shadow_base.is_null() {
                     unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
-                        .unwrap_or_else(|e| warn!("munmap: {}", e));
+                        .unwrap_or_else(|e| warn!("munmap: {e}"));
                 }
             }
         }
@@ -462,7 +462,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe { linux_api::mman::munmap(region.shadow_base, removed_range.len()) }
-                        .unwrap_or_else(|e| warn!("munmap: {}", e));
+                        .unwrap_or_else(|e| warn!("munmap: {e}"));
 
                     // Adjust base
                     region.shadow_base = unsafe { region.shadow_base.add(removed_range.len()) };
@@ -484,7 +484,7 @@ impl MemoryMapper {
                             removed_range.len(),
                         )
                     }
-                    .unwrap_or_else(|e| warn!("munmap: {}", e));
+                    .unwrap_or_else(|e| warn!("munmap: {e}"));
                 }
                 Mutation::Split(_original, left, right) => {
                     let (_, left_region) = self.regions.get(left.start).unwrap();
@@ -505,7 +505,7 @@ impl MemoryMapper {
                             removed_range.len(),
                         )
                     }
-                    .unwrap_or_else(|e| warn!("munmap: {}", e));
+                    .unwrap_or_else(|e| warn!("munmap: {e}"));
 
                     // Adjust start of right region.
                     let (_, right_region) = self.regions.get_mut(right.start).unwrap();
@@ -522,7 +522,7 @@ impl MemoryMapper {
 
                     // Unmap range from Shadow's address space.
                     unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
-                        .unwrap_or_else(|e| warn!("munmap: {}", e));
+                        .unwrap_or_else(|e| warn!("munmap: {e}"));
                 }
             }
         }
@@ -571,7 +571,7 @@ impl MemoryMapper {
                     ctx.thread.native_pid().as_raw_nonzero().get(),
                     fd
                 ))
-                .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{}", fd))),
+                .unwrap_or_else(|_| PathBuf::from(format!("bad-fd-{fd}"))),
             ))
         };
         let mut region = Region {
@@ -610,7 +610,7 @@ impl MemoryMapper {
     /// Executes the actual mmap operation in the plugin, updates the MemoryManager's understanding of
     /// the plugin's address space, and unmaps the affected memory from Shadow if it was mapped in.
     pub fn handle_munmap_result(&mut self, addr: ForeignPtr<u8>, length: usize) {
-        trace!("handle_munmap_result({:?}, {})", addr, length);
+        trace!("handle_munmap_result({addr:?}, {length})");
         if length == 0 {
             return;
         }
@@ -716,7 +716,7 @@ impl MemoryMapper {
 
                 // Unmap the old location from Shadow.
                 unsafe { linux_api::mman::munmap(region.shadow_base, old_size) }
-                    .unwrap_or_else(|e| warn!("munmap: {}", e));
+                    .unwrap_or_else(|e| warn!("munmap: {e}"));
 
                 // Update the region metadata.
                 region.shadow_base = new_shadow_base;
@@ -892,7 +892,7 @@ impl MemoryMapper {
         prot: ProtFlags,
     ) -> Result<(), Errno> {
         let (ctx, thread) = ctx.split_thread();
-        trace!("mprotect({:?}, {}, {:?})", addr, size, prot);
+        trace!("mprotect({addr:?}, {size}, {prot:?})");
         thread.native_mprotect(&ctx, addr, size, prot)?;
 
         // Update protections. We remove the affected range, and then update and re-insert affected
@@ -954,7 +954,7 @@ impl MemoryMapper {
                                 prot,
                             )
                         }
-                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
+                        .unwrap_or_else(|e| warn!("mprotect: {e}"));
                     }
                     assert!(
                         self.regions
@@ -982,7 +982,7 @@ impl MemoryMapper {
                                 prot,
                             )
                         }
-                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
+                        .unwrap_or_else(|e| warn!("mprotect: {e}"));
                     }
                     assert!(
                         self.regions
@@ -1000,7 +1000,7 @@ impl MemoryMapper {
                                 prot,
                             )
                         }
-                        .unwrap_or_else(|e| warn!("mprotect: {}", e));
+                        .unwrap_or_else(|e| warn!("mprotect: {e}"));
                     }
                     assert!(
                         self.regions
@@ -1023,7 +1023,7 @@ impl MemoryMapper {
             // behavior in Rust.  Instead of accessing such pointers directly,
             // we fall back the memory *copier*, which will use a safely aligned
             // intermediate buffer.
-            trace!("Can't map unaligned pointer {:?}", src);
+            trace!("Can't map unaligned pointer {src:?}");
             return None;
         }
 
@@ -1031,13 +1031,13 @@ impl MemoryMapper {
             Some((i, r)) => (i, r),
             None => {
                 if !src.ptr().is_null() {
-                    warn!("src {:?} isn't in any mapped region", src);
+                    warn!("src {src:?} isn't in any mapped region");
                 }
                 return None;
             }
         };
         let shadow_base = if region.shadow_base.is_null() {
-            trace!("src {:?} isn't mapped into Shadow", src);
+            trace!("src {src:?} isn't mapped into Shadow");
             return None;
         } else {
             region.shadow_base
@@ -1045,10 +1045,7 @@ impl MemoryMapper {
 
         if !interval.contains(&(usize::from(src.slice(src.len()..src.len()).ptr()) - 1)) {
             // End isn't in the region.
-            trace!(
-                "src {:?} mapped into Shadow, but extends beyond mapped region.",
-                src
-            );
+            trace!("src {src:?} mapped into Shadow, but extends beyond mapped region.");
             return None;
         }
 
@@ -1086,7 +1083,7 @@ impl MemoryMapper {
     /// Counts accesses where we had to fall back to the thread's (slow) apis.
     fn inc_misses<T: Pod>(&self, src: ForeignArrayPtr<T>) {
         let key = match self.regions.get(usize::from(src.ptr())) {
-            Some((_, original_path)) => format!("{:?}", original_path),
+            Some((_, original_path)) => format!("{original_path:?}"),
             None => "not found".to_string(),
         };
         let mut misses = self.misses_by_path.borrow_mut();

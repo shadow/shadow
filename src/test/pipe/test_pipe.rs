@@ -316,7 +316,7 @@ fn test_large_read_write() -> Result<(), String> {
                 },
                 &[]
             )?;
-            println!("Wrote {}", rv);
+            println!("Wrote {rv}");
             bytes_written += rv as usize;
 
             let read_slice = &mut read_buf[bytes_read..];
@@ -327,7 +327,7 @@ fn test_large_read_write() -> Result<(), String> {
                 },
                 &[]
             )?;
-            println!("Read {}", rv);
+            println!("Read {rv}");
             let range_read = bytes_read..bytes_read + rv as usize;
             assert_eq!(read_buf[range_read.clone()], write_buf[range_read]);
             bytes_read += rv as usize;
@@ -1198,7 +1198,7 @@ fn test_close_during_blocking_write() -> Result<(), String> {
             match nix::unistd::read(read_fd, &mut buf) {
                 Ok(0) => break,
                 Ok(x) => assert!(x > 0),
-                Err(e) => panic!("Unexpected error {}", e),
+                Err(e) => panic!("Unexpected error {e}"),
             }
         }
         nix::unistd::close(read_fd).unwrap();
@@ -1210,7 +1210,7 @@ fn test_close_during_blocking_write() -> Result<(), String> {
             // linux will only write in 789 byte chuncks, but shadow might write fewer
             Ok(n) => assert!(n > 0 && n <= 789),
             Err(nix::errno::Errno::EBADF) => break,
-            Err(e) => panic!("Unexpected error {}", e),
+            Err(e) => panic!("Unexpected error {e}"),
         }
     }
 

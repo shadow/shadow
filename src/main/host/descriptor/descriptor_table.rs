@@ -49,7 +49,7 @@ impl DescriptorTable {
             // Un-borrow from `available_indices`.
             let idx = *idx;
             // Take from `available_indices`
-            trace!("Reusing available index {}", idx);
+            trace!("Reusing available index {idx}");
             self.available_indices.remove(&idx);
             idx
         } else {
@@ -72,7 +72,7 @@ impl DescriptorTable {
                 .descriptors
                 .contains_key(&DescriptorHandle::new(idx).unwrap())
             {
-                trace!("Skipping past in-use index {}", idx);
+                trace!("Skipping past in-use index {idx}");
 
                 // Check if the next index is out of range.
                 if idx >= FD_MAX {
@@ -88,14 +88,14 @@ impl DescriptorTable {
             }
 
             // Take the next index.
-            trace!("Using index {}", idx);
+            trace!("Using index {idx}");
             idx
         };
 
         let idx = DescriptorHandle::new(idx).unwrap();
 
         let prev = self.descriptors.insert(idx, descriptor);
-        assert!(prev.is_none(), "Already a descriptor at {}", idx);
+        assert!(prev.is_none(), "Already a descriptor at {idx}");
 
         Ok(idx)
     }
@@ -138,9 +138,9 @@ impl DescriptorTable {
         let prev = self.descriptors.insert(index, descriptor);
 
         if prev.is_some() {
-            trace!("Overwriting index {}", index);
+            trace!("Overwriting index {index}");
         } else {
-            trace!("Setting to unused index {}", index);
+            trace!("Setting to unused index {index}");
         }
 
         prev

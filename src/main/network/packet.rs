@@ -1246,8 +1246,7 @@ mod export {
         if let Err(e) = mem.copy_from_ptr(&mut dst[..], src) {
             // Panic because the packet data will be corrupt (not what the application wrote).
             panic!(
-                "Couldn't read managed process memory at {:?} into packet payload at {:?}: {:?}",
-                src, dst, e
+                "Couldn't read managed process memory at {src:?} into packet payload at {dst:?}: {e:?}"
             );
         }
 
@@ -1315,9 +1314,7 @@ mod export {
 
             if let Err(e) = dst_writer.write_all(&bytes[start..end]) {
                 log::warn!(
-                    "Couldn't write managed process memory at {:?} from packet payload: {:?}",
-                    dst,
-                    e
+                    "Couldn't write managed process memory at {dst:?} from packet payload: {e:?}"
                 );
                 // TODO: can we get memmgr errno here like we can with `copy_from_ptr()`?
                 return linux_api::errno::Errno::EFAULT.to_negated_i64();
@@ -1331,10 +1328,7 @@ mod export {
 
         if tot_written > 0 {
             if let Err(e) = dst_writer.flush() {
-                log::warn!(
-                    "Couldn't flush managed process writes from packet payload: {:?}",
-                    e
-                );
+                log::warn!("Couldn't flush managed process writes from packet payload: {e:?}");
                 // TODO: can we get memmgr errno here like we can with `copy_from_ptr()`?
                 return linux_api::errno::Errno::EFAULT.to_negated_i64();
             }

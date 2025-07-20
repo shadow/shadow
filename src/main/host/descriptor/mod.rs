@@ -988,7 +988,7 @@ mod tests {
             // Compare their debug strings instead.
             let orig_debug = format!("{:?}", &val);
             let roundtripped = SyscallResult::from(SyscallReturn::from(val));
-            let roundtripped_debug = format!("{:?}", roundtripped);
+            let roundtripped_debug = format!("{roundtripped:?}");
             assert_eq!(orig_debug, roundtripped_debug);
         }
     }
@@ -1023,7 +1023,7 @@ mod tests {
             // strings instead.
             let orig_debug = format!("{:?}", &val);
             let roundtripped = SyscallReturn::from(SyscallResult::from(val));
-            let roundtripped_debug = format!("{:?}", roundtripped);
+            let roundtripped_debug = format!("{roundtripped:?}");
             assert_eq!(orig_debug, roundtripped_debug);
         }
     }

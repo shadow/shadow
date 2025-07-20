@@ -79,7 +79,7 @@ where
 
         match test.run() {
             Err(failure) => {
-                println!(" ✗ ({})", failure);
+                println!(" ✗ ({failure})");
                 if !summarize {
                     return Err(failure);
                 }
@@ -141,7 +141,7 @@ where
     if a == b {
         Ok(())
     } else {
-        Err(format!("{:?} != {:?} -- {}", a, b, message))
+        Err(format!("{a:?} != {b:?} -- {message}"))
     }
 }
 
@@ -153,7 +153,7 @@ where
     if a != b {
         Ok(())
     } else {
-        Err(format!("{:?} == {:?} -- {}", a, b, message))
+        Err(format!("{a:?} == {b:?} -- {message}"))
     }
 }
 
@@ -165,7 +165,7 @@ where
     if a < b {
         Ok(())
     } else {
-        Err(format!("!({:?} < {:?}) -- {}", a, b, message))
+        Err(format!("!({a:?} < {b:?}) -- {message}"))
     }
 }
 
@@ -177,7 +177,7 @@ where
     if a > b {
         Ok(())
     } else {
-        Err(format!("!({:?} > {:?}) -- {}", a, b, message))
+        Err(format!("!({a:?} > {b:?}) -- {message}"))
     }
 }
 
@@ -191,7 +191,7 @@ where
 
     for fd in fds.into_iter() {
         let rv_close = unsafe { libc::close(*fd) };
-        assert_eq!(rv_close, 0, "Could not close fd {}", fd);
+        assert_eq!(rv_close, 0, "Could not close fd {fd}");
     }
 
     rv
@@ -271,8 +271,7 @@ where
         // if we expect the system call to return an error (rv should be -1)
         if rv != (-1).into() {
             return Err(format!(
-                "Expecting a return value of -1, received {} [line {}]",
-                rv, line
+                "Expecting a return value of -1, received {rv} [line {line}]",
             ));
         }
         if !expected_errnos.contains(&errno) {

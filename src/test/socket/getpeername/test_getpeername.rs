@@ -67,7 +67,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
     for &domain in domains.iter() {
         // add details to the test names to avoid duplicates
-        let append_args = |s| format!("{} <domain={:?}>", s, domain);
+        let append_args = |s| format!("{s} <domain={domain:?}>");
 
         // only inet/inet6 dgram sockets can be connected to a non-existent address
         if [libc::AF_INET, libc::AF_INET6].contains(&domain) {
@@ -86,7 +86,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={:?}, sock_type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain:?}, sock_type={sock_type}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -139,8 +139,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args =
-                |s| format!("{} <init_method={:?}, sock_type={}>", s, method, sock_type);
+            let append_args = |s| format!("{s} <init_method={method:?}, sock_type={sock_type}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -995,7 +994,7 @@ fn check_getpeername_call(
         // if we expect the socket() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

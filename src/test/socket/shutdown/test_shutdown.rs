@@ -66,12 +66,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
             for &flag in flags.iter() {
                 for &how in hows.iter() {
                     // add details to the test names to avoid duplicates
-                    let append_args = |s| {
-                        format!(
-                            "{} <domain={},type={},flag={},how={}>",
-                            s, domain, sock_type, flag, how
-                        )
-                    };
+                    let append_args =
+                        |s| format!("{s} <domain={domain},type={sock_type},flag={flag},how={how}>");
 
                     let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
                         test_utils::ShadowTest::new(
@@ -144,7 +140,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &domain in domains.iter() {
         for &flag in flags.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},flag={}>", s, domain, flag);
+            let append_args = |s| format!("{s} <domain={domain},flag={flag}>");
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_tcp_fin_correctness"),

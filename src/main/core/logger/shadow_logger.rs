@@ -168,7 +168,7 @@ impl ShadowLogger {
                     // Flush
                     self.flush_records(None).unwrap();
                 }
-                Err(e) => panic!("Unexpected error {}", e),
+                Err(e) => panic!("Unexpected error {e}"),
             }
         }
     }
@@ -236,8 +236,7 @@ impl ShadowLogger {
             done_sender.send(()).unwrap_or_else(|e| {
                 println!(
                     "WARNING: Logger couldn't notify
-                calling thread: {:?}",
-                    e
+                calling thread: {e:?}",
                 )
             });
         }
@@ -305,14 +304,11 @@ impl ShadowLogger {
                     .unwrap()
                     .send(cmd)
                     .unwrap_or_else(|e| {
-                        println!("WARNING: Couldn't send command to logger thread: {:?}", e);
+                        println!("WARNING: Couldn't send command to logger thread: {e:?}");
                     });
             })
             .unwrap_or_else(|e| {
-                println!(
-                    "WARNING: Couldn't get sender channel to logger thread: {:?}",
-                    e
-                );
+                println!("WARNING: Couldn't get sender channel to logger thread: {e:?}");
             });
     }
 }
@@ -448,7 +444,7 @@ impl std::fmt::Display for ShadowLogRecord {
                 .unwrap_or("n/a"),
         )?;
         if let Some(line) = self.line {
-            write!(f, "{line}", line = line)?;
+            write!(f, "{line}")?;
         } else {
             write!(f, "n/a")?;
         }

@@ -81,7 +81,7 @@ fn test_pipe() -> Result<(), String> {
         read_poll.revents = 0;
         ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         if ready != 1 {
-            return Err(format!("error: poll returned {} instead of 1", ready));
+            return Err(format!("error: poll returned {ready} instead of 1"));
         }
 
         if read_poll.revents & libc::POLLIN == 0 {
@@ -145,7 +145,7 @@ fn test_regular_file() -> Result<(), String> {
         };
         let ready = unsafe { libc::poll(std::ptr::from_mut(&mut read_poll), 1, 100) };
         if ready != 1 {
-            return Err(format!("error: poll returned {} instead of 1", ready));
+            return Err(format!("error: poll returned {ready} instead of 1"));
         }
 
         if read_poll.revents & libc::POLLIN == 0 {
@@ -252,8 +252,7 @@ fn test_poll_args_common(
         drop(interruptor);
 
         let ready_string = format!(
-            "{:?} returned an unexpected result: expected {}, got {}",
-            poll_fn, exp_result, ready
+            "{poll_fn:?} returned an unexpected result: expected {exp_result}, got {ready}",
         );
         test_utils::result_assert_eq(exp_result, ready, &ready_string)?;
 
@@ -269,10 +268,7 @@ fn test_poll_args_common(
             let elapsed = instant_before.elapsed();
             test_utils::result_assert(
                 elapsed >= timeout,
-                &format!(
-                    "No events with timeout of {:?}, but only {:?} elapsed",
-                    timeout, elapsed
-                ),
+                &format!("No events with timeout of {timeout:?}, but only {elapsed:?} elapsed"),
             )?;
         }
 
@@ -293,17 +289,9 @@ fn get_poll_args_test(
     exp_revents: i16,
 ) -> test_utils::ShadowTest<(), String> {
     let test_name = format!(
-        "test_poll_args\n\t<fn={:?},pfd_null={},fd_inval={},events={},signal_time={:?},timeout={:?},nfds={}>\n\t-> <exp_result={},exp_errno={},exp_revents={}>",
-        poll_fn,
-        pfd_null,
-        fd_inval,
-        events,
-        signal_time,
-        timeout,
-        nfds,
-        exp_result,
-        exp_error,
-        exp_revents
+        "test_poll_args\n\t<fn={poll_fn:?},pfd_null={pfd_null},fd_inval={fd_inval},\
+        events={events},signal_time={signal_time:?},timeout={timeout:?},nfds={nfds}>\n\t-> \
+        <exp_result={exp_result},exp_errno={exp_error},exp_revents={exp_revents}>",
     );
     test_utils::ShadowTest::new(
         &test_name,

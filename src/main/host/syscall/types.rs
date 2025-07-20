@@ -207,7 +207,7 @@ impl From<std::io::Error> for SyscallError {
             }),
             None => {
                 let default = Errno::ENOTSUP;
-                warn!("Mapping error {} to {}", e, default);
+                warn!("Mapping error {e} to {default}");
                 SyscallError::from(default)
             }
         }
@@ -370,7 +370,7 @@ mod export {
     ) -> *mut SyscallReturnBlocked {
         let scr = unsafe { scr.as_mut().unwrap() };
         let SyscallReturn::Block(b) = scr else {
-            panic!("Unexpected scr {:?}", scr);
+            panic!("Unexpected scr {scr:?}");
         };
         b
     }
@@ -381,7 +381,7 @@ mod export {
     ) -> *mut SyscallReturnDone {
         let scr = unsafe { scr.as_mut().unwrap() };
         let SyscallReturn::Done(d) = scr else {
-            panic!("Unexpected scr {:?}", scr);
+            panic!("Unexpected scr {scr:?}");
         };
         d
     }

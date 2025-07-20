@@ -10,7 +10,7 @@ fn main() {
         match nix::unistd::write(write_fd, &buffer) {
             Ok(_) => (),
             Err(nix::errno::Errno::EWOULDBLOCK) => break,
-            Err(e) => panic!("Unexpected result: {}", e),
+            Err(e) => panic!("Unexpected result: {e}"),
         }
     }
 

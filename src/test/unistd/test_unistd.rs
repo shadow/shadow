@@ -30,7 +30,7 @@ fn main() {
     let argv: Vec<CString> = std::env::args()
         .map(|x| CString::new(x.as_bytes()).unwrap())
         .collect();
-    println!("{:?}", argv);
+    println!("{argv:?}");
 
     if argv.len() < 6 {
         eprintln!(

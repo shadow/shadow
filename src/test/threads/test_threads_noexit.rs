@@ -17,6 +17,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // The shadow tests should never get here, but including it for completion.
     child.join().unwrap();
-    println!("Threads exiting normally after {} seconds", NUM_SECONDS);
+    println!("Threads exiting normally after {NUM_SECONDS} seconds");
     Ok(())
 }

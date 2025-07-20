@@ -131,10 +131,7 @@ impl ManagedThread {
             })
         };
 
-        trace!(
-            "waiting for start event from shim with native pid {:?}",
-            native_pid
-        );
+        trace!("waiting for start event from shim with native pid {native_pid:?}");
         let start_req = ipc_shmem.from_plugin().receive().unwrap();
         match &start_req {
             ShimEventToShadow::StartReq(_) => {
@@ -386,10 +383,7 @@ impl ManagedThread {
         let child_native_tid = Pid::from_raw(libc::pid_t::from(clone_res)).unwrap();
         trace!("native clone treated tid {child_native_tid:?}");
 
-        trace!(
-            "waiting for start event from shim with native tid {:?}",
-            child_native_tid
-        );
+        trace!("waiting for start event from shim with native tid {child_native_tid:?}");
         let start_req = child_ipc_shmem.from_plugin().receive().unwrap();
         match &start_req {
             ShimEventToShadow::StartReq(_) => (),
@@ -511,7 +505,7 @@ impl ManagedThread {
                     break;
                 }
                 Err(e) => {
-                    error!("Unexpected tgkill error: {:?}", e);
+                    error!("Unexpected tgkill error: {e:?}");
                     break;
                 }
                 Ok(()) if native_pid == native_tid => {

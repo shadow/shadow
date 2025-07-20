@@ -70,11 +70,7 @@ impl<'a> Manager<'a> {
         // get the system's CPU frequency
         let raw_frequency = get_raw_cpu_frequency_hz().unwrap_or_else(|e| {
             let default_freq = 2_500_000_000; // 2.5 GHz
-            log::debug!(
-                "Failed to get raw CPU frequency, using {} Hz instead: {}",
-                default_freq,
-                e
-            );
+            log::debug!("Failed to get raw CPU frequency, using {default_freq} Hz instead: {e}");
             default_freq
         });
 
@@ -367,7 +363,7 @@ impl<'a> Manager<'a> {
         // should have either all `Some` values, or all `None` values
         let cpus: Vec<Option<u32>> = cpu_iter.take(parallelism).collect();
         if cpus[0].is_some() {
-            log::debug!("Pinning to cpus: {:?}", cpus);
+            log::debug!("Pinning to cpus: {cpus:?}");
             assert!(cpus.iter().all(|x| x.is_some()));
         } else {
             log::debug!("Not pinning to CPUs");
@@ -595,8 +591,8 @@ impl<'a> Manager<'a> {
             if self.config.experimental.use_object_counters.unwrap() {
                 let alloc_counts = stats.alloc_counts.lock().unwrap();
                 let dealloc_counts = stats.dealloc_counts.lock().unwrap();
-                log::info!("Global allocated object counts: {}", alloc_counts);
-                log::info!("Global deallocated object counts: {}", dealloc_counts);
+                log::info!("Global allocated object counts: {alloc_counts}");
+                log::info!("Global deallocated object counts: {dealloc_counts}");
 
                 if *alloc_counts == *dealloc_counts {
                     log::info!("We allocated and deallocated the same number of objects :)");
@@ -722,7 +718,7 @@ impl<'a> Manager<'a> {
         let mut resources: libc::rusage = unsafe { std::mem::zeroed() };
         if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut resources) } != 0 {
             let err = nix::errno::Errno::last();
-            log::warn!("Unable to get shadow's resource usage: {}", err);
+            log::warn!("Unable to get shadow's resource usage: {err}");
             return;
         }
 

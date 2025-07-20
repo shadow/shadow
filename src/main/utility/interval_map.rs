@@ -304,14 +304,14 @@ mod tests {
         for i in m.keys() {
             // TODO: support empty interval keys?
             if i.start >= i.end {
-                return Err(format!("Invalid interval {:?}", i));
+                return Err(format!("Invalid interval {i:?}"));
             }
         }
 
         // Intervals don't overlap
         for (i1, i2) in m.keys().zip(m.keys().skip(1)) {
             if i1.end > i2.start {
-                return Err(format!("Overlapping intervals {:?} and {:?}", i1, i2));
+                return Err(format!("Overlapping intervals {i1:?} and {i2:?}"));
             }
         }
 
@@ -335,8 +335,7 @@ mod tests {
         let new_len = m.keys().count();
         if new_len_sum < old_len_sum {
             return Err(format!(
-                "length-sum shrunk from {} to {}",
-                old_len_sum, new_len_sum
+                "length-sum shrunk from {old_len_sum} to {new_len_sum}"
             ));
         }
         if new_len_sum < (interval.end - interval.start) {
@@ -369,8 +368,7 @@ mod tests {
                 let mut m_clone = m.clone();
                 // Catch panics (failures) so that we can print the failing test case.
                 let res = std::panic::catch_unwind(move || {
-                    insert_and_sanity_check(&mut m_clone, start..end, &format!("{}.{}", i, j))
-                        .unwrap();
+                    insert_and_sanity_check(&mut m_clone, start..end, &format!("{i}.{j}")).unwrap();
                     m_clone
                 });
                 if res.is_err() {
@@ -579,7 +577,7 @@ mod tests {
 
         let new_len = interval_sum(m.keys());
         if new_len > old_len {
-            return Err(format!("new_len {} > old_len {}", new_len, old_len));
+            return Err(format!("new_len {new_len} > old_len {old_len}"));
         }
 
         Ok(mutations)
@@ -607,7 +605,7 @@ mod tests {
                     insert_and_sanity_check(
                         &mut m_clone,
                         insert_start..insert_end,
-                        &format!("{}.{}", i, j),
+                        &format!("{i}.{j}"),
                     )
                     .unwrap();
                     m_clone

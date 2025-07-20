@@ -30,7 +30,7 @@ impl std::fmt::Display for ThreadRetVal {
             ThreadRetVal::CondBroadcastFailed => "pthread_cond_broadcast failed",
             ThreadRetVal::NullThreadArg => "null thread argument",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 

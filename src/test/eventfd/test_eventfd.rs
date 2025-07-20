@@ -106,15 +106,12 @@ fn check_read_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         read(efd, &mut bytes).map_err(|e| e.to_string())? == 8,
-        &format!("Unable to read 8 bytes from eventfd {}", efd),
+        &format!("Unable to read 8 bytes from eventfd {efd}"),
     )?;
 
     test_utils::result_assert(
         u64::from_ne_bytes(bytes) == expected_val,
-        &format!(
-            "The value we read from the eventfd {} counter was incorrect",
-            efd
-        ),
+        &format!("The value we read from the eventfd {efd} counter was incorrect"),
     )?;
 
     Ok(())
@@ -127,15 +124,12 @@ fn check_readv_success(efd: RawFd, expected_val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         readv(efd, &mut iov).map_err(|e| e.to_string())? == 8,
-        &format!("Unable to read 8 bytes from eventfd {}", efd),
+        &format!("Unable to read 8 bytes from eventfd {efd}"),
     )?;
 
     test_utils::result_assert(
         u64::from_ne_bytes(bytes) == expected_val,
-        &format!(
-            "The value we read from the eventfd {} counter was incorrect",
-            efd
-        ),
+        &format!("The value we read from the eventfd {efd} counter was incorrect"),
     )?;
 
     Ok(())
@@ -146,10 +140,7 @@ fn check_read_eagain(efd: RawFd) -> Result<(), String> {
 
     test_utils::result_assert(
         read(efd, &mut bytes) == Err(Errno::EAGAIN),
-        &format!(
-            "Reading empty counter did not block eventfd {} as expected",
-            efd
-        ),
+        &format!("Reading empty counter did not block eventfd {efd} as expected"),
     )?;
 
     Ok(())
@@ -162,10 +153,7 @@ fn check_readv_eagain(efd: RawFd) -> Result<(), String> {
 
     test_utils::result_assert(
         readv(efd, &mut iov) == Err(Errno::EAGAIN),
-        &format!(
-            "Reading empty counter did not block eventfd {} as expected",
-            efd
-        ),
+        &format!("Reading empty counter did not block eventfd {efd} as expected"),
     )?;
 
     Ok(())
@@ -176,7 +164,7 @@ fn check_write_success(efd: RawFd, val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         write(efd, &bytes).map_err(|e| e.to_string())? == 8,
-        &format!("Unable to write 8 bytes to eventfd {}", efd),
+        &format!("Unable to write 8 bytes to eventfd {efd}"),
     )?;
 
     Ok(())
@@ -188,7 +176,7 @@ fn check_writev_success(efd: RawFd, val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         writev(efd, &iov).map_err(|e| e.to_string())? == 8,
-        &format!("Unable to writev 8 bytes to eventfd {}", efd),
+        &format!("Unable to writev 8 bytes to eventfd {efd}"),
     )?;
 
     Ok(())
@@ -199,10 +187,7 @@ fn check_write_einval(efd: RawFd, val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         write(efd, &bytes) == Err(Errno::EINVAL),
-        &format!(
-            "Overflowing counter did not block eventfd {} as expected",
-            efd
-        ),
+        &format!("Overflowing counter did not block eventfd {efd} as expected"),
     )?;
 
     Ok(())
@@ -214,10 +199,7 @@ fn check_writev_einval(efd: RawFd, val: u64) -> Result<(), String> {
 
     test_utils::result_assert(
         writev(efd, &iov) == Err(Errno::EINVAL),
-        &format!(
-            "Overflowing counter did not block eventfd {} as expected",
-            efd
-        ),
+        &format!("Overflowing counter did not block eventfd {efd} as expected"),
     )?;
 
     Ok(())
@@ -345,7 +327,7 @@ fn test_eventfd_readv_writev_multiple_iovs() -> Result<(), String> {
         test_utils::result_assert_eq(
             readv(efd, &mut iov),
             Ok(8),
-            &format!("Unable to read 8 bytes from eventfd {}", efd),
+            &format!("Unable to read 8 bytes from eventfd {efd}"),
         )?;
 
         test_utils::result_assert_eq(

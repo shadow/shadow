@@ -89,10 +89,7 @@ impl NetworkInterface {
             }
         });
 
-        log::debug!(
-            "Bringing up network interface '{name}' at '{addr}' using {:?}",
-            qdisc
-        );
+        log::debug!("Bringing up network interface '{name}' at '{addr}' using {qdisc:?}");
 
         let queue_kind = match qdisc {
             // A packet fifo is realized using a min-heap over monitonically increasing priority
@@ -207,7 +204,7 @@ impl NetworkInterface {
                 packet.display_bytes(writer)
             }) {
                 // There was a non-recoverable error.
-                log::warn!("Unable to write packet to pcap output: {}", e);
+                log::warn!("Unable to write packet to pcap output: {e}");
                 log::warn!(
                     "Fatal pcap logging error; stopping pcap logging for interface '{}'.",
                     self.addr

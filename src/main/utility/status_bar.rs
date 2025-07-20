@@ -43,7 +43,7 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
             let rows = match tiocgwinsz() {
                 Ok(x) => x.ws_row,
                 Err(e) => {
-                    log::error!("Status bar ioctl failed ({}). Stopping the status bar.", e);
+                    log::error!("Status bar ioctl failed ({e}). Stopping the status bar.");
                     break;
                 }
             };
@@ -80,14 +80,8 @@ impl<T: 'static + StatusBarState> StatusBar<T> {
             std::thread::sleep(redraw_interval);
         }
 
-        let to_print = format!(
-            "{save_cursor}{last_line}{clear}{restore_scroll_region}{restore_cursor}",
-            save_cursor = SAVE_CURSOR,
-            last_line = LAST_LINE,
-            clear = CLEAR,
-            restore_scroll_region = RESTORE_SCROLL_REGION,
-            restore_cursor = RESTORE_CURSOR,
-        );
+        let to_print =
+            format!("{SAVE_CURSOR}{LAST_LINE}{CLEAR}{RESTORE_SCROLL_REGION}{RESTORE_CURSOR}");
 
         std::io::stderr().write_all(to_print.as_bytes()).unwrap();
         let _ = std::io::stderr().flush();
@@ -109,7 +103,7 @@ impl<T: 'static + StatusBarState> std::ops::Drop for StatusBar<T> {
             .swap(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(handle) = self.thread.take() {
             if let Err(e) = handle.join() {
-                log::warn!("Progress bar thread did not exit cleanly: {:?}", e);
+                log::warn!("Progress bar thread did not exit cleanly: {e:?}");
             }
         }
     }
@@ -172,7 +166,7 @@ impl<T: 'static + StatusBarState> std::ops::Drop for StatusPrinter<T> {
         self.stop_sender.take();
         if let Some(handle) = self.thread.take() {
             if let Err(e) = handle.join() {
-                log::warn!("Progress thread did not exit cleanly: {:?}", e);
+                log::warn!("Progress thread did not exit cleanly: {e:?}");
             }
         }
     }

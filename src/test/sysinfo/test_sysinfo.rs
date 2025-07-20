@@ -8,7 +8,7 @@ fn main() {
     let info_ptr = &mut info as *mut libc::sysinfo;
     let rv = unsafe { libc::sysinfo(info_ptr) };
 
-    println!("Found return value {:?}.", rv);
+    println!("Found return value {rv:?}.");
     assert_eq!(rv, 0);
     println!("Found uptime {:?}.", info.uptime);
     assert!(info.uptime > 0);

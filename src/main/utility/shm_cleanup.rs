@@ -13,10 +13,10 @@ const SHADOW_SHM_FILE_PREFIX: &str = "shadow_shmemfile";
 // Get the paths from the given directory path.
 fn get_dir_contents(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     fs::read_dir(dir)
-        .context(format!("Reading all directory entries from {:?}", dir))?
+        .context(format!("Reading all directory entries from {dir:?}"))?
         .map(|entry| {
             Ok(entry
-                .context(format!("Reading a directory entry from {:?}", dir))?
+                .context(format!("Reading a directory entry from {dir:?}"))?
                 .path())
         })
         .collect()
@@ -56,12 +56,10 @@ fn get_running_pid_set(dir_path: &Path) -> anyhow::Result<HashSet<i32>> {
 // `shadow_shmemfile_6379761.950298775-2738869`
 fn pid_from_shadow_shm_file_name(file_name: &str) -> anyhow::Result<i32> {
     let pid_str = file_name.split('-').next_back().context(format!(
-        "Parsing PID separator '-' from shm file name {:?}",
-        file_name
+        "Parsing PID separator '-' from shm file name {file_name:?}",
     ))?;
     let pid = i32::from_str(pid_str).context(format!(
-        "Parsing PID '{}' from shm file name {:?}",
-        pid_str, file_name
+        "Parsing PID '{pid_str}' from shm file name {file_name:?}",
     ))?;
     Ok(pid)
 }
@@ -95,11 +93,7 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
             let creator_pid = match pid_from_shadow_shm_file_name(&file_name.to_string_lossy()) {
                 Ok(pid) => pid,
                 Err(e) => {
-                    log::warn!(
-                        "Unable to parse PID from shared memory file {:?}: {:?}",
-                        path,
-                        e
-                    );
+                    log::warn!("Unable to parse PID from shared memory file {path:?}: {e:?}");
                     // Keep going to try the rest of the paths we found.
                     continue;
                 }
@@ -107,7 +101,7 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
 
             // Do not remove the file if it's owner process is still running.
             if !running_pids.contains(&creator_pid) {
-                log::trace!("Removing orphaned shared memory file {:?}", path);
+                log::trace!("Removing orphaned shared memory file {path:?}");
                 if fs::remove_file(path).is_ok() {
                     num_removed += 1;
                 }
@@ -115,7 +109,7 @@ pub fn shm_cleanup(shm_dir: impl AsRef<Path>) -> anyhow::Result<u32> {
         }
     }
 
-    log::debug!("Removed {} total shared memory files.", num_removed);
+    log::debug!("Removed {num_removed} total shared memory files.");
     Ok(num_removed)
 }
 

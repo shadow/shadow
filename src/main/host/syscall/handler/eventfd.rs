@@ -48,7 +48,7 @@ impl SyscallHandler {
         let flags = match EfdFlags::from_bits(flags) {
             Some(x) => x,
             None => {
-                log::warn!("Invalid eventfd flags: {}", flags);
+                log::warn!("Invalid eventfd flags: {flags}");
                 return Err(Errno::EINVAL);
             }
         };
@@ -82,7 +82,7 @@ impl SyscallHandler {
             .register_descriptor(desc)
             .or(Err(Errno::ENFILE))?;
 
-        log::trace!("eventfd() returning fd {}", fd);
+        log::trace!("eventfd() returning fd {fd}");
 
         Ok(fd)
     }

@@ -149,7 +149,7 @@ impl ChildPidWatcher {
                     // Just try again.
                     continue;
                 }
-                Err(e) => panic!("epoll_wait: {:?}", e),
+                Err(e) => panic!("epoll_wait: {e:?}"),
             };
 
             // We hold the lock the whole time we're processing events. While it'd
@@ -176,9 +176,9 @@ impl ChildPidWatcher {
             let res = rustix::io::read(&inner.command_notifier, &mut buf);
             debug_assert!(match res {
                 Ok(8) => true,
-                Ok(i) => panic!("Unexpected read size {}", i),
+                Ok(i) => panic!("Unexpected read size {i}"),
                 Err(rustix::io::Errno::AGAIN) => true,
-                Err(e) => panic!("Unexpected error {:?}", e),
+                Err(e) => panic!("Unexpected error {e:?}"),
             });
             // Run commands
             std::mem::swap(&mut commands, &mut inner.commands);

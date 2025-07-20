@@ -42,10 +42,7 @@ impl TokenBucket {
     ) -> Option<TokenBucket> {
         if capacity > 0 && refill_increment > 0 && !refill_interval.is_zero() {
             log::trace!(
-                "Initializing token bucket with capacity {}, will refill {} tokens every {:?}",
-                capacity,
-                refill_increment,
-                refill_interval
+                "Initializing token bucket with capacity {capacity}, will refill {refill_increment} tokens every {refill_interval:?}"
             );
             Some(TokenBucket {
                 capacity,

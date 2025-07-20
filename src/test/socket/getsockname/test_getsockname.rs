@@ -73,7 +73,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={:?}, sock_type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain:?}, sock_type={sock_type}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -133,8 +133,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args =
-                |s| format!("{} <init_method={:?}, sock_type={}>", s, method, sock_type);
+            let append_args = |s| format!("{s} <init_method={method:?}, sock_type={sock_type}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -914,7 +913,7 @@ fn check_getsockname_call(
         // if we expect the socket() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

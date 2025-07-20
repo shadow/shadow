@@ -264,7 +264,7 @@ impl<T> SelfContainedChannel<T> {
                     state = updated_state;
                     continue;
                 }
-                Err(e) => panic!("Unexpected futex error {:?}", e),
+                Err(e) => panic!("Unexpected futex error {e:?}"),
             };
         }
         self.state
