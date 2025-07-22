@@ -22,10 +22,9 @@ message(STATUS "System name: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "System version: ${CMAKE_SYSTEM_VERSION}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 
-## building with support for C11 on platforms that default to C99 or C89
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+## NOTE: Prefer setting C compiler flags in `ShadowBuildCommon::cc_build`, since
+## then they will also be used when building code outside of cmake (such as when
+## running clippy).
 
 ## ensure unix environment (CMAKE_SYSTEM_NAME == "Linux")
 if((NOT UNIX) OR (NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux")))

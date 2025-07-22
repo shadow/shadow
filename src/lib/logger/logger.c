@@ -93,7 +93,7 @@ typedef struct {
     _Atomic LogLevel level;
 } StderrLogger;
 
-static void _stderrlogger_flush() {
+static void _stderrlogger_flush(Logger* logger) {
     fflush(stderr);
 }
 
