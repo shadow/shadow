@@ -587,7 +587,7 @@ impl<X: Dependencies> TcpStateTrait<X> for ListenState<X> {
             Err(child) => {
                 // the child is in a state that we can't return to the caller, so we messed up
                 // somewhere earlier
-                panic!("Unexpected child TCP state in accept queue: {:?}", child);
+                panic!("Unexpected child TCP state in accept queue: {child:?}");
             }
         };
 

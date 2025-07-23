@@ -172,6 +172,6 @@ mod tests {
             node = node_with_reference.upgrade_to_owned();
         }
 
-        println!("{:?}", node);
+        println!("{node:?}");
     }
 }

@@ -39,9 +39,7 @@ impl TryFrom<gml_parser::gml::Node<'_>> for ShadowNode {
                         .as_str()
                         .ok_or("Node 'host_bandwidth_down' is not a string")?
                         .parse()
-                        .map_err(|e| {
-                            format!("Node 'host_bandwidth_down' is not a valid unit: {}", e)
-                        })
+                        .map_err(|e| format!("Node 'host_bandwidth_down' is not a valid unit: {e}"))
                 })
                 .transpose()?,
             bandwidth_up: gml_node
@@ -52,7 +50,7 @@ impl TryFrom<gml_parser::gml::Node<'_>> for ShadowNode {
                         .as_str()
                         .ok_or("Node 'host_bandwidth_up' is not a string")?
                         .parse()
-                        .map_err(|e| format!("Node 'host_bandwidth_up' is not a valid unit: {}", e))
+                        .map_err(|e| format!("Node 'host_bandwidth_up' is not a valid unit: {e}"))
                 })
                 .transpose()?,
         })
@@ -83,13 +81,13 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
                 .as_str()
                 .ok_or("Edge 'latency' is not a string")?
                 .parse()
-                .map_err(|e| format!("Edge 'latency' is not a valid unit: {}", e))?,
+                .map_err(|e| format!("Edge 'latency' is not a valid unit: {e}"))?,
             jitter: match gml_edge.other.remove("jitter") {
                 Some(x) => x
                     .as_str()
                     .ok_or("Edge 'jitter' is not a string")?
                     .parse()
-                    .map_err(|e| format!("Edge 'jitter' is not a valid unit: {}", e))?,
+                    .map_err(|e| format!("Edge 'jitter' is not a valid unit: {e}"))?,
                 None => units::Time::new(0, units::TimePrefix::Milli),
             },
             packet_loss: match gml_edge.other.remove("packet_loss") {
@@ -265,13 +263,11 @@ impl NetworkGraph {
                 let mut edges = graph.edges_connecting(*src, *dst);
                 let edge = edges
                     .next()
-                    .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
+                    .ok_or(format!("No edge connecting node {src_id} to {dst_id}"))?;
                 if edges.count() != 0 {
-                    return Err(format!(
-                        "More than one edge connecting node {} to {}",
-                        src_id, dst_id
-                    )
-                    .into());
+                    return Err(
+                        format!("More than one edge connecting node {src_id} to {dst_id}").into(),
+                    );
                 }
                 Ok(edge.weight())
             }
@@ -279,13 +275,11 @@ impl NetworkGraph {
                 let mut edges = graph.edges_connecting(*src, *dst);
                 let edge = edges
                     .next()
-                    .ok_or(format!("No edge connecting node {} to {}", src_id, dst_id))?;
+                    .ok_or(format!("No edge connecting node {src_id} to {dst_id}"))?;
                 if edges.count() != 0 {
-                    return Err(format!(
-                        "More than one edge connecting node {} to {}",
-                        src_id, dst_id
-                    )
-                    .into());
+                    return Err(
+                        format!("More than one edge connecting node {src_id} to {dst_id}").into(),
+                    );
                 }
                 Ok(edge.weight())
             }
@@ -545,11 +539,10 @@ mod tests {
                 ]
                 edge [
                   source 1
-                  target {}
+                  target {id}
                   latency "1 ns"
                 ]
             ]"#,
-                id
             );
 
             if *id == 3 {

@@ -39,7 +39,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
         // `next()` should block until we've received a signal, or `signals_list` is closed and
         // `None` is returned
         if let Some(signal) = signals_list.forever().next() {
-            log::info!("Received signal {}. Flushing log and exiting", signal);
+            log::info!("Received signal {signal}. Flushing log and exiting");
             log::logger().flush();
             std::process::exit(1);
         }
@@ -92,13 +92,13 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
 
     // load the configuration yaml
     let config_file = load_config_file(&config_filename, true)
-        .with_context(|| format!("Failed to load configuration file {}", config_filename))?;
+        .with_context(|| format!("Failed to load configuration file {config_filename}"))?;
 
     // generate the final shadow configuration from the config file and cli options
     let shadow_config = ConfigOptions::new(config_file, options.clone());
 
     if options.show_config {
-        eprintln!("{:#?}", shadow_config);
+        eprintln!("{shadow_config:#?}");
         return Ok(());
     }
 
@@ -150,7 +150,7 @@ pub fn run_shadow(args: Vec<&OsStr>) -> anyhow::Result<()> {
 
     // before we run the simulation, clean up any orphaned shared memory
     if let Err(e) = shm_cleanup::shm_cleanup(shm_cleanup::SHM_DIR_PATH) {
-        log::warn!("Unable to clean up shared memory files: {:?}", e);
+        log::warn!("Unable to clean up shared memory files: {e:?}");
     }
 
     // save the platform data required for CPU pinning
@@ -256,7 +256,7 @@ fn write_build_info(mut w: impl std::io::Write) -> std::io::Result<()> {
         c::GLIB_MINOR_VERSION,
         c::GLIB_MICRO_VERSION,
     )?;
-    writeln!(w, "Built on {}", BUILD_TIMESTAMP)?;
+    writeln!(w, "Built on {BUILD_TIMESTAMP}")?;
     writeln!(
         w,
         "Built from git branch {}",
@@ -391,14 +391,8 @@ fn load_config_file(
 
 fn pause_for_gdb_attach() -> anyhow::Result<()> {
     let pid = nix::unistd::getpid();
-    log::info!(
-        "Pausing with SIGTSTP to enable debugger attachment (pid {})",
-        pid
-    );
-    eprintln!(
-        "** Pausing with SIGTSTP to enable debugger attachment (pid {})",
-        pid
-    );
+    log::info!("Pausing with SIGTSTP to enable debugger attachment (pid {pid})");
+    eprintln!("** Pausing with SIGTSTP to enable debugger attachment (pid {pid})");
 
     signal::raise(signal::Signal::SIGTSTP)?;
 
@@ -458,7 +452,7 @@ fn log_environment(args: Vec<&OsStr>) {
             "LD_PRELOAD" | "LD_STATIC_TLS_EXTRA" | "G_DEBUG" | "G_SLICE" => log::Level::Info,
             _ => log::Level::Trace,
         };
-        log::log!(level, "env: {:?}={:?}", key, value);
+        log::log!(level, "env: {key:?}={value:?}");
     }
 }
 
@@ -479,18 +473,18 @@ mod export {
         if let Err(e) = result {
             // log the full error, its context, and its backtrace if enabled
             if log::log_enabled!(log::Level::Error) {
-                for line in format!("{:?}", e).split('\n') {
-                    log::error!("{}", line);
+                for line in format!("{e:?}").split('\n') {
+                    log::error!("{line}");
                 }
                 log::logger().flush();
 
                 // print the short error
-                eprintln!("** Shadow did not complete successfully: {}", e);
+                eprintln!("** Shadow did not complete successfully: {e}");
                 eprintln!("**   {}", e.root_cause());
                 eprintln!("** See the log for details");
             } else {
                 // logging may not be configured yet, so print to stderr
-                eprintln!("{:?}", e);
+                eprintln!("{e:?}");
             }
 
             return 1;

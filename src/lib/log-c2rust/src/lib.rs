@@ -47,7 +47,7 @@ pub fn c_to_rust_log_level(level: logger::LogLevel) -> Option<log::Level> {
         logger::_LogLevel_LOGLEVEL_DEBUG => Some(Debug),
         logger::_LogLevel_LOGLEVEL_TRACE => Some(Trace),
         logger::_LogLevel_LOGLEVEL_UNSET => None,
-        _ => panic!("Unexpected log level {}", level),
+        _ => panic!("Unexpected log level {level}"),
     }
 }
 
@@ -93,7 +93,7 @@ pub unsafe extern "C-unwind" fn rustlogger_log(
             .line(Some(u32::try_from(line).unwrap()))
             // SAFETY: fn_name is statically allocated.
             .module_path_static(unsafe { optional_str(fn_name) })
-            .args(format_args!("{}", msgbuf))
+            .args(format_args!("{msgbuf}"))
             .build(),
     );
 }

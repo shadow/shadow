@@ -69,12 +69,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &domain in [libc::AF_INET, libc::AF_UNIX].iter() {
         for &(sock_type_1, sock_type_2) in &sock_type_combinations {
             // add details to the test names to avoid duplicates
-            let append_args = |s| {
-                format!(
-                    "{} <domain={},type_1={},type_2={}>",
-                    s, domain, sock_type_1, sock_type_2
-                )
-            };
+            let append_args =
+                |s| format!("{s} <domain={domain},type_1={sock_type_1},type_2={sock_type_2}>");
 
             // skip tests that use SOCK_SEQPACKET with INET sockets
             if domain == libc::AF_INET && [sock_type_1, sock_type_2].contains(&libc::SOCK_SEQPACKET)
@@ -95,8 +91,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+                let append_args = |s| format!("{s} <domain={domain},type={sock_type},flag={flag}>");
 
                 tests.extend(vec![
                     test_utils::ShadowTest::new(
@@ -136,7 +131,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+            let append_args = |s| format!("{s} <type={sock_type},flag={flag}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -352,7 +347,7 @@ fn test_all_ports_used() -> Result<(), String> {
                 addr_len: std::mem::size_of_val(&addr) as u32,
             };
 
-            check_bind_call(&args, None).map_err(|e| format!("port {}: {}", port, e))?;
+            check_bind_call(&args, None).map_err(|e| format!("port {port}: {e}"))?;
         }
 
         let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
@@ -383,7 +378,7 @@ fn test_all_ports_used() -> Result<(), String> {
 
     for fd in fds_used.into_iter() {
         let rv_close = unsafe { libc::close(fd) };
-        assert_eq!(rv_close, 0, "Could not close fd {}", fd);
+        assert_eq!(rv_close, 0, "Could not close fd {fd}");
     }
 
     rv
@@ -744,7 +739,7 @@ fn check_bind_call(
         // if we expect the socket() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

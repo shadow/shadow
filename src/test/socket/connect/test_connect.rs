@@ -82,7 +82,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM].iter() {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+            let append_args = |s| format!("{s} <type={sock_type},flag={flag}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -187,7 +187,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &sock_type in [libc::SOCK_STREAM].iter() {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+            let append_args = |s| format!("{s} <type={sock_type},flag={flag}>");
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_loopback_listening_connect"),
@@ -201,7 +201,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &sock_type in [libc::SOCK_STREAM, libc::SOCK_DGRAM, libc::SOCK_SEQPACKET].iter() {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+            let append_args = |s| format!("{s} <type={sock_type},flag={flag}>");
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_non_existent_path"),
@@ -221,8 +221,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         for &sock_type in sock_types.iter() {
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+                let append_args = |s| format!("{s} <domain={domain},type={sock_type},flag={flag}>");
 
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_af_unspec"),
@@ -241,12 +240,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain},type={sock_type}>");
 
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
-                let append_args =
-                    |s| format!("{} <domain={},type={},flag={}>", s, domain, sock_type, flag);
+                let append_args = |s| format!("{s} <domain={domain},type={sock_type},flag={flag}>");
 
                 tests.extend(vec![
                     test_utils::ShadowTest::new(
@@ -292,12 +290,8 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         for &sock_type in sock_types.iter() {
             for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
                 // add details to the test names to avoid duplicates
-                let append_args = |s| {
-                    format!(
-                        "{} <init_method={:?},type={},flag={}>",
-                        s, method, sock_type, flag
-                    )
-                };
+                let append_args =
+                    |s| format!("{s} <init_method={method:?},type={sock_type},flag={flag}>");
 
                 tests.extend(vec![test_utils::ShadowTest::new(
                     &append_args("test_af_unspec_after_connect"),
@@ -1295,7 +1289,7 @@ fn check_connect_call(
         // if we expect the connect() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

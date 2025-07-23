@@ -21,7 +21,7 @@ impl FromStr for Sharing {
         } else if s == "s" {
             Ok(Sharing::Shared)
         } else {
-            Err(format!("Bad sharing specifier {}", s).into())
+            Err(format!("Bad sharing specifier {s}").into())
         }
     }
 }
@@ -54,7 +54,7 @@ impl FromStr for MappingPath {
                         .unwrap()
                         .as_str()
                         .parse::<i32>()
-                        .map_err(|e| format!("Parsing thread id: {}", e))?,
+                        .map_err(|e| format!("Parsing thread id: {e}"))?,
                 ));
             }
             return Ok(match s {
@@ -67,7 +67,7 @@ impl FromStr for MappingPath {
                 _ => MappingPath::OtherSpecial(s.to_string()),
             });
         }
-        Err(format!("Couldn't parse '{}'", s).into())
+        Err(format!("Couldn't parse '{s}'").into())
     }
 }
 
@@ -96,7 +96,7 @@ where
 {
     match parse_fn(field) {
         Ok(res) => Ok(res),
-        Err(err) => Err(format!("Parsing {} '{}': {}", field_name, field, err)),
+        Err(err) => Err(format!("Parsing {field_name} '{field}': {err}")),
     }
 }
 
@@ -112,7 +112,7 @@ impl FromStr for Mapping {
 
         let caps = RE
             .captures(line)
-            .ok_or_else(|| format!("Didn't match regex: {}", line))?;
+            .ok_or_else(|| format!("Didn't match regex: {line}"))?;
 
         Ok(Mapping {
             begin: parse_field(caps.get(1).unwrap().as_str(), "begin", |s| {
@@ -126,7 +126,7 @@ impl FromStr for Mapping {
                 match s {
                     "r" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse read bit {}", s).into()),
+                    _ => return Err(format!("Couldn't parse read bit {s}").into()),
                 }
             },
             write: {
@@ -134,7 +134,7 @@ impl FromStr for Mapping {
                 match s {
                     "w" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse write bit {}", s).into()),
+                    _ => return Err(format!("Couldn't parse write bit {s}").into()),
                 }
             },
             execute: {
@@ -142,7 +142,7 @@ impl FromStr for Mapping {
                 match s {
                     "x" => true,
                     "-" => false,
-                    _ => return Err(format!("Couldn't parse execute bit {}", s).into()),
+                    _ => return Err(format!("Couldn't parse execute bit {s}").into()),
                 }
             },
             sharing: caps.get(6).unwrap().as_str().parse::<Sharing>()?,
@@ -171,7 +171,7 @@ impl FromStr for Mapping {
                 match s {
                     "" => false,
                     "(deleted)" => true,
-                    _ => return Err(format!("Couldn't parse trailing field '{}'", s).into()),
+                    _ => return Err(format!("Couldn't parse trailing field '{s}'").into()),
                 }
             },
         })
@@ -182,7 +182,7 @@ impl FromStr for Mapping {
 pub fn parse_file_contents(mappings: &str) -> Result<Vec<Mapping>, Box<dyn Error>> {
     let res: Result<Vec<_>, String> = mappings
         .lines()
-        .map(|line| Mapping::from_str(line).map_err(|e| format!("Parsing line: {}\n{}", line, e)))
+        .map(|line| Mapping::from_str(line).map_err(|e| format!("Parsing line: {line}\n{e}")))
         .collect();
     Ok(res?)
 }
@@ -192,7 +192,7 @@ pub fn mappings_for_pid(pid: libc::pid_t) -> Result<Vec<Mapping>, Box<dyn Error>
     use std::fs::File;
     use std::io::Read;
 
-    let mut file = File::open(format!("/proc/{}/maps", pid))?;
+    let mut file = File::open(format!("/proc/{pid}/maps"))?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     parse_file_contents(&contents)

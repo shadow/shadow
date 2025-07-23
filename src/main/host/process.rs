@@ -879,7 +879,7 @@ pub struct Process {
 
 fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     let Some(process) = host.process_borrow(pid) else {
-        debug!("Process {:?} no longer exists", pid);
+        debug!("Process {pid:?} no longer exists");
         return;
     };
     let process = process.borrow(host.root());
@@ -951,7 +951,7 @@ impl Process {
         strace_logging_options: Option<FmtOptions>,
         expected_final_state: ProcessFinalState,
     ) -> Result<RootedRc<RootedRefCell<Process>>, Errno> {
-        debug!("starting process '{:?}'", plugin_name);
+        debug!("starting process '{plugin_name:?}'");
 
         let main_thread_id = host.get_new_thread_id();
         let process_id = ProcessId::from(main_thread_id);
@@ -1046,7 +1046,7 @@ impl Process {
         let main_thread =
             Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id).unwrap();
 
-        debug!("process '{:?}' started", plugin_name);
+        debug!("process '{plugin_name:?}' started");
 
         if pause_for_debugging {
             // will block until logger output has been flushed
@@ -1068,7 +1068,7 @@ impl Process {
               \n** this task, and then typing \"fg\".\
               \n** If running GDB, resume Shadow by typing \"signal SIGCONT\"."
             );
-            eprintln!("{}", msg);
+            eprintln!("{msg}");
 
             rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::Tstp)
                 .unwrap();
@@ -1195,7 +1195,7 @@ impl Process {
             };
             let threads = runnable.threads.borrow();
             let Some(thread) = threads.get(&tid) else {
-                debug!("Thread {} no longer exists", tid);
+                debug!("Thread {tid} no longer exists");
                 return;
             };
             // Clone the thread reference, so that we don't hold a dynamically
@@ -1287,7 +1287,7 @@ impl Process {
                 runnable.native_pid().into(),
                 rustix::process::Signal::Kill,
             ) {
-                warn!("kill: {:?}", err);
+                warn!("kill: {err:?}");
             }
 
             #[cfg(feature = "perf_timers")]
@@ -1554,7 +1554,7 @@ impl Process {
                 (s, log::Level::Debug)
             }
         };
-        log::log!(log_level, "{}", main_result_string);
+        log::log!(log_level, "{main_result_string}");
 
         let zombie = ZombieProcess {
             common: runnable.into_common(),
@@ -1984,7 +1984,7 @@ mod export {
         match proc.memory_borrow().copy_from_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
-                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                trace!("Couldn't read {src:?} into {dst:?}: {e:?}");
                 e.to_negated_i32()
             }
         }
@@ -2005,7 +2005,7 @@ mod export {
         match proc.memory_borrow_mut().copy_to_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
-                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                trace!("Couldn't write {src:?} into {dst:?}: {e:?}");
                 e.to_negated_i32()
             }
         }

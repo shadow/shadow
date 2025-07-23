@@ -762,10 +762,7 @@ impl Host {
                 cpu.update_time(event.time());
                 let cpu_delay = cpu.delay();
                 if cpu_delay > SimulationTime::ZERO {
-                    trace!(
-                        "event blocked on CPU, rescheduled for {:?} from now",
-                        cpu_delay
-                    );
+                    trace!("event blocked on CPU, rescheduled for {cpu_delay:?} from now");
 
                     // reschedule the event after the CPU delay time
                     event.set_time(event.time() + cpu_delay);

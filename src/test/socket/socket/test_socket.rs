@@ -63,8 +63,8 @@ enum SocketFn {
 impl SocketFn {
     fn format(&self, args: &SocketArguments) -> String {
         match &self {
-            SocketFn::Socket => format!("socket({})", args),
-            SocketFn::Syscall => format!("syscall(SYS_socket, {})", args),
+            SocketFn::Socket => format!("socket({args})"),
+            SocketFn::Syscall => format!("syscall(SYS_socket, {args})"),
         }
     }
 }
@@ -352,7 +352,7 @@ where
             }
             // the test failed
             Err(err) => {
-                println!(" ✗ ({})", err);
+                println!(" ✗ ({err})");
                 fd = None;
                 // if not summarizing, should exit immediately
                 if !summarize {
@@ -363,12 +363,12 @@ where
 
         // check for duplicate fds
         if let Some(fd) = fd {
-            assert!(!used_fds.contains(&fd), "Duplicate fd returned: {}", fd);
+            assert!(!used_fds.contains(&fd), "Duplicate fd returned: {fd}");
             used_fds.insert(fd);
         }
     }
 
-    println!("Passed {}/{}", num_passed, num_performed);
+    println!("Passed {num_passed}/{num_performed}");
 
     if num_passed == num_performed {
         Ok(())
@@ -404,15 +404,14 @@ fn check_socket_call(
     // if we expect the socket creation to return an error
     let fd = if should_error {
         if rv != -1 {
-            return Err(format!("Expecting a return value of -1, received {}", rv));
+            return Err(format!("Expecting a return value of -1, received {rv}"));
         }
 
         None
     } else {
         if rv < 0 {
             return Err(format!(
-                "Expecting a non-negative return value, received {}",
-                rv
+                "Expecting a non-negative return value, received {rv}",
             ));
         }
 

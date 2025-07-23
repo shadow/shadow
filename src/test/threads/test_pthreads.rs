@@ -30,7 +30,7 @@ impl std::fmt::Display for ThreadRetVal {
             ThreadRetVal::CondBroadcastFailed => "pthread_cond_broadcast failed",
             ThreadRetVal::NullThreadArg => "null thread argument",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 
@@ -276,6 +276,7 @@ fn test_make_detached() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(clippy::manual_dangling_ptr)]
 extern "C" fn thread_return_one(_arg: *mut libc::c_void) -> *mut libc::c_void {
     1 as *mut libc::c_void
 }

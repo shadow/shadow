@@ -55,7 +55,7 @@ fn check_randomness(fracs: &[f64]) -> Result<(), String> {
 
     for f in fracs {
         let percent = (f * 100_f64) as u8;
-        assert!(percent <= 100, "invalid random percent value: {}", percent,);
+        assert!(percent <= 100, "invalid random percent value: {percent}");
         let j = percent as usize % BUCKETLEN;
         buckets[j] += 1;
     }
@@ -63,7 +63,7 @@ fn check_randomness(fracs: &[f64]) -> Result<(), String> {
     let fail = buckets.contains(&0);
     println!("bucket values:");
     for (i, val) in buckets.iter().enumerate() {
-        println!("bucket[{}] = {}", i, val);
+        println!("bucket[{i}] = {val}");
     }
 
     if fail {
@@ -77,7 +77,7 @@ fn test_path_helper(path: &str) -> Result<(), String> {
     use std::io::Read;
 
     let mut file =
-        std::fs::File::open(path).map_err(|e| format!("error: cannot open file: {:?}", e))?;
+        std::fs::File::open(path).map_err(|e| format!("error: cannot open file: {e:?}"))?;
 
     let mut values = [0_f64; RGENLEN];
 

@@ -240,10 +240,11 @@ impl Epoll {
     }
 
     fn refresh_state(&mut self, cb_queue: &mut CallbackQueue) {
-        let readable = self
-            .has_ready_events()
-            .then_some(FileState::READABLE)
-            .unwrap_or_default();
+        let readable = if self.has_ready_events() {
+            FileState::READABLE
+        } else {
+            Default::default()
+        };
         self.update_state(
             /* mask= */ FileState::READABLE,
             readable,

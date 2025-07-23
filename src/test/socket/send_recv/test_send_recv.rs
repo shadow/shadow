@@ -2400,7 +2400,7 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
             Ok(n) => n,
             // if any socket can't write, then we're done writing
             Err(nix::errno::Errno::EWOULDBLOCK) => break,
-            Err(e) => panic!("unexpected write() errno {:?}", e),
+            Err(e) => panic!("unexpected write() errno {e:?}"),
         };
 
         packets_written.push_back((src_fd, n));
@@ -2414,7 +2414,7 @@ fn test_unix_dgram_multiple_senders() -> Result<(), String> {
         let n = match nix::unistd::read(dst_fd, &mut recv_buf) {
             Ok(n) => n,
             Err(nix::errno::Errno::EWOULDBLOCK) => break,
-            Err(e) => panic!("unexpected write() errno {:?}", e),
+            Err(e) => panic!("unexpected write() errno {e:?}"),
         };
 
         // check that the packet length is as expected

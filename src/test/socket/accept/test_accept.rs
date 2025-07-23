@@ -46,7 +46,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     let mut tests: Vec<test_utils::ShadowTest<_, _>> = vec![];
 
     for &accept_fn in [AcceptFn::Accept, AcceptFn::Accept4].iter() {
-        let append_args = |s| format!("{} <fn={:?}>", s, accept_fn);
+        let append_args = |s| format!("{s} <fn={accept_fn:?}>");
 
         tests.extend(vec![
             test_utils::ShadowTest::new(
@@ -94,8 +94,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
 
                         let append_args = |s| {
                             format!(
-                                "{} <fn={:?},domain={},sock_type={},sock_flag={},accept_flag={:?}>",
-                                s, accept_fn, domain, sock_type, sock_flag, accept_flag
+                                "{s} <fn={accept_fn:?},domain={domain},sock_type={sock_type},sock_flag={sock_flag},accept_flag={accept_flag:?}>",
                             )
                         };
 
@@ -1035,7 +1034,7 @@ fn check_accept_call(
         // if we expect the accept() call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(

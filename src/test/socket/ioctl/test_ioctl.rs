@@ -39,7 +39,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &domain in domains.iter() {
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},sock_type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain},sock_type={sock_type}>");
 
             tests.extend(vec![test_utils::ShadowTest::new(
                 &append_args("test_tty"),

@@ -755,7 +755,7 @@ mod export {
         let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                log::debug!("Attempted to get a descriptor with handle {handle}");
                 return std::ptr::null();
             }
         };
@@ -780,7 +780,7 @@ mod export {
         let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                log::debug!("Attempted to get a descriptor with handle {handle}");
                 return std::ptr::null_mut();
             }
         };
@@ -805,7 +805,7 @@ mod export {
         let handle = match handle.try_into() {
             Ok(i) => i,
             Err(_) => {
-                log::debug!("Attempted to get a descriptor with handle {}", handle);
+                log::debug!("Attempted to get a descriptor with handle {handle}");
                 return std::ptr::null_mut();
             }
         };
@@ -819,8 +819,7 @@ mod export {
                     tcp.borrow().as_legacy_file()
                 } else {
                     log::warn!(
-                        "A descriptor exists for fd={}, but it is not a legacy file. Returning NULL.",
-                        handle
+                        "A descriptor exists for fd={handle}, but it is not a legacy file. Returning NULL."
                     );
                     std::ptr::null_mut()
                 }

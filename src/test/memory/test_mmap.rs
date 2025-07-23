@@ -496,26 +496,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for &unlink_before_mmap in [false, true].iter() {
         tests.push(test_utils::ShadowTest::new(
-            &format!(
-                "test_mmap_file_low <unlink_before_mmap={}>",
-                unlink_before_mmap
-            ),
+            &format!("test_mmap_file_low <unlink_before_mmap={unlink_before_mmap}>"),
             move || test_mmap_file_low(unlink_before_mmap),
             set![TestEnv::Libc, TestEnv::Shadow],
         ));
         tests.push(test_utils::ShadowTest::new(
-            &format!(
-                "test_mmap_file_high32 <unlink_before_mmap={}>",
-                unlink_before_mmap
-            ),
+            &format!("test_mmap_file_high32 <unlink_before_mmap={unlink_before_mmap}>"),
             move || test_mmap_file_high32(unlink_before_mmap),
             set![TestEnv::Libc, TestEnv::Shadow],
         ));
         tests.push(test_utils::ShadowTest::new(
-            &format!(
-                "test_mmap_file_high64 <unlink_before_mmap={}>",
-                unlink_before_mmap
-            ),
+            &format!("test_mmap_file_high64 <unlink_before_mmap={unlink_before_mmap}>"),
             move || test_mmap_file_high64(unlink_before_mmap),
             set![TestEnv::Libc, TestEnv::Shadow],
         ));

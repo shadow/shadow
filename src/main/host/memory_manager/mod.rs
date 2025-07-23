@@ -798,7 +798,7 @@ mod export {
         match mem.copy_from_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
-                trace!("Couldn't read {:?} into {:?}: {:?}", src, dst, e);
+                trace!("Couldn't read {src:?} into {dst:?}: {e:?}");
                 e.to_negated_i32()
             }
         }
@@ -819,7 +819,7 @@ mod export {
         match mem.copy_to_ptr(dst, src) {
             Ok(_) => 0,
             Err(e) => {
-                trace!("Couldn't write {:?} into {:?}: {:?}", src, dst, e);
+                trace!("Couldn't write {src:?} into {dst:?}: {e:?}");
                 e.to_negated_i32()
             }
         }

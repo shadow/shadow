@@ -1359,7 +1359,7 @@ impl Protocol for ConnOrientedListening {
         for sock in self.queue {
             // close all queued sockets
             if let Err(e) = sock.borrow_mut().close(cb_queue) {
-                log::warn!("Unexpected error while closing queued unix socket: {:?}", e);
+                log::warn!("Unexpected error while closing queued unix socket: {e:?}");
             }
         }
 
@@ -2011,10 +2011,7 @@ impl UnixSocketCommon {
     ) -> Result<SockaddrUnix<libc::sockaddr_un>, SyscallError> {
         // get the unix address
         let Some(addr) = addr.and_then(|x| x.as_unix()) else {
-            log::warn!(
-                "Attempted to bind unix socket to non-unix address {:?}",
-                addr
-            );
+            log::warn!("Attempted to bind unix socket to non-unix address {addr:?}");
             return Err(Errno::EINVAL.into());
         };
 
@@ -2121,11 +2118,11 @@ impl UnixSocketCommon {
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
         let Some(mut flags) = MsgFlags::from_bits(flags) else {
-            log::warn!("Unrecognized send flags: {:#b}", flags);
+            log::warn!("Unrecognized send flags: {flags:#b}");
             return Err(Errno::EINVAL.into());
         };
         if flags.intersects(!supported_flags) {
-            log::warn!("Unsupported send flags: {:?}", flags);
+            log::warn!("Unsupported send flags: {flags:?}");
             return Err(Errno::EINVAL.into());
         }
 
@@ -2231,11 +2228,11 @@ impl UnixSocketCommon {
         // if there's a flag we don't support, it's probably best to raise an error rather than do
         // the wrong thing
         let Some(mut flags) = MsgFlags::from_bits(flags) else {
-            log::warn!("Unrecognized recv flags: {:#b}", flags);
+            log::warn!("Unrecognized recv flags: {flags:#b}");
             return Err(Errno::EINVAL.into());
         };
         if flags.intersects(!supported_flags) {
-            log::warn!("Unsupported recv flags: {:?}", flags);
+            log::warn!("Unsupported recv flags: {flags:?}");
             return Err(Errno::EINVAL.into());
         }
 

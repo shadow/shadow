@@ -93,10 +93,7 @@ impl EventFd {
         // this check doesn't guarentee that we can write all bytes since the stream length is only
         // a hint
         if len < NUM_BYTES {
-            log::trace!(
-                "Reading from eventfd requires a buffer of at least {} bytes",
-                NUM_BYTES
-            );
+            log::trace!("Reading from eventfd requires a buffer of at least {NUM_BYTES} bytes");
             return Err(Errno::EINVAL.into());
         }
 
@@ -145,10 +142,7 @@ impl EventFd {
         // this check doesn't guarentee that we can read all bytes since the stream length is only
         // a hint
         if len < NUM_BYTES {
-            log::trace!(
-                "Writing to eventfd requires a buffer with at least {} bytes",
-                NUM_BYTES
-            );
+            log::trace!("Writing to eventfd requires a buffer with at least {NUM_BYTES} bytes");
             return Err(Errno::EINVAL.into());
         }
 

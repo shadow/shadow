@@ -1390,7 +1390,7 @@ fn generate_help_strs(
             match meta.default {
                 Some(default) => defaults.insert(
                     name.clone(),
-                    format!("{}{}[default: {}]", description, space, default),
+                    format!("{description}{space}[default: {default}]"),
                 ),
                 None => defaults.insert(name.clone(), description.to_string()),
             };
@@ -1501,7 +1501,7 @@ mod tests {
                 r#"
                 general:
                   stop_time: 1 min
-                  {}
+                  {option}
                 network:
                   graph:
                     type: 1_gbit_switch
@@ -1511,7 +1511,6 @@ mod tests {
                     processes:
                     - path: /bin/true
                 "#,
-                option
             )
         };
 

@@ -57,7 +57,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         DupFn::FcntlCloExec,
     ] {
         tests.push(test_utils::ShadowTest::new(
-            &format!("test_dup_io <dup_fn={:?}>", dup_fn),
+            &format!("test_dup_io <dup_fn={dup_fn:?}>"),
             move || test_dup_io(dup_fn),
             set![TestEnv::Libc, TestEnv::Shadow],
         ));

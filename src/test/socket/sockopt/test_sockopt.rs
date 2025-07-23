@@ -147,7 +147,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &domain in domains.iter() {
         for &sock_type in sock_types.iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <domain={},sock_type={}>", s, domain, sock_type);
+            let append_args = |s| format!("{s} <domain={domain},sock_type={sock_type}>");
 
             let more_tests: Vec<test_utils::ShadowTest<_, _>> = vec![
                 test_utils::ShadowTest::new(
@@ -613,10 +613,7 @@ fn bufsize_test_helper(
     // very small sizes
     test_utils::result_assert(
         after_optval >= min,
-        &format!(
-            "Resulting value {} was expected to be larger than the min {}",
-            after_optval, min
-        ),
+        &format!("Resulting value {after_optval} was expected to be larger than the min {min}"),
     )?;
 
     // if the value we set was above the lower limit, they should be equal

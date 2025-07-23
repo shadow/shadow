@@ -108,7 +108,7 @@ fn test_raise(
         signal::SigHandler::Handler(signal_handler),
     ] {
         for signal in catchable_signals() {
-            println!("Signal {}", signal);
+            println!("Signal {signal}");
             unsafe {
                 signal::sigaction(
                     signal,
@@ -238,7 +238,7 @@ fn test_process_pending_multithreaded() -> Result<(), Box<dyn Error>> {
 
 fn test_sigprocmask() -> Result<(), Box<dyn Error>> {
     for signal in catchable_signals() {
-        println!("{}", signal);
+        println!("{signal}");
         unsafe {
             signal::sigaction(
                 signal,

@@ -14,7 +14,7 @@ fn fmt_int_with_suffix(
     if ptr == 0 {
         write!(f, "{ptr:#x} <null>")
     } else {
-        write!(f, "{ptr:#x} {}", suffix)
+        write!(f, "{ptr:#x} {suffix}")
     }
 }
 
@@ -26,7 +26,7 @@ fn fmt_ptr_with_suffix<T>(
     if ptr.is_null() {
         write!(f, "{ptr:p} <null>")
     } else {
-        write!(f, "{ptr:p} {}", suffix)
+        write!(f, "{ptr:p} {suffix}")
     }
 }
 
@@ -345,8 +345,8 @@ fn fmt_msghdr(
     // prepare the socket address for formatting
     let msg_name = DebugFormatter(move |fmt| {
         match addr {
-            Ok(Some(addr)) => write!(fmt, "{addr} ({:p})", ptr),
-            Ok(None) => write!(fmt, "{:p}", ptr),
+            Ok(Some(addr)) => write!(fmt, "{addr} ({ptr:p})"),
+            Ok(None) => write!(fmt, "{ptr:p}"),
             // if we weren't able to read the sockaddr (NULL, EFAULT, etc), just show the pointer
             Err(_) => fmt_ptr_with_suffix(fmt, ptr, "<invalid-read>"),
         }

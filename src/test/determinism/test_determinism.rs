@@ -62,7 +62,7 @@ fn test_name_address() {
                 let sockaddr_in =
                     unsafe { addrinfo.ai_addr.cast::<libc::sockaddr_in>().as_ref() }.unwrap();
                 let addr = std::net::Ipv4Addr::from_bits(u32::from_be(sockaddr_in.sin_addr.s_addr));
-                println!("getaddrinfo(hostname): {:?}", addr);
+                println!("getaddrinfo(hostname): {addr:?}");
             }
             libc::AF_INET6 => {
                 let sockaddr_in =
@@ -70,7 +70,7 @@ fn test_name_address() {
                 let addr = std::net::Ipv6Addr::from_bits(u128::from_ne_bytes(
                     sockaddr_in.sin6_addr.s6_addr,
                 ));
-                println!("getaddrinfo(hostname): {:?}", addr);
+                println!("getaddrinfo(hostname): {addr:?}");
             }
             x => {
                 panic!("Unrecognized family {x}")

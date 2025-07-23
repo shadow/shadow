@@ -18,14 +18,14 @@ fn main() {
         let address: nix::sys::socket::SockaddrStorage = match ifaddr.address {
             Some(a) => a,
             None => {
-                println!("Skipping non-sockaddr {:?}", ifaddr);
+                println!("Skipping non-sockaddr {ifaddr:?}");
                 continue;
             }
         };
         let address: &nix::sys::socket::SockaddrIn = match address.as_sockaddr_in() {
             Some(a) => a,
             None => {
-                println!("Skipping non-ipv4 address {}", address);
+                println!("Skipping non-ipv4 address {address}");
                 continue;
             }
         };
@@ -48,10 +48,7 @@ fn main() {
     }
 
     for argument in std::env::args().skip(1) {
-        println!(
-            "checking that ip address argument {} is in ifaddrs list",
-            argument
-        );
+        println!("checking that ip address argument {argument} is in ifaddrs list");
         assert!(ip_vec.contains(&argument));
     }
 }

@@ -36,8 +36,7 @@ fn sleep_and_test() {
 
             let duration = end_time - start_time;
             println!(
-                "{:>9}, {:>21} -- Duration: {:?} (sleep_duration {:?}, tolerance +/- {:?})",
-                sleep_name, time_name, duration, sleep_duration, tolerance
+                "{sleep_name:>9}, {time_name:>21} -- Duration: {duration:?} (sleep_duration {sleep_duration:?}, tolerance +/- {tolerance:?})",
             );
 
             assert!(duration_abs_diff(sleep_duration, duration) < tolerance);
@@ -64,8 +63,7 @@ fn sleep_and_signal_test() {
     let signaler_sleep_duration = Duration::from_secs(1);
     let tolerance = Duration::from_millis(30);
     println!(
-        "*** Interrupted sleep tests. Sleeping for {:?} but interrupted after {:?} ***",
-        sleeper_sleep_duration, signaler_sleep_duration
+        "*** Interrupted sleep tests. Sleeping for {sleeper_sleep_duration:?} but interrupted after {signaler_sleep_duration:?} ***",
     );
     for (sleep_fn, sleep_name) in SLEEP_FNS.iter() {
         let (sender, receiver) = std::sync::mpsc::channel::<unistd::Pid>();
@@ -77,10 +75,7 @@ fn sleep_and_signal_test() {
             let end_time = call_clock_gettime(libc::CLOCK_MONOTONIC);
 
             let duration = end_time - start_time;
-            println!(
-                "{:>9} -- Slept for: {:?}, rem: {:?}",
-                sleep_name, duration, rem
-            );
+            println!("{sleep_name:>9} -- Slept for: {duration:?}, rem: {rem:?}");
 
             // Check time slept
             assert!(duration_abs_diff(signaler_sleep_duration, duration) < tolerance);

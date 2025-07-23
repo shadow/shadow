@@ -41,7 +41,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     for &sock_type in sock_types {
         for &flag in [0, libc::SOCK_NONBLOCK, libc::SOCK_CLOEXEC].iter() {
             // add details to the test names to avoid duplicates
-            let append_args = |s| format!("{} <type={},flag={}>", s, sock_type, flag);
+            let append_args = |s| format!("{s} <type={sock_type},flag={flag}>");
 
             tests.extend(vec![
                 test_utils::ShadowTest::new(
@@ -206,7 +206,7 @@ fn check_bind_call(
         // if we expect the call to return an error (rv should be -1)
         Some(expected_errno) => {
             if rv != -1 {
-                return Err(format!("Expecting a return value of -1, received {}", rv));
+                return Err(format!("Expecting a return value of -1, received {rv}"));
             }
             if errno != expected_errno {
                 return Err(format!(
