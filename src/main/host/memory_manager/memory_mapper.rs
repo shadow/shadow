@@ -1072,6 +1072,7 @@ impl MemoryMapper {
         Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         if src.is_empty() {
             return Some(&mut []);
