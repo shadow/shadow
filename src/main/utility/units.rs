@@ -14,6 +14,7 @@ assert_eq!(
 ```
 */
 
+use std::borrow::Cow;
 use std::fmt::{self, Debug, Display};
 use std::str::FromStr;
 
@@ -491,19 +492,15 @@ macro_rules! unit_impl {
         }
 
         impl<T: Prefix> JsonSchema for $name<T> {
-            fn is_referenceable() -> bool { false }
-
-            fn schema_name() -> String {
-                stringify!($name).to_owned()
+            fn schema_name() -> Cow<'static, str> {
+                stringify!($name).into()
             }
 
-            fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
-                schemars::schema::SchemaObject {
-                    instance_type: Some(schemars::schema::InstanceType::String.into()),
-                    format: Some(stringify!($name).to_owned()),
-                    ..Default::default()
-                }
-                .into()
+            fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+                schemars::json_schema!({
+                    "title": stringify!($name),
+                    "type": ["string"],
+                })
             }
         }
     };
@@ -771,6 +768,17 @@ mod tests {
         assert_eq!(
             std::time::Duration::new(1, 123),
             std::time::Duration::from(time)
+        );
+    }
+
+    #[test]
+    fn schema() {
+        assert_eq!(
+            Time::<TimePrefix>::json_schema(&mut schemars::SchemaGenerator::default()),
+            schemars::json_schema!({
+                "title": "Time",
+                "type": ["string"],
+            }),
         );
     }
 }
