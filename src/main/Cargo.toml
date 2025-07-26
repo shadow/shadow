@@ -33,7 +33,7 @@ shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs", features = ["ni
 lzma-rs = "0.3"
 memoffset = "0.9.1"
 merge = "0.2"
-neli = "0.6.4"
+neli = "0.7.1"
 nix = { version = "0.29.0", features = ["feature", "ioctl", "mman", "net", "personality", "resource", "sched", "signal", "socket", "time", "uio", "user"] }
 shadow-pod = { path = "../lib/pod" }
 once_cell = "1.21"
