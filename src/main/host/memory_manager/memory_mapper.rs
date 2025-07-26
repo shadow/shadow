@@ -1072,8 +1072,11 @@ impl MemoryMapper {
         Some(unsafe { std::slice::from_raw_parts(notnull_debug(ptr), src.len()) })
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub unsafe fn get_mut<T: Pod>(&self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
+    // This takes `&mut self` even though it doesn't *need* a mutable reference. But it helps to
+    // prevent accidental overlapping mutable borrows. If in the future we want to support getting
+    // multiple disjoint mutable references, we could change this to a `&self`, and perform runtime
+    // bounds checking on memory ranges.
+    pub unsafe fn get_mut<T: Pod>(&mut self, src: ForeignArrayPtr<T>) -> Option<&mut [T]> {
         if src.is_empty() {
             return Some(&mut []);
         }
