@@ -1,11 +1,10 @@
 use std::io::Cursor;
 
 use anyhow::anyhow;
-use neli::consts::nl::{NlmF, NlmFFlags};
-use neli::consts::rtnl::{IfaFFlags, RtAddrFamily, RtScope, Rtm};
-use neli::nl::{NlPayload, Nlmsghdr};
-use neli::rtnl::Ifaddrmsg;
-use neli::types::RtBuffer;
+use neli::consts::nl::NlmF;
+use neli::consts::rtnl::{RtAddrFamily, RtScope, Rtm};
+use neli::nl::{NlPayload, Nlmsghdr, NlmsghdrBuilder};
+use neli::rtnl::{Ifaddrmsg, IfaddrmsgBuilder};
 use neli::{FromBytes, ToBytes};
 
 use test_utils::{ShadowTest, TestEnvironment, set};
@@ -19,23 +18,20 @@ fn test_normal() -> anyhow::Result<()> {
         )
     };
 
-    let ifaddrmsg = Ifaddrmsg {
-        ifa_family: RtAddrFamily::Unspecified,
-        ifa_prefixlen: 0,
-        ifa_flags: IfaFFlags::empty(),
-        ifa_scope: RtScope::Universe.into(),
-        ifa_index: 0,
-        rtattrs: RtBuffer::new(),
-    };
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getaddr;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifaddrmsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifaddrmsg = IfaddrmsgBuilder::default()
+        .ifa_family(RtAddrFamily::Unspecified)
+        .ifa_prefixlen(0)
+        .ifa_scope(RtScope::Universe)
+        .ifa_index(0)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getaddr)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifaddrmsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -75,7 +71,7 @@ fn test_normal() -> anyhow::Result<()> {
     else {
         return Err(anyhow!("failed to deserialize the message"));
     };
-    let Ok(_ifaddrmsg) = nlmsg.get_payload() else {
+    let Some(_ifaddrmsg) = nlmsg.get_payload() else {
         return Err(anyhow!("failed to find the payload"));
     };
 
@@ -91,23 +87,20 @@ fn test_shorter_than_nlmsghdr() -> anyhow::Result<()> {
         )
     };
 
-    let ifaddrmsg = Ifaddrmsg {
-        ifa_family: RtAddrFamily::Unspecified,
-        ifa_prefixlen: 0,
-        ifa_flags: IfaFFlags::empty(),
-        ifa_scope: RtScope::Universe.into(),
-        ifa_index: 0,
-        rtattrs: RtBuffer::new(),
-    };
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getaddr;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifaddrmsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifaddrmsg = IfaddrmsgBuilder::default()
+        .ifa_family(RtAddrFamily::Unspecified)
+        .ifa_prefixlen(0)
+        .ifa_scope(RtScope::Universe)
+        .ifa_index(0)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getaddr)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifaddrmsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -156,23 +149,20 @@ fn test_shorter_than_ifaddrmsg() -> anyhow::Result<()> {
         )
     };
 
-    let ifaddrmsg = Ifaddrmsg {
-        ifa_family: RtAddrFamily::Unspecified,
-        ifa_prefixlen: 0,
-        ifa_flags: IfaFFlags::empty(),
-        ifa_scope: RtScope::Universe.into(),
-        ifa_index: 0,
-        rtattrs: RtBuffer::new(),
-    };
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getaddr;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifaddrmsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifaddrmsg = IfaddrmsgBuilder::default()
+        .ifa_family(RtAddrFamily::Unspecified)
+        .ifa_prefixlen(0)
+        .ifa_scope(RtScope::Universe)
+        .ifa_index(0)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getaddr)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifaddrmsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -215,7 +205,7 @@ fn test_shorter_than_ifaddrmsg() -> anyhow::Result<()> {
     else {
         return Err(anyhow!("failed to deserialize the message"));
     };
-    let Ok(_ifaddrmsg) = nlmsg.get_payload() else {
+    let Some(_ifaddrmsg) = nlmsg.get_payload() else {
         return Err(anyhow!("failed to find the payload"));
     };
 
