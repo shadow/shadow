@@ -1,11 +1,10 @@
 use std::io::Cursor;
 
 use anyhow::anyhow;
-use neli::consts::nl::{NlmF, NlmFFlags};
-use neli::consts::rtnl::{Arphrd, IffFlags, RtAddrFamily, Rtm};
-use neli::nl::{NlPayload, Nlmsghdr};
-use neli::rtnl::Ifinfomsg;
-use neli::types::RtBuffer;
+use neli::consts::nl::NlmF;
+use neli::consts::rtnl::{Arphrd, RtAddrFamily, Rtm};
+use neli::nl::{NlPayload, Nlmsghdr, NlmsghdrBuilder};
+use neli::rtnl::{Ifinfomsg, IfinfomsgBuilder};
 use neli::{FromBytes, ToBytes};
 
 use test_utils::{ShadowTest, TestEnvironment, set};
@@ -19,23 +18,18 @@ fn test_normal() -> anyhow::Result<()> {
         )
     };
 
-    let ifinfomsg = Ifinfomsg::new(
-        RtAddrFamily::Unspecified,
-        Arphrd::Netrom,
-        0,
-        IffFlags::empty(),
-        IffFlags::empty(),
-        RtBuffer::new(),
-    );
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getlink;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifinfomsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifinfomsg = IfinfomsgBuilder::default()
+        .ifi_family(RtAddrFamily::Unspecified)
+        .ifi_type(Arphrd::Netrom)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getlink)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifinfomsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -75,7 +69,7 @@ fn test_normal() -> anyhow::Result<()> {
     else {
         return Err(anyhow!("failed to deserialize the message"));
     };
-    let Ok(_ifinfomsg) = nlmsg.get_payload() else {
+    let Some(_ifinfomsg) = nlmsg.get_payload() else {
         return Err(anyhow!("failed to find the payload"));
     };
 
@@ -91,23 +85,18 @@ fn test_shorter_than_nlmsghdr() -> anyhow::Result<()> {
         )
     };
 
-    let ifinfomsg = Ifinfomsg::new(
-        RtAddrFamily::Unspecified,
-        Arphrd::Netrom,
-        0,
-        IffFlags::empty(),
-        IffFlags::empty(),
-        RtBuffer::new(),
-    );
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getlink;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifinfomsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifinfomsg = IfinfomsgBuilder::default()
+        .ifi_family(RtAddrFamily::Unspecified)
+        .ifi_type(Arphrd::Netrom)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getlink)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifinfomsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -156,23 +145,18 @@ fn test_shorter_than_ifinfomsg() -> anyhow::Result<()> {
         )
     };
 
-    let ifinfomsg = Ifinfomsg::new(
-        RtAddrFamily::Unspecified,
-        Arphrd::Netrom,
-        0,
-        IffFlags::empty(),
-        IffFlags::empty(),
-        RtBuffer::new(),
-    );
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getlink;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifinfomsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifinfomsg = IfinfomsgBuilder::default()
+        .ifi_family(RtAddrFamily::Unspecified)
+        .ifi_type(Arphrd::Netrom)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getlink)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifinfomsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
@@ -215,7 +199,7 @@ fn test_shorter_than_ifinfomsg() -> anyhow::Result<()> {
     else {
         return Err(anyhow!("failed to deserialize the message"));
     };
-    let Ok(_ifinfomsg) = nlmsg.get_payload() else {
+    let Some(_ifinfomsg) = nlmsg.get_payload() else {
         return Err(anyhow!("failed to find the payload"));
     };
 
