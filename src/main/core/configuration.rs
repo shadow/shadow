@@ -11,6 +11,7 @@
 //! that the configuration parsing does not become environment-dependent. If a configuration file
 //! parses on one system, it should parse successfully on other systems as well.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
@@ -1144,11 +1145,11 @@ impl std::fmt::Display for Signal {
 }
 
 impl JsonSchema for Signal {
-    fn schema_name() -> String {
-        String::from("Signal")
+    fn schema_name() -> Cow<'static, str> {
+        "Signal".into()
     }
 
-    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
         // Use the "anything" schema. The Deserialize implementation does the
         // actual parsing and error handling.
         // TODO: Ideally we'd only accept strings or integers here. The
@@ -1156,7 +1157,7 @@ impl JsonSchema for Signal {
         // though, and we currently only use the schemas for command-line-option
         // help strings. Since we don't currently take Signals in
         // command-line-options, it doesn't matter.
-        schemars::schema::Schema::Bool(true)
+        schemars::json_schema!(true)
     }
 }
 
@@ -1379,23 +1380,40 @@ pub const ONE_GBIT_SWITCH_GRAPH: &str = r#"graph [
 ]"#;
 
 /// Generate help strings for objects in a JSON schema, including the Serde defaults if available.
-fn generate_help_strs(
-    schema: schemars::schema::RootSchema,
-) -> std::collections::HashMap<String, String> {
+fn generate_help_strs(schema: schemars::Schema) -> std::collections::HashMap<String, String> {
+    // the default for each field
     let mut defaults = std::collections::HashMap::<String, String>::new();
-    for (name, obj) in &schema.schema.object.as_ref().unwrap().properties {
-        if let Some(meta) = obj.clone().into_object().metadata {
-            let description = meta.description.unwrap_or_default();
-            let space = if !description.is_empty() { " " } else { "" };
-            match meta.default {
-                Some(default) => defaults.insert(
-                    name.clone(),
-                    format!("{description}{space}[default: {default}]"),
-                ),
-                None => defaults.insert(name.clone(), description.to_string()),
-            };
-        }
+
+    // for each field with an entry in "properties"
+    for (name, obj) in schema.get("properties").unwrap().as_object().unwrap() {
+        let description = obj
+            .get("description")
+            .map(|x| x.as_str().unwrap())
+            .unwrap_or("");
+
+        // schemars gives us the raw doc string, so there is no markdown formatting/rendering
+        // applied. This means that line breaks aren't collapsed and our help text will have
+        // unintended line breaks.
+        //
+        // We don't want to bring in an entire markdown parser here, so we crudely remove the line
+        // breaks manually. This will cause issues where there are intended line breaks (lines
+        // ending with two spaces), new paragraphs ('\n\n'), etc. But hopefully this is good enough
+        // for now.
+        //
+        // See https://github.com/GREsau/schemars/issues/120
+        let description = description.replace("\n", " ");
+
+        let name = name.clone();
+
+        match obj.get("default") {
+            Some(default) => {
+                let space = if !description.is_empty() { " " } else { "" };
+                defaults.insert(name, format!("{description}{space}[default: {default}]"))
+            }
+            None => defaults.insert(name, description.to_string()),
+        };
     }
+
     defaults
 }
 
