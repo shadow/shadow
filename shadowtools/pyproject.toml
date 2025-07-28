@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "shadowtools"
 version = "0.0.1"
 description = "Libraries and tools for use with the shadow network simulator"
-# Oldest python version on a supported platform (ubuntu 20.04).
-requires-python = ">=3.8.2"
+# Oldest python version on a supported platform (debian 11).
+requires-python = ">=3.9.2"
 # Strings from https://pypi.org/classifiers/
 classifiers = [
     "Development Status :: 1 - Planning",
