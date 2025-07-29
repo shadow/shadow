@@ -8,12 +8,10 @@ use linux_api::ioctls::IoctlRequest;
 use linux_api::netlink::{ifaddrmsg, ifinfomsg, nlmsghdr};
 use linux_api::rtnetlink::{RTM_GETADDR, RTM_GETLINK, RTMGRP_IPV4_IFADDR, RTMGRP_IPV6_IFADDR};
 use linux_api::socket::Shutdown;
-use neli::consts::nl::{NlmF, NlmFFlags, Nlmsg};
-use neli::consts::rtnl::{
-    Arphrd, Ifa, IfaF, IfaFFlags, Iff, IffFlags, Ifla, RtAddrFamily, RtScope, Rtm,
-};
-use neli::nl::{NlPayload, Nlmsghdr};
-use neli::rtnl::{Ifaddrmsg, Ifinfomsg, Rtattr};
+use neli::consts::nl::{NlmF, Nlmsg};
+use neli::consts::rtnl::{Arphrd, Ifa, IfaF, Iff, Ifla, RtAddrFamily, RtScope, Rtm};
+use neli::nl::{NlPayload, Nlmsghdr, NlmsghdrBuilder};
+use neli::rtnl::{Ifaddrmsg, IfaddrmsgBuilder, Ifinfomsg, IfinfomsgBuilder, RtattrBuilder};
 use neli::types::{Buffer, RtBuffer};
 use neli::{FromBytes, ToBytes};
 use nix::sys::socket::{MsgFlags, NetlinkAddr};
@@ -773,14 +771,13 @@ impl InitialState {
         };
 
         // Generate a dummy error with the same sequence number as the request
-        let msg = {
-            let len = None;
-            let nl_type = Nlmsg::Error;
-            let flags = NlmFFlags::empty();
-            let pid = None;
-            let payload = NlPayload::<Nlmsg, ()>::Empty;
-            Nlmsghdr::new(len, nl_type, flags, Some(nlmsg_seq), pid, payload)
-        };
+        let msg = NlmsghdrBuilder::default()
+            .nl_type(Nlmsg::Error)
+            .nl_flags(NlmF::empty())
+            .nl_seq(nlmsg_seq)
+            .nl_payload(NlPayload::<Nlmsg, ()>::Empty)
+            .build()
+            .expect("NlmsghdrBuilder missing a required field");
 
         let mut buffer = Cursor::new(Vec::new());
         msg.to_bytes(&mut buffer).unwrap();
@@ -793,27 +790,27 @@ impl InitialState {
             return self.handle_error(bytes);
         };
 
-        let Ok(ifaddrmsg) = nlmsg.get_payload() else {
+        let Some(ifaddrmsg) = nlmsg.get_payload() else {
             log::warn!("Failed to find the payload");
             return self.handle_error(bytes);
         };
 
         // The only supported interface address family is AF_INET
-        if ifaddrmsg.ifa_family != RtAddrFamily::Unspecified
-            && ifaddrmsg.ifa_family != RtAddrFamily::Inet
+        if *ifaddrmsg.ifa_family() != RtAddrFamily::Unspecified
+            && *ifaddrmsg.ifa_family() != RtAddrFamily::Inet
         {
             log::warn!("Unsupported ifa_family (only AF_UNSPEC and AF_INET are supported)");
             return self.handle_error(bytes);
         }
 
         // The rest of the fields are unsupported. We limit only the interest to the zero values
-        if ifaddrmsg.ifa_prefixlen != 0
-            || ifaddrmsg.ifa_flags != IfaFFlags::empty()
-            || ifaddrmsg.ifa_index != 0
-            || ifaddrmsg.ifa_scope != libc::c_uchar::from(RtScope::Universe)
+        if *ifaddrmsg.ifa_prefixlen() != 0
+            || !ifaddrmsg.ifa_flags().is_empty()
+            || *ifaddrmsg.ifa_index() != 0
+            || *ifaddrmsg.ifa_scope() != RtScope::Universe
         {
             log::warn!(
-                "Unsupported ifa_prefixlen, ifa_flags, ifa_scope, or ifa_index (they have to be 0)"
+                "Unsupported ifa_prefixlen, ifa_flags, ifa_scope, or ifa_index (they have to be 0)",
             );
             return self.handle_error(bytes);
         }
@@ -837,47 +834,62 @@ impl InitialState {
                 // I don't know the difference between IFA_ADDRESS and IFA_LOCAL. However, Linux
                 // provides the same address for both attributes, so I do the same.
                 // Run `strace ip addr` to see.
-                Rtattr::new(None, Ifa::Address, Buffer::from(&address[..])).unwrap(),
-                Rtattr::new(None, Ifa::Local, Buffer::from(&address[..])).unwrap(),
-                Rtattr::new(None, Ifa::Broadcast, Buffer::from(&broadcast[..])).unwrap(),
-                Rtattr::new(None, Ifa::Label, Buffer::from(label)).unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifa::Address)
+                    .rta_payload(Buffer::from(&address[..]))
+                    .build()
+                    .unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifa::Local)
+                    .rta_payload(Buffer::from(&address[..]))
+                    .build()
+                    .unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifa::Broadcast)
+                    .rta_payload(Buffer::from(&broadcast[..]))
+                    .build()
+                    .unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifa::Label)
+                    .rta_payload(Buffer::from(label))
+                    .build()
+                    .unwrap(),
             ];
-            let ifaddrmsg = Ifaddrmsg {
-                ifa_family: RtAddrFamily::Inet,
-                ifa_prefixlen: interface.prefix_len,
+            let ifaddrmsg = IfaddrmsgBuilder::default()
+                .ifa_family(RtAddrFamily::Inet)
+                .ifa_prefixlen(interface.prefix_len)
                 // IFA_F_PERMANENT is used to indicate that the address is permanent
-                ifa_flags: IfaFFlags::new(&[IfaF::Permanent]),
-                ifa_scope: libc::c_uchar::from(interface.scope),
-                ifa_index: interface.index,
-                rtattrs: RtBuffer::from_iter(attrs),
-            };
-            let nlmsg = {
-                let len = None;
-                let nl_type = Rtm::Newaddr;
+                .ifa_flags(IfaF::PERMANENT)
+                .ifa_scope(interface.scope)
+                .ifa_index(interface.index)
+                .rtattrs(RtBuffer::from_iter(attrs))
+                .build()
+                .expect("IfaddrmsgBuilder missing a required field");
+            let nlmsg = NlmsghdrBuilder::default()
+                .nl_type(Rtm::Newaddr)
                 // The NLM_F_MULTI flag is used to indicate that we will send multiple messages
-                let flags = NlmFFlags::new(&[NlmF::Multi]);
+                .nl_flags(NlmF::MULTI)
                 // Use the same sequence number as the request
-                let seq = Some(nlmsg.nl_seq);
-                let pid = None;
-                let payload = NlPayload::Payload(ifaddrmsg);
-                Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-            };
+                .nl_seq(*nlmsg.nl_seq())
+                .nl_payload(NlPayload::Payload(ifaddrmsg))
+                .build()
+                .expect("NlmsghdrBuilder missing a required field");
             nlmsg.to_bytes(&mut buffer).unwrap();
         }
         // After sending the messages with the NLM_F_MULTI flag set, we need to send the NLMSG_DONE message
-        let done_msg = {
-            let len = None;
-            let nl_type = Nlmsg::Done;
-            let flags = NlmFFlags::new(&[NlmF::Multi]);
+        let done_msg = NlmsghdrBuilder::default()
+            .nl_type(Nlmsg::Done)
+            .nl_flags(NlmF::MULTI)
             // Use the same sequence number as the request
-            let seq = Some(nlmsg.nl_seq);
-            let pid = None;
-            // Linux also emits the errno of zero after the header. See `strace ip addr`
-            // For documentation reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
-            // For code reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
-            let payload: NlPayload<Nlmsg, u32> = NlPayload::Payload(0);
-            Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-        };
+            .nl_seq(*nlmsg.nl_seq())
+            // Linux also emits the errno of zero after the header. See `strace ip addr`.
+            // For documentation reference, see:
+            // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
+            // For code reference, see:
+            // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
+            .nl_payload(NlPayload::Payload(0u32))
+            .build()
+            .expect("NlmsghdrBuilder missing a required field");
         done_msg.to_bytes(&mut buffer).unwrap();
 
         buffer.into_inner()
@@ -889,14 +901,14 @@ impl InitialState {
             return self.handle_error(bytes);
         };
 
-        let Ok(ifinfomsg) = nlmsg.get_payload() else {
+        let Some(ifinfomsg) = nlmsg.get_payload() else {
             log::warn!("Failed to find the payload");
             return self.handle_error(bytes);
         };
 
         // The only supported interface address family is AF_INET
-        if ifinfomsg.ifi_family != RtAddrFamily::Unspecified
-            && ifinfomsg.ifi_family != RtAddrFamily::Inet
+        if *ifinfomsg.ifi_family() != RtAddrFamily::Unspecified
+            && *ifinfomsg.ifi_family() != RtAddrFamily::Inet
         {
             warn_once_then_debug!(
                 "Unsupported ifi_family (only AF_UNSPEC and AF_INET are supported)"
@@ -905,9 +917,9 @@ impl InitialState {
         }
 
         // The rest of the fields are unsupported. We limit only the interest to the zero values
-        if ifinfomsg.ifi_type != 0.into()
-            || ifinfomsg.ifi_index != 0
-            || ifinfomsg.ifi_flags != IffFlags::empty()
+        if *ifinfomsg.ifi_type() != 0.into()
+            || *ifinfomsg.ifi_index() != 0
+            || !ifinfomsg.ifi_flags().is_empty()
         {
             warn_once_then_debug!(
                 "Unsupported ifi_type, ifi_index, or ifi_flags (they have to be 0)"
@@ -926,60 +938,72 @@ impl InitialState {
 
             // List of attribtes sent with the response for the current interface
             let attrs = [
-                Rtattr::new(None, Ifla::Ifname, Buffer::from(label)).unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifla::Ifname)
+                    .rta_payload(Buffer::from(label))
+                    .build()
+                    .unwrap(),
                 // Not sure about the value of this one, but I always see 1000 from `ip addr`. If
                 // we don't specify this, `ip addr` will create an AF_INET socket and do ioctl. See
                 // https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/tree/ip/ipaddress.c#n168
-                Rtattr::new(None, Ifla::Txqlen, Buffer::from(&1000u32.to_le_bytes()[..])).unwrap(),
-                Rtattr::new(
-                    None,
-                    Ifla::Mtu,
-                    Buffer::from(&interface.mtu.to_le_bytes()[..]),
-                )
-                .unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifla::Txqlen)
+                    .rta_payload(Buffer::from(&u32::to_le_bytes(1000)[..]))
+                    .build()
+                    .unwrap(),
+                RtattrBuilder::default()
+                    .rta_type(Ifla::Mtu)
+                    .rta_payload(Buffer::from(&u32::to_le_bytes(interface.mtu)[..]))
+                    .build()
+                    .unwrap(),
                 // TODO: Add the MAC address through IFLA_ADDRESS and IFLA_BROADCAST
             ];
             let flags = if interface.if_type == Arphrd::Loopback {
-                IffFlags::new(&[Iff::Up, Iff::Loopback, Iff::Running])
+                Iff::UP | Iff::LOOPBACK | Iff::RUNNING
             } else {
                 // Not sure about the IFF_MULTICAST, but it's also the one I got from `strace ip addr`
-                IffFlags::new(&[Iff::Up, Iff::Broadcast, Iff::Running, Iff::Multicast])
+                Iff::UP | Iff::BROADCAST | Iff::RUNNING | Iff::MULTICAST
             };
-            let ifinfomsg = Ifinfomsg::new(
-                RtAddrFamily::Inet,
-                interface.if_type,
-                interface.index,
-                flags,
-                IffFlags::from_bitmask(0xffffffff), // rtnetlink(7) recommends to set it to all 1s
-                RtBuffer::from_iter(attrs),
-            );
-            let nlmsg = {
-                let len = None;
-                let nl_type = Rtm::Newlink;
+            let interface_index = interface
+                .index
+                .try_into()
+                .expect("interface index too large");
+
+            let ifinfomsg = IfinfomsgBuilder::default()
+                .ifi_family(RtAddrFamily::Inet)
+                .ifi_type(interface.if_type)
+                .ifi_index(interface_index)
+                .ifi_flags(flags)
+                // rtnetlink(7) recommends to set it to all 1s
+                .ifi_change(Iff::from_bits_retain(0xffffffff))
+                .rtattrs(RtBuffer::from_iter(attrs))
+                .build()
+                .expect("IfinfomsgBuilder missing a required field");
+            let nlmsg = NlmsghdrBuilder::default()
+                .nl_type(Rtm::Newlink)
                 // The NLM_F_MULTI flag is used to indicate that we will send multiple messages
-                let flags = NlmFFlags::new(&[NlmF::Multi]);
+                .nl_flags(NlmF::MULTI)
                 // Use the same sequence number as the request
-                let seq = Some(nlmsg.nl_seq);
-                let pid = None;
-                let payload = NlPayload::Payload(ifinfomsg);
-                Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-            };
+                .nl_seq(*nlmsg.nl_seq())
+                .nl_payload(NlPayload::Payload(ifinfomsg))
+                .build()
+                .expect("NlmsghdrBuilder missing a required field");
             nlmsg.to_bytes(&mut buffer).unwrap();
         }
         // After sending the messages with the NLM_F_MULTI flag set, we need to send the NLMSG_DONE message
-        let done_msg = {
-            let len = None;
-            let nl_type = Nlmsg::Done;
-            let flags = NlmFFlags::new(&[NlmF::Multi]);
+        let done_msg = NlmsghdrBuilder::default()
+            .nl_type(Nlmsg::Done)
+            .nl_flags(NlmF::MULTI)
             // Use the same sequence number as the request
-            let seq = Some(nlmsg.nl_seq);
-            let pid = None;
-            // Linux also emits the errno of zero after the header. See `strace ip addr`
-            // For documentation reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
-            // For code reference, see https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
-            let payload: NlPayload<Nlmsg, u32> = NlPayload::Payload(0);
-            Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-        };
+            .nl_seq(*nlmsg.nl_seq())
+            // Linux also emits the errno of zero after the header. See `strace ip addr`.
+            // For documentation reference, see:
+            // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/userspace-api/netlink/intro.rst?h=v6.2#n232
+            // For code reference, see:
+            // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/netlink/af_netlink.c?h=v6.2#n2222
+            .nl_payload(NlPayload::Payload(0u32))
+            .build()
+            .expect("NlmsghdrBuilder missing a required field");
         done_msg.to_bytes(&mut buffer).unwrap();
 
         buffer.into_inner()
@@ -1061,7 +1085,7 @@ struct Interface {
     if_type: Arphrd,
     mtu: u32,
     scope: RtScope,
-    index: libc::c_int,
+    index: libc::c_uint,
 }
 
 /// Common data and functionality that is useful for all states.

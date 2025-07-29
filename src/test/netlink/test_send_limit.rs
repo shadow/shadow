@@ -1,33 +1,29 @@
 use std::io::Cursor;
 
 use neli::ToBytes;
-use neli::consts::nl::{NlmF, NlmFFlags};
-use neli::consts::rtnl::{IfaFFlags, RtAddrFamily, RtScope, Rtm};
-use neli::nl::{NlPayload, Nlmsghdr};
-use neli::rtnl::Ifaddrmsg;
-use neli::types::RtBuffer;
+use neli::consts::nl::NlmF;
+use neli::consts::rtnl::{RtAddrFamily, RtScope, Rtm};
+use neli::nl::{NlPayload, NlmsghdrBuilder};
+use neli::rtnl::IfaddrmsgBuilder;
 
 use test_utils::{ShadowTest, TestEnvironment, set};
 
 // Send a bunch of Netlink messages to the file descriptor. Return the number of written bytes.
 fn flood(fd: libc::c_int) -> libc::ssize_t {
-    let ifaddrmsg = Ifaddrmsg {
-        ifa_family: RtAddrFamily::Unspecified,
-        ifa_prefixlen: 0,
-        ifa_flags: IfaFFlags::empty(),
-        ifa_scope: RtScope::Universe.into(),
-        ifa_index: 0,
-        rtattrs: RtBuffer::new(),
-    };
-    let nlmsg = {
-        let len = None;
-        let nl_type = Rtm::Getaddr;
-        let flags = NlmFFlags::new(&[NlmF::Request, NlmF::Dump]);
-        let seq = Some(0xfe182ab9); // Random number
-        let pid = None;
-        let payload = NlPayload::Payload(ifaddrmsg);
-        Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
-    };
+    let ifaddrmsg = IfaddrmsgBuilder::default()
+        .ifa_family(RtAddrFamily::Unspecified)
+        .ifa_prefixlen(0)
+        .ifa_scope(RtScope::Universe)
+        .ifa_index(0)
+        .build()
+        .unwrap();
+    let nlmsg = NlmsghdrBuilder::default()
+        .nl_type(Rtm::Getaddr)
+        .nl_flags(NlmF::REQUEST | NlmF::DUMP)
+        .nl_seq(0xfe182ab9) // Random number
+        .nl_payload(NlPayload::Payload(ifaddrmsg))
+        .build()
+        .unwrap();
 
     let mut buffer = Cursor::new(Vec::new());
     nlmsg.to_bytes(&mut buffer).unwrap();
