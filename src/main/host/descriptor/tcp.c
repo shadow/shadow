@@ -238,7 +238,7 @@ struct _TCP {
     /* if I am a server, I parent many multiplexed child sockets */
     TCPServer* server;
 
-    /* if I am a multiplexed child, I have a pointer to my parent */
+    /* if I am a child (not yet `accept`ed), I have a pointer to my parent */
     TCPChild* child;
 
     MAGIC_DECLARE;
@@ -299,15 +299,16 @@ static TCPChild* _tcpchild_new(TCP* tcp, TCP* parent, int handle, in_addr_t peer
 
     child->handle = handle;
 
-    /* the child is bound to the parent server's address, because all packets
-     * coming from the child should appear to be coming from the server itself */
-    in_addr_t parentAddress;
+    /* the child is bound to the address on which the connection was received
+     * (which will also be the parent's local address, UNLESS that address is unspecified).
+     */
+    in_addr_t _parentAddress;
     in_port_t parentPort;
-    legacysocket_getSocketName(&(parent->super), &parentAddress, &parentPort);
-    legacysocket_setSocketName(&(tcp->super), parentAddress, parentPort);
+    legacysocket_getSocketName(&(parent->super), &_parentAddress, &parentPort);
+    legacysocket_setSocketName(&(tcp->super), parent->server->lastIP, parentPort);
 
-    /* we have the same name and peer as the parent, but we do not associate
-     * on the interface. the parent will receive packets and multiplex to us. */
+    /* We do not yet associate on the interface. the parent will receive packets
+     * and multiplex to us until we're `accept`ed. */
 
     return child;
 }
@@ -389,9 +390,13 @@ struct TCPCong_ *tcp_cong(TCP *tcp) {
 
 void tcp_clearAllChildrenIfServer(TCP* tcp) {
     MAGIC_ASSERT(tcp);
-    if(tcp->server && tcp->server->children) {
-        g_hash_table_destroy(tcp->server->children);
-        tcp->server->children = NULL;
+    if(tcp->server) {
+        if (tcp->server->pending) {
+            g_queue_clear(tcp->server->pending);
+        }
+        if (tcp->server->children) {
+            g_hash_table_remove_all(tcp->server->children);
+        }
     }
 }
 
@@ -693,47 +698,44 @@ static void _tcp_setState(TCP* tcp, const Host* host, enum TCPState state) {
             /* user can no longer use socket */
             legacyfile_adjustStatus((LegacyFile*)tcp, FileState_ACTIVE, FALSE, 0);
 
-            bool disassociate = true;
+            if(tcp->child && tcp->child->parent) {
+                /* Child socket was closed.
+                 * Possibly we can get here if the client closes the connection before the
+                 * server `accept`s the socket off of the listen queue.
+                 */
+                TCP* parent = tcp->child->parent;
+                utility_debugAssert(parent->server);
+
+                /* tell my server to stop accepting packets for me
+                 * this will destroy the child and NULL out tcp->child */
+                g_hash_table_remove(parent->server->children, &(tcp->child->key));
+
+                /* if i was the server's last child and its waiting to close, close it */
+                if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
+                    /* In previous versions of shadow, accepted sockets were
+                     * still children of the listening socket.  This is no longer
+                     * the case, so we shouldn't be able to get here.  child
+                     * sockets are unparented when they are accepted from the
+                     * listening queue, and when a listening socket is closed, we
+                     * close all child sockets (i.e. sockets still on the listen
+                     * queue). */
+                    utility_panic("A closed listening socket shouldn't have any children");
+                }
+            }
+
+            /* Clear child sockets, which were never accepted. */
+            /* TODO <https://github.com/shadow/shadow/issues/3644>: we need to
+             * send a RST instead of just silently dropping these. */
+            tcp_clearAllChildrenIfServer(tcp);
 
             in_addr_t sock_ip = 0;
             in_port_t sock_port = 0;
-            if (!legacysocket_getSocketName(&tcp->super, &sock_ip, &sock_port)) {
-                /* socket isn't bound, so don't try to disassociate */
-                disassociate = false;
-            }
-
-            in_addr_t peer_ip = 0;
-            in_port_t peer_port = 0;
-            legacysocket_getPeerName(&tcp->super, &peer_ip, &peer_port);
-
-            /*
-             * servers have to wait for all children to close.
-             * children need to notify their parents when closing.
-             */
-            if (!tcp->server || !tcp->server->children ||
-                g_hash_table_size(tcp->server->children) <= 0) {
-                if(tcp->child && tcp->child->parent) {
-                    TCP* parent = tcp->child->parent;
-                    utility_debugAssert(parent->server);
-
-                    /* tell my server to stop accepting packets for me
-                     * this will destroy the child and NULL out tcp->child */
-                    g_hash_table_remove(parent->server->children, &(tcp->child->key));
-
-                    /* if i was the server's last child and its waiting to close, close it */
-                    if((parent->state == TCPS_CLOSED) && (g_hash_table_size(parent->server->children) <= 0)) {
-                        if (disassociate) {
-                            /* this will unbind from the network interface and free socket */
-                            host_disassociateInterface(
-                                host, PTCP, sock_ip, sock_port, peer_ip, peer_port);
-                        }
-                    }
-                }
-
-                if (disassociate) {
-                    /* TODO: we should only be disassociating non-child sockets */
-                    host_disassociateInterface(host, PTCP, sock_ip, sock_port, peer_ip, peer_port);
-                }
+            int is_bound = legacysocket_getSocketName(&tcp->super, &sock_ip, &sock_port);
+            if (is_bound) {
+                in_addr_t peer_ip = 0;
+                in_port_t peer_port = 0;
+                legacysocket_getPeerName(&tcp->super, &peer_ip, &peer_port);
+                host_disassociateInterface(host, PTCP, sock_ip, sock_port, peer_ip, peer_port);
             }
             break;
         }
@@ -1815,6 +1817,11 @@ gint tcp_acceptServerPeer(TCP* tcp, const Host* host, in_addr_t* ip, in_port_t* 
     *ip = tcpChild->super.peerIP;
     utility_debugAssert(port);
     *port = tcpChild->super.peerPort;
+
+    // The caller, `LegacyTcpSocket::accept`, will associate the child directly
+    // to the concrete local+peer address pair. It is no longer a child socket.
+    _tcpchild_free(tcpChild->child);
+    tcpChild->child = NULL;
 
     return 0;
 }

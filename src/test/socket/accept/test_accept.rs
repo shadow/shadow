@@ -224,6 +224,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                         ]);
+                        if sock_type != libc::SOCK_DGRAM {
+                            tests.push(test_utils::ShadowTest::new(
+                                &append_args("test_close_connection_without_accept"),
+                                move || {
+                                    test_close_connection_without_accept(
+                                        domain, sock_type, sock_flag,
+                                    )
+                                },
+                                // shadow doesn't handle this correctly:
+                                // https://github.com/shadow/shadow/issues/3644
+                                set![TestEnv::Libc],
+                            ));
+                        }
                     }
                 }
             }
