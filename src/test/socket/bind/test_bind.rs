@@ -182,7 +182,7 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
     tests.push(test_utils::ShadowTest::new(
         "tcp-reuse-addr-with-orphaned-child-socket",
         test_tcp_reuse_addr_with_orphaned_child_socket,
-        set![TestEnv::Libc],
+        set![TestEnv::Libc, TestEnv::Shadow],
     ));
 
     tests
@@ -209,8 +209,9 @@ fn test_tcp_reuse_addr_with_orphaned_child_socket() -> Result<(), String> {
     assert_with_errno!(listen_fd >= 0);
 
     // We set SO_REUSEADDR to avoid having to wait for TIME_WAIT before allowing
-    // the address to be reused. Under shadow this isn't strictly necessary,
-    // since it doesn't implement TIME_WAIT, but doesn't hurt.
+    // the address to be reused. This currently isn't strictly needed under
+    // shadow, since the `close` syscall immediately fully closes the listening
+    // socket without waiting TIME_WAIT (possibly a bug?).
     let one = 1u32;
     assert_with_errno!(
         unsafe {
@@ -248,6 +249,11 @@ fn test_tcp_reuse_addr_with_orphaned_child_socket() -> Result<(), String> {
     let accepted_fd =
         unsafe { libc::accept(listen_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
     assert_with_errno!(accepted_fd >= 0);
+
+    // https://github.com/shadow/shadow/issues/3563: some non-zero time needs to pass
+    // for shadow to clean up state and recognize the address as being available again.
+    // Unclear why.
+    std::thread::sleep(std::time::Duration::from_nanos(1));
 
     assert_with_errno!(unsafe { libc::close(listen_fd) } == 0);
     let listen_fd = unsafe { libc::socket(domain, sock_type | socket_flag, 0) };
