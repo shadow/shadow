@@ -3,6 +3,11 @@
  * See LICENSE for licensing information
  */
 
+use std::os::fd::AsRawFd as _;
+use std::os::fd::FromRawFd as _;
+use std::os::fd::IntoRawFd as _;
+use std::os::fd::OwnedFd;
+
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::socket_utils;
 use test_utils::socket_utils::SockAddr;
@@ -717,6 +722,71 @@ fn test_after_close(
         let rv = unsafe { libc::close(fd) };
         assert_eq!(rv, 0, "Could not close the fd");
     }
+
+    Ok(())
+}
+
+fn test_close_connection_without_accept(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    sock_flag: libc::c_int,
+) -> Result<(), String> {
+    assert_ne!(
+        sock_type,
+        libc::SOCK_DGRAM,
+        "This test doesn't support datagram sockets"
+    );
+
+    let fd = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    assert!(fd >= 0);
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+
+    let (server_addr, server_addr_len) = socket_utils::autobind_helper(fd.as_raw_fd(), domain);
+
+    // listen for connections
+    test_utils::assert_with_errno!(unsafe { libc::listen(fd.as_raw_fd(), 10) } == 0);
+
+    let fd_client = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    let fd_client = unsafe { OwnedFd::from_raw_fd(fd_client) };
+    // connect to the server address
+    let rv = unsafe { libc::connect(fd_client.as_raw_fd(), server_addr.as_ptr(), server_addr_len) };
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
+
+    // close the listener
+    test_utils::assert_with_errno!(unsafe { libc::close(fd.into_raw_fd()) } == 0);
+
+    // client should detect that the connection was destroyed.
+
+    // For now set the client to non-blocking to facilitate debugging this test
+    // under shadow.  Without this, the operations below block indefinitely,
+    // making it difficult to e.g. use --summarize to check the behavior across
+    // different socket types etc.
+    {
+        let flags = unsafe { libc::fcntl(fd_client.as_raw_fd(), libc::F_GETFL, 0) };
+        test_utils::assert_with_errno!(flags != -1);
+        test_utils::assert_with_errno!(
+            unsafe {
+                libc::fcntl(
+                    fd_client.as_raw_fd(),
+                    libc::F_SETFL,
+                    flags | libc::O_NONBLOCK,
+                )
+            } == 0
+        );
+    }
+
+    let mut buf = [0u8; 10];
+    test_utils::check_system_call!(
+        || unsafe { libc::recv(fd_client.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len(), 0) },
+        &[libc::ECONNRESET]
+    )?;
+    test_utils::check_system_call!(
+        || unsafe { libc::send(fd_client.as_raw_fd(), buf.as_ptr().cast(), buf.len(), 0) },
+        &[libc::EPIPE]
+    )?;
+
+    // close the client
+    test_utils::assert_with_errno!(unsafe { libc::close(fd_client.into_raw_fd()) } == 0);
 
     Ok(())
 }
