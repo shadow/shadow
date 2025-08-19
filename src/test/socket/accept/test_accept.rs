@@ -889,7 +889,6 @@ fn test_after_client_closed(
 
     // connect to the server address
     let rv = unsafe { libc::connect(fd_client, server_addr.as_ptr(), server_addr_len) };
-
     assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
@@ -898,6 +897,14 @@ fn test_after_client_closed(
     // select()/poll() and getsockopt()
     let rv = unsafe { libc::usleep(10000) };
     assert_eq!(rv, 0);
+
+    // data sent before the server-side calls `accept` should be buffered,
+    // and readable after the socket is `accept`ed.
+    let send_buf = [1u8, 2u8, 3u8, 4u8];
+    assert_eq!(
+        nix::sys::socket::send(fd_client, &send_buf, nix::sys::socket::MsgFlags::empty()),
+        Ok(send_buf.len())
+    );
 
     // close the client socket
     nix::unistd::close(fd_client).unwrap();
@@ -935,10 +942,15 @@ fn test_after_client_closed(
         if let Some(fd) = fd {
             // let's test recv() while we're here...
             let mut buf = [0u8; 10];
+            // receive the data that was sent before `accept`
             let num_read =
                 nix::sys::socket::recv(fd, &mut buf, nix::sys::socket::MsgFlags::empty()).unwrap();
+            assert_eq!(&buf[..num_read], send_buf.as_slice());
             // returns EOF
-            assert_eq!(num_read, 0);
+            assert_eq!(
+                nix::sys::socket::recv(fd, &mut buf, nix::sys::socket::MsgFlags::empty()),
+                Ok(0)
+            );
 
             let rv = unsafe { libc::close(fd) };
             assert_eq!(rv, 0, "Could not close the fd");
