@@ -72,7 +72,11 @@
  * Assert that a struct declared with MAGIC_DECLARE and initialized with
  * MAGIC_INIT still holds the value MAGIC_VALUE.
  */
-#define MAGIC_ASSERT(object) utility_debugAssert((object) && ((object)->magic == MAGIC_VALUE))
+#define MAGIC_ASSERT(object)                                                                       \
+    do {                                                                                           \
+        utility_debugAssert(object);                                                               \
+        utility_debugAssert((object)->magic == MAGIC_VALUE);                                       \
+    } while (0)
 
 /**
  * CLear a magic value. Future assertions with MAGIC_ASSERT will fail.
