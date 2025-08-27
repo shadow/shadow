@@ -4,6 +4,7 @@
  */
 
 use test_utils::TestEnvironment as TestEnv;
+use test_utils::assert_with_errno;
 use test_utils::set;
 use test_utils::socket_utils::SockAddr;
 
@@ -177,7 +178,109 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         }
     }
 
+    // additional tests
+    tests.push(test_utils::ShadowTest::new(
+        "tcp-reuse-addr-with-orphaned-child-socket",
+        test_tcp_reuse_addr_with_orphaned_child_socket,
+        set![TestEnv::Libc, TestEnv::Shadow],
+    ));
+
     tests
+}
+
+fn test_tcp_reuse_addr_with_orphaned_child_socket() -> Result<(), String> {
+    // This is essentially a regression test for
+    // https://github.com/shadow/shadow/issues/3563.
+    // We bind a socket, let a client connect, close the binding socket,
+    // and then try to bind a new socket to the same address.
+
+    let addr = libc::sockaddr_in {
+        sin_family: libc::AF_INET as u16,
+        sin_port: 11111u16.to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: libc::INADDR_LOOPBACK.to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+    let domain = libc::AF_INET;
+    let sock_type = libc::SOCK_STREAM;
+    let socket_flag = 0;
+    let listen_fd = unsafe { libc::socket(domain, sock_type | socket_flag, 0) };
+    assert_with_errno!(listen_fd >= 0);
+
+    // Set SO_REUSEADDR to allow the listening address to be reused, even if accepted
+    // sockets using that address are still open or in TIME_WAIT.
+    // See <https://github.com/shadow/shadow/blob/main/src/lib/tcp/notes/listener-close-with-pending-conn.md>
+    let one = 1u32;
+    assert_with_errno!(
+        unsafe {
+            libc::setsockopt(
+                listen_fd,
+                libc::SOL_SOCKET,
+                libc::SO_REUSEADDR,
+                std::ptr::from_ref(&one).cast(),
+                size_of_val(&one) as u32,
+            )
+        } == 0
+    );
+
+    let args = BindArguments {
+        fd: listen_fd,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+    check_bind_call(&args, None).expect("first bind unexpectedly failed");
+    assert_with_errno!(unsafe { libc::listen(listen_fd, 10) } == 0);
+
+    let client_fd = unsafe { libc::socket(domain, sock_type | socket_flag, 0) };
+    assert_with_errno!(client_fd >= 0);
+    assert_with_errno!(
+        unsafe {
+            libc::connect(
+                client_fd,
+                std::ptr::from_ref(&addr).cast::<libc::sockaddr>(),
+                std::mem::size_of_val(&addr) as u32,
+            )
+        } == 0
+    );
+    assert_with_errno!(unsafe { libc::close(client_fd) } == 0);
+
+    let accepted_fd =
+        unsafe { libc::accept(listen_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
+    assert_with_errno!(accepted_fd >= 0);
+
+    // https://github.com/shadow/shadow/issues/3563: some non-zero time needs to pass
+    // for shadow to clean up state and recognize the address as being available again.
+    // Unclear why.
+    std::thread::sleep(std::time::Duration::from_nanos(1));
+
+    assert_with_errno!(unsafe { libc::close(listen_fd) } == 0);
+    let listen_fd = unsafe { libc::socket(domain, sock_type | socket_flag, 0) };
+    assert_with_errno!(listen_fd >= 0);
+    assert_with_errno!(
+        unsafe {
+            libc::setsockopt(
+                listen_fd,
+                libc::SOL_SOCKET,
+                libc::SO_REUSEADDR,
+                std::ptr::from_ref(&one).cast(),
+                size_of_val(&one) as u32,
+            )
+        } == 0
+    );
+    let args = BindArguments {
+        fd: listen_fd,
+        addr: Some(SockAddr::Inet(addr)),
+        addr_len: std::mem::size_of_val(&addr) as u32,
+    };
+    // Previously, https://github.com/shadow/shadow/issues/3563 caused shadow to fail here,
+    // incorrectly returning EADDRINUSE due to the accepted socket still being alive.
+    let res = check_bind_call(&args, None);
+
+    assert_with_errno!(unsafe { libc::close(listen_fd) } == 0);
+    assert_with_errno!(unsafe { libc::close(accepted_fd) } == 0);
+
+    res
 }
 
 // test binding using an argument that cannot be a fd

@@ -3,6 +3,11 @@
  * See LICENSE for licensing information
  */
 
+use std::os::fd::AsRawFd as _;
+use std::os::fd::FromRawFd as _;
+use std::os::fd::IntoRawFd as _;
+use std::os::fd::OwnedFd;
+
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::socket_utils;
 use test_utils::socket_utils::SockAddr;
@@ -219,6 +224,19 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
                                 set![TestEnv::Libc, TestEnv::Shadow],
                             ),
                         ]);
+                        if sock_type != libc::SOCK_DGRAM {
+                            tests.push(test_utils::ShadowTest::new(
+                                &append_args("test_close_connection_without_accept"),
+                                move || {
+                                    test_close_connection_without_accept(
+                                        domain, sock_type, sock_flag,
+                                    )
+                                },
+                                // shadow doesn't handle this correctly:
+                                // https://github.com/shadow/shadow/issues/3644
+                                set![TestEnv::Libc],
+                            ));
+                        }
                     }
                 }
             }
@@ -721,6 +739,71 @@ fn test_after_close(
     Ok(())
 }
 
+fn test_close_connection_without_accept(
+    domain: libc::c_int,
+    sock_type: libc::c_int,
+    sock_flag: libc::c_int,
+) -> Result<(), String> {
+    assert_ne!(
+        sock_type,
+        libc::SOCK_DGRAM,
+        "This test doesn't support datagram sockets"
+    );
+
+    let fd = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    assert!(fd >= 0);
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+
+    let (server_addr, server_addr_len) = socket_utils::autobind_helper(fd.as_raw_fd(), domain);
+
+    // listen for connections
+    test_utils::assert_with_errno!(unsafe { libc::listen(fd.as_raw_fd(), 10) } == 0);
+
+    let fd_client = unsafe { libc::socket(domain, sock_type | sock_flag, 0) };
+    let fd_client = unsafe { OwnedFd::from_raw_fd(fd_client) };
+    // connect to the server address
+    let rv = unsafe { libc::connect(fd_client.as_raw_fd(), server_addr.as_ptr(), server_addr_len) };
+    assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
+
+    // close the listener
+    test_utils::assert_with_errno!(unsafe { libc::close(fd.into_raw_fd()) } == 0);
+
+    // client should detect that the connection was destroyed.
+
+    // For now set the client to non-blocking to facilitate debugging this test
+    // under shadow.  Without this, the operations below block indefinitely,
+    // making it difficult to e.g. use --summarize to check the behavior across
+    // different socket types etc.
+    {
+        let flags = unsafe { libc::fcntl(fd_client.as_raw_fd(), libc::F_GETFL, 0) };
+        test_utils::assert_with_errno!(flags != -1);
+        test_utils::assert_with_errno!(
+            unsafe {
+                libc::fcntl(
+                    fd_client.as_raw_fd(),
+                    libc::F_SETFL,
+                    flags | libc::O_NONBLOCK,
+                )
+            } == 0
+        );
+    }
+
+    let mut buf = [0u8; 10];
+    test_utils::check_system_call!(
+        || unsafe { libc::recv(fd_client.as_raw_fd(), buf.as_mut_ptr().cast(), buf.len(), 0) },
+        &[libc::ECONNRESET]
+    )?;
+    test_utils::check_system_call!(
+        || unsafe { libc::send(fd_client.as_raw_fd(), buf.as_ptr().cast(), buf.len(), 0) },
+        &[libc::EPIPE]
+    )?;
+
+    // close the client
+    test_utils::assert_with_errno!(unsafe { libc::close(fd_client.into_raw_fd()) } == 0);
+
+    Ok(())
+}
+
 /// Test accept by checking the returned address fields.
 fn test_correctness(
     accept_fn: AcceptFn,
@@ -889,7 +972,6 @@ fn test_after_client_closed(
 
     // connect to the server address
     let rv = unsafe { libc::connect(fd_client, server_addr.as_ptr(), server_addr_len) };
-
     assert!(rv == 0 || (rv == -1 && test_utils::get_errno() == libc::EINPROGRESS));
 
     // shadow needs to run events, otherwise the accept call won't know it
@@ -898,6 +980,14 @@ fn test_after_client_closed(
     // select()/poll() and getsockopt()
     let rv = unsafe { libc::usleep(10000) };
     assert_eq!(rv, 0);
+
+    // data sent before the server-side calls `accept` should be buffered,
+    // and readable after the socket is `accept`ed.
+    let send_buf = [1u8, 2u8, 3u8, 4u8];
+    assert_eq!(
+        nix::sys::socket::send(fd_client, &send_buf, nix::sys::socket::MsgFlags::empty()),
+        Ok(send_buf.len())
+    );
 
     // close the client socket
     nix::unistd::close(fd_client).unwrap();
@@ -935,10 +1025,15 @@ fn test_after_client_closed(
         if let Some(fd) = fd {
             // let's test recv() while we're here...
             let mut buf = [0u8; 10];
+            // receive the data that was sent before `accept`
             let num_read =
                 nix::sys::socket::recv(fd, &mut buf, nix::sys::socket::MsgFlags::empty()).unwrap();
+            assert_eq!(&buf[..num_read], send_buf.as_slice());
             // returns EOF
-            assert_eq!(num_read, 0);
+            assert_eq!(
+                nix::sys::socket::recv(fd, &mut buf, nix::sys::socket::MsgFlags::empty()),
+                Ok(0)
+            );
 
             let rv = unsafe { libc::close(fd) };
             assert_eq!(rv, 0, "Could not close the fd");

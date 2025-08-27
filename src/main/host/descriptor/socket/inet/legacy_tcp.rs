@@ -883,8 +883,8 @@ impl LegacyTcpSocket {
 
     pub fn accept(
         &mut self,
-        _net_ns: &NetworkNamespace,
-        _rng: impl rand::Rng,
+        net_ns: &NetworkNamespace,
+        rng: impl rand::Rng,
         _cb_queue: &mut CallbackQueue,
     ) -> Result<OpenFile, SyscallError> {
         let is_valid_listener = unsafe { c::tcp_isValidListener(self.as_legacy_tcp()) } == 1;
@@ -946,8 +946,12 @@ impl LegacyTcpSocket {
             );
         };
 
-        // sanity check: make sure new socket peer address matches address returned from
-        // tcp_acceptServerPeer() above
+        // Associate the new socket with the local:peer address pair. In
+        // previous versions of shadow, the new socket was never registered this
+        // way. Instead the packets continued to be routed to the parent
+        // listening-socket, which was responsible for routing them to this new
+        // "child" socket.  But that led to bugs such as
+        // https://github.com/shadow/shadow/issues/3563.
         {
             let File::Socket(Socket::Inet(InetSocket::LegacyTcp(new_socket))) =
                 open_file.inner_file()
@@ -955,19 +959,72 @@ impl LegacyTcpSocket {
                 panic!("Expected this to be a LegacyTcpSocket");
             };
 
-            let new_socket = new_socket.borrow();
+            // get and validate child peer and local addresses.
+            let child_peer_addr;
+            let child_local_addr;
+            {
+                let new_socket_ref = new_socket.borrow();
+                // sanity check: make sure new socket peer address matches address returned from
+                // tcp_acceptServerPeer() above
+                {
+                    let mut ip: libc::in_addr_t = 0;
+                    let mut port: libc::in_port_t = 0;
 
-            let mut ip: libc::in_addr_t = 0;
-            let mut port: libc::in_port_t = 0;
+                    // should return ip and port in network byte order
+                    let okay = unsafe {
+                        c::legacysocket_getPeerName(
+                            new_socket_ref.as_legacy_socket(),
+                            &mut ip,
+                            &mut port,
+                        )
+                    };
 
-            // should return ip and port in network byte order
-            let okay = unsafe {
-                c::legacysocket_getPeerName(new_socket.as_legacy_socket(), &mut ip, &mut port)
-            };
+                    assert_eq!(okay, 1);
+                    assert_eq!(ip, peer_addr.sin_addr.s_addr);
+                    assert_eq!(port, peer_addr.sin_port);
+                }
+                child_peer_addr = new_socket_ref
+                    .getpeername()
+                    .expect("error finding child peer address")
+                    .expect("missing child peer address");
+                child_local_addr = new_socket_ref
+                    .getsockname()
+                    .expect("error finding local address")
+                    .expect("missing local address");
+                let parent_local_addr = self
+                    .getsockname()
+                    .expect("error finding parent local address")
+                    .expect("missing parent local address");
+                // port should be the same as the listening socket.
+                debug_assert_eq!(
+                    child_local_addr.port(),
+                    parent_local_addr.port(),
+                    "local address of accept'ed socket doesn't match parent listening socket"
+                );
+                // address should be same as the parent address, unless it was unspecified.
+                if !parent_local_addr.ip().is_unspecified() {
+                    debug_assert_eq!(child_local_addr.ip(), parent_local_addr.ip());
+                }
+                // in any case, address of the child should *not* be unspecified.
+                debug_assert!(!child_local_addr.ip().is_unspecified());
+                debug_assert_ne!(!child_local_addr.port(), 0);
+            }
 
-            assert_eq!(okay, 1);
-            assert_eq!(ip, peer_addr.sin_addr.s_addr);
-            assert_eq!(port, peer_addr.sin_port);
+            let (_addr, handle) = inet::associate_socket(
+                InetSocket::LegacyTcp(Arc::clone(new_socket)),
+                SocketAddrV4::from(child_local_addr),
+                SocketAddrV4::from(child_peer_addr),
+                /* Allow the parent/listening socket to be bound to the same address,
+                 * with a missing/generic peer. */
+                /* check_generic_peer= */
+                false,
+                net_ns,
+                rng,
+            )?;
+            // the handle normally disassociates the socket when dropped, but
+            // the C TCP code does its own manual disassociation, so we'll just
+            // let it do its own thing.
+            std::mem::forget(handle);
         }
 
         Ok(open_file)
