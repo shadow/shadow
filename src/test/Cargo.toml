@@ -257,4 +257,4 @@ once_cell = "1.21.0"
 vasi-sync = { path = "../lib/vasi-sync" }
 static_assertions = "1.1.0"
 tempfile = "3.21.0"
-tor-llcrypto = "0.33.0"
+tor-llcrypto = "0.34.0"
