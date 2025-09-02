@@ -2165,9 +2165,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "safelog"
-version = "0.4.8"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a4e1c994fbc7521a5003e5c1c54304654ea0458881e777f6e2638520c2de8c5"
+checksum = "e17ce82c29ef6ea061293688b9c0e8aca4cd621c24cddd1e1743fef3b9860a15"
 dependencies = [
  "derive_more",
  "educe",
@@ -2833,9 +2833,9 @@ dependencies = [
 
 [[package]]
 name = "tor-llcrypto"
-version = "0.33.0"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b92fa9a99a066f06cd266287f6f89270c010693cce3c4c2fa38c27abfcda5fb"
+checksum = "68f1aafe2d85828f4d4ddcd046a8b03a2d1d4a5de0211a4ddbc42d89278ab3f4"
 dependencies = [
  "aes",
  "base64ct",
