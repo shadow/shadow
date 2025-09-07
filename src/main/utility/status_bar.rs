@@ -101,10 +101,10 @@ impl<T: 'static + StatusBarState> std::ops::Drop for StatusBar<T> {
     fn drop(&mut self) {
         self.stop_flag
             .swap(true, std::sync::atomic::Ordering::Relaxed);
-        if let Some(handle) = self.thread.take() {
-            if let Err(e) = handle.join() {
-                log::warn!("Progress bar thread did not exit cleanly: {e:?}");
-            }
+        if let Some(handle) = self.thread.take()
+            && let Err(e) = handle.join()
+        {
+            log::warn!("Progress bar thread did not exit cleanly: {e:?}");
         }
     }
 }
@@ -164,10 +164,10 @@ impl<T: 'static + StatusBarState> std::ops::Drop for StatusPrinter<T> {
     fn drop(&mut self) {
         // drop the sender to disconnect it
         self.stop_sender.take();
-        if let Some(handle) = self.thread.take() {
-            if let Err(e) = handle.join() {
-                log::warn!("Progress thread did not exit cleanly: {e:?}");
-            }
+        if let Some(handle) = self.thread.take()
+            && let Err(e) = handle.join()
+        {
+            log::warn!("Progress thread did not exit cleanly: {e:?}");
         }
     }
 }

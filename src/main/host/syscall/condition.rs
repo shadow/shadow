@@ -154,10 +154,10 @@ impl SyscallCondition {
 
 impl Drop for SyscallCondition {
     fn drop(&mut self) {
-        if let Some(condition) = &self.condition {
-            if !condition.c_ptr.ptr().is_null() {
-                unsafe { cshadow::syscallcondition_unref(condition.c_ptr.ptr()) }
-            }
+        if let Some(condition) = &self.condition
+            && !condition.c_ptr.ptr().is_null()
+        {
+            unsafe { cshadow::syscallcondition_unref(condition.c_ptr.ptr()) }
         }
     }
 }

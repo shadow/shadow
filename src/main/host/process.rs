@@ -545,16 +545,16 @@ impl RunnableProcess {
             process_shmem_protected.set_pending_standard_siginfo(signal, siginfo_t);
         }
 
-        if let Some(thread) = current_thread {
-            if thread.process_id() == self.common.id() {
-                let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-                let threadmem = thread.shmem();
-                let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
-                if !threadprotmem.blocked_signals.has(signal) {
-                    // Target process is this process, and current thread hasn't blocked
-                    // the signal.  It will be delivered to this thread when it resumes.
-                    return;
-                }
+        if let Some(thread) = current_thread
+            && thread.process_id() == self.common.id()
+        {
+            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+            let threadmem = thread.shmem();
+            let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
+            if !threadprotmem.blocked_signals.has(signal) {
+                // Target process is this process, and current thread hasn't blocked
+                // the signal.  It will be delivered to this thread when it resumes.
+                return;
             }
         }
 

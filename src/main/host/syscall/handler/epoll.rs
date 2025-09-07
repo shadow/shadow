@@ -370,22 +370,21 @@ impl SyscallHandler {
 
         // Our behavior depends on the value of timeout.
         // Return immediately if timeout is 0.
-        if let Some(timeout) = timeout {
-            if timeout.is_zero() {
-                log::trace!("No events are ready on epoll {epfd} and the timeout is 0");
-                return Ok(0);
-            }
+        if let Some(timeout) = timeout
+            && timeout.is_zero()
+        {
+            log::trace!("No events are ready on epoll {epfd} and the timeout is 0");
+            return Ok(0);
         }
 
         // Return immediately if we were already blocked for a while and still have no events.
         // Condition will only exist after a wakeup.
-        if let Some(cond) = ctx.objs.thread.syscall_condition() {
-            if let Some(abs_timeout) = cond.timeout() {
-                if Worker::current_time().unwrap() >= abs_timeout {
-                    log::trace!("No events are ready on epoll {epfd} and the timeout expired");
-                    return Ok(0);
-                }
-            }
+        if let Some(cond) = ctx.objs.thread.syscall_condition()
+            && let Some(abs_timeout) = cond.timeout()
+            && Worker::current_time().unwrap() >= abs_timeout
+        {
+            log::trace!("No events are ready on epoll {epfd} and the timeout expired");
+            return Ok(0);
         }
 
         // If there's a signal pending, this syscall will be interrupted.

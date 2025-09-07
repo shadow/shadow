@@ -639,10 +639,10 @@ impl LegacyFileCounter {
     fn close_helper(&mut self, host: &Host) {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
-        if Arc::<()>::strong_count(&self.open_count) == 1 {
-            if let Some(file) = self.file.take() {
-                unsafe { c::legacyfile_close(file.ptr(), host) }
-            }
+        if Arc::<()>::strong_count(&self.open_count) == 1
+            && let Some(file) = self.file.take()
+        {
+            unsafe { c::legacyfile_close(file.ptr(), host) }
         }
     }
 

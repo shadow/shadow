@@ -60,10 +60,10 @@ impl SyscallHandler {
         let mut result = Self::readv_helper(ctx, file.inner_file(), &iovs, None, 0);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_read = result?;
@@ -133,10 +133,10 @@ impl SyscallHandler {
         let mut result = Self::readv_helper(ctx, file.inner_file(), &iovs, Some(offset), 0);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_read = result?;
@@ -197,10 +197,10 @@ impl SyscallHandler {
         let offset = (offset != -1).then_some(offset);
 
         // if the offset is set, make sure it's not negative
-        if let Some(offset) = offset {
-            if offset < 0 {
-                return Err(Errno::EINVAL.into());
-            }
+        if let Some(offset) = offset
+            && offset < 0
+        {
+            return Err(Errno::EINVAL.into());
         }
 
         let iov_count = iov_count.try_into().or(Err(Errno::EINVAL))?;
@@ -214,10 +214,10 @@ impl SyscallHandler {
         let mut result = Self::readv_helper(ctx, file.inner_file(), &iovs, offset, flags);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_read = result?;
@@ -346,10 +346,10 @@ impl SyscallHandler {
         let mut result = Self::writev_helper(ctx, file.inner_file(), &iovs, None, 0);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;
@@ -419,10 +419,10 @@ impl SyscallHandler {
         let mut result = Self::writev_helper(ctx, file.inner_file(), &iovs, Some(offset), 0);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;
@@ -483,10 +483,10 @@ impl SyscallHandler {
         let offset = (offset != -1).then_some(offset);
 
         // if the offset is set, make sure it's not negative
-        if let Some(offset) = offset {
-            if offset < 0 {
-                return Err(Errno::EINVAL.into());
-            }
+        if let Some(offset) = offset
+            && offset < 0
+        {
+            return Err(Errno::EINVAL.into());
         }
 
         let iov_count = iov_count.try_into().or(Err(Errno::EINVAL))?;
@@ -500,10 +500,10 @@ impl SyscallHandler {
         let mut result = Self::writev_helper(ctx, file.inner_file(), &iovs, offset, flags);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;

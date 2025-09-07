@@ -1326,12 +1326,12 @@ mod export {
 
         let tot_written = dst_len.saturating_sub(dst_space);
 
-        if tot_written > 0 {
-            if let Err(e) = dst_writer.flush() {
-                log::warn!("Couldn't flush managed process writes from packet payload: {e:?}");
-                // TODO: can we get memmgr errno here like we can with `copy_from_ptr()`?
-                return linux_api::errno::Errno::EFAULT.to_negated_i64();
-            }
+        if tot_written > 0
+            && let Err(e) = dst_writer.flush()
+        {
+            log::warn!("Couldn't flush managed process writes from packet payload: {e:?}");
+            // TODO: can we get memmgr errno here like we can with `copy_from_ptr()`?
+            return linux_api::errno::Errno::EFAULT.to_negated_i64();
         }
 
         log::trace!("We wrote {tot_written} bytes into managed process buffer of len {dst_len}");

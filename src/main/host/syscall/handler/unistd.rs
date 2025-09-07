@@ -220,10 +220,10 @@ impl SyscallHandler {
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_read = result?;
@@ -274,10 +274,10 @@ impl SyscallHandler {
         let mut result = Self::read_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_read = result?;
@@ -340,10 +340,10 @@ impl SyscallHandler {
         let mut result = Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, None);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;
@@ -395,10 +395,10 @@ impl SyscallHandler {
             Self::write_helper(ctx, file.inner_file(), buf_ptr, buf_size, Some(offset));
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;
@@ -610,12 +610,12 @@ impl SyscallHandler {
             // the calling process.
             return Err(Errno::ESRCH.into());
         }
-        if let Some(pgid) = pgid {
-            if ctx.objs.host.process_session_id_of_group_id(pgid) != Some(process.session_id()) {
-                // An attempt was made to move a process into a process group in
-                // a different session
-                return Err(Errno::EPERM.into());
-            }
+        if let Some(pgid) = pgid
+            && ctx.objs.host.process_session_id_of_group_id(pgid) != Some(process.session_id())
+        {
+            // An attempt was made to move a process into a process group in
+            // a different session
+            return Err(Errno::EPERM.into());
         }
         if process.session_id() != ctx.objs.process.session_id() {
             // `setpgid(2)`: ... or to change the process  group  ID of one of

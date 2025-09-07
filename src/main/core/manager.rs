@@ -156,13 +156,13 @@ impl<'a> Manager<'a> {
 
             // create the hosts directory if it doesn't exist
             let result = std::fs::create_dir(&hosts_path);
-            if let Err(e) = result {
-                if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    return Err(e).context(format!(
-                        "Failed to create hosts directory '{}'",
-                        hosts_path.display()
-                    ));
-                }
+            if let Err(e) = result
+                && e.kind() != std::io::ErrorKind::AlreadyExists
+            {
+                return Err(e).context(format!(
+                    "Failed to create hosts directory '{}'",
+                    hosts_path.display()
+                ));
             }
         } else {
             // create the data and hosts directories
@@ -498,11 +498,11 @@ impl<'a> Manager<'a> {
                     );
 
                     // log a heartbeat message every 'heartbeat_interval' amount of simulated time
-                    if let Some(heartbeat_interval) = heartbeat_interval {
-                        if window_start > last_heartbeat + heartbeat_interval {
-                            last_heartbeat = window_start;
-                            self.log_heartbeat(window_start);
-                        }
+                    if let Some(heartbeat_interval) = heartbeat_interval
+                        && window_start > last_heartbeat + heartbeat_interval
+                    {
+                        last_heartbeat = window_start;
+                        self.log_heartbeat(window_start);
                     }
 
                     // check resource usage every 30 real seconds
