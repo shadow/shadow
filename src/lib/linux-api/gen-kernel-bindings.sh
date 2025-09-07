@@ -108,6 +108,8 @@ bindgen_flags+=("--blocklist-item=SS_AUTODISARM")
 bindgen_flags+=("--allowlist-type=sigset_t")
 bindgen_flags+=("--allowlist-type=siginfo_t")
 bindgen_flags+=("--allowlist-type=sigaction")
+# needed to avoid an `unpredictable_function_pointer_comparisons` warning
+bindgen_flags+=("--no-partialeq=sigaction")
 bindgen_flags+=("--allowlist-type=stack_t")
 bindgen_flags+=("--allowlist-type=ucontext")
 

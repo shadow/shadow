@@ -3364,7 +3364,7 @@ pub type linux___sighandler_t = linux___signalfn_t;
 pub type linux___restorefn_t = ::core::option::Option<unsafe extern "C" fn()>;
 pub type linux___sigrestore_t = linux___restorefn_t;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct linux_sigaction {
     pub lsa_handler: linux___sighandler_t,
     pub lsa_flags: ::core::ffi::c_ulong,
