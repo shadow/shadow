@@ -830,7 +830,7 @@ impl<'a> Manager<'a> {
         Ok(page_size * avl_pages)
     }
 
-    pub fn shmem(&self) -> &ShMemBlock<ManagerShmem> {
+    pub fn shmem(&self) -> &ShMemBlock<'_, ManagerShmem> {
         &self.shmem
     }
 }

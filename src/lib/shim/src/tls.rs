@@ -338,7 +338,7 @@ impl ThreadLocalStorage {
 
     /// Returns thread local storage for the current thread. The raw byte contents
     /// are initialized to zero.
-    fn current_thread_storage(&self) -> TlsOneThreadBackingStoreRef {
+    fn current_thread_storage(&self) -> TlsOneThreadBackingStoreRef<'_> {
         if let Some(ThreadLocalStorageKey(id)) = self.current_key() {
             // SAFETY: `id` is unique to this live thread, and caller guarantees
             // any previous thread with this `id` has been removed.

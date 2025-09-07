@@ -370,7 +370,7 @@ impl MemoryManager {
     pub fn memory_ref_prefix<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
-    ) -> Result<ProcessMemoryRef<T>, Errno> {
+    ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
         // Only use the mapped ref if it's able to get the whole region,
         // since otherwise the copying version might be able to get more
         // data.

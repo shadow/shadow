@@ -93,13 +93,13 @@ impl<'a> ThreadContext<'a> {
 
     /// Split into a `&Process` and a `HostContext`. Useful e.g.
     /// for calling `Process` methods that take a `&HostContext`.
-    pub fn split_process(&self) -> (HostContext, &Process) {
+    pub fn split_process(&self) -> (HostContext<'_>, &Process) {
         (HostContext::new(self.host), self.process)
     }
 
     /// Split into a `&Thread` and a `ProcessContext`. Useful e.g.
     /// for calling `Thread` methods that take a `&ProcessContext`.
-    pub fn split_thread(&self) -> (ProcessContext, &Thread) {
+    pub fn split_thread(&self) -> (ProcessContext<'_>, &Thread) {
         (ProcessContext::new(self.host, self.process), self.thread)
     }
 

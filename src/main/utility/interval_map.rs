@@ -100,18 +100,18 @@ impl<V: Clone> IntervalMap<V> {
     }
 
     /// Returns iterator over all intervals keys, in sorted order.
-    pub fn keys(&self) -> KeyIter<V> {
+    pub fn keys(&self) -> KeyIter<'_, V> {
         KeyIter { map: self, i: 0 }
     }
 
     /// Returns iterator over all intervals keys and their values, in order by interval key.
-    pub fn iter(&self) -> ItemIter<V> {
+    pub fn iter(&self) -> ItemIter<'_, V> {
         ItemIter { map: self, i: 0 }
     }
 
     /// Returns iterator over all interval keys and their values, starting with the first interval
     /// containing or after `begin`.
-    pub fn iter_from(&self, begin: usize) -> ItemIter<V> {
+    pub fn iter_from(&self, begin: usize) -> ItemIter<'_, V> {
         let idx = match self.starts.binary_search(&begin) {
             Ok(i) => i,
             Err(i) if (i > 0 && begin < self.ends[i - 1]) => i - 1,

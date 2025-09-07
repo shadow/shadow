@@ -63,7 +63,7 @@ impl Iterator for RangeListIter<'_> {
 /// The iterator will return items in the order of the list, meaning that they are not guaranteed to
 /// be returned in increasing order and there may be duplicates. For example "1,2,3,3,2" would
 /// return items \[1, 2, 3, 3, 2\].
-pub fn parse_range_list(range_list: &str) -> RangeListIter {
+pub fn parse_range_list(range_list: &str) -> RangeListIter<'_> {
     RangeListIter {
         current_range: None,
         remaining: range_list,

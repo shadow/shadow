@@ -758,7 +758,7 @@ fn test_timer() {
     let mut host = Host::new();
 
     /// Helper to get the state from a socket.
-    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<'_, TcpState<TestEnvState>> {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 
@@ -840,7 +840,7 @@ fn verify_send_sync() {
 /// 5.6.7.8:20.
 fn establish_helper(scheduler: &Scheduler, host: &mut Host) -> Rc<RefCell<TcpSocket>> {
     /// Helper to get the state from a socket.
-    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<TcpState<TestEnvState>> {
+    fn s(tcp: &Rc<RefCell<TcpSocket>>) -> Ref<'_, TcpState<TestEnvState>> {
         Ref::map(tcp.borrow(), |x| x.tcp_state())
     }
 

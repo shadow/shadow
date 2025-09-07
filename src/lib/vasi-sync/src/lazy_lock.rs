@@ -173,7 +173,7 @@ where
     /// We can't because of our usage of loom's UnsafeCell, which doesn't support
     /// getting a raw reference that's not borrowed from an intermediate temp object.
     #[inline]
-    pub fn force(&self) -> Ref<T> {
+    pub fn force(&self) -> Ref<'_, T> {
         // `Acquire` pairs with `Release` in `Uninitd` case of `init`.
         let state = InitState::try_from(self.init_state.load(atomic::Ordering::Acquire)).unwrap();
 

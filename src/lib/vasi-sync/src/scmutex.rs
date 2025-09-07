@@ -177,7 +177,7 @@ impl<T> SelfContainedMutex<T> {
         }
     }
 
-    pub fn lock(&self) -> SelfContainedMutexGuard<T> {
+    pub fn lock(&self) -> SelfContainedMutexGuard<'_, T> {
         // On first attempt, optimistically assume the lock is uncontended.
         let mut current = FutexWord {
             lock_state: UNLOCKED,

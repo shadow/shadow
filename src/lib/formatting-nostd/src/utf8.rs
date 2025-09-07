@@ -136,7 +136,7 @@ impl<'a> core::iter::Iterator for DecodeLossyIterator<'a> {
     }
 }
 
-pub fn decode_lossy(bytes: &[u8]) -> DecodeLossyIterator {
+pub fn decode_lossy(bytes: &[u8]) -> DecodeLossyIterator<'_> {
     DecodeLossyIterator { bytes }
 }
 
