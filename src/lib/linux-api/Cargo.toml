@@ -12,21 +12,21 @@ rustix = ["dep:rustix"]
 c_bindings = ["dep:shadow-build-common", "dep:cbindgen"]
 
 [dependencies]
-bitflags = "2.9.0"
-log = { version = "0.4.22", default-features = false }
+bitflags = "2.9.4"
+log = { version = "0.4.28", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
-num_enum = { version = "0.7.3", default-features = false }
+num_enum = { version = "0.7.4", default-features = false }
 memoffset = "0.9.1"
-bytemuck = "1.23.0"
+bytemuck = "1.23.2"
 linux-syscall = "1.2.0"
 linux-errno = "1.1.0"
 naked-function = "0.1.5"
 linux-raw-sys = "0.10.0"
 rustix = { optional = true, version = "0.38.44", default-features = false, features = ["process"] }
-libc = { optional = true, default-features = false, version = "0.2.159" }
-bytemuck_derive = "1.10.0"
+libc = { optional = true, default-features = false, version = "0.2.175" }
+bytemuck_derive = "1.10.1"
 
 [dev-dependencies]
 rustix = { version = "0.38.44", default-features=false, features = ["thread", "process", "time"] }
