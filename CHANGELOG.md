@@ -71,6 +71,8 @@ https://gitlab.torproject.org/tpo/core/arti/-/issues/1972).
 * Intercept reads to `/proc/sys/kernel/random/uuid` and return a simulated pseudorandom result instead of letting the host systerm return an actually-random result. (#3617, fixing #3188).
 * Trap and emulate the `cpuid` instruction where the platform supports it (currently on relatively new intel processors), to report that the `rdrand` and `rdseed` instructions are unavailable. (#3619, fixing #1561 and #3610)
 * Fixed an error when running clippy on Shadow and using newer compiler versions. (#3631)
+* Fixed a bug where a listening TCP socket would be cleaned up only after all its child sockets were closed. (#3643)
+* Fixed a bug where files could have their `close()` delayed until the application next made a blocking syscall. (#3652)
 
 Full changelog since v3.2.0:
 
