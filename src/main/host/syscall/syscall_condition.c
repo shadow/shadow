@@ -45,6 +45,7 @@ struct _SysCallCondition {
 };
 
 static void _syscallcondition_unrefcb(void* cond_ptr);
+static void _syscallcondition_wrapper_free(void** cond_ptr_ptr);
 static void _syscallcondition_notifyTimeoutExpired(const Host* host, void* obj, void* arg);
 
 SysCallCondition* syscallcondition_new(Trigger trigger) {
@@ -237,6 +238,17 @@ static void _syscallcondition_unrefcb(void* cond_ptr) {
     syscallcondition_unref(cond_ptr);
 }
 
+// Unrefs the SysCallCondition at `*cond_ptr` and frees `cond_ptr`.
+//
+// `cond_ptr_ptr` must be non-NULL and allocated with `g_new()`.
+// `*cond_ptr_ptr` may or may not be NULL depending on if it has already been unrefed.
+static void _syscallcondition_wrapper_free(void** cond_ptr_ptr) {
+    if (*cond_ptr_ptr) {
+        _syscallcondition_unrefcb(*cond_ptr_ptr);
+    }
+    g_free(cond_ptr_ptr);
+}
+
 #ifdef DEBUG
 static void _syscallcondition_logListeningState(SysCallCondition* cond, const Process* proc,
                                                 const char* listenVerb) {
@@ -347,59 +359,71 @@ static bool _syscallcondition_satisfied(SysCallCondition* cond, const Host* host
 }
 
 static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
-    SysCallCondition* cond = obj;
-    MAGIC_ASSERT(cond);
+    // We can unref the `SysCallCondition` here by unrefing `*cond_wrapper` and setting
+    // `*cond_wrapper` to NULL. If we don't, it will be cleaned up automatically.
+    SysCallCondition** cond_wrapper = obj;
+    if (cond_wrapper == NULL) {
+        utility_panic("cond_wrapper is NULL");
+    }
+    MAGIC_ASSERT(*cond_wrapper);
 
     // The wakeup is executing here and now. Setting to false allows
     // the callback to be scheduled again if the condition isn't canceled
     // (which it will be, if we decide to actually run the process below).
-    cond->wakeupScheduled = false;
+    (*cond_wrapper)->wakeupScheduled = false;
 
-    const Process* proc = host_getProcess(host, cond->proc);
+    const Process* proc = host_getProcess(host, (*cond_wrapper)->proc);
     if (!proc) {
 #ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "ignored (process no longer exists)");
+        _syscallcondition_logListeningState(*cond_wrapper, proc, "ignored (process no longer exists)");
 #endif
         return;
     }
 
     if (!process_isRunning(proc)) {
 #ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "ignored (process no longer running)");
+        _syscallcondition_logListeningState(*cond_wrapper, proc, "ignored (process no longer running)");
 #endif
         return;
     }
 
-    const Thread* thread = process_getThread(proc, cond->threadId);
+    const Thread* thread = process_getThread(proc, (*cond_wrapper)->threadId);
     if (!thread) {
 #ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "ignored (thread no longer exists)");
+        _syscallcondition_logListeningState(*cond_wrapper, proc, "ignored (thread no longer exists)");
 #endif
         return;
     }
 
 #ifdef DEBUG
-    _syscallcondition_logListeningState(cond, proc, "wakeup while");
+    _syscallcondition_logListeningState(*cond_wrapper, proc, "wakeup while");
 #endif
 
     // Always deliver the wakeup if the timeout expired.
     // Otherwise, only deliver the wakeup if the desc status is still valid.
-    if (!_syscallcondition_satisfied(cond, host, thread)) {
+    if (!_syscallcondition_satisfied(*cond_wrapper, host, thread)) {
         // Spurious wakeup. Just return without running the process. The
         // condition's listeners should still be installed, and now that we've
         // flipped `wakeupScheduled`, they can schedule this wakeup again.
 #ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "re-blocking");
+        _syscallcondition_logListeningState(*cond_wrapper, proc, "re-blocking");
 #endif
         return;
     }
 
 #ifdef DEBUG
-    _syscallcondition_logListeningState(cond, proc, "stopped");
+    _syscallcondition_logListeningState(*cond_wrapper, proc, "stopped");
 #endif
 
+    pid_t pid = (*cond_wrapper)->proc;
+    pid_t tid = (*cond_wrapper)->threadId;
+
+    // We need to unref the `SysCallCondition` before we wake up the thread.
+    syscallcondition_unref(*cond_wrapper);
+    *cond_wrapper = NULL;
+
     /* Wake up the thread. */
-    host_continue(host, cond->proc, cond->threadId);
+    host_continue(host, pid, tid);
 }
 
 static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, const Host* host) {
@@ -411,12 +435,19 @@ static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, const H
         return;
     }
 
+    // We allow `_syscallcondition_trigger` to unref `cond` itself by setting this pointer to NULL.
+    SysCallCondition** cond_wrapper = g_new(SysCallCondition*, 1);
+    *cond_wrapper = cond;
+
     /* We deliver the wakeup via a task, to make sure whatever
      * code triggered our listener finishes its logic first before
      * we tell the process to run the plugin and potentially change
      * the state of the trigger object again. */
-    TaskRef* wakeupTask = taskref_new_bound(
-        cond->hostId, _syscallcondition_trigger, cond, NULL, _syscallcondition_unrefcb, NULL);
+    /* Since we're passing a `SysCallCondition**`, we need to cast to `void*` and
+     * `TaskObjectFreeFunc` to satisfy the signature of `taskref_new_bound`. */
+    TaskRef* wakeupTask =
+        taskref_new_bound(cond->hostId, _syscallcondition_trigger, (void*)cond_wrapper, NULL,
+                          (TaskObjectFreeFunc)_syscallcondition_wrapper_free, NULL);
     host_scheduleTaskWithDelay(host, wakeupTask, 0); // Call without moving time forward
 
     syscallcondition_ref(cond);
