@@ -384,21 +384,22 @@ static void _syscallcondition_trigger(const Host* host, void* obj, void* arg) {
 
     // Always deliver the wakeup if the timeout expired.
     // Otherwise, only deliver the wakeup if the desc status is still valid.
-    if (_syscallcondition_satisfied(cond, host, thread)) {
-#ifdef DEBUG
-        _syscallcondition_logListeningState(cond, proc, "stopped");
-#endif
-
-        /* Wake up the thread. */
-        host_continue(host, cond->proc, cond->threadId);
-    } else {
+    if (!_syscallcondition_satisfied(cond, host, thread)) {
         // Spurious wakeup. Just return without running the process. The
         // condition's listeners should still be installed, and now that we've
         // flipped `wakeupScheduled`, they can schedule this wakeup again.
 #ifdef DEBUG
         _syscallcondition_logListeningState(cond, proc, "re-blocking");
 #endif
+        return;
     }
+
+#ifdef DEBUG
+    _syscallcondition_logListeningState(cond, proc, "stopped");
+#endif
+
+    /* Wake up the thread. */
+    host_continue(host, cond->proc, cond->threadId);
 }
 
 static void _syscallcondition_scheduleWakeupTask(SysCallCondition* cond, const Host* host) {
