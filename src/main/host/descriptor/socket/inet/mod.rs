@@ -40,7 +40,7 @@ pub enum InetSocket {
 }
 
 impl InetSocket {
-    pub fn borrow(&self) -> InetSocketRef {
+    pub fn borrow(&self) -> InetSocketRef<'_> {
         match self {
             Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.borrow()),
             Self::Tcp(f) => InetSocketRef::Tcp(f.borrow()),
@@ -48,7 +48,7 @@ impl InetSocket {
         }
     }
 
-    pub fn try_borrow(&self) -> Result<InetSocketRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<InetSocketRef<'_>, atomic_refcell::BorrowError> {
         Ok(match self {
             Self::LegacyTcp(f) => InetSocketRef::LegacyTcp(f.try_borrow()?),
             Self::Tcp(f) => InetSocketRef::Tcp(f.try_borrow()?),
@@ -56,7 +56,7 @@ impl InetSocket {
         })
     }
 
-    pub fn borrow_mut(&self) -> InetSocketRefMut {
+    pub fn borrow_mut(&self) -> InetSocketRefMut<'_> {
         match self {
             Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.borrow_mut()),
             Self::Tcp(f) => InetSocketRefMut::Tcp(f.borrow_mut()),
@@ -64,7 +64,7 @@ impl InetSocket {
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<InetSocketRefMut<'_>, atomic_refcell::BorrowMutError> {
         Ok(match self {
             Self::LegacyTcp(f) => InetSocketRefMut::LegacyTcp(f.try_borrow_mut()?),
             Self::Tcp(f) => InetSocketRefMut::Tcp(f.try_borrow_mut()?),

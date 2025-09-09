@@ -113,25 +113,25 @@ impl UdpSocket {
     ) {
         packet.add_status(PacketStatus::RcvSocketProcessed);
 
-        if let Some(peer_addr) = self.peer_addr {
-            if peer_addr != packet.src_ipv4_address() {
-                // connect(2): "If the socket sockfd is of type SOCK_DGRAM, then addr is the address
-                // to which datagrams are sent by default, and the only address from which datagrams
-                // are received."
+        if let Some(peer_addr) = self.peer_addr
+            && peer_addr != packet.src_ipv4_address()
+        {
+            // connect(2): "If the socket sockfd is of type SOCK_DGRAM, then addr is the address
+            // to which datagrams are sent by default, and the only address from which datagrams
+            // are received."
 
-                // we have a peer, but received a packet from a different source address than that
-                // peer
-                packet.add_status(PacketStatus::RcvSocketDropped);
+            // we have a peer, but received a packet from a different source address than that
+            // peer
+            packet.add_status(PacketStatus::RcvSocketDropped);
 
-                // TODO: There's a race condition where we check the packet's address only when
-                // receiving the packet from the network interface, but the user could call
-                // `connect()` to set a peer after we've already received and buffered this packet.
-                // My guess is that this race condition exists in Linux as well, but ideally we
-                // should add a test, and do another check when `recvmsg()` is called if we really
-                // need to.
+            // TODO: There's a race condition where we check the packet's address only when
+            // receiving the packet from the network interface, but the user could call
+            // `connect()` to set a peer after we've already received and buffered this packet.
+            // My guess is that this race condition exists in Linux as well, but ideally we
+            // should add a test, and do another check when `recvmsg()` is called if we really
+            // need to.
 
-                return;
-            }
+            return;
         };
 
         // TODO: also check the dst address to make sure we are the intended socket?
@@ -203,10 +203,10 @@ impl UdpSocket {
 
         // if we are bound to INADDR_ANY, we should instead return the IP used to communicate with
         // the connected peer (if we have one)
-        if *addr.ip() == Ipv4Addr::UNSPECIFIED {
-            if let Some(peer_addr) = self.peer_addr {
-                addr.set_ip(*peer_addr.ip());
-            }
+        if *addr.ip() == Ipv4Addr::UNSPECIFIED
+            && let Some(peer_addr) = self.peer_addr
+        {
+            addr.set_ip(*peer_addr.ip());
         }
 
         Ok(Some(addr.into()))

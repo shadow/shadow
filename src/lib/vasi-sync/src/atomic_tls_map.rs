@@ -132,7 +132,7 @@ where
     ///
     /// The value at `key`, if any, must have been inserted by the current thread.
     #[inline]
-    pub unsafe fn get(&self, key: NonZeroUsize) -> Option<Ref<V>> {
+    pub unsafe fn get(&self, key: NonZeroUsize) -> Option<Ref<'_, V>> {
         // SAFETY: Ensured by caller
         let idx = self.idx(key)?;
         let ptr = self.values[idx].get();
@@ -153,7 +153,7 @@ where
     ///
     /// There must not be a value at `key` that was inserted by a different
     /// thread.
-    unsafe fn insert(&self, key: NonZeroUsize, value: V) -> Ref<V> {
+    unsafe fn insert(&self, key: NonZeroUsize, value: V) -> Ref<'_, V> {
         let idx = self
             .indexes_from(key)
             .find(|idx| {
@@ -185,7 +185,11 @@ where
     /// There must not be a value at `key` that was inserted by a different
     /// thread.
     #[inline]
-    pub unsafe fn get_or_insert_with(&self, key: NonZeroUsize, init: impl FnOnce() -> V) -> Ref<V> {
+    pub unsafe fn get_or_insert_with(
+        &self,
+        key: NonZeroUsize,
+        init: impl FnOnce() -> V,
+    ) -> Ref<'_, V> {
         let val = unsafe { self.get(key) };
         val.unwrap_or_else(|| {
             let val = init();

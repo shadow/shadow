@@ -419,16 +419,16 @@ fn check_socket_call(
     };
 
     // check the errno if we were given one
-    if let Some(expected_errno) = expected_errno {
-        if errno != expected_errno {
-            return Err(format!(
-                "Expecting errno {} \"{}\", received {} \"{}\"",
-                expected_errno,
-                test_utils::get_errno_message(expected_errno),
-                errno,
-                test_utils::get_errno_message(errno)
-            ));
-        }
+    if let Some(expected_errno) = expected_errno
+        && errno != expected_errno
+    {
+        return Err(format!(
+            "Expecting errno {} \"{}\", received {} \"{}\"",
+            expected_errno,
+            test_utils::get_errno_message(expected_errno),
+            errno,
+            test_utils::get_errno_message(errno)
+        ));
     }
 
     Ok(fd)

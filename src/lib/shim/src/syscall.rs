@@ -45,7 +45,7 @@ unsafe fn native_syscall(args: &SyscallArgs) -> SyscallReg {
                 in("r8") u64::from(args.args[4]),
                 in("r9") u64::from(args.args[5]))
         };
-        return rv.into();
+        rv.into()
     }
 }
 

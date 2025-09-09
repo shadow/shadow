@@ -68,11 +68,12 @@ impl Runahead {
 
         // helper function for checking if we should update the min_used_latency
         let should_update = |min_used_latency: &Option<SimulationTime>| {
-            if let Some(min_used_latency) = min_used_latency {
-                if latency >= *min_used_latency {
-                    return false;
-                }
+            if let Some(min_used_latency) = min_used_latency
+                && latency >= *min_used_latency
+            {
+                return false;
             }
+
             // true if runahead was never set before, or new latency is smaller than the old latency
             true
         };

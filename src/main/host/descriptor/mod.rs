@@ -173,7 +173,7 @@ impl IsSend for File {}
 impl IsSync for File {}
 
 impl File {
-    pub fn borrow(&self) -> FileRef {
+    pub fn borrow(&self) -> FileRef<'_> {
         match self {
             Self::Pipe(f) => FileRef::Pipe(f.borrow()),
             Self::EventFd(f) => FileRef::EventFd(f.borrow()),
@@ -183,7 +183,7 @@ impl File {
         }
     }
 
-    pub fn try_borrow(&self) -> Result<FileRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<FileRef<'_>, atomic_refcell::BorrowError> {
         Ok(match self {
             Self::Pipe(f) => FileRef::Pipe(f.try_borrow()?),
             Self::EventFd(f) => FileRef::EventFd(f.try_borrow()?),
@@ -193,7 +193,7 @@ impl File {
         })
     }
 
-    pub fn borrow_mut(&self) -> FileRefMut {
+    pub fn borrow_mut(&self) -> FileRefMut<'_> {
         match self {
             Self::Pipe(f) => FileRefMut::Pipe(f.borrow_mut()),
             Self::EventFd(f) => FileRefMut::EventFd(f.borrow_mut()),
@@ -203,7 +203,7 @@ impl File {
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<FileRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<FileRefMut<'_>, atomic_refcell::BorrowMutError> {
         Ok(match self {
             Self::Pipe(f) => FileRefMut::Pipe(f.try_borrow_mut()?),
             Self::EventFd(f) => FileRefMut::EventFd(f.try_borrow_mut()?),
@@ -639,10 +639,10 @@ impl LegacyFileCounter {
     fn close_helper(&mut self, host: &Host) {
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
-        if Arc::<()>::strong_count(&self.open_count) == 1 {
-            if let Some(file) = self.file.take() {
-                unsafe { c::legacyfile_close(file.ptr(), host) }
-            }
+        if Arc::<()>::strong_count(&self.open_count) == 1
+            && let Some(file) = self.file.take()
+        {
+            unsafe { c::legacyfile_close(file.ptr(), host) }
         }
     }
 

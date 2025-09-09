@@ -52,7 +52,7 @@ use nom::Finish;
 ///     Err(e) => panic!("Could not parse graph: {}", e),
 /// };
 /// ```
-pub fn parse(gml_str: &str) -> Result<gml::Gml, String> {
+pub fn parse(gml_str: &str) -> Result<gml::Gml<'_>, String> {
     match parser::gml::<nom_language::error::VerboseError<&str>>(gml_str).finish() {
         Ok((_remaining, graph)) => Ok(graph),
         Err(e) => Err(nom_language::error::convert_error(gml_str, e)),

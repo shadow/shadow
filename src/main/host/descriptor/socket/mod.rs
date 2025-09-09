@@ -45,7 +45,7 @@ pub enum Socket {
 }
 
 impl Socket {
-    pub fn borrow(&self) -> SocketRef {
+    pub fn borrow(&self) -> SocketRef<'_> {
         match self {
             Self::Unix(f) => SocketRef::Unix(f.borrow()),
             Self::Inet(f) => SocketRef::Inet(f.borrow()),
@@ -53,7 +53,7 @@ impl Socket {
         }
     }
 
-    pub fn try_borrow(&self) -> Result<SocketRef, atomic_refcell::BorrowError> {
+    pub fn try_borrow(&self) -> Result<SocketRef<'_>, atomic_refcell::BorrowError> {
         Ok(match self {
             Self::Unix(f) => SocketRef::Unix(f.try_borrow()?),
             Self::Inet(f) => SocketRef::Inet(f.try_borrow()?),
@@ -61,7 +61,7 @@ impl Socket {
         })
     }
 
-    pub fn borrow_mut(&self) -> SocketRefMut {
+    pub fn borrow_mut(&self) -> SocketRefMut<'_> {
         match self {
             Self::Unix(f) => SocketRefMut::Unix(f.borrow_mut()),
             Self::Inet(f) => SocketRefMut::Inet(f.borrow_mut()),
@@ -69,7 +69,7 @@ impl Socket {
         }
     }
 
-    pub fn try_borrow_mut(&self) -> Result<SocketRefMut, atomic_refcell::BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<SocketRefMut<'_>, atomic_refcell::BorrowMutError> {
         Ok(match self {
             Self::Unix(f) => SocketRefMut::Unix(f.try_borrow_mut()?),
             Self::Inet(f) => SocketRefMut::Inet(f.try_borrow_mut()?),

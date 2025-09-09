@@ -12,10 +12,10 @@ pub fn raw_return_value_to_errno(rv: i64) -> Result<SyscallReg, i32> {
 }
 
 pub fn raw_return_value_to_result(rv: i64) -> Result<SyscallReg, linux_api::errno::Errno> {
-    if let Ok(rv) = u16::try_from(-rv) {
-        if let Ok(errno) = linux_api::errno::Errno::try_from(rv) {
-            return Err(errno);
-        }
+    if let Ok(rv) = u16::try_from(-rv)
+        && let Ok(errno) = linux_api::errno::Errno::try_from(rv)
+    {
+        return Err(errno);
     }
 
     Ok(rv.into())

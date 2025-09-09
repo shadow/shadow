@@ -124,12 +124,12 @@ impl SyscallHandler {
 
         // make sure that we either don't have a blocked syscall, or if we blocked a syscall, then
         // that same syscall should be executed again when it becomes unblocked
-        if let Some(blocked_syscall) = self.blocked_syscall {
-            if blocked_syscall != syscall {
-                panic!(
-                    "We blocked syscall {blocked_syscall} but syscall {syscall} is unexpectedly being invoked"
-                );
-            }
+        if let Some(blocked_syscall) = self.blocked_syscall
+            && blocked_syscall != syscall
+        {
+            panic!(
+                "We blocked syscall {blocked_syscall} but syscall {syscall} is unexpectedly being invoked"
+            );
         }
 
         // were we previously blocked on this same syscall?
@@ -163,10 +163,10 @@ impl SyscallHandler {
         // Count the frequency of each syscall, but only on the initial call. This avoids double
         // counting in the case where the initial call blocked at first, but then later became
         // unblocked and is now being handled again here.
-        if let Some(syscall_counter) = self.syscall_counter.as_mut() {
-            if !was_blocked {
-                syscall_counter.add_one(syscall_name);
-            }
+        if let Some(syscall_counter) = self.syscall_counter.as_mut()
+            && !was_blocked
+        {
+            syscall_counter.add_one(syscall_name);
         }
 
         #[cfg(feature = "perf_timers")]

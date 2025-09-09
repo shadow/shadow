@@ -142,10 +142,10 @@ impl ByteQueue {
         let bytes = unused.split_to(size);
 
         // we may have used up all of the space in 'unused_buffer'
-        if let Some(ref unused_buffer) = self.unused_buffer {
-            if unused_buffer.is_empty() {
-                self.unused_buffer = None;
-            }
+        if let Some(ref unused_buffer) = self.unused_buffer
+            && unused_buffer.is_empty()
+        {
+            self.unused_buffer = None;
         }
 
         self.push_chunk(bytes, ChunkType::Packet);

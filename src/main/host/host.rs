@@ -903,7 +903,7 @@ impl Host {
     /// that will receive and process packets with a given destination address.
     /// In the latter case, if the packet destination is not on this host, we
     /// return the router to route it to the correct host.
-    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<dyn PacketDevice> {
+    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
         if address == Ipv4Addr::LOCALHOST {
             self.net_ns.localhost.borrow()
         } else if address == self.default_ip() {

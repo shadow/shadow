@@ -33,17 +33,17 @@ impl TimeParts {
     }
 
     /// Format as HH:MM:SS.
-    pub fn fmt_hr_min_sec(&self) -> TimePartsFmtHrMinSec {
+    pub fn fmt_hr_min_sec(&self) -> TimePartsFmtHrMinSec<'_> {
         TimePartsFmtHrMinSec { time: self }
     }
 
     /// Format as HH:MM:SS.mmm.
-    pub fn fmt_hr_min_sec_milli(&self) -> TimePartsFmtHrMinSecMilli {
+    pub fn fmt_hr_min_sec_milli(&self) -> TimePartsFmtHrMinSecMilli<'_> {
         TimePartsFmtHrMinSecMilli { time: self }
     }
 
     /// Format as HH:MM:SS.nnnnnnnnn.
-    pub fn fmt_hr_min_sec_nano(&self) -> TimePartsFmtHrMinSecNano {
+    pub fn fmt_hr_min_sec_nano(&self) -> TimePartsFmtHrMinSecNano<'_> {
         TimePartsFmtHrMinSecNano { time: self }
     }
 }

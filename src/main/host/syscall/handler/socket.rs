@@ -252,10 +252,10 @@ impl SyscallHandler {
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_sent = result?;
@@ -323,10 +323,10 @@ impl SyscallHandler {
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let bytes_written = result?;
@@ -400,10 +400,10 @@ impl SyscallHandler {
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let RecvmsgReturn {
@@ -476,10 +476,10 @@ impl SyscallHandler {
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         let result = result?;
@@ -672,10 +672,10 @@ impl SyscallHandler {
         let mut result = Self::accept_helper(ctx, file.inner_file(), addr_ptr, addr_len_ptr, 0);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         result
@@ -722,10 +722,10 @@ impl SyscallHandler {
         let mut result = Self::accept_helper(ctx, file.inner_file(), addr_ptr, addr_len_ptr, flags);
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         result
@@ -862,10 +862,10 @@ impl SyscallHandler {
         });
 
         // if the syscall will block, keep the file open until the syscall restarts
-        if let Some(err) = result.as_mut().err() {
-            if let Some(cond) = err.blocked_condition() {
-                cond.set_active_file(file);
-            }
+        if let Some(err) = result.as_mut().err()
+            && let Some(cond) = err.blocked_condition()
+        {
+            cond.set_active_file(file);
         }
 
         result?;

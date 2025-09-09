@@ -218,7 +218,7 @@ impl Thread {
         self.id == self.process_id.into()
     }
 
-    pub fn syscall_condition(&self) -> Option<SyscallConditionRef> {
+    pub fn syscall_condition(&self) -> Option<SyscallConditionRef<'_>> {
         // We check the for null explicitly here instead of using `as_mut` to
         // construct and match an `Option<&mut c::SysCallCondition>`, since it's
         // difficult to ensure we're not breaking any Rust aliasing rules when
@@ -231,7 +231,7 @@ impl Thread {
         }
     }
 
-    pub fn syscall_condition_mut(&self) -> Option<SyscallConditionRefMut> {
+    pub fn syscall_condition_mut(&self) -> Option<SyscallConditionRefMut<'_>> {
         // We can't safely use `as_mut` here, since that would construct a mutable reference,
         // and we can't prove no other reference exists.
         let c = self.cond.get().ptr();
@@ -464,7 +464,7 @@ impl Thread {
     }
 
     /// Shared memory for this thread.
-    pub fn shmem(&self) -> &ShMemBlock<ThreadShmem> {
+    pub fn shmem(&self) -> &ShMemBlock<'_, ThreadShmem> {
         &self.shim_shared_memory
     }
 

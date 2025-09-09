@@ -335,11 +335,11 @@ impl Drop for MemoryMapper {
         // address space.
         let mutations = self.regions.clear(usize::MIN..usize::MAX);
         for m in mutations {
-            if let Mutation::Removed(interval, region) = m {
-                if !region.shadow_base.is_null() {
-                    unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
-                        .unwrap_or_else(|e| warn!("munmap: {e}"));
-                }
+            if let Mutation::Removed(interval, region) = m
+                && !region.shadow_base.is_null()
+            {
+                unsafe { linux_api::mman::munmap(region.shadow_base, interval.len()) }
+                    .unwrap_or_else(|e| warn!("munmap: {e}"));
             }
         }
     }

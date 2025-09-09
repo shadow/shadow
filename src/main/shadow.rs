@@ -376,10 +376,10 @@ fn load_config_file(
             // remove entries having a key beginning with "x-" (follows docker's convention:
             // https://docs.docker.com/compose/compose-file/#extension)
             mapping.retain(|key, _value| {
-                if let serde_yaml::Value::String(key) = key {
-                    if key.starts_with("x-") {
-                        return false;
-                    }
+                if let serde_yaml::Value::String(key) = key
+                    && key.starts_with("x-")
+                {
+                    return false;
                 }
                 true
             });

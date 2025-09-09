@@ -405,7 +405,7 @@ impl RunnableProcess {
     }
 
     #[track_caller]
-    fn first_live_thread(&self, root: &Root) -> Option<Ref<RootedRc<RootedRefCell<Thread>>>> {
+    fn first_live_thread(&self, root: &Root) -> Option<Ref<'_, RootedRc<RootedRefCell<Thread>>>> {
         Ref::filter_map(self.threads.borrow(), |threads| {
             threads.values().next().inspect(|thread| {
                 // There shouldn't be any non-running threads in the table.
@@ -426,7 +426,7 @@ impl RunnableProcess {
     }
 
     #[track_caller]
-    fn thread(&self, virtual_tid: ThreadId) -> Option<Ref<RootedRc<RootedRefCell<Thread>>>> {
+    fn thread(&self, virtual_tid: ThreadId) -> Option<Ref<'_, RootedRc<RootedRefCell<Thread>>>> {
         Ref::filter_map(self.threads.borrow(), |threads| threads.get(&virtual_tid)).ok()
     }
 
@@ -545,16 +545,16 @@ impl RunnableProcess {
             process_shmem_protected.set_pending_standard_siginfo(signal, siginfo_t);
         }
 
-        if let Some(thread) = current_thread {
-            if thread.process_id() == self.common.id() {
-                let host_shmem = host.shim_shmem_lock_borrow().unwrap();
-                let threadmem = thread.shmem();
-                let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
-                if !threadprotmem.blocked_signals.has(signal) {
-                    // Target process is this process, and current thread hasn't blocked
-                    // the signal.  It will be delivered to this thread when it resumes.
-                    return;
-                }
+        if let Some(thread) = current_thread
+            && thread.process_id() == self.common.id()
+        {
+            let host_shmem = host.shim_shmem_lock_borrow().unwrap();
+            let threadmem = thread.shmem();
+            let threadprotmem = threadmem.protected.borrow(&host_shmem.root);
+            if !threadprotmem.blocked_signals.has(signal) {
+                // Target process is this process, and current thread hasn't blocked
+                // the signal.  It will be delivered to this thread when it resumes.
+                return;
             }
         }
 
@@ -896,26 +896,26 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
 }
 
 impl Process {
-    fn common(&self) -> Ref<Common> {
+    fn common(&self) -> Ref<'_, Common> {
         Ref::map(self.state.borrow(), |state| {
             state.as_ref().unwrap().common()
         })
     }
 
-    fn common_mut(&self) -> RefMut<Common> {
+    fn common_mut(&self) -> RefMut<'_, Common> {
         RefMut::map(self.state.borrow_mut(), |state| {
             state.as_mut().unwrap().common_mut()
         })
     }
 
-    fn as_runnable(&self) -> Option<Ref<RunnableProcess>> {
+    fn as_runnable(&self) -> Option<Ref<'_, RunnableProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
             state.as_ref().unwrap().as_runnable()
         })
         .ok()
     }
 
-    fn as_runnable_mut(&self) -> Option<RefMut<RunnableProcess>> {
+    fn as_runnable_mut(&self) -> Option<RefMut<'_, RunnableProcess>> {
         RefMut::filter_map(self.state.borrow_mut(), |state| {
             state.as_mut().unwrap().as_runnable_mut()
         })
@@ -927,7 +927,7 @@ impl Process {
         self.as_runnable()
     }
 
-    fn as_zombie(&self) -> Option<Ref<ZombieProcess>> {
+    fn as_zombie(&self) -> Option<Ref<'_, ZombieProcess>> {
         Ref::filter_map(self.state.borrow(), |state| {
             state.as_ref().unwrap().as_zombie()
         })
