@@ -1,0 +1,59 @@
+general:
+  stop_time: 30s
+  # we set this explicitly in case we make this the default in the future
+  model_unblocked_syscall_latency: false
+experimental:
+  strace_logging_mode: standard
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: python3
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket
+
+          server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          server.bind(('0.0.0.0', 8080))
+          server.listen(100)
+          print("Listening")
+
+          (s, _) = server.accept()
+          s.close()
+          print("Accepted socket")
+
+          server.close()
+          print("Closed listening socket")
+
+          # all sockets have been closed, so we expect this to work
+          server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          server.bind(('0.0.0.0', 8080))
+          server.listen(100)
+          server.close()
+  client:
+    network_node_id: 0
+    processes:
+    - path: python3
+      start_time: 100 ms
+      expected_final_state: running
+      args:
+        - '-u'
+        - '-c'
+        - |
+          import socket, time
+
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          s.connect(('server', 8080))
+          print("Connected")
+
+          # don't close the socket, we want to keep the socket open until the
+          # end of the simulation so that closing the socket doesn't send a FIN
+          print("Sleeping")
+          time.sleep(100000)
