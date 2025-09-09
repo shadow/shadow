@@ -23,7 +23,7 @@ bytemuck = "1.23.2"
 linux-syscall = "1.2.0"
 linux-errno = "1.1.0"
 naked-function = "0.1.5"
-linux-raw-sys = "0.10.0"
+linux-raw-sys = "0.11.0"
 rustix = { optional = true, version = "0.38.44", default-features = false, features = ["process"] }
 libc = { optional = true, default-features = false, version = "0.2.175" }
 bytemuck_derive = "1.10.1"
