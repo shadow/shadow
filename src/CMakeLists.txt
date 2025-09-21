@@ -1,3 +1,5 @@
+include(ExternalProject)
+
 set(RUSTFLAGS "-C force-frame-pointers=y")
 set(CARGO_ENV_VARS "SHADOW_VERSION=\"${SHADOW_VERSION_STRING_CONF}\"")
 
@@ -37,7 +39,6 @@ set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXXFLAGS=\"${RUST_CXXFLAGS}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CC=\"${CMAKE_C_COMPILER}\"")
 set(CARGO_ENV_VARS "${CARGO_ENV_VARS} CXX=\"${CMAKE_CXX_COMPILER}\"")
 set(TARGETDIR "${CMAKE_CURRENT_BINARY_DIR}/target")
-include(ExternalProject)
 ExternalProject_Add(
     rust-workspace-project
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}
@@ -45,7 +46,18 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND echo "Building workspace..."
+    # cmake appears to truncate strings when there's a semicolon,
+    # so we need to write this awkwardly
+    BUILD_COMMAND bash -c " \
+        VERSION=\"$(${CARGO_ENV_VARS} rustc --version | awk '{print $2}')\" \
+        && [[ \"$VERSION\" == 1.89.0 ]] \
+        && echo '' \
+        && echo \"Unsupported rust version: $VERSION\" \
+        && echo 'See https://github.com/shadow/shadow/issues/3654' \
+        && echo '' \
+        && exit 1 || exit 0 \
+        "
+    COMMAND echo "Building workspace..."
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
