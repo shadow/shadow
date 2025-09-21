@@ -1024,19 +1024,43 @@ int regularfile_poll(RegularFile* file, struct pollfd* pfd) {
 // *at functions (NULL directory file is valid)
 ///////////////////////////////////////////////
 
-static inline int _regularfile_getOSDirFD(RegularFile* dir) {
+// May return an error (negative value), as not all `RegularFile`s in shadow have an OS fd.
+static int _regularfile_getOSDirFD(RegularFile* dir, int *outFd) {
     if (dir) {
         MAGIC_ASSERT(dir);
-        return dir->type != FILE_TYPE_IN_MEMORY && dir->osfile.fd != OSFILE_INVALID ?
-            dir->osfile.fd : AT_FDCWD;
+        switch (dir->type) {
+            case FILE_TYPE_IN_MEMORY:
+                // No OS file, so nothing we can do here.
+                return -1;
+            case FILE_TYPE_NOTSET:
+            case FILE_TYPE_RANDOM:
+            case FILE_TYPE_HOSTS:
+            case FILE_TYPE_LOCALTIME:
+            case FILE_TYPE_REGULAR:
+                if (dir->osfile.fd == OSFILE_INVALID) {
+                    // No OS file, so nothing we can do here.
+                    return -1;
+                }
+                *outFd = dir->osfile.fd;
+                return 0;
+        }
+        panic("Didn't check all file types (and compiler should have warned about this)");
     } else {
-        return AT_FDCWD;
+        // No directory file provided, so use the cwd.
+        *outFd = AT_FDCWD;
+        return 0;
     }
 }
 
 int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* statbuf, int flags,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fstatat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fstatat os-backed file %i, flags %d", dir, osFd, flags);
@@ -1057,7 +1081,13 @@ int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* sta
 
 int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gid_t group,
                          int flags, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fchownat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fchownat os-backed file %i", dir, osFd);
@@ -1078,7 +1108,13 @@ int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gi
 
 int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, int flags,
                          const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fchmodat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fchmodat os-backed file %i", dir, osFd);
@@ -1099,7 +1135,13 @@ int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, in
 
 int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct timeval times[2],
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_futimesat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p futimesat os-backed file %i", dir, osFd);
@@ -1120,7 +1162,13 @@ int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct t
 
 int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct timespec times[2],
                           int flags, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_utimensat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p utimesat os-backed file %i", dir, osFd);
@@ -1141,7 +1189,13 @@ int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct t
 
 int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int flags,
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_faccessat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p faccessat os-backed file %i", dir, osFd);
@@ -1162,7 +1216,13 @@ int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int 
 
 int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_mkdirat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p mkdirat os-backed file %i", dir, osFd);
@@ -1183,7 +1243,13 @@ int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
 
 int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev_t dev,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_mknodat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p mknodat os-backed file %i", dir, osFd);
@@ -1204,8 +1270,19 @@ int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev
 
 int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* newDir,
                        const char* newPath, int flags, const char* workingDir) {
-    int oldOsFd = _regularfile_getOSDirFD(oldDir);
-    int newOsFd = _regularfile_getOSDirFD(newDir);
+    int oldOsFd = -1;
+    int newOsFd = -1;
+    if (_regularfile_getOSDirFD(oldDir, &oldOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_linkat'");
+        return -EINVAL;
+    }
+    if (_regularfile_getOSDirFD(newDir, &newOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_linkat'");
+        return -EINVAL;
+    }
+
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
@@ -1234,7 +1311,13 @@ int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* ne
 
 int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
                          const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_unlinkat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p unlinkat os-backed file %i", dir, osFd);
@@ -1255,7 +1338,13 @@ int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
 
 int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* target,
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_symlinkat'");
+        return -EINVAL;
+    }
+
     const char* linkpathTmp = linkpath;
 
     trace("RegularFile %p symlinkat os-backed file %i", dir, osFd);
@@ -1276,7 +1365,13 @@ int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* ta
 
 ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf, size_t bufsize,
                                const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_readlinkat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p readlinkat os-backed file %i", dir, osFd);
@@ -1297,8 +1392,19 @@ ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf
 
 int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile* newDir,
                           const char* newPath, unsigned int flags, const char* workingDir) {
-    int oldOsFd = _regularfile_getOSDirFD(oldDir);
-    int newOsFd = _regularfile_getOSDirFD(newDir);
+    int oldOsFd = -1;
+    int newOsFd = -1;
+    if (_regularfile_getOSDirFD(oldDir, &oldOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_renameat2'");
+        return -EINVAL;
+    }
+    if (_regularfile_getOSDirFD(newDir, &newOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_renameat2'");
+        return -EINVAL;
+    }
+
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
@@ -1329,7 +1435,13 @@ int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile*
 #ifdef SYS_statx
 int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigned int mask,
                       struct statx* statxbuf, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_statx'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p statx os-backed file %i", dir, osFd);
