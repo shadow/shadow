@@ -1066,6 +1066,13 @@ int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* sta
     trace("RegularFile %p fstatat os-backed file %i, flags %d", dir, osFd, flags);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // stat(2):
+            // > ENOENT - path is an empty string and AT_EMPTY_PATH was not
+            // > specified in flags.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1093,6 +1100,14 @@ int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gi
     trace("RegularFile %p fchownat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // Unlike fstatat, the man page for fchownat does not appear to
+            // specify what happens when the path name is empty. But fchownat
+            // does have an `AT_EMPTY_PATH` flag and experimentally seems to
+            // behave similarly to fstatat.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1120,6 +1135,13 @@ int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, in
     trace("RegularFile %p fchmodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the
+            // path name is empty. But it experimentally seems to return an
+            // error.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1147,6 +1169,13 @@ int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct t
     trace("RegularFile %p futimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the
+            // path name is empty. But it experimentally seems to return an
+            // error.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1174,6 +1203,16 @@ int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct t
     trace("RegularFile %p utimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // utimensat(2):
+            // > ENOENT - (utimensat()) A component of pathname does not refer to
+            // > an existing directory or file, or pathname is an empty string
+            //
+            // Presumably it does want to allow an empty path if
+            // `AT_EMPTY_PATH` is set.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1201,6 +1240,14 @@ int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int 
     trace("RegularFile %p faccessat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // Unlike fstatat, the man page does not appear to specify what
+            // happens when the path name is empty. But it does have an
+            // `AT_EMPTY_PATH` flag and experimentally seems to behave
+            // similarly to fstatat.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1228,6 +1275,12 @@ int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
     trace("RegularFile %p mkdirat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the path
+            // name is empty. But it experimentally seems to return ENOENT.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1255,6 +1308,12 @@ int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev
     trace("RegularFile %p mknodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the path
+            // name is empty. But it experimentally seems to return ENOENT.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1287,6 +1346,8 @@ int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* ne
     const char* newPathTmp = newPath;
 
     trace("RegularFiles %p, %p linkat os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
+
+    // TODO: properly handle an empty path
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1323,6 +1384,13 @@ int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
     trace("RegularFile %p unlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // unlinkat(2):
+            // > ENOENT - A component in pathname does not exist or is a dangling
+            // > symbolic link, or pathname is empty.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1350,6 +1418,13 @@ int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* ta
     trace("RegularFile %p symlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(linkpathTmp) == 0) {
+            // symlinkat(2):
+            // > ENOENT - A directory component in linkpath does not exist or is a
+            // > dangling symbolic link, or target or linkpath is an empty string.
+            return -ENOENT;
+        }
+
         osFd = -1;
         linkpathTmp = _regularfile_getAbsolutePath(NULL, linkpath, workingDir);
     }
@@ -1377,6 +1452,19 @@ ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf
     trace("RegularFile %p readlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // readlinkat(2):
+            // > Since Linux 2.6.39, pathname can be an empty string, in which
+            // > case the call operates on the symbolic link referred to by
+            // > dirfd (which should have been obtained using open(2) with the
+            // > O_PATH and O_NOFOLLOW flags).
+            //
+            // If both AT_FDCWD and "" were specified, the call operates on the
+            // current working directory, which shouldn't be a symlink. It
+            // experimentally seems to return ENOENT instead of EINVAL.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1409,6 +1497,8 @@ int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile*
     const char* newPathTmp = newPath;
 
     trace("RegularFiles %p, %p renameat2 os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
+
+    // TODO: properly handle an empty path
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1447,6 +1537,14 @@ int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigne
     trace("RegularFile %p statx os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // stat(2):
+            // > ENOENT - A component of pathname does not exist, or pathname
+            // > is an empty string and AT_EMPTY_PATH was not specified in
+            // > flags.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }

@@ -636,6 +636,10 @@ static void _test_stat() {
     g_assert_cmpint(filestat.st_nlink, ==, 1);
     g_assert_cmpint(filestat.st_size, ==, 0);
 
+    // Test an empty path.
+    g_assert_cmpint(stat("", &filestat), ==, -1);
+    assert_errno_is(ENOENT);
+
     /* success! */
 }
 
@@ -761,6 +765,20 @@ static void _test_faccessat_helper(int (*faccessat_fn)(int, const char*, int, in
     g_assert_cmpint(faccessat_fn(this_dirfd, basename(adf.name), 0xffffffff, 0), ==, -1);
     assert_errno_is(EINVAL);
 
+    // Test an empty path.
+    g_assert_cmpint(faccessat_fn(this_dirfd, "", F_OK, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(faccessat_fn(AT_FDCWD, "", F_OK, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(faccessat_fn(this_dirfd, ".", F_OK, 0));
+
+    // Test the current working directory.
+    assert_nonneg_errno(faccessat_fn(AT_FDCWD, ".", F_OK, 0));
+
     // success!
     closedir(dir);
 }
@@ -771,6 +789,235 @@ static void _test_faccessat() { _test_faccessat_helper(faccessat); }
 // Test both syscalls directly
 static void _test_faccessat_syscall() { _test_faccessat_helper(faccessat_syscall); }
 static void _test_faccessat2_syscall() { _test_faccessat_helper(faccessat2_syscall); }
+
+int futimesat_syscall(int dirfd, const char* pathname, const struct timeval times[2]) {
+    return syscall(SYS_futimesat, dirfd, pathname, times);
+}
+
+// Some syscalls are documented as returning ENOENT for an empty path, but most
+// don't document the behaviour when the path is empty. Ideally we would have
+// tests for all of these syscalls where we could check this, but we don't have
+// these tests, so this test checks a handful that we don't test elsewhere.
+static void _test_empty_paths() {
+    g_auto(AutoDeleteFile) adf = _create_auto_file();
+
+    assert_nonneg_errno(chmod(adf.name, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
+
+    DIR* dir;
+    assert_nonnull_errno(dir = opendir(dirname(adf.name)));
+
+    int this_dirfd;
+    assert_nonneg_errno(this_dirfd = dirfd(dir));
+
+    ////////// fstatat //////////
+
+    struct stat filestat = {0};
+
+    // Test an empty path.
+    memset(&filestat, 0, sizeof(filestat));
+    g_assert_cmpint(fstatat(this_dirfd, "", &filestat, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    memset(&filestat, 0, sizeof(filestat));
+    g_assert_cmpint(fstatat(AT_FDCWD, "", &filestat, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    memset(&filestat, 0, sizeof(filestat));
+    assert_nonneg_errno(fstatat(this_dirfd, ".", &filestat, 0));
+
+    // Test the current working directory.
+    memset(&filestat, 0, sizeof(filestat));
+    assert_nonneg_errno(fstatat(AT_FDCWD, ".", &filestat, 0));
+
+    ////////// fchownat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(fchownat(this_dirfd, "", -1, -1, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(fchownat(AT_FDCWD, "", -1, -1, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(fchownat(this_dirfd, ".", -1, -1, 0));
+
+    // Test the current working directory.
+    assert_nonneg_errno(fchownat(AT_FDCWD, ".", -1, -1, 0));
+
+    ////////// fchmodat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(fchmodat(this_dirfd, "", S_IRUSR | S_IWUSR | S_IXUSR, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(fchmodat(AT_FDCWD, "", S_IRUSR | S_IWUSR | S_IXUSR, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(fchmodat(this_dirfd, ".", S_IRUSR | S_IWUSR | S_IXUSR, 0));
+
+    // Test the current working directory.
+    assert_nonneg_errno(fchmodat(AT_FDCWD, ".", S_IRUSR | S_IWUSR | S_IXUSR, 0));
+
+    ////////// futimesat //////////
+
+    const struct timeval times_timeval[2] = {0};
+
+    // Test an empty path.
+    g_assert_cmpint(futimesat_syscall(this_dirfd, "", times_timeval), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(futimesat_syscall(AT_FDCWD, "", times_timeval), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(futimesat_syscall(this_dirfd, ".", times_timeval));
+
+    // Test the current working directory.
+    assert_nonneg_errno(futimesat_syscall(AT_FDCWD, ".", times_timeval));
+
+    ////////// utimensat //////////
+
+    const struct timespec times_timespec[2] = {0};
+
+    // Test an empty path.
+    g_assert_cmpint(utimensat(this_dirfd, "", times_timespec, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(utimensat(AT_FDCWD, "", times_timespec, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(utimensat(this_dirfd, ".", times_timespec, 0));
+
+    // Test the current working directory.
+    assert_nonneg_errno(utimensat(AT_FDCWD, ".", times_timespec, 0));
+
+    ////////// faccessat //////////
+
+    // we test this separately in '_test_faccessat_helper'
+
+    ////////// mkdirat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(mkdirat(this_dirfd, "", S_IRWXU), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(mkdirat(AT_FDCWD, "", S_IRWXU), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    g_assert_cmpint(mkdirat(this_dirfd, ".", S_IRWXU), ==, -1);
+    assert_errno_is(EEXIST);
+
+    // Test the current working directory.
+    g_assert_cmpint(mkdirat(AT_FDCWD, ".", S_IRWXU), ==, -1);
+    assert_errno_is(EEXIST);
+
+    ////////// mknodat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(mknodat(this_dirfd, "", S_IRWXU | S_IFREG, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(mknodat(AT_FDCWD, "", S_IRWXU | S_IFREG, 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    g_assert_cmpint(mknodat(this_dirfd, ".", S_IRWXU | S_IFREG, 0), ==, -1);
+    assert_errno_is(EEXIST);
+
+    // Test the current working directory.
+    g_assert_cmpint(mknodat(AT_FDCWD, ".", S_IRWXU | S_IFREG, 0), ==, -1);
+    assert_errno_is(EEXIST);
+
+    ////////// unlinkat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(unlinkat(this_dirfd, "", 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(unlinkat(AT_FDCWD, "", 0), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    g_assert_cmpint(unlinkat(this_dirfd, ".", 0), ==, -1);
+    assert_errno_is(EISDIR);
+
+    // Test the current working directory.
+    g_assert_cmpint(unlinkat(AT_FDCWD, ".", 0), ==, -1);
+    assert_errno_is(EISDIR);
+
+    ////////// symlinkat //////////
+
+    // Test an empty path.
+    g_assert_cmpint(symlinkat("foo", this_dirfd, ""), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(symlinkat("foo", AT_FDCWD, ""), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    g_assert_cmpint(symlinkat("foo", this_dirfd, "."), ==, -1);
+    assert_errno_is(EEXIST);
+
+    // Test the current working directory.
+    g_assert_cmpint(symlinkat("foo", AT_FDCWD, "."), ==, -1);
+    assert_errno_is(EEXIST);
+
+    ////////// readlinkat //////////
+
+    char buf[50] = {0};
+
+    // Test an empty path.
+    g_assert_cmpint(readlinkat(this_dirfd, "", buf, sizeof(buf)), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(readlinkat(AT_FDCWD, "", buf, sizeof(buf)), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    g_assert_cmpint(readlinkat(this_dirfd, ".", buf, sizeof(buf)), ==, -1);
+    assert_errno_is(EINVAL);
+
+    // Test the current working directory.
+    g_assert_cmpint(readlinkat(AT_FDCWD, ".", buf, sizeof(buf)), ==, -1);
+    assert_errno_is(EINVAL);
+
+    ////////// statx //////////
+
+    struct statx statxbuf = {0};
+
+    // Test an empty path.
+    g_assert_cmpint(statx(this_dirfd, "", 0, 0, &statxbuf), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test an empty path.
+    g_assert_cmpint(statx(AT_FDCWD, "", 0, 0, &statxbuf), ==, -1);
+    assert_errno_is(ENOENT);
+
+    // Test the directory of the temporary file.
+    assert_nonneg_errno(statx(this_dirfd, ".", 0, 0, &statxbuf));
+
+    // Test the current working directory.
+    assert_nonneg_errno(statx(AT_FDCWD, ".", 0, 0, &statxbuf));
+
+    //////////
+
+    // success!
+    closedir(dir);
+}
 
 static void _test_dir() {
     g_auto(AutoDeleteFile) adf = _create_auto_dir();
@@ -1093,6 +1340,7 @@ int main(int argc, char* argv[]) {
     g_test_add_func("/file/faccessat", _test_faccessat);
     g_test_add_func("/file/faccessat_syscall", _test_faccessat_syscall);
     g_test_add_func("/file/faccessat2_syscall", _test_faccessat2_syscall);
+    g_test_add_func("/file/test_empty_paths", _test_empty_paths);
     g_test_add_func("/file/stat", _test_stat);
 
     g_test_add_func("/file/dir", _test_dir);
