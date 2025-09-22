@@ -28,8 +28,8 @@ jobs:
           - 'debian:11-slim'
           # EOL June 2028 https://wiki.debian.org/LTS
           - 'debian:12-slim'
-          # EOL May 2025 https://endoflife.date/fedora
-          - 'fedora:40'
+          # EOL May 2026 https://endoflife.date/fedora
+          - 'fedora:42'
         cc: ['gcc']
         buildtype: ['release']
         include:
