@@ -5,7 +5,7 @@
 We support the following Linux x86-64 distributions:
 
 - Ubuntu 22.04, 24.04
-- Debian 11, 12
+- Debian 11, 12, 13
 - Fedora 42
 
 We do not provide official support for other platforms. This means that we do
