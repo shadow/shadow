@@ -16,11 +16,8 @@ hosts:
   client1: &host
     network_node_id: 0
     processes:
-    # Would be more idiomatic to use curl, but that fails on debian 10 due to:
-    # - Different path to curl (/bin/curl vs /usr/bin/curl)
-    # - Deadlock in this version of curl. https://github.com/shadow/shadow/issues/1794
-    - path: /usr/bin/python3
-      args: -c "import urllib.request; print(urllib.request.urlopen('http://server').read().decode('utf-8'))"
+    - path: curl
+      args: http://server
       start_time: 5s
   client2: *host
   client3: *host
