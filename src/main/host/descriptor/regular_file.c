@@ -1024,24 +1024,55 @@ int regularfile_poll(RegularFile* file, struct pollfd* pfd) {
 // *at functions (NULL directory file is valid)
 ///////////////////////////////////////////////
 
-static inline int _regularfile_getOSDirFD(RegularFile* dir) {
+// May return an error (negative value), as not all `RegularFile`s in shadow have an OS fd.
+static int _regularfile_getOSDirFD(RegularFile* dir, int *outFd) {
     if (dir) {
         MAGIC_ASSERT(dir);
-        return dir->type != FILE_TYPE_IN_MEMORY && dir->osfile.fd != OSFILE_INVALID ?
-            dir->osfile.fd : AT_FDCWD;
+        switch (dir->type) {
+            case FILE_TYPE_IN_MEMORY:
+                // No OS file, so nothing we can do here.
+                return -1;
+            case FILE_TYPE_NOTSET:
+            case FILE_TYPE_RANDOM:
+            case FILE_TYPE_HOSTS:
+            case FILE_TYPE_LOCALTIME:
+            case FILE_TYPE_REGULAR:
+                if (dir->osfile.fd == OSFILE_INVALID) {
+                    // No OS file, so nothing we can do here.
+                    return -1;
+                }
+                *outFd = dir->osfile.fd;
+                return 0;
+        }
+        panic("Didn't check all file types (and compiler should have warned about this)");
     } else {
-        return AT_FDCWD;
+        // No directory file provided, so use the cwd.
+        *outFd = AT_FDCWD;
+        return 0;
     }
 }
 
 int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* statbuf, int flags,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fstatat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fstatat os-backed file %i, flags %d", dir, osFd, flags);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // stat(2):
+            // > ENOENT - path is an empty string and AT_EMPTY_PATH was not
+            // > specified in flags.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1057,12 +1088,26 @@ int regularfile_fstatat(RegularFile* dir, const char* pathname, struct stat* sta
 
 int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gid_t group,
                          int flags, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fchownat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fchownat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // Unlike fstatat, the man page for fchownat does not appear to
+            // specify what happens when the path name is empty. But fchownat
+            // does have an `AT_EMPTY_PATH` flag and experimentally seems to
+            // behave similarly to fstatat.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1078,12 +1123,25 @@ int regularfile_fchownat(RegularFile* dir, const char* pathname, uid_t owner, gi
 
 int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, int flags,
                          const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_fchmodat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p fchmodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the
+            // path name is empty. But it experimentally seems to return an
+            // error.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1099,12 +1157,25 @@ int regularfile_fchmodat(RegularFile* dir, const char* pathname, mode_t mode, in
 
 int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct timeval times[2],
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_futimesat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p futimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the
+            // path name is empty. But it experimentally seems to return an
+            // error.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1120,12 +1191,28 @@ int regularfile_futimesat(RegularFile* dir, const char* pathname, const struct t
 
 int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct timespec times[2],
                           int flags, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_utimensat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p utimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // utimensat(2):
+            // > ENOENT - (utimensat()) A component of pathname does not refer to
+            // > an existing directory or file, or pathname is an empty string
+            //
+            // Presumably it does want to allow an empty path if
+            // `AT_EMPTY_PATH` is set.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1141,12 +1228,26 @@ int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct t
 
 int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int flags,
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_faccessat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p faccessat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // Unlike fstatat, the man page does not appear to specify what
+            // happens when the path name is empty. But it does have an
+            // `AT_EMPTY_PATH` flag and experimentally seems to behave
+            // similarly to fstatat.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1162,12 +1263,24 @@ int regularfile_faccessat(RegularFile* dir, const char* pathname, int mode, int 
 
 int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_mkdirat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p mkdirat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the path
+            // name is empty. But it experimentally seems to return ENOENT.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1183,12 +1296,24 @@ int regularfile_mkdirat(RegularFile* dir, const char* pathname, mode_t mode,
 
 int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev_t dev,
                         const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_mknodat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p mknodat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // The man page does not appear to specify what happens when the path
+            // name is empty. But it experimentally seems to return ENOENT.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1204,12 +1329,25 @@ int regularfile_mknodat(RegularFile* dir, const char* pathname, mode_t mode, dev
 
 int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* newDir,
                        const char* newPath, int flags, const char* workingDir) {
-    int oldOsFd = _regularfile_getOSDirFD(oldDir);
-    int newOsFd = _regularfile_getOSDirFD(newDir);
+    int oldOsFd = -1;
+    int newOsFd = -1;
+    if (_regularfile_getOSDirFD(oldDir, &oldOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_linkat'");
+        return -EINVAL;
+    }
+    if (_regularfile_getOSDirFD(newDir, &newOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_linkat'");
+        return -EINVAL;
+    }
+
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
     trace("RegularFiles %p, %p linkat os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
+
+    // TODO: properly handle an empty path
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1234,12 +1372,25 @@ int regularfile_linkat(RegularFile* oldDir, const char* oldPath, RegularFile* ne
 
 int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
                          const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_unlinkat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p unlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // unlinkat(2):
+            // > ENOENT - A component in pathname does not exist or is a dangling
+            // > symbolic link, or pathname is empty.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1255,12 +1406,25 @@ int regularfile_unlinkat(RegularFile* dir, const char* pathname, int flags,
 
 int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* target,
                           const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_symlinkat'");
+        return -EINVAL;
+    }
+
     const char* linkpathTmp = linkpath;
 
     trace("RegularFile %p symlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(linkpathTmp) == 0) {
+            // symlinkat(2):
+            // > ENOENT - A directory component in linkpath does not exist or is a
+            // > dangling symbolic link, or target or linkpath is an empty string.
+            return -ENOENT;
+        }
+
         osFd = -1;
         linkpathTmp = _regularfile_getAbsolutePath(NULL, linkpath, workingDir);
     }
@@ -1276,12 +1440,31 @@ int regularfile_symlinkat(RegularFile* dir, const char* linkpath, const char* ta
 
 ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf, size_t bufsize,
                                const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_readlinkat'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p readlinkat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0) {
+            // readlinkat(2):
+            // > Since Linux 2.6.39, pathname can be an empty string, in which
+            // > case the call operates on the symbolic link referred to by
+            // > dirfd (which should have been obtained using open(2) with the
+            // > O_PATH and O_NOFOLLOW flags).
+            //
+            // If both AT_FDCWD and "" were specified, the call operates on the
+            // current working directory, which shouldn't be a symlink. It
+            // experimentally seems to return ENOENT instead of EINVAL.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
@@ -1297,12 +1480,25 @@ ssize_t regularfile_readlinkat(RegularFile* dir, const char* pathname, char* buf
 
 int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile* newDir,
                           const char* newPath, unsigned int flags, const char* workingDir) {
-    int oldOsFd = _regularfile_getOSDirFD(oldDir);
-    int newOsFd = _regularfile_getOSDirFD(newDir);
+    int oldOsFd = -1;
+    int newOsFd = -1;
+    if (_regularfile_getOSDirFD(oldDir, &oldOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_renameat2'");
+        return -EINVAL;
+    }
+    if (_regularfile_getOSDirFD(newDir, &newOsFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_renameat2'");
+        return -EINVAL;
+    }
+
     const char* oldPathTmp = oldPath;
     const char* newPathTmp = newPath;
 
     trace("RegularFiles %p, %p renameat2 os-backed files %i, %i", oldDir, newDir, oldOsFd, newOsFd);
+
+    // TODO: properly handle an empty path
 
     if (oldOsFd == AT_FDCWD) {
         oldOsFd = -1;
@@ -1329,12 +1525,26 @@ int regularfile_renameat2(RegularFile* oldDir, const char* oldPath, RegularFile*
 #ifdef SYS_statx
 int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigned int mask,
                       struct statx* statxbuf, const char* workingDir) {
-    int osFd = _regularfile_getOSDirFD(dir);
+    int osFd = -1;
+    if (_regularfile_getOSDirFD(dir, &osFd) < 0) {
+        // this would probably be a 'warn-once-then-debug' in rust
+        debug("Failed to get OS fd for 'RegularFile' in 'regularfile_statx'");
+        return -EINVAL;
+    }
+
     const char* pathnameTmp = pathname;
 
     trace("RegularFile %p statx os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
+        if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
+            // stat(2):
+            // > ENOENT - A component of pathname does not exist, or pathname
+            // > is an empty string and AT_EMPTY_PATH was not specified in
+            // > flags.
+            return -ENOENT;
+        }
+
         osFd = -1;
         pathnameTmp = _regularfile_getAbsolutePath(NULL, pathname, workingDir);
     }
