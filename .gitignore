@@ -3,6 +3,8 @@ build
 # area for local temp files
 /local
 /install
+# python build files
+*.egg-info/
 # ide-specific settings
 .vscode
 cscope.*
