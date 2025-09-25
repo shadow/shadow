@@ -46,17 +46,7 @@ ExternalProject_Add(
     BUILD_ALWAYS 1
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
-    # cmake appears to truncate strings when there's a semicolon,
-    # so we need to write this awkwardly
-    BUILD_COMMAND bash -c " \
-        VERSION=\"$(${CARGO_ENV_VARS} rustc --version | awk '{print $2}')\" \
-        && [[ \"$VERSION\" == 1.89.0 ]] \
-        && echo '' \
-        && echo \"Unsupported rust version: $VERSION\" \
-        && echo 'See https://github.com/shadow/shadow/issues/3654' \
-        && echo '' \
-        && exit 1 || exit 0 \
-        "
+    BUILD_COMMAND echo "Building workspace..."
     COMMAND echo "Building workspace..."
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
