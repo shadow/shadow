@@ -1821,6 +1821,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                         "ud2",
 
                         "2:",
+                        // clobbered by syscall instruction.
+                        // https://www.felixcloutier.com/x86/syscall
+                        out("rcx") _, out("r11") _,
                         inlateout("rax") libc::SYS_vfork => raw_pid,
                         // r12 shouldn't be clobbered by the vfork syscall
                         in("r12") libc::SYS_execve,
