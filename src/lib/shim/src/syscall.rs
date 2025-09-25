@@ -37,6 +37,11 @@ unsafe fn native_syscall(args: &SyscallArgs) -> SyscallReg {
         unsafe {
             core::arch::asm!(
                 "syscall",
+                // rcx is clobbered by syscall instruction to save RIP.
+                // r11 is clobbered by syscall instruction to save RFLAGS.
+                // https://www.felixcloutier.com/x86/syscall
+                out("rcx") _,
+                out("r11") _,
                 inout("rax") args.number => rv,
                 in("rdi") u64::from(args.args[0]),
                 in("rsi") u64::from(args.args[1]),
