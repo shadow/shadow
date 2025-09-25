@@ -308,6 +308,9 @@ unsafe fn do_clone_thread(ctx: &ucontext, event: &ShimEventAddThreadReq) -> i64 
             "call {set_context}",
 
             "2:",
+            // clobbered by syscall instruction.
+            // https://www.felixcloutier.com/x86/syscall
+            out("rcx") _, out("r11") _,
             // clone syscall number in, rv out
             inout("rax") libc::SYS_clone => rv,
             // clone syscall arg1

@@ -74,6 +74,7 @@ https://gitlab.torproject.org/tpo/core/arti/-/issues/1972).
 * Fixed a bug where a listening TCP socket would be cleaned up only after all its child sockets were closed. (#3643)
 * Fixed a bug where files could have their `close()` delayed until the application next made a blocking syscall. (#3652)
 * Fixed incorrect handling of most file -at syscalls when called with an empty path string. (#3661)
+* Fixed missing register clobbers that resulted in breakage in rust 1.89. (#3666, fixing #3654)
 
 Full changelog since v3.2.0:
 

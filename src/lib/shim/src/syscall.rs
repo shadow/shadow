@@ -4,6 +4,7 @@ use core::sync::atomic;
 use formatting_nostd::{BorrowedFdWriter, FormatBuffer};
 use linux_api::errno::Errno;
 use linux_api::ucontext::ucontext;
+use linux_syscall::{Result64, syscall};
 use rustix::fd::BorrowedFd;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::option::FfiOption;
@@ -32,18 +33,24 @@ unsafe fn native_syscall(args: &SyscallArgs) -> SyscallReg {
         // https://doc.rust-lang.org/nomicon/panic-handler.html
         unsafe { crate::release_and_exit_current_thread(exit_status) };
     } else {
-        let rv: i64;
-        // SAFETY: Caller is responsible for ensuring this syscall is safe to make.
-        unsafe {
-            core::arch::asm!(
-                "syscall",
-                inout("rax") args.number => rv,
-                in("rdi") u64::from(args.args[0]),
-                in("rsi") u64::from(args.args[1]),
-                in("rdx") u64::from(args.args[2]),
-                in("r10") u64::from(args.args[3]),
-                in("r8") u64::from(args.args[4]),
-                in("r9") u64::from(args.args[5]))
+        let Ok(num) = u32::try_from(args.number) else {
+            return Errno::ENOSYS.to_negated_i32().into();
+        };
+        let rv: i64 = match unsafe {
+            syscall!(
+                num,
+                u64::from(args.args[0]),
+                u64::from(args.args[1]),
+                u64::from(args.args[2]),
+                u64::from(args.args[3]),
+                u64::from(args.args[4]),
+                u64::from(args.args[5])
+            )
+        }
+        .try_i64()
+        {
+            Ok(x) => x,
+            Err(e) => -i64::from(e.get()),
         };
         rv.into()
     }

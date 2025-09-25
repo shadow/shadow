@@ -2424,6 +2424,7 @@ dependencies = [
  "libc",
  "linux-api",
  "linux-raw-sys 0.11.0",
+ "linux-syscall",
  "log",
  "log-c2rust",
  "logger",
