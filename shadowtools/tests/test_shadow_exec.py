@@ -58,7 +58,10 @@ class TestShadowExecCLI(unittest.TestCase):
                 "--",
                 "bash",
                 "-c",
-                "date -Ins; sleep 1.001; date -Ins",
+                # we would use 'sleep' here, but /bin/sleep in newer coreutils seems to add an extra
+                # nanosecond to the specified time:
+                # https://github.com/shadow/shadow/pull/3663#issuecomment-3341062224
+                "date -Ins; coproc read -t 1.001; wait; date -Ins",
             ],
             text=True,
         )

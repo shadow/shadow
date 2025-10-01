@@ -2,7 +2,11 @@ include_directories(${GLIB_INCLUDE_DIRS})
 add_executable(test_clone_leader_exits_early test_clone_leader_exits_early.c ../test_common.c)
 target_compile_options(test_clone_leader_exits_early PUBLIC "-pthread")
 target_link_libraries(test_clone_leader_exits_early ${GLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-add_linux_tests(BASENAME clone_leader_exits_early COMMAND test_clone_leader_exits_early)
+
+# FIXME: This test segfaults under Linux on newer distros (for example Fedora
+# 42 and Debian 13), so disabling for now.
+# https://github.com/shadow/shadow/issues/3544
+#add_linux_tests(BASENAME clone_leader_exits_early COMMAND test_clone_leader_exits_early)
 
 add_shadow_tests(
     BASENAME clone_leader_exits_early
