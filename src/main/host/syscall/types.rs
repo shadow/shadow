@@ -80,7 +80,7 @@ impl<T> ForeignArrayPtr<T> {
     /// Cast to type `U`. Fails if the total size isn't a multiple of `sizeof<U>`.
     pub fn cast<U>(&self) -> Option<ForeignArrayPtr<U>> {
         let count_bytes = self.count * size_of::<T>();
-        if count_bytes % size_of::<U>() != 0 {
+        if !count_bytes.is_multiple_of(size_of::<U>()) {
             return None;
         }
         Some(ForeignArrayPtr::new(
