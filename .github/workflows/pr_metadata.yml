@@ -25,7 +25,7 @@ jobs:
     - name: Apply Labels
       # Add labels based on paths modified in PR
       # https://github.com/actions/labeler
-      uses: actions/labeler@v5
+      uses: actions/labeler@v6
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
         configuration-path: .github/pr_labeler_conf.yml

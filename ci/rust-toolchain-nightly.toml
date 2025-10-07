@@ -9,6 +9,6 @@
 [toolchain]
 # Must be a version built with miri; check
 # https://rust-lang.github.io/rustup-components-history/
-channel = "nightly-2025-09-06"
+channel = "nightly-2025-10-04"
 # We don't add individual components here. CI individually
 # adds the ones they need (e.g. clippy, miri).

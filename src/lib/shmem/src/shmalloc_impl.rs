@@ -334,7 +334,7 @@ impl Block {
     pub(crate) fn get_ref<T>(&self) -> &[T] {
         let (begin_p, end_p) = self.get_block_data_range();
         let block_len = unsafe { end_p.offset_from(begin_p) } as usize;
-        assert!(block_len % core::mem::size_of::<T>() == 0);
+        assert!(block_len.is_multiple_of(core::mem::size_of::<T>()));
         let nelems = block_len / core::mem::size_of::<T>();
         unsafe { core::slice::from_raw_parts(begin_p as *const T, nelems) }
     }

@@ -627,7 +627,7 @@ impl TcpHeader {
         // TODO: should we consider the length of the selective acks, if any exist?
 
         // Add padding bytes if needed.
-        if (len % 4) != 0 {
+        if !len.is_multiple_of(4) {
             len += 4 - (len % 4);
         }
 

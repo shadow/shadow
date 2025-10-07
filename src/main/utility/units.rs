@@ -34,7 +34,7 @@ pub trait Prefix: Clone + Copy + Default + PartialEq + FromStr + Display + Debug
     fn conversion_factor(&self, to: Self) -> Result<u128, String> {
         let from_mag = self.relative_magnitude();
         let to_mag = to.relative_magnitude();
-        if from_mag % to_mag != 0 {
+        if !from_mag.is_multiple_of(to_mag) {
             return Err("Conversion would lose precision".to_string());
         }
         Ok(from_mag / to_mag)

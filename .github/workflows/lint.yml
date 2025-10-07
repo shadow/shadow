@@ -16,7 +16,7 @@ jobs:
   lint-python:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -24,16 +24,16 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
       - run: pip install flake8
       - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude src/external
 
   lint-python-mypy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -41,7 +41,7 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           # Oldest python version supported by shadowtools package
           python-version: '3.8'
@@ -59,7 +59,7 @@ jobs:
   lint-shell:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
           # Run on PR head instead of merge result. Running on the merge
@@ -73,7 +73,7 @@ jobs:
   lint-rust:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
@@ -92,7 +92,7 @@ jobs:
   lint-clippy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to
@@ -119,7 +119,7 @@ jobs:
   lint-cargo-lock:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cargo update check
         run: |
           # This will return an error if any versions of local crates in the Cargo.lock
@@ -130,7 +130,7 @@ jobs:
   lint-cargo-doc:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Run on PR head instead of merge result. Running on the merge
           # result can give confusing results, and we require PR to be up to

@@ -50,7 +50,7 @@ jobs:
     steps:
       - run: apt-get update
       - name: Checkout shadow
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: shadow
           # Run on PR head instead of merge result. Running on the merge
@@ -156,7 +156,7 @@ jobs:
           key: tgen-build-key-${{ env.CONTAINER }}-816d68cd3d0ff7d0ec71e8bbbae24ecd6a636117
       - name: Checkout tgen
         if: steps.restore-tgen-build-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: tgen
           repository: shadow/tgen
@@ -226,7 +226,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-shadow
 
@@ -237,7 +237,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-tgen
           path: .
@@ -358,7 +358,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-shadow
 
@@ -369,7 +369,7 @@ jobs:
         run: apt-get install -y libglib2.0-0
 
       - name: Download tgen
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-tgen
           path: .
@@ -440,7 +440,7 @@ jobs:
       - run: apt-get update
 
       - name: Download shadow
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-shadow
 

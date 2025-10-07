@@ -7,4 +7,4 @@
 # See
 # https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file
 [toolchain]
-channel = "1.88"
+channel = "1.90"

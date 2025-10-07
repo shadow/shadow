@@ -243,7 +243,7 @@ name = "test_close_range"
 path = "close_range/test_close_range.rs"
 
 [dependencies]
-anyhow = "1.0.99"
+anyhow = "1.0.100"
 asm_util = { path = "../lib/asm-util" }
 formatting-nostd = { path = "../lib/formatting-nostd" }
 libc = "0.2"
