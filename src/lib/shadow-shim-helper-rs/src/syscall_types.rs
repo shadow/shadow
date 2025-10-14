@@ -532,3 +532,17 @@ impl From<SyscallReg> for linux_api::prctl::ArchPrctlOp {
         Self::new(reg.into())
     }
 }
+
+impl TryFrom<SyscallReg> for linux_api::resource::Resource {
+    type Error = ();
+
+    fn try_from(value: SyscallReg) -> Result<Self, Self::Error> {
+        let Ok(value) = u32::try_from(u64::from(value)) else {
+            return Err(());
+        };
+        let Ok(value) = linux_api::resource::Resource::try_from(value) else {
+            return Err(());
+        };
+        Ok(value)
+    }
+}
