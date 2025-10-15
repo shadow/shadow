@@ -9,7 +9,7 @@ impl SyscallHandler {
         prlimit64,
         /* rv */ std::ffi::c_int,
         /* pid */ linux_api::posix_types::kernel_pid_t,
-        /* resource */ std::ffi::c_uint,
+        /* resource */ linux_api::resource::Resource,
         /* new_rlim */ *const std::ffi::c_void,
         /* old_rlim */ *const std::ffi::c_void,
     );
@@ -34,5 +34,33 @@ impl SyscallHandler {
             // pid instead.
             Err(Errno::EOPNOTSUPP.into())
         }
+    }
+
+    log_syscall!(
+        getrlimit,
+        /* rv */ std::ffi::c_int,
+        /* resource */ linux_api::resource::Resource,
+        /* rlimit */ *const linux_api::resource::rlimit,
+    );
+    pub fn getrlimit(
+        _ctx: &mut SyscallContext,
+        _resource: std::ffi::c_uint,
+        _rlimit: ForeignPtr<linux_api::resource::rlimit>,
+    ) -> Result<(), SyscallError> {
+        Err(SyscallError::Native)
+    }
+
+    log_syscall!(
+        setrlimit,
+        /* rv */ std::ffi::c_int,
+        /* resource */ linux_api::resource::Resource,
+        /* rlimit */ *const linux_api::resource::rlimit,
+    );
+    pub fn setrlimit(
+        _ctx: &mut SyscallContext,
+        _resource: std::ffi::c_uint,
+        _rlimit: ForeignPtr<linux_api::resource::rlimit>,
+    ) -> Result<(), SyscallError> {
+        Err(SyscallError::Native)
     }
 }
