@@ -10,15 +10,15 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* pid */ linux_api::posix_types::kernel_pid_t,
         /* resource */ linux_api::resource::Resource,
-        /* new_rlim */ *const std::ffi::c_void,
-        /* old_rlim */ *const std::ffi::c_void,
+        /* new_rlim */ *const linux_api::resource::rlimit64,
+        /* old_rlim */ *const linux_api::resource::rlimit64,
     );
     pub fn prlimit64(
         _ctx: &mut SyscallContext,
         pid: linux_api::posix_types::kernel_pid_t,
         resource: std::ffi::c_uint,
-        _new_rlim: ForeignPtr<()>,
-        _old_rlim: ForeignPtr<()>,
+        _new_rlim: ForeignPtr<linux_api::resource::rlimit64>,
+        _old_rlim: ForeignPtr<linux_api::resource::rlimit64>,
     ) -> Result<(), SyscallError> {
         log::trace!("prlimit64 called on pid {pid} for resource {resource}");
 
