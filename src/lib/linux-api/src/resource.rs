@@ -11,6 +11,10 @@ unsafe impl Pod for rusage {}
 pub type rlimit = crate::bindings::linux_rlimit;
 unsafe impl Pod for rlimit {}
 
+#[allow(non_camel_case_types)]
+pub type rlimit64 = crate::bindings::linux_rlimit64;
+unsafe impl Pod for rlimit64 {}
+
 // Resource  identifier, as used in getrlimit, setrlimit, prlimit.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
