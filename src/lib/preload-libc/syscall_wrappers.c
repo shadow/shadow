@@ -272,9 +272,7 @@ INTERPOSE(getresgid);
 #ifdef SYS_getresuid // kernel entry: num=118 func=sys_getresuid
 INTERPOSE(getresuid);
 #endif
-#ifdef SYS_getrlimit // kernel entry: num=97 func=sys_getrlimit
-INTERPOSE(getrlimit);
-#endif
+// Skipping SYS_getrlimit
 #ifdef SYS_getrusage // kernel entry: num=98 func=sys_getrusage
 INTERPOSE(getrusage);
 #endif
@@ -757,9 +755,7 @@ INTERPOSE(setpgid);
 // Skipping SYS_setresgid
 // Skipping SYS_setresuid
 // Skipping SYS_setreuid
-#ifdef SYS_setrlimit // kernel entry: num=160 func=sys_setrlimit
-INTERPOSE(setrlimit);
-#endif
+// Skipping SYS_setrlimit
 #ifdef SYS_setsid // kernel entry: num=112 func=sys_setsid
 INTERPOSE(setsid);
 #endif
