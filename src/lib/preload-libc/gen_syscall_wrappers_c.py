@@ -212,7 +212,10 @@ for line in data.splitlines():
     if len(parts) < 4 or '#' in parts[0]:
         continue
 
-    num, abi, name, entry = parts
+    # Most lines contain only these 4 fields.
+    # Some contain additional trailing fields we don't care about
+    # ("-  noreturn"), which we drop.
+    num, abi, name, entry = parts[:4]
 
     # ignore the x32-specific abi, since shadow only supports x86_64
     if 'x32' in abi:
