@@ -152,9 +152,7 @@ INTERPOSE(fchdir);
 #endif
 // Skipping SYS_fchmod
 // Skipping SYS_fchmodat
-#ifdef SYS_fchmodat2 // kernel entry: num=452 func=sys_fchmodat2
-INTERPOSE(fchmodat2);
-#endif
+// Skipping SYS_fchmodat2
 #ifdef SYS_fchown // kernel entry: num=93 func=sys_fchown
 INTERPOSE(fchown);
 #endif
@@ -169,6 +167,12 @@ INTERPOSE(fdatasync);
 #endif
 #ifdef SYS_fgetxattr // kernel entry: num=193 func=sys_fgetxattr
 INTERPOSE(fgetxattr);
+#endif
+#ifdef SYS_file_getattr // kernel entry: num=468 func=sys_file_getattr
+INTERPOSE(file_getattr);
+#endif
+#ifdef SYS_file_setattr // kernel entry: num=469 func=sys_file_setattr
+INTERPOSE(file_setattr);
 #endif
 #ifdef SYS_finit_module // kernel entry: num=313 func=sys_finit_module
 INTERPOSE(finit_module);
@@ -205,7 +209,16 @@ INTERPOSE(ftruncate);
 #ifdef SYS_futex // kernel entry: num=202 func=sys_futex
 INTERPOSE(futex);
 #endif
+#ifdef SYS_futex_requeue // kernel entry: num=456 func=sys_futex_requeue
+INTERPOSE(futex_requeue);
+#endif
+#ifdef SYS_futex_wait // kernel entry: num=455 func=sys_futex_wait
+INTERPOSE(futex_wait);
+#endif
 // Skipping SYS_futex_waitv
+#ifdef SYS_futex_wake // kernel entry: num=454 func=sys_futex_wake
+INTERPOSE(futex_wake);
+#endif
 #ifdef SYS_futimesat // kernel entry: num=261 func=sys_futimesat
 INTERPOSE(futimesat);
 #endif
@@ -286,6 +299,9 @@ INTERPOSE(getuid);
 #ifdef SYS_getxattr // kernel entry: num=191 func=sys_getxattr
 INTERPOSE(getxattr);
 #endif
+#ifdef SYS_getxattrat // kernel entry: num=464 func=sys_getxattrat
+INTERPOSE(getxattrat);
+#endif
 #ifdef SYS_init_module // kernel entry: num=175 func=sys_init_module
 INTERPOSE(init_module);
 #endif
@@ -364,14 +380,17 @@ INTERPOSE(linkat);
 #ifdef SYS_listen // kernel entry: num=50 func=sys_listen
 INTERPOSE(listen);
 #endif
+#ifdef SYS_listmount // kernel entry: num=458 func=sys_listmount
+INTERPOSE(listmount);
+#endif
 #ifdef SYS_listxattr // kernel entry: num=194 func=sys_listxattr
 INTERPOSE(listxattr);
 #endif
+#ifdef SYS_listxattrat // kernel entry: num=465 func=sys_listxattrat
+INTERPOSE(listxattrat);
+#endif
 #ifdef SYS_llistxattr // kernel entry: num=195 func=sys_llistxattr
 INTERPOSE(llistxattr);
-#endif
-#ifdef SYS_lookup_dcookie // kernel entry: num=212 func=sys_lookup_dcookie
-INTERPOSE(lookup_dcookie);
 #endif
 #ifdef SYS_lremovexattr // kernel entry: num=198 func=sys_lremovexattr
 INTERPOSE(lremovexattr);
@@ -381,6 +400,15 @@ INTERPOSE(lseek);
 #endif
 #ifdef SYS_lsetxattr // kernel entry: num=189 func=sys_lsetxattr
 INTERPOSE(lsetxattr);
+#endif
+#ifdef SYS_lsm_get_self_attr // kernel entry: num=459 func=sys_lsm_get_self_attr
+INTERPOSE(lsm_get_self_attr);
+#endif
+#ifdef SYS_lsm_list_modules // kernel entry: num=461 func=sys_lsm_list_modules
+INTERPOSE(lsm_list_modules);
+#endif
+#ifdef SYS_lsm_set_self_attr // kernel entry: num=460 func=sys_lsm_set_self_attr
+INTERPOSE(lsm_set_self_attr);
 #endif
 #ifdef SYS_lstat // kernel entry: num=6 func=sys_newlstat
 INTERPOSE(lstat);
@@ -462,6 +490,9 @@ INTERPOSE(mq_unlink);
 #ifdef SYS_mremap // kernel entry: num=25 func=sys_mremap
 INTERPOSE(mremap);
 #endif
+#ifdef SYS_mseal // kernel entry: num=462 func=sys_mseal
+INTERPOSE(mseal);
+#endif
 #ifdef SYS_msgctl // kernel entry: num=71 func=sys_msgctl
 INTERPOSE(msgctl);
 #endif
@@ -498,6 +529,9 @@ INTERPOSE(nanosleep);
 INTERPOSE(open_by_handle_at);
 #endif
 // Skipping SYS_open_tree
+#ifdef SYS_open_tree_attr // kernel entry: num=467 func=sys_open_tree_attr
+INTERPOSE(open_tree_attr);
+#endif
 // Skipping SYS_openat
 #ifdef SYS_openat2 // kernel entry: num=437 func=sys_openat2
 INTERPOSE(openat2);
@@ -598,6 +632,9 @@ INTERPOSE(remap_file_pages);
 #endif
 #ifdef SYS_removexattr // kernel entry: num=197 func=sys_removexattr
 INTERPOSE(removexattr);
+#endif
+#ifdef SYS_removexattrat // kernel entry: num=466 func=sys_removexattrat
+INTERPOSE(removexattrat);
 #endif
 #ifdef SYS_rename // kernel entry: num=82 func=sys_rename
 INTERPOSE(rename);
@@ -736,6 +773,9 @@ INTERPOSE(settimeofday);
 #ifdef SYS_setxattr // kernel entry: num=188 func=sys_setxattr
 INTERPOSE(setxattr);
 #endif
+#ifdef SYS_setxattrat // kernel entry: num=463 func=sys_setxattrat
+INTERPOSE(setxattrat);
+#endif
 #ifdef SYS_shmat // kernel entry: num=30 func=sys_shmat
 INTERPOSE(shmat);
 #endif
@@ -770,6 +810,9 @@ INTERPOSE(stat);
 #endif
 #ifdef SYS_statfs // kernel entry: num=137 func=sys_statfs
 INTERPOSE(statfs);
+#endif
+#ifdef SYS_statmount // kernel entry: num=457 func=sys_statmount
+INTERPOSE(statmount);
 #endif
 #ifdef SYS_statx // kernel entry: num=332 func=sys_statx
 INTERPOSE(statx);
@@ -861,6 +904,12 @@ INTERPOSE(unlinkat);
 #endif
 #ifdef SYS_unshare // kernel entry: num=272 func=sys_unshare
 INTERPOSE(unshare);
+#endif
+#ifdef SYS_uprobe // kernel entry: num=336 func=sys_uprobe
+INTERPOSE(uprobe);
+#endif
+#ifdef SYS_uretprobe // kernel entry: num=335 func=sys_uretprobe
+INTERPOSE(uretprobe);
 #endif
 #ifdef SYS_userfaultfd // kernel entry: num=323 func=sys_userfaultfd
 INTERPOSE(userfaultfd);
