@@ -35,8 +35,12 @@ impl SyscallHandler {
         };
 
         // SAFETY: native_pid can't be *our* process. Potentially unsafe for target (managed) process.
-        unsafe { linux_api::resource::prlimit64(native_pid, resource, new_rlim, old_rlim.as_deref_mut()) }?;
-        log::trace!("called prlimit64 native_pid:{native_pid:?} resource:{resource:?} new:{new_rlim:?} old:{old_rlim:?}");
+        unsafe {
+            linux_api::resource::prlimit64(native_pid, resource, new_rlim, old_rlim.as_deref_mut())
+        }?;
+        log::trace!(
+            "called prlimit64 native_pid:{native_pid:?} resource:{resource:?} new:{new_rlim:?} old:{old_rlim:?}"
+        );
         Ok(())
     }
 
