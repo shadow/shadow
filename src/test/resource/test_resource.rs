@@ -332,6 +332,24 @@ fn test_prlimit_child() {
     }
 }
 
+// This is essentially a regression test for
+// <https://github.com/shadow/shadow/issues/3681>.
+fn test_set_fsize_zero() {
+    let initial = LibcGetRLimit
+        .getrlimit(linux_api::resource::Resource::RLIMIT_FSIZE.into())
+        .unwrap();
+    // Set file-write limit to 0.
+    // This should be ok as long as we don't try writing to any files while this is set.
+    LibcSetRLimit.setrlimit(linux_api::resource::Resource::RLIMIT_FSIZE.into(), &linux_api::resource::rlimit{ rlim_cur: 0, rlim_max: initial.rlim_max }).unwrap();
+
+    // Do some syscall that should be handled shim-side, causing the shim
+    // to try writing to the strace log file.
+    linux_api::time::clock_gettime(linux_api::time::ClockId::CLOCK_REALTIME).unwrap();
+
+    // Restore the normal limit.
+    LibcSetRLimit.setrlimit(linux_api::resource::Resource::RLIMIT_FSIZE.into(),&initial).unwrap();
+}
+
 fn main() {
     test_getrlimits_every_resource();
     test_getrlimits_errors();
@@ -340,4 +358,6 @@ fn main() {
     test_setrlimits_errors();
 
     test_prlimit_child();
+
+    test_set_fsize_zero();
 }
