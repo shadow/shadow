@@ -11,18 +11,15 @@ impl SyscallHandler {
         pid: linux_api::posix_types::kernel_pid_t,
         resource: std::ffi::c_uint,
         new_rlim: Option<&linux_api::resource::rlimit64>,
-        mut old_rlim: Option<&mut linux_api::resource::rlimit64>,
+        old_rlim: Option<&mut linux_api::resource::rlimit64>,
     ) -> Result<(), SyscallError> {
-        // TODO: For determinism, we may want to enforce static limits for certain resources, like
-        // RLIMIT_NOFILE. Some applications like Tor will change behavior depending on these limits.
-
         let Ok(resource) = linux_api::resource::Resource::try_from(resource) else {
             return Err(Errno::EINVAL.into());
         };
 
-        let native_pid = if pid == 0 {
+        if pid == 0 {
             // process is calling prlimit on itself
-            ctx.objs.process.native_pid()
+            ctx.objs.process.prlimit64(resource, new_rlim, old_rlim)?;
         } else {
             // calling on another process
             let Ok(id) = ProcessId::try_from(pid) else {
@@ -31,16 +28,10 @@ impl SyscallHandler {
             let Some(process) = ctx.objs.host.process_borrow(id) else {
                 return Err(Errno::ESRCH.into());
             };
-            process.borrow(ctx.objs.host.root()).native_pid()
-        };
-
-        // SAFETY: native_pid can't be *our* process. Potentially unsafe for target (managed) process.
-        unsafe {
-            linux_api::resource::prlimit64(native_pid, resource, new_rlim, old_rlim.as_deref_mut())
-        }?;
-        log::trace!(
-            "called prlimit64 native_pid:{native_pid:?} resource:{resource:?} new:{new_rlim:?} old:{old_rlim:?}"
-        );
+            process
+                .borrow(ctx.objs.host.root())
+                .prlimit64(resource, new_rlim, old_rlim)?;
+        }
         Ok(())
     }
 
