@@ -679,79 +679,6 @@ impl RunnableProcess {
     pub fn shmem(&self) -> impl Deref<Target = ShMemBlock<'static, ProcessShmem>> + '_ {
         &self.shim_shared_mem_block
     }
-
-    /// Emulate the `prlimit64` syscall for this process, operating on potentially both
-    /// native and emulated resource limits.
-    pub fn prlimit64(
-        &mut self,
-        resource: linux_api::resource::Resource,
-        new_rlim: Option<&linux_api::resource::rlimit64>,
-        old_rlim: Option<&mut linux_api::resource::rlimit64>,
-    ) -> Result<(), linux_api::errno::Errno> {
-        let idx = usize::try_from(u32::from(resource)).unwrap();
-        let cur = &self.common.rlimits[idx];
-        if let Some(old_rlim) = old_rlim {
-            *old_rlim = *cur;
-        }
-        let Some(new_rlim) = new_rlim else {
-            // Nothing else to do.
-            return Ok(());
-        };
-        if new_rlim.rlim_cur > new_rlim.rlim_max {
-            return Err(linux_api::errno::Errno::EINVAL);
-        }
-        // For now don't allow increasing rlim_max. We'd only be able to actually do this
-        // natively if shadow is running with CAP_SYS_RESOURCE. We could pretend to do it
-        // without changing the native limit, but that might just lead to confusion if and
-        // when the native limit is exceeded without exceeding the emulated limit.
-        if new_rlim.rlim_max > cur.rlim_max {
-            return Err(linux_api::errno::Errno::EPERM);
-        }
-
-        // Update our emulated limits to what was requested.
-        self.common.rlimits[idx] = *new_rlim;
-
-        // Get the current native limit.
-        // Theoretically we could cache this, but doesn't seem worth the
-        // complexity and fragility.
-        let mut native_rlim = shadow_pod::zeroed();
-        // SAFETY: we're only getting, not setting.
-        unsafe {
-            linux_api::resource::prlimit64(self.native_pid, resource, None, Some(&mut native_rlim))
-        }
-        .unwrap();
-
-        let mut new_rlim = *new_rlim;
-        if new_rlim.rlim_cur < native_rlim.rlim_cur {
-            // We don't permit lowering limits past their initial values,
-            // since the shadow shim may use resources beyond what the managed process
-            // itself needs (see <https://github.com/shadow/shadow/issues/3681>).
-            log::warn!(
-                "Only pretending to lower native {resource:?} rlim_cur from {} to {}",
-                native_rlim.rlim_cur,
-                new_rlim.rlim_cur
-            );
-            new_rlim.rlim_cur = native_rlim.rlim_cur;
-        }
-        if new_rlim.rlim_max < native_rlim.rlim_cur {
-            // We can allow lowering the native max, since we currently never try to increase
-            // the limit beyond its initial value. But the kernel won't let us lower beyond rlim_cur.
-            log::warn!(
-                "Only pretending to lower native {resource:?} rlim_max from {} to {}",
-                native_rlim.rlim_max,
-                new_rlim.rlim_max
-            );
-            new_rlim.rlim_max = native_rlim.rlim_cur;
-        }
-
-        // Update the native limits. This should always succeed with the validations we already did above.
-        // SAFETY: Not our process, and the checks we did above should ensure we don't lower
-        // the limits to something the shim can't handle.
-        unsafe { linux_api::resource::prlimit64(self.native_pid, resource, Some(&new_rlim), None) }
-            .unwrap();
-
-        Ok(())
-    }
 }
 
 impl ExplicitDrop for RunnableProcess {
@@ -1678,9 +1605,78 @@ impl Process {
         new_rlim: Option<&linux_api::resource::rlimit64>,
         old_rlim: Option<&mut linux_api::resource::rlimit64>,
     ) -> Result<(), linux_api::errno::Errno> {
-        self.as_runnable_mut()
-            .unwrap()
-            .prlimit64(resource, new_rlim, old_rlim)
+        let idx = usize::try_from(u32::from(resource)).unwrap();
+        let cur = self.common().rlimits[idx];
+        if let Some(old_rlim) = old_rlim {
+            *old_rlim = cur;
+        }
+        let Some(new_rlim) = new_rlim else {
+            // Nothing else to do.
+            return Ok(());
+        };
+        if new_rlim.rlim_cur > new_rlim.rlim_max {
+            return Err(linux_api::errno::Errno::EINVAL);
+        }
+        // For now don't allow increasing rlim_max. We'd only be able to actually do this
+        // natively if shadow is running with CAP_SYS_RESOURCE. We could pretend to do it
+        // without changing the native limit, but that might just lead to confusion if and
+        // when the native limit is exceeded without exceeding the emulated limit.
+        if new_rlim.rlim_max > cur.rlim_max {
+            return Err(linux_api::errno::Errno::EPERM);
+        }
+
+        // Update our emulated limits to what was requested.
+        self.common_mut().rlimits[idx] = *new_rlim;
+
+        let native_pid = if let Some(runnable) = self.as_runnable() {
+            runnable.native_pid()
+        } else {
+            // The process is a zombie. No need to update the native limits, and
+            // we can't since we already reaped the native process when
+            // converting to the zombie state.
+            return Ok(());
+        };
+
+        // Get the current native limit.
+        // Theoretically we could cache this, but doesn't seem worth the
+        // complexity and fragility.
+        let mut native_rlim = shadow_pod::zeroed();
+        // SAFETY: we're only getting, not setting.
+        unsafe {
+            linux_api::resource::prlimit64(native_pid, resource, None, Some(&mut native_rlim))
+        }
+        .unwrap();
+
+        let mut new_rlim = *new_rlim;
+        if new_rlim.rlim_cur < native_rlim.rlim_cur {
+            // We don't permit lowering limits past their initial values,
+            // since the shadow shim may use resources beyond what the managed process
+            // itself needs (see <https://github.com/shadow/shadow/issues/3681>).
+            log::warn!(
+                "Only pretending to lower native {resource:?} rlim_cur from {} to {}",
+                native_rlim.rlim_cur,
+                new_rlim.rlim_cur
+            );
+            new_rlim.rlim_cur = native_rlim.rlim_cur;
+        }
+        if new_rlim.rlim_max < native_rlim.rlim_cur {
+            // We can allow lowering the native max, since we currently never try to increase
+            // the limit beyond its initial value. But the kernel won't let us lower beyond rlim_cur.
+            log::warn!(
+                "Only pretending to lower native {resource:?} rlim_max from {} to {}",
+                native_rlim.rlim_max,
+                new_rlim.rlim_max
+            );
+            new_rlim.rlim_max = native_rlim.rlim_cur;
+        }
+
+        // Update the native limits. This should always succeed with the validations we already did above.
+        // SAFETY: Not our process, and the checks we did above should ensure we don't lower
+        // the limits to something the shim can't handle.
+        unsafe { linux_api::resource::prlimit64(native_pid, resource, Some(&new_rlim), None) }
+            .unwrap();
+
+        Ok(())
     }
 
     /// FIXME: still needed? Time is now updated more granularly in the Thread code

@@ -312,6 +312,7 @@ fn test_prlimit_child() {
             .unwrap();
             println!("got child rlimit {initial_rlim:?}");
 
+            // set new limit in child
             let new_rlim = linux_api::resource::rlimit64 {
                 rlim_cur: decrement_rlim(initial_rlim.rlim_cur),
                 rlim_max: initial_rlim.rlim_max,
@@ -319,6 +320,34 @@ fn test_prlimit_child() {
             unsafe { linux_api::resource::prlimit64(child_pid, resource, Some(&new_rlim), None) }
                 .unwrap();
 
+            // wait for child to exit, but use WNOWAIT to not reap yet so that we can test operating on
+            // a zombie process below.
+            let child_status = rustix::process::waitid(
+                rustix::process::WaitId::Pid(
+                    rustix::process::Pid::from_raw(child_pid.as_raw_nonzero().get()).unwrap(),
+                ),
+                rustix::process::WaitidOptions::NOWAIT | rustix::process::WaitidOptions::EXITED,
+            )
+            .unwrap();
+            assert_eq!(child_status.unwrap().exit_status(), Some(0));
+
+            // Experimentally, both getting and setting rlimits works on zombie
+            // processes the same as if they were still running.
+            let mut zombie_rlim = linux_api::resource::rlimit64 {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            unsafe {
+                linux_api::resource::prlimit64(child_pid, resource, None, Some(&mut zombie_rlim))
+            }
+            .unwrap();
+            assert_eq!(zombie_rlim, new_rlim);
+            unsafe {
+                linux_api::resource::prlimit64(child_pid, resource, Some(&initial_rlim), None)
+            }
+            .unwrap();
+
+            // Now let's actually reap.
             let child_status = rustix::process::waitpid(
                 Some(rustix::process::Pid::from_raw(child_pid.as_raw_nonzero().get()).unwrap()),
                 rustix::process::WaitOptions::empty(),
