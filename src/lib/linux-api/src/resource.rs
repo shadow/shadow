@@ -30,6 +30,8 @@ const _: () = assert!(RLIM64_INFINITY == !0);
 pub const RLIM_INFINITY: u64 = bindings::LINUX_RLIM_INFINITY as u64;
 const _: () = assert!(RLIM_INFINITY == !0);
 
+pub const RLIM_NLIMITS: u32 = crate::bindings::LINUX_RLIM_NLIMITS;
+
 // Resource  identifier, as used in getrlimit, setrlimit, prlimit.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
