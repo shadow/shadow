@@ -20,6 +20,16 @@ unsafe impl Pod for rlimit {}
 pub type rlimit64 = crate::bindings::linux_rlimit64;
 unsafe impl Pod for rlimit64 {}
 
+// `include/linux/resource.h` defines this as (~0ULL); for some reason
+// bindgen is generating LINUX_RLIM64_INFINITY as an i32, though.
+pub const RLIM64_INFINITY: u64 = bindings::LINUX_RLIM64_INFINITY as u64;
+const _: () = assert!(RLIM64_INFINITY == !0);
+
+// `include/asm-generic/resource.h` defines this as (~0UL); for some reason
+// bindgen is generating LINUX_RLIM_INFINITY as an i32, though.
+pub const RLIM_INFINITY: u64 = bindings::LINUX_RLIM_INFINITY as u64;
+const _: () = assert!(RLIM_INFINITY == !0);
+
 // Resource  identifier, as used in getrlimit, setrlimit, prlimit.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
