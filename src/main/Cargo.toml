@@ -14,7 +14,7 @@ anyhow = "1.0.100"
 asm_util = { path = "../lib/asm-util" }
 atomic_refcell = "0.1"
 backtrace = "0.3.76"
-bitflags = "2.9"
+bitflags = "2.10"
 # custom version of the bytes crate required to make the 'try_unsplit' method public
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513

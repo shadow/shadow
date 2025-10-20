@@ -4,7 +4,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-bitflags = "2.9.4"
+bitflags = "2.10.0"
 # custom version of the bytes crate required to make the 'try_unsplit' method public
 # issue: https://github.com/tokio-rs/bytes/issues/287
 # pr: https://github.com/tokio-rs/bytes/pull/513
