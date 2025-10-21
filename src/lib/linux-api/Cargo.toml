@@ -12,7 +12,7 @@ rustix = ["dep:rustix"]
 c_bindings = ["dep:shadow-build-common", "dep:cbindgen"]
 
 [dependencies]
-bitflags = "2.9.4"
+bitflags = "2.10.0"
 log = { version = "0.4.28", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
