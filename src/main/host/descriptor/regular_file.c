@@ -420,6 +420,17 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         //   * /proc/[tid]/task/ Needs to list virtual child [tid]s
         //   * /proc/[tid]/fd/ Needs to list virtual file descriptors
         // * Probably much more ...
+    } else if (!strcmp(abspath, "/dev/tty")) {
+        // Without special handling we'd open *shadow's* /dev/tty, which
+        // we definitely don't want.
+        // For now we simulate that the processes have no tty attached.
+        // See <https://github.com/shadow/shadow/issues/3684>
+        trace("Faking failure for opening /dev/tty");
+        if (abspath) {
+            free(abspath);
+        }
+        file->type = FILE_TYPE_NOTSET;
+        return -ENXIO;
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
