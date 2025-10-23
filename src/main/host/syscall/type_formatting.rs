@@ -197,6 +197,7 @@ simple_display_impl!(u8, u16, u32, u64, usize);
 deref_pointer_impl!(i8, i16, i32, i64, isize);
 deref_pointer_impl!(u8, u16, u32, u64, usize);
 deref_pointer_impl!(linux_api::resource::rlimit);
+deref_pointer_impl!(linux_api::resource::rlimit64);
 deref_pointer_impl!(linux_api::stat::stat);
 deref_pointer_impl!(linux_api::sched::clone_args);
 deref_pointer_impl!(linux_api::time::timespec);

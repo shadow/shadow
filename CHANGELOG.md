@@ -16,7 +16,8 @@ MINOR changes (backwards-compatible):
 
 PATCH changes (bugfixes):
 
-*
+* Avoid lowering native resource limits of managed processes beyond what is needed
+for shadow's `LD_PRELOAD`d shim to function. (#3682 fixing #3681)
 
 Full changelog since v3.3.0:
 

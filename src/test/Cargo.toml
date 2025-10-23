@@ -47,6 +47,10 @@ name = "test_sched_affinity"
 path = "sched_affinity/test_sched_affinity.rs"
 
 [[bin]]
+name = "test_resource"
+path = "resource/test_resource.rs"
+
+[[bin]]
 name = "test_sleep"
 path = "sleep/test_sleep.rs"
 
