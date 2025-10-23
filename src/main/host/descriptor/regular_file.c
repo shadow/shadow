@@ -430,6 +430,23 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
             free(abspath);
         }
         file->type = FILE_TYPE_NOTSET;
+        // ENXIO: No such device or address. Experimentally verified this is
+        // what gets returned natively when the process has no tty attached.
+        return -ENXIO;
+    } else if (!strncmp(abspath, "/dev/",5) && strcmp(abspath, "/dev/null")) {
+        // /dev/ file that we don't handle or haven't explicitly thought about.
+        // We might eventually want to handle some of these, but for now probably better
+        // to conservatively fail.
+        //
+        // Notably this includes /dev/stdin, /dev/stdout, and /dev/stderr, since
+        // without special handling we'd open *shadow's* corresponding special file.
+        warning("Faking failure for opening unhandled /dev/ file %s", abspath);
+        if (abspath) {
+            free(abspath);
+        }
+        file->type = FILE_TYPE_NOTSET;
+        // ENXIO: No such device or address. Alternatively we could use ENOENT,
+        // but maybe ENXIO is a sensible default for things under /dev/.
         return -ENXIO;
     } else {
         file->type = FILE_TYPE_REGULAR;
