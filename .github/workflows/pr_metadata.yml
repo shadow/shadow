@@ -15,13 +15,6 @@ jobs:
   Triage:
     runs-on: ubuntu-latest
     steps:
-    - name: Assign Author
-      # Add the author as an assignee of the PR
-      # https://github.com/marketplace/actions/auto-author-assign
-      # before updating the version of this untrusted action, check the code manually
-      uses: toshimaru/auto-author-assign@2f43a071b67edd3d56dfc034b1267c0c1576596c
-      with:
-        repo-token: "${{ secrets.GITHUB_TOKEN }}"
     - name: Apply Labels
       # Add labels based on paths modified in PR
       # https://github.com/actions/labeler
@@ -30,8 +23,3 @@ jobs:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
         configuration-path: .github/pr_labeler_conf.yml
         sync-labels: true
-    - name: Check Milestone
-      # Check if a pull request is assigned a milestone
-      # https://github.com/siimon/milestone-check-action
-      # before updating the version of this untrusted action, check the code manually
-      uses: siimon/milestone-check-action@5ff17a53248d7aaa65b817458ee6106247625790
