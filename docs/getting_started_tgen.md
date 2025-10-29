@@ -118,5 +118,5 @@ $ {{#include ../examples/docs/traffic-generation/show.sh:body_2}}
 You can also parse the TGen output logged to the stdout files using the
 `tgentools` program from the TGen repo, and plot the data in graphical format to
 visualize the performance characteristics of the transfers. [This
-page](https://github.com/shadow/tgen/blob/main/doc/Tools-Setup.md) describes how
+page](https://github.com/shadow/tgen/blob/main/tools/README.md) describes how
 to get started.
