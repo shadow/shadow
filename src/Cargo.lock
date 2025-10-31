@@ -899,7 +899,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -950,7 +950,7 @@ version = "0.0.0"
 dependencies = [
  "cc",
  "libc",
- "rustix 0.38.44",
+ "rustix",
  "shadow-build-common",
  "va_list",
 ]
@@ -1306,7 +1306,7 @@ dependencies = [
  "memoffset 0.9.1",
  "naked-function",
  "num_enum",
- "rustix 0.38.44",
+ "rustix",
  "shadow-build-common",
  "shadow-pod",
  "static_assertions",
@@ -1321,12 +1321,6 @@ checksum = "e3fb7f5d1d983421e02a44690025b1133e83f0e9d2ee60953217498a2bfdd34e"
 dependencies = [
  "posix-errno",
 ]
-
-[[package]]
-name = "linux-raw-sys"
-version = "0.4.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
 name = "linux-raw-sys"
@@ -2160,19 +2154,6 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
-dependencies = [
- "bitflags 2.10.0",
- "errno",
- "libc",
- "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "rustix"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd15f8a2c5551a84d56efdc1cd049089e409ac19a3072d5037a17fd70719ff3e"
@@ -2181,7 +2162,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2440,7 +2421,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "regex",
- "rustix 0.38.44",
+ "rustix",
  "scheduler",
  "schemars",
  "serde",
@@ -2480,7 +2461,7 @@ dependencies = [
  "log-c2rust",
  "logger",
  "num_enum",
- "rustix 0.38.44",
+ "rustix",
  "shadow-build-common",
  "shadow-pod",
  "shadow-shim-helper-rs",
@@ -2507,7 +2488,7 @@ dependencies = [
  "num_enum",
  "once_cell",
  "rand 0.9.2",
- "rustix 0.38.44",
+ "rustix",
  "shadow-build-common",
  "shadow-pod",
  "shadow_shmem",
@@ -2531,7 +2512,7 @@ dependencies = [
  "nix 0.26.4",
  "once_cell",
  "rand 0.9.2",
- "rustix 0.38.44",
+ "rustix",
  "signal-hook",
  "static_assertions",
  "tempfile",
@@ -2756,8 +2737,8 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.3",
  "once_cell",
- "rustix 1.1.2",
- "windows-sys 0.61.1",
+ "rustix",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2766,7 +2747,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b8cb979cb11c32ce1603f8137b22262a9d131aaa5c37b5678025f22b8becd0"
 dependencies = [
- "rustix 1.1.2",
+ "rustix",
  "windows-sys 0.60.2",
 ]
 
@@ -3114,7 +3095,7 @@ dependencies = [
  "num_enum",
  "rand 0.9.2",
  "rustc-hash",
- "rustix 0.38.44",
+ "rustix",
  "static_assertions",
  "vasi",
 ]
@@ -3267,7 +3248,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fabb953106c3c8eea8306e4393700d7657561cb43122571b172bbfb7c7ba1d"
 dependencies = [
  "env_home",
- "rustix 1.1.2",
+ "rustix",
  "winsafe",
 ]
 
@@ -3293,7 +3274,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3421,29 +3402,11 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
 version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
  "windows-targets 0.53.4",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.61.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f109e41dd4a3c848907eb83d5a42ea98b3769495597450cf6d153507b166f0f"
-dependencies = [
- "windows-link 0.2.0",
 ]
 
 [[package]]
