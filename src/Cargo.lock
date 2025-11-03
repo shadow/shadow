@@ -2104,9 +2104,9 @@ checksum = "caf4aa5b0f434c91fe5c7f1ecb6a5ece2130b02ad2a590589dda5146df959001"
 
 [[package]]
 name = "retry-error"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b295404fa4a9e1e63537ccbd4e4b6309d9688bd70608ddc16d3b8af0389a673a"
+checksum = "061ea3484f50bb17b7adfbf69c8a2d97ccdbcf4981375a50f291d3e4cce6f130"
 
 [[package]]
 name = "rsa"
@@ -2198,9 +2198,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "safelog"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e75b0880210c750d9189aa2d1ef94075a5500ccd9e7e98ad868e017c17c4a4bc"
+checksum = "255eb326931273b167f0cc4454c4dfb7f6d40d45ee881f5d07f7605b01782afc"
 dependencies = [
  "derive_more",
  "educe",
@@ -2935,9 +2935,9 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tor-error"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63d766a5d11ddad7946cf8357ce7a1e948abdc3ad3ef06ed23f35af522dc089c"
+checksum = "0c2f67b386f2720f444f4ed496edd21fab25f2b2d64ede97a0b8108708dc34e1"
 dependencies = [
  "derive_more",
  "futures",
@@ -2950,9 +2950,9 @@ dependencies = [
 
 [[package]]
 name = "tor-llcrypto"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95cb3920ea326ba2bb7c2674293655d045a1112eb93cc8ddcbf948bb59307a97"
+checksum = "3e662718a0897b682babb6c3af726e81098ddca3a92682550cacdf5e4e1b50a2"
 dependencies = [
  "aes",
  "base64ct",
