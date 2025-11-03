@@ -284,7 +284,7 @@ fn fmt_string(
     len: Option<usize>,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
-    const DISPLAY_LEN: usize = 40;
+    const DISPLAY_LEN: usize = libc::PATH_MAX as usize;
 
     // the pointer may point to a buffer of unknown length, so we may have to choose our own size
     let len = len.unwrap_or(
