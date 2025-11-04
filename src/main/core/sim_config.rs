@@ -161,44 +161,49 @@ impl SimConfig {
         // For each route between nodes, examine each consecutive hop (u->v). If the underlying
         // graph edge has a bandwidth attribute in that direction, include it; otherwise omit it
         // to indicate "no limit for that hop".
-        let edge_bandwidths_bytes = if config.experimental.edge_bandwidth_limiting_enabled.unwrap_or(false) {
-            let mut map = HashMap::new();
-            let nodes_in_use: Vec<_> = ip_assignment.get_nodes().into_iter().collect();
-            for src in &nodes_in_use {
-                for dst in &nodes_in_use {
-                    if let Some(path_nodes) = routing_info.path_nodes(*src, *dst) {
-                        // iterate consecutive pairs
-                        for win in path_nodes.windows(2) {
-                            let u = win[0];
-                            let v = win[1];
-                            if u == v { continue; }
-                            let u_idx = *graph.node_id_to_index(u).unwrap();
-                            let v_idx = *graph.node_id_to_index(v).unwrap();
-                            if let Ok(edge) = graph.get_edge(u_idx, v_idx) {
-                                if let Some(bits_down) = edge
-                                    .bandwidth_down
-                                    .as_ref()
-                                    .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
-                                {
-                                    map.insert((u, v), bits_down / 8);
+        let edge_bandwidths_bytes =
+            if config
+                .experimental
+                .edge_bandwidth_limiting_enabled
+                .unwrap_or(false)
+            {
+                let mut map = HashMap::new();
+                let nodes_in_use: Vec<_> = ip_assignment.get_nodes().into_iter().collect();
+                for src in &nodes_in_use {
+                    for dst in &nodes_in_use {
+                        if let Some(path_nodes) = routing_info.path_nodes(*src, *dst) {
+                            // iterate consecutive pairs
+                            for win in path_nodes.windows(2) {
+                                let u = win[0];
+                                let v = win[1];
+                                if u == v {
+                                    continue;
                                 }
-                            }
-                            // Opposite direction capacity might differ (edge_bandwidth_up)
-                            if let Ok(edge) = graph.get_edge(v_idx, u_idx) {
-                                if let Some(bits_up) = edge
-                                    .bandwidth_up
-                                    .as_ref()
-                                    .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
-                                {
-                                    map.insert((v, u), bits_up / 8);
+                                let u_idx = *graph.node_id_to_index(u).unwrap();
+                                let v_idx = *graph.node_id_to_index(v).unwrap();
+                                if let Ok(edge) = graph.get_edge(u_idx, v_idx) {
+                                    if let Some(bits_down) = edge.bandwidth_down.as_ref().map(|x| {
+                                        x.convert(units::SiPrefixUpper::Base).unwrap().value()
+                                    }) {
+                                        map.insert((u, v), bits_down / 8);
+                                    }
+                                }
+                                // Opposite direction capacity might differ (edge_bandwidth_up)
+                                if let Ok(edge) = graph.get_edge(v_idx, u_idx) {
+                                    if let Some(bits_up) = edge.bandwidth_up.as_ref().map(|x| {
+                                        x.convert(units::SiPrefixUpper::Base).unwrap().value()
+                                    }) {
+                                        map.insert((v, u), bits_up / 8);
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            Some(map)
-        } else { None };
+                Some(map)
+            } else {
+                None
+            };
 
         Ok(Self {
             random,
@@ -492,7 +497,8 @@ fn generate_routing_info(
     };
 
     // Build hop sequences per (src,dst)
-    let mut hops: std::collections::HashMap<(u32, u32), Vec<u32>> = std::collections::HashMap::new();
+    let mut hops: std::collections::HashMap<(u32, u32), Vec<u32>> =
+        std::collections::HashMap::new();
     // Convert back to ids for iteration
     let node_ids: Vec<u32> = nodes
         .iter()

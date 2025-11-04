@@ -318,42 +318,36 @@ impl NetworkGraph {
 
     /// Compute a shortest path between two nodes and return the sequence of
     /// petgraph node indices along the path, inclusive of endpoints.
-    pub fn shortest_path_nodes(
-        &self,
-        src: NodeIndex,
-        dst: NodeIndex,
-    ) -> Option<Vec<NodeIndex>> {
+    pub fn shortest_path_nodes(&self, src: NodeIndex, dst: NodeIndex) -> Option<Vec<NodeIndex>> {
         match &self.graph {
-            GraphWrapper::Directed(graph) => {
-                petgraph::algo::astar(
-                    graph,
-                    src,
-                    |n| n == dst,
-                    |e| e
-                        .weight()
+            GraphWrapper::Directed(graph) => petgraph::algo::astar(
+                graph,
+                src,
+                |n| n == dst,
+                |e| {
+                    e.weight()
                         .latency
                         .convert(units::TimePrefix::Nano)
                         .unwrap()
-                        .value(),
-                    |_| 0u64,
-                )
-                .map(|(_cost, path)| path)
-            }
-            GraphWrapper::Undirected(graph) => {
-                petgraph::algo::astar(
-                    graph,
-                    src,
-                    |n| n == dst,
-                    |e| e
-                        .weight()
+                        .value()
+                },
+                |_| 0u64,
+            )
+            .map(|(_cost, path)| path),
+            GraphWrapper::Undirected(graph) => petgraph::algo::astar(
+                graph,
+                src,
+                |n| n == dst,
+                |e| {
+                    e.weight()
                         .latency
                         .convert(units::TimePrefix::Nano)
                         .unwrap()
-                        .value(),
-                    |_| 0u64,
-                )
-                .map(|(_cost, path)| path)
-            }
+                        .value()
+                },
+                |_| 0u64,
+            )
+            .map(|(_cost, path)| path),
         }
     }
 }
@@ -504,11 +498,12 @@ pub struct RoutingInfo<T: Eq + Hash + std::fmt::Display + Clone + Copy> {
 }
 
 impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
-    pub fn new(
-        paths: HashMap<(T, T), PathProperties>,
-        hops: HashMap<(T, T), Vec<T>>,
-    ) -> Self {
-        Self { paths, hops, packet_counters: std::sync::RwLock::new(HashMap::new()) }
+    pub fn new(paths: HashMap<(T, T), PathProperties>, hops: HashMap<(T, T), Vec<T>>) -> Self {
+        Self {
+            paths,
+            hops,
+            packet_counters: std::sync::RwLock::new(HashMap::new()),
+        }
     }
 
     /// Get properties for the path from one node to another.

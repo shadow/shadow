@@ -377,20 +377,26 @@ impl Worker {
                 let src = w.shared.ip_assignment.get_node(src_ip);
                 let dst = w.shared.ip_assignment.get_node(dst_ip);
                 (src, dst)
-            }).unwrap() {
+            })
+            .unwrap()
+            {
                 let nodes_vec = Worker::with(|w| {
                     w.shared
                         .routing_info
                         .path_nodes(src_node, dst_node)
                         .map(|s| s.to_vec())
-                }).unwrap();
+                })
+                .unwrap();
                 if let Some(nodes) = nodes_vec {
                     let needed_bytes = payload_size as u64;
-                    let mut total_block = shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0);
+                    let mut total_block =
+                        shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0);
                     for pair in nodes.windows(2) {
                         let u = pair[0];
                         let v = pair[1];
-                        if u == v { continue; }
+                        if u == v {
+                            continue;
+                        }
                         let hop_block = Worker::with(|w| {
                             let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
                             if let Some(tb) = buckets.get_mut(&(u, v)) {
@@ -401,7 +407,8 @@ impl Worker {
                             } else {
                                 None
                             }
-                        }).unwrap();
+                        })
+                        .unwrap();
                         if let Some(extra) = hop_block {
                             total_block = total_block.saturating_add(extra);
                             log::info!(
@@ -413,7 +420,9 @@ impl Worker {
                             );
                         }
                     }
-                    if total_block > shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0) {
+                    if total_block
+                        > shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0)
+                    {
                         delay = delay.saturating_add(total_block);
                     }
                 }
@@ -560,7 +569,9 @@ pub struct WorkerShared {
     pub sim_end_time: EmulatedTime,
     // Optional per-edge bandwidth limit token buckets keyed by (src_node_id, dst_node_id)
     pub edge_bw_enabled: bool,
-    pub edge_bw_buckets: std::sync::RwLock<std::collections::HashMap<(u32, u32), crate::network::relay::TokenBucket>>,
+    pub edge_bw_buckets: std::sync::RwLock<
+        std::collections::HashMap<(u32, u32), crate::network::relay::TokenBucket>,
+    >,
 }
 
 impl WorkerShared {

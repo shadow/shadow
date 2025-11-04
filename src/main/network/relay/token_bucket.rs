@@ -127,7 +127,6 @@ impl TokenBucket {
         // that might cause `now` to appear earlier than `last_refill`.
         let mut span = now.saturating_duration_since(&self.last_refill);
 
-
         if span >= self.refill_interval {
             // Apply refills for the scheduled refill events that have passed.
             let num_refills = span
