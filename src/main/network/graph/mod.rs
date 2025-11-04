@@ -315,6 +315,47 @@ impl NetworkGraph {
     pub fn get_edge(&self, src: NodeIndex, dst: NodeIndex) -> Result<&ShadowEdge, NetGraphError> {
         self.get_edge_weight(&src, &dst)
     }
+
+    /// Compute a shortest path between two nodes and return the sequence of
+    /// petgraph node indices along the path, inclusive of endpoints.
+    pub fn shortest_path_nodes(
+        &self,
+        src: NodeIndex,
+        dst: NodeIndex,
+    ) -> Option<Vec<NodeIndex>> {
+        match &self.graph {
+            GraphWrapper::Directed(graph) => {
+                petgraph::algo::astar(
+                    graph,
+                    src,
+                    |n| n == dst,
+                    |e| e
+                        .weight()
+                        .latency
+                        .convert(units::TimePrefix::Nano)
+                        .unwrap()
+                        .value(),
+                    |_| 0u64,
+                )
+                .map(|(_cost, path)| path)
+            }
+            GraphWrapper::Undirected(graph) => {
+                petgraph::algo::astar(
+                    graph,
+                    src,
+                    |n| n == dst,
+                    |e| e
+                        .weight()
+                        .latency
+                        .convert(units::TimePrefix::Nano)
+                        .unwrap()
+                        .value(),
+                    |_| 0u64,
+                )
+                .map(|(_cost, path)| path)
+            }
+        }
+    }
 }
 
 /// Network characteristics for a path between two nodes.
@@ -457,20 +498,27 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> Default for IpAssignment<T> {
 #[derive(Debug)]
 pub struct RoutingInfo<T: Eq + Hash + std::fmt::Display + Clone + Copy> {
     paths: HashMap<(T, T), PathProperties>,
+    ///  hop sequences for each (src,dst) route, inclusive of endpoints
+    hops: HashMap<(T, T), Vec<T>>,
     packet_counters: std::sync::RwLock<HashMap<(T, T), u64>>,
 }
 
 impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
-    pub fn new(paths: HashMap<(T, T), PathProperties>) -> Self {
-        Self {
-            paths,
-            packet_counters: std::sync::RwLock::new(HashMap::new()),
-        }
+    pub fn new(
+        paths: HashMap<(T, T), PathProperties>,
+        hops: HashMap<(T, T), Vec<T>>,
+    ) -> Self {
+        Self { paths, hops, packet_counters: std::sync::RwLock::new(HashMap::new()) }
     }
 
     /// Get properties for the path from one node to another.
     pub fn path(&self, start: T, end: T) -> Option<PathProperties> {
         self.paths.get(&(start, end)).copied()
+    }
+
+    /// Get hop sequence for the path from one node to another, if available.
+    pub fn path_nodes(&self, start: T, end: T) -> Option<&[T]> {
+        self.hops.get(&(start, end)).map(|v| v.as_slice())
     }
 
     /// Increment the number of packets sent from one node to another.

@@ -110,6 +110,18 @@ Experimental (Unstable and may change or be removed at any time, regardless of S
           `native_preemption_native_interval` has elapsed without returning control to shadow.
           [default: "10 ms"]
 
+      --edge-bandwidth-limiting-enabled <bool>
+          Enable experimental per-edge bandwidth limiting. When false (default), any edge
+          bandwidth attributes in the network graph are ignored. [default: false]
+
+      --edge-bandwidth-algorithm <name>
+          Rate-limiting algorithm when edge bandwidth limiting is enabled. Currently supported:
+          token_bucket [default: "token-bucket"]
+
+      --edge-bandwidth-burst-ratio <ratio>
+          Burst ratio for token bucket algorithm when edge bandwidth limiting is enabled.
+          [default: 1.5]
+
       --report-errors-to-stderr <bool>
           When true, report error-level messages to stderr in addition to logging to stdout.
           [default: true]

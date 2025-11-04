@@ -370,39 +370,52 @@ impl Worker {
         let mut delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
 
         // Optional experimental per-edge bandwidth limiting: if enabled and not in bootstrap,
-        // we treat each directed (src_node, dst_node) hop as having its own token bucket.
-        // If the bucket doesn't have enough tokens for this packet, we add the required
-        // conforming delay to the path latency before scheduling delivery.
+        // enforce bandwidth per hop along the selected route. For hops without a bucket, assume
+        // no limit. We sum the required conforming delays across hops.
         if Worker::with(|w| w.shared.edge_bw_enabled).unwrap() && !is_bootstrapping {
             if let (Some(src_node), Some(dst_node)) = Worker::with(|w| {
                 let src = w.shared.ip_assignment.get_node(src_ip);
                 let dst = w.shared.ip_assignment.get_node(dst_ip);
                 (src, dst)
-            }).unwrap()
-            {
-                let needed_bytes = payload_size as u64;
-                // Try to consume tokens. On error, 'blocking' is the duration until the bucket
-                // refills enough to conform; we add that to the network latency.
-                let maybe_block = Worker::with(|w| {
-                    let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
-                    if let Some(tb) = buckets.get_mut(&(src_node, dst_node)) {
-                        match tb.comforming_remove(needed_bytes) {
-                            Ok(_remaining) => None,
-                            Err(blocking) => Some(blocking),
-                        }
-                    } else {
-                        None
-                    }
+            }).unwrap() {
+                let nodes_vec = Worker::with(|w| {
+                    w.shared
+                        .routing_info
+                        .path_nodes(src_node, dst_node)
+                        .map(|s| s.to_vec())
                 }).unwrap();
-                if let Some(extra) = maybe_block {
-                    log::info!(
-                        "Edge bandwidth limiting: delaying packet src_node={} dst_node={} bytes={} extra_delay={:?}",
-                        src_node,
-                        dst_node,
-                        needed_bytes,
-                        extra
-                    );
-                    delay = delay.saturating_add(extra);
+                if let Some(nodes) = nodes_vec {
+                    let needed_bytes = payload_size as u64;
+                    let mut total_block = shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0);
+                    for pair in nodes.windows(2) {
+                        let u = pair[0];
+                        let v = pair[1];
+                        if u == v { continue; }
+                        let hop_block = Worker::with(|w| {
+                            let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
+                            if let Some(tb) = buckets.get_mut(&(u, v)) {
+                                match tb.comforming_remove(needed_bytes) {
+                                    Ok(_remaining) => None,
+                                    Err(blocking) => Some(blocking),
+                                }
+                            } else {
+                                None
+                            }
+                        }).unwrap();
+                        if let Some(extra) = hop_block {
+                            total_block = total_block.saturating_add(extra);
+                            log::info!(
+                                "Edge bandwidth limiting: delaying packet hop src_node={} dst_node={} bytes={} extra_delay={:?}",
+                                u,
+                                v,
+                                needed_bytes,
+                                extra
+                            );
+                        }
+                    }
+                    if total_block > shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0) {
+                        delay = delay.saturating_add(total_block);
+                    }
                 }
             }
         }
