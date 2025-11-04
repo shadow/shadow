@@ -238,6 +238,20 @@ impl SyscallHandler {
     }
 
     log_syscall!(
+        readlink,
+        /* rv */ std::ffi::c_int,
+        /* pathname */ SyscallStringArg,
+        /* TODO: format this when we have better support for output-buffers.
+         * https://github.com/shadow/shadow/issues/3694 */
+        /* buf */
+        *const std::ffi::c_void,
+        /* bufsize */ std::ffi::c_int,
+    );
+    pub fn readlink(_ctx: &mut SyscallContext) -> SyscallResult {
+        Err(SyscallError::Native)
+    }
+
+    log_syscall!(
         sync_file_range,
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_int,

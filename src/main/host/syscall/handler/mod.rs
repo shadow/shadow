@@ -467,6 +467,7 @@ impl SyscallHandler {
             SyscallNum::NR_pwritev2 => handle!(pwritev2),
             SyscallNum::NR_read => handle!(read),
             SyscallNum::NR_readahead => handle!(readahead),
+            SyscallNum::NR_readlink => handle!(readlink),
             SyscallNum::NR_readlinkat => handle!(readlinkat),
             SyscallNum::NR_readv => handle!(readv),
             SyscallNum::NR_recvfrom => handle!(recvfrom),
@@ -563,7 +564,6 @@ impl SyscallHandler {
             | SyscallNum::NR_madvise
             | SyscallNum::NR_mkdir
             | SyscallNum::NR_mknod
-            | SyscallNum::NR_readlink
             | SyscallNum::NR_removexattr
             | SyscallNum::NR_rename
             | SyscallNum::NR_rmdir

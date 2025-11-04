@@ -7,7 +7,14 @@ use crate::host::syscall::type_formatting::SyscallStringArg;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 
 impl SyscallHandler {
-    log_syscall!(statx, /* rv */ std::ffi::c_int);
+    log_syscall!(
+        statx,
+        /* rv */ std::ffi::c_int,
+        /* dfd */ std::ffi::c_int,
+        /* filename */ SyscallStringArg,
+        /* flags */ std::ffi::c_int,
+        /* statxbuf */ *const std::ffi::c_void,
+    );
     pub fn statx(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_statx, ctx)
     }
