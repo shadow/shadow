@@ -65,6 +65,9 @@ pub struct ShadowEdge {
     pub latency: units::Time<units::TimePrefix>,
     pub jitter: units::Time<units::TimePrefix>,
     pub packet_loss: f32,
+    // Optional per-edge bandwidth limits
+    pub bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
+    pub bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 }
 
 impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
@@ -94,6 +97,28 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
                 Some(x) => x.as_float().ok_or("Edge 'packet_loss' is not a float")?,
                 None => 0.0,
             },
+            bandwidth_down: gml_edge
+                .other
+                .remove("edge_bandwidth_down")
+                .map(|bandwidth| {
+                    bandwidth
+                        .as_str()
+                        .ok_or("Edge 'edge_bandwidth_down' is not a string")?
+                        .parse()
+                        .map_err(|e| format!("Edge 'edge_bandwidth_down' is not a valid unit: {e}"))
+                })
+                .transpose()?,
+            bandwidth_up: gml_edge
+                .other
+                .remove("edge_bandwidth_up")
+                .map(|bandwidth| {
+                    bandwidth
+                        .as_str()
+                        .ok_or("Edge 'edge_bandwidth_up' is not a string")?
+                        .parse()
+                        .map_err(|e| format!("Edge 'edge_bandwidth_up' is not a valid unit: {e}"))
+                })
+                .transpose()?,
         };
 
         if rv.packet_loss < 0f32 || rv.packet_loss > 1f32 {
@@ -284,6 +309,11 @@ impl NetworkGraph {
                 Ok(edge.weight())
             }
         }
+    }
+
+    /// Get a reference to the edge between two nodes.
+    pub fn get_edge(&self, src: NodeIndex, dst: NodeIndex) -> Result<&ShadowEdge, NetGraphError> {
+        self.get_edge_weight(&src, &dst)
     }
 }
 

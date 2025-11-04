@@ -39,6 +39,9 @@ pub struct SimConfig {
     // bandwidths of hosts at ip addresses
     pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
 
+    // Optional per-edge bandwidth in bytes/sec for direct edges, keyed by (src_node_id, dst_node_id)
+    pub edge_bandwidths_bytes: Option<HashMap<(u32, u32), u64>>,
+
     // a list of hosts and their processes
     pub hosts: Vec<HostInfo>,
 }
@@ -154,11 +157,54 @@ impl SimConfig {
             })
             .collect();
 
+        // Optional: build per-edge bandwidth map for direct graphs when enabled
+        // Build per-edge (directed) bandwidth map in bytes/sec when experimental limiting is enabled
+        // and we're using direct edges (not shortest path). We interpret:
+        //  - edge_bandwidth_down as the src->dst capacity
+        //  - edge_bandwidth_up   as the dst->src capacity
+        let edge_bandwidths_bytes = if config.experimental.edge_bandwidth_limiting_enabled.unwrap_or(false)
+            && !config.network.use_shortest_path.unwrap()
+        {
+            let mut map = HashMap::new();
+            let nodes: Vec<_> = ip_assignment.get_nodes().into_iter().collect();
+            for src in &nodes {
+                for dst in &nodes {
+                    // include self-loop as well
+                    let src_idx = *graph.node_id_to_index(*src).unwrap();
+                    let dst_idx = *graph.node_id_to_index(*dst).unwrap();
+                    if let Ok(edge) = graph.get_edge(src_idx, dst_idx) {
+                        // Directed graphs: "down" limits src->dst; "up" limits dst->src.
+                        // Undirected graphs: treat as two arcs the same way for enforcement.
+                        if src != dst {
+                            if let Some(bits_down) = edge
+                                .bandwidth_down
+                                .as_ref()
+                                .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                            {
+                                map.insert((*src, *dst), bits_down / 8);
+                            }
+                            if let Some(bits_up) = edge
+                                .bandwidth_up
+                                .as_ref()
+                                .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                            {
+                                map.insert((*dst, *src), bits_up / 8);
+                            }
+                        }
+                    }
+                }
+            }
+            Some(map)
+        } else {
+            None
+        };
+
         Ok(Self {
             random,
             ip_assignment,
             routing_info,
             host_bandwidths,
+            edge_bandwidths_bytes,
             hosts,
         })
     }

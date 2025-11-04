@@ -367,7 +367,45 @@ impl Worker {
             return;
         }
 
-        let delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
+        let mut delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
+
+        // Optional experimental per-edge bandwidth limiting: if enabled and not in bootstrap,
+        // we treat each directed (src_node, dst_node) hop as having its own token bucket.
+        // If the bucket doesn't have enough tokens for this packet, we add the required
+        // conforming delay to the path latency before scheduling delivery.
+        if Worker::with(|w| w.shared.edge_bw_enabled).unwrap() && !is_bootstrapping {
+            if let (Some(src_node), Some(dst_node)) = Worker::with(|w| {
+                let src = w.shared.ip_assignment.get_node(src_ip);
+                let dst = w.shared.ip_assignment.get_node(dst_ip);
+                (src, dst)
+            }).unwrap()
+            {
+                let needed_bytes = payload_size as u64;
+                // Try to consume tokens. On error, 'blocking' is the duration until the bucket
+                // refills enough to conform; we add that to the network latency.
+                let maybe_block = Worker::with(|w| {
+                    let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
+                    if let Some(tb) = buckets.get_mut(&(src_node, dst_node)) {
+                        match tb.comforming_remove(needed_bytes) {
+                            Ok(_remaining) => None,
+                            Err(blocking) => Some(blocking),
+                        }
+                    } else {
+                        None
+                    }
+                }).unwrap();
+                if let Some(extra) = maybe_block {
+                    log::info!(
+                        "Edge bandwidth limiting: delaying packet src_node={} dst_node={} bytes={} extra_delay={:?}",
+                        src_node,
+                        dst_node,
+                        needed_bytes,
+                        extra
+                    );
+                    delay = delay.saturating_add(extra);
+                }
+            }
+        }
 
         Worker::update_lowest_used_latency(delay);
         Worker::with(|w| w.shared.increment_packet_count(src_ip, dst_ip)).unwrap();
@@ -507,6 +545,9 @@ pub struct WorkerShared {
     pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
+    // Optional per-edge bandwidth limit token buckets keyed by (src_node_id, dst_node_id)
+    pub edge_bw_enabled: bool,
+    pub edge_bw_buckets: std::sync::RwLock<std::collections::HashMap<(u32, u32), crate::network::relay::TokenBucket>>,
 }
 
 impl WorkerShared {
