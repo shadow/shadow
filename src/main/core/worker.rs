@@ -388,7 +388,14 @@ impl Worker {
                 })
                 .unwrap();
                 if let Some(nodes) = nodes_vec {
-                    let needed_bytes = payload_size as u64;
+                    // Approximate per-hop packet size to engage the token bucket.
+                    // Use a conservative MTU-sized decrement so large application payloads
+                    // that are segmented at lower layers still experience rate limiting.
+                    let needed_bytes = if payload_size == 0 {
+                        0u64
+                    } else {
+                        std::cmp::min(payload_size as u64, 1500u64)
+                    };
                     let mut total_block =
                         shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0);
                     for pair in nodes.windows(2) {
@@ -397,7 +404,10 @@ impl Worker {
                         if u == v {
                             continue;
                         }
-                        let hop_block = Worker::with(|w| {
+                        let hop_block = if needed_bytes == 0 {
+                            None
+                        } else {
+                            Worker::with(|w| {
                             let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
                             if let Some(tb) = buckets.get_mut(&(u, v)) {
                                 match tb.comforming_remove(needed_bytes) {
@@ -408,7 +418,8 @@ impl Worker {
                                 None
                             }
                         })
-                        .unwrap();
+                        .unwrap()
+                        };
                         if let Some(extra) = hop_block {
                             total_block = total_block.saturating_add(extra);
                             log::info!(

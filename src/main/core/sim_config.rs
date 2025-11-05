@@ -181,19 +181,26 @@ impl SimConfig {
                                 }
                                 let u_idx = *graph.node_id_to_index(u).unwrap();
                                 let v_idx = *graph.node_id_to_index(v).unwrap();
+
+                                // Get the edge (for undirected graphs, get_edge(u,v) == get_edge(v,u))
                                 if let Ok(edge) = graph.get_edge(u_idx, v_idx) {
-                                    if let Some(bits_down) = edge.bandwidth_down.as_ref().map(|x| {
-                                        x.convert(units::SiPrefixUpper::Base).unwrap().value()
-                                    }) {
-                                        map.insert((u, v), bits_down / 8);
+                                    // For direction (u->v), prefer bandwidth_down, fallback to bandwidth_up
+                                    if let Some(bits) = edge
+                                        .bandwidth_down
+                                        .as_ref()
+                                        .or(edge.bandwidth_up.as_ref())
+                                        .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                                    {
+                                        map.insert((u, v), bits / 8);
                                     }
-                                }
-                                // Opposite direction capacity might differ (edge_bandwidth_up)
-                                if let Ok(edge) = graph.get_edge(v_idx, u_idx) {
-                                    if let Some(bits_up) = edge.bandwidth_up.as_ref().map(|x| {
-                                        x.convert(units::SiPrefixUpper::Base).unwrap().value()
-                                    }) {
-                                        map.insert((v, u), bits_up / 8);
+                                    // For direction (v->u), prefer bandwidth_up, fallback to bandwidth_down
+                                    if let Some(bits) = edge
+                                        .bandwidth_up
+                                        .as_ref()
+                                        .or(edge.bandwidth_down.as_ref())
+                                        .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                                    {
+                                        map.insert((v, u), bits / 8);
                                     }
                                 }
                             }
