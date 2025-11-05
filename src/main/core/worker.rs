@@ -369,7 +369,7 @@ impl Worker {
 
         let mut delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
 
-        // Optional experimental per-edge bandwidth limiting: if enabled and not in bootstrap,
+        // experimental per-edge bandwidth limiting: if enabled and not in bootstrap,
         // enforce bandwidth per hop along the selected route. For hops without a bucket, assume
         // no limit. We sum the required conforming delays across hops.
         if Worker::with(|w| w.shared.edge_bw_enabled).unwrap() && !is_bootstrapping {
@@ -388,7 +388,6 @@ impl Worker {
                 })
                 .unwrap();
                 if let Some(nodes) = nodes_vec {
-                    // Approximate per-hop packet size to engage the token bucket.
                     // Use a conservative MTU-sized decrement so large application payloads
                     // that are segmented at lower layers still experience rate limiting.
                     let needed_bytes = if payload_size == 0 {
@@ -408,17 +407,17 @@ impl Worker {
                             None
                         } else {
                             Worker::with(|w| {
-                            let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
-                            if let Some(tb) = buckets.get_mut(&(u, v)) {
-                                match tb.comforming_remove(needed_bytes) {
-                                    Ok(_remaining) => None,
-                                    Err(blocking) => Some(blocking),
+                                let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
+                                if let Some(tb) = buckets.get_mut(&(u, v)) {
+                                    match tb.comforming_remove(needed_bytes) {
+                                        Ok(_remaining) => None,
+                                        Err(blocking) => Some(blocking),
+                                    }
+                                } else {
+                                    None
                                 }
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap()
+                            })
+                            .unwrap()
                         };
                         if let Some(extra) = hop_block {
                             total_block = total_block.saturating_add(extra);
@@ -578,7 +577,7 @@ pub struct WorkerShared {
     pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
-    // Optional per-edge bandwidth limit token buckets keyed by (src_node_id, dst_node_id)
+    // per-edge bandwidth limit token buckets keyed by (src_node_id, dst_node_id)
     pub edge_bw_enabled: bool,
     pub edge_bw_buckets: std::sync::RwLock<
         std::collections::HashMap<(u32, u32), crate::network::relay::TokenBucket>,
