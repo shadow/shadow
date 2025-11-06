@@ -39,6 +39,9 @@ pub struct SimConfig {
     // bandwidths of hosts at ip addresses
     pub host_bandwidths: HashMap<std::net::IpAddr, Bandwidth>,
 
+    // Optional per-edge bandwidth in bytes/sec for direct edges, keyed by (src_node_id, dst_node_id)
+    pub edge_bandwidths_bytes: Option<HashMap<(u32, u32), u64>>,
+
     // a list of hosts and their processes
     pub hosts: Vec<HostInfo>,
 }
@@ -154,11 +157,67 @@ impl SimConfig {
             })
             .collect();
 
+        // Build per-hop (directed) bandwidth map in bytes/sec when experimental limiting is enabled.
+        // For each route between nodes, examine each consecutive hop (u->v). If the underlying
+        // graph edge has a bandwidth attribute in that direction, include it; otherwise omit it
+        // to indicate "no limit for that hop".
+        let edge_bandwidths_bytes =
+            if config
+                .experimental
+                .edge_bandwidth_limiting_enabled
+                .unwrap_or(false)
+            {
+                let mut map = HashMap::new();
+                let nodes_in_use: Vec<_> = ip_assignment.get_nodes().into_iter().collect();
+                for src in &nodes_in_use {
+                    for dst in &nodes_in_use {
+                        if let Some(path_nodes) = routing_info.path_nodes(*src, *dst) {
+                            // iterate consecutive pairs
+                            for win in path_nodes.windows(2) {
+                                let u = win[0];
+                                let v = win[1];
+                                if u == v {
+                                    continue;
+                                }
+                                let u_idx = *graph.node_id_to_index(u).unwrap();
+                                let v_idx = *graph.node_id_to_index(v).unwrap();
+
+                                // Get the edge (for undirected graphs, get_edge(u,v) == get_edge(v,u))
+                                if let Ok(edge) = graph.get_edge(u_idx, v_idx) {
+                                    // For direction (u->v), prefer bandwidth_down, fallback to bandwidth_up
+                                    if let Some(bits) = edge
+                                        .bandwidth_down
+                                        .as_ref()
+                                        .or(edge.bandwidth_up.as_ref())
+                                        .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                                    {
+                                        map.insert((u, v), bits / 8);
+                                    }
+                                    // For direction (v->u), prefer bandwidth_up, fallback to bandwidth_down
+                                    if let Some(bits) = edge
+                                        .bandwidth_up
+                                        .as_ref()
+                                        .or(edge.bandwidth_down.as_ref())
+                                        .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value())
+                                    {
+                                        map.insert((v, u), bits / 8);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Some(map)
+            } else {
+                None
+            };
+
         Ok(Self {
             random,
             ip_assignment,
             routing_info,
             host_bandwidths,
+            edge_bandwidths_bytes,
             hosts,
         })
     }
@@ -444,5 +503,31 @@ fn generate_routing_info(
             .collect()
     };
 
-    Ok(RoutingInfo::new(paths))
+    // Build hop sequences per (src,dst)
+    let mut hops: std::collections::HashMap<(u32, u32), Vec<u32>> =
+        std::collections::HashMap::new();
+    // Convert back to ids for iteration
+    let node_ids: Vec<u32> = nodes
+        .iter()
+        .map(|ni| graph.node_index_to_id(*ni).unwrap())
+        .collect();
+    for src in &node_ids {
+        for dst in &node_ids {
+            let s_idx = *graph.node_id_to_index(*src).unwrap();
+            let d_idx = *graph.node_id_to_index(*dst).unwrap();
+            let id_seq: Vec<u32> = if use_shortest_paths {
+                let seq = graph
+                    .shortest_path_nodes(s_idx, d_idx)
+                    .unwrap_or_else(|| vec![s_idx, d_idx]);
+                seq.into_iter()
+                    .map(|ni| graph.node_index_to_id(ni).unwrap())
+                    .collect()
+            } else {
+                vec![*src, *dst]
+            };
+            hops.insert((*src, *dst), id_seq);
+        }
+    }
+
+    Ok(RoutingInfo::new(paths, hops))
 }
