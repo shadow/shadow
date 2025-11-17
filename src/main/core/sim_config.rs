@@ -250,7 +250,7 @@ fn build_host(
             .bandwidth_down
             .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
         bandwidth_up_bits: host
-            .bandwidth_down
+            .bandwidth_up
             .map(|x| x.convert(units::SiPrefixUpper::Base).unwrap().value()),
 
         ip_addr: host.ip_addr.map(|x| x.into()),
