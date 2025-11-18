@@ -18,6 +18,9 @@ PATCH changes (bugfixes):
 
 * Avoid lowering native resource limits of managed processes beyond what is needed
 for shadow's `LD_PRELOAD`d shim to function. (#3682 fixing #3681)
+* Fixed a bug where setting `hosts.<hostname>.bandwidth_up` was ineffective. (#3699)
+* Fixed a bug where if `hosts.<hostname>.bandwidth_down` was configured for a host,
+  it would also overwrite the host's `bandwidth_up`. (#3699)
 
 Full changelog since v3.3.0:
 
