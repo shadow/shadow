@@ -72,6 +72,9 @@ hosts:
 - [`network.graph.file.compression`](#networkgraphfilecompression)
 - [`network.use_shortest_path`](#networkuse_shortest_path)
 - [`experimental`](#experimental)
+ - [`experimental.edge_bandwidth_limiting_enabled`](#experimentaledge_bandwidth_limiting_enabled)
+ - [`experimental.edge_bandwidth_algorithm`](#experimentaledge_bandwidth_algorithm)
+ - [`experimental.edge_bandwidth_burst_ratio`](#experimentaledge_bandwidth_burst_ratio)
 - [`experimental.interface_qdisc`](#experimentalinterface_qdisc)
 - [`experimental.max_unapplied_cpu_latency`](#experimentalmax_unapplied_cpu_latency)
 - [`experimental.native_preemption_enabled`](#experimentalnative_preemption_enabled)
@@ -307,6 +310,32 @@ complete (including self-loops) and to have exactly one edge between any two
 nodes.
 
 #### `experimental`
+#### `experimental.edge_bandwidth_limiting_enabled`
+
+Default: false  
+Type: Bool
+
+Enable experimental per-edge bandwidth limiting. When disabled, any
+`edge_bandwidth_*` attributes on network graph edges are ignored.
+
+When enabled, Shadow enforces per-hop bandwidth limits along the route between
+hosts. Hops without edge bandwidth attributes are treated as unlimited.
+
+#### `experimental.edge_bandwidth_algorithm`
+
+Default: "token-bucket"  
+Type: "token-bucket"
+
+Rate-limiting algorithm used when edge bandwidth limiting is enabled. Currently
+only a token bucket is supported.
+
+#### `experimental.edge_bandwidth_burst_ratio`
+
+Default: 1.5  
+Type: Float
+
+Burst ratio for the token bucket algorithm. Higher values allow larger short-term
+bursts over the configured long-term rate before delaying packets.
 
 Experimental experiment settings. Unstable and may change or be removed at any
 time, regardless of Shadow version.
