@@ -16,7 +16,7 @@ vasi = { path = "../vasi" }
 rustc-hash = { version = "2.1.1", default-features = false }
 
 [dev-dependencies]
-criterion = "0.7.0"
+criterion = "0.8.1"
 rand = "0.9.2"
 rustix = { version = "0.38.44", default-features = false, features = ["process"] }
 libc = "0.2"
