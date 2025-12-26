@@ -51,7 +51,7 @@ serde_json = "1.0.145"
 serde_yaml = "0.9"
 shadow-build-info = { path = "../lib/shadow-build-info" }
 shadow_shmem = { path = "../lib/shmem" }
-signal-hook = "0.3.18"
+signal-hook = "0.4.1"
 static_assertions = "1.1.0"
 std-util = { path = "../lib/std-util" }
 tcp = { path = "../lib/tcp" }
