@@ -67,6 +67,7 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
+      - run: sudo apt-get update
       - run: sudo apt-get install shellcheck
       - run: find . -name '*.sh' | xargs shellcheck
 
@@ -101,6 +102,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       # Our rust build scripts require libglib.
+      - run: sudo apt-get update
       - name: Install system dependencies
         run: sudo apt-get install -y libglib2.0-dev
 
@@ -138,6 +140,7 @@ jobs:
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
       # Our rust build scripts require libglib.
+      - run: sudo apt-get update
       - name: Install system dependencies
         run: sudo apt-get install -y libglib2.0-dev
       - name: Set Rust toolchain

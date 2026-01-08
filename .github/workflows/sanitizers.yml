@@ -24,6 +24,7 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
 
     # Our rust build scripts require libglib.
+    - run: sudo apt-get update
     - name: Install system dependencies
       run: sudo apt-get install -y libglib2.0-dev
 
