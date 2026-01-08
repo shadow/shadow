@@ -526,6 +526,26 @@ pub struct ExperimentalOptions {
     #[clap(long, value_name = "seconds")]
     #[clap(help = EXP_HELP.get("native_preemption_sim_interval").unwrap().as_str())]
     pub native_preemption_sim_interval: Option<units::Time<units::TimePrefix>>,
+
+    /// Enable experimental per-edge bandwidth limiting. When false (default),
+    /// any edge bandwidth attributes in the network graph are ignored.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "bool")]
+    #[clap(help = EXP_HELP.get("edge_bandwidth_limiting_enabled").unwrap().as_str())]
+    pub edge_bandwidth_limiting_enabled: Option<bool>,
+
+    /// Rate-limiting algorithm when edge bandwidth limiting is enabled.
+    /// Currently supported: token_bucket
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "name")]
+    #[clap(help = EXP_HELP.get("edge_bandwidth_algorithm").unwrap().as_str())]
+    pub edge_bandwidth_algorithm: Option<EdgeBandwidthAlgorithm>,
+
+    /// Burst ratio for token bucket algorithm when edge bandwidth limiting is enabled.
+    #[clap(hide_short_help = true)]
+    #[clap(long, value_name = "ratio")]
+    #[clap(help = EXP_HELP.get("edge_bandwidth_burst_ratio").unwrap().as_str())]
+    pub edge_bandwidth_burst_ratio: Option<f64>,
 }
 
 impl ExperimentalOptions {
@@ -576,7 +596,24 @@ impl Default for ExperimentalOptions {
                 units::TimePrefix::Milli,
             )),
             native_preemption_sim_interval: Some(units::Time::new(10, units::TimePrefix::Milli)),
+            edge_bandwidth_limiting_enabled: Some(false),
+            edge_bandwidth_algorithm: Some(EdgeBandwidthAlgorithm::TokenBucket),
+            edge_bandwidth_burst_ratio: Some(1.5),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum EdgeBandwidthAlgorithm {
+    TokenBucket,
+}
+
+impl std::str::FromStr for EdgeBandwidthAlgorithm {
+    type Err = serde_yaml::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_yaml::from_str(s)
     }
 }
 
