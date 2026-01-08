@@ -10,6 +10,7 @@
 - [etcd (distributed key-value store)](#etcd-distributed-key-value-store)
 - [CTorrent and opentracker](#ctorrent-and-opentracker)
 - [http-server](#http-server)
+- [CPython](#cpython)
 
 ## libopenblas
 
@@ -299,6 +300,17 @@ privileges if it detects that the effective user is root.
 ```bash
 {{#include ../examples/apps/http-server/run.sh:body}}
 ```
+
+## CPython
+
+CPython (the reference Python implementation) has at least one known
+[busy-loop](limitations.md#busy-loops), in its `subprocess.Popen.communicate`
+([CPython #142195](https://github.com/python/cpython/issues/142195)).  This is
+fixed in the CPython 3.13+ branches, but as of 2025-01-07 there are not yet any
+tagged releases with that fix.
+
+This can be worked around using the `--model-unblocked-syscall-latency`
+feature. See [busy-loops](limitations.md#busy-loops) for details and caveats.
 
 ### Notes
 
