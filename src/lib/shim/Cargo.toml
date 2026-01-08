@@ -23,7 +23,7 @@ asm_util = { path = "../asm-util" }
 logger = { path = "../logger" }
 log = { version = "0.4.28", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
-rustix = { version = "0.38.44", default-features = false, features = ["process", "thread", "time", "mm"] }
+rustix = { version = "1.1.3", default-features = false, features = ["process", "thread", "time", "mm"] }
 linux-raw-sys = { version = "0.12.0" }
 shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
