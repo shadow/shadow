@@ -39,6 +39,8 @@ add_shadow_tests(
       # the full timeout to fail otherwise.
       TIMEOUT 5
     )
+
+add_shadow_tests(BASENAME no_tty)
     
 add_subdirectory(2210)
 add_subdirectory(3100)
