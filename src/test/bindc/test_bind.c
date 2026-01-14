@@ -86,23 +86,30 @@ static void _test_explicit_bind(gconstpointer gp) {
     assert_true_errno((fd1 = socket(AF_INET, socket_type, 0)) >= 0);
     assert_true_errno((fd2 = socket(AF_INET, socket_type, 0)) >= 0);
 
-    trace("binding one socket to localhost:11111");
+    trace("binding one socket to localhost on ephemeral port 0");
     assert_true_errno(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
-                               (in_port_t)htons(11111)) == 0);
+                               (in_port_t)htons(0)) == 0);
+
+    // discover the assigned port so the test doesn't rely on a hardcoded port
+    struct sockaddr_in bound_addr;
+    socklen_t bound_len = sizeof(bound_addr);
+    memset(&bound_addr, 0, sizeof(bound_addr));
+    assert_true_errno(getsockname(fd1, (struct sockaddr*)&bound_addr, &bound_len) == 0);
+    in_port_t assigned_port = bound_addr.sin_port;
 
     trace("try to bind the same socket again, which this should fail since we already did bind");
     g_assert_true(_do_bind(fd1, (in_addr_t)htonl(INADDR_LOOPBACK),
-                           (in_port_t)htons(11111)) == -1);
+                           assigned_port) == -1);
     assert_errno_is(EINVAL);
 
     trace("binding a second socket to the same address as the first should fail");
     g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_LOOPBACK),
-                           (in_port_t)htons(11111)) == -1);
+                           assigned_port) == -1);
     assert_errno_is(EADDRINUSE);
 
     trace("binding a second socket to ANY with same port as the first should fail");
     g_assert_true(_do_bind(fd2, (in_addr_t)htonl(INADDR_ANY),
-                           (in_port_t)htons(11111)) == -1);
+                           assigned_port) == -1);
     assert_errno_is(EADDRINUSE);
 
     trace("binding to 0.0.0.0:0 should succeed");

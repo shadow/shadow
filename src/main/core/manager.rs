@@ -395,6 +395,47 @@ impl<'a> Manager<'a> {
                     .collect(),
                 bootstrap_end_time,
                 sim_end_time: self.end_time,
+                edge_bw_enabled: self
+                    .config
+                    .experimental
+                    .edge_bandwidth_limiting_enabled
+                    .unwrap_or(false),
+                edge_bw_buckets: {
+                    use crate::network::relay::TokenBucket;
+                    let mut map = std::collections::HashMap::new();
+                    if let Some(edge_bws) = &manager_config.edge_bandwidths_bytes {
+                        for ((src, dst), bytes_per_sec) in edge_bws.iter() {
+                            // Configure a token bucket matching the relay/host limiter pattern:
+                            //  - refill every 1 ms
+                            //  - refill_size = bytes_per_sec / 1000
+                            //  - capacity = refill_size + MTU (allows small bursts without losing tokens)
+                            let refill_interval = shadow_shim_helper_rs::simulation_time::SimulationTime::from_millis(1);
+                            let refill_size: u64 = std::cmp::max(1u64, *bytes_per_sec / 1000);
+                            let capacity: u64 = refill_size.saturating_add(1500u64);
+                            if let Some(tb) = TokenBucket::new(capacity, refill_size, refill_interval) {
+                                map.insert((*src, *dst), tb);
+                            }
+                        }
+                    }
+                    let count = map.len();
+                    if self
+                        .config
+                        .experimental
+                        .edge_bandwidth_limiting_enabled
+                        .unwrap_or(false)
+                    {
+                        if count > 0 {
+                            log::info!(
+                                "Experimental edge bandwidth limiting enabled for {count} directed edges"
+                            );
+                        } else {
+                            log::info!(
+                                "Experimental edge bandwidth limiting enabled, but no edges had bandwidth attributes"
+                            );
+                        }
+                    }
+                    std::sync::RwLock::new(map)
+                },
             });
 
         // scope used so that the scheduler is dropped before we log the global counters below
@@ -850,6 +891,9 @@ pub struct ManagerConfig {
 
     // a list of hosts and their processes
     pub hosts: Vec<HostInfo>,
+
+    // Optional per-edge bandwidth bytes/sec for direct edges
+    pub edge_bandwidths_bytes: Option<HashMap<(u32, u32), u64>>,
 }
 
 /// Helper function to initialize the global [`Host`] before running the closure.
