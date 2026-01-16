@@ -692,9 +692,9 @@ dependencies = [
 
 [[package]]
 name = "derive-deftly"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "671d7e4bedfb1971dbce30d75726d94f3d1520db2eac56d8d4b0b0805b6a5dda"
+checksum = "284db66a66f03c3dafbe17360d959eb76b83f77cfe191677e2a7899c0da291f3"
 dependencies = [
  "derive-deftly-macros",
  "heck",
@@ -702,9 +702,9 @@ dependencies = [
 
 [[package]]
 name = "derive-deftly-macros"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "337f65eb93d9996551b9442423480eca4532586b337484446eb5138d0cd8fcf0"
+checksum = "caef6056a5788d05d173cdc3c562ac28ae093828f851f69378b74e4e3d578e41"
 dependencies = [
  "heck",
  "indexmap",
@@ -1170,6 +1170,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "humantime"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
 
 [[package]]
 name = "ident_case"
@@ -2125,9 +2131,12 @@ checksum = "caf4aa5b0f434c91fe5c7f1ecb6a5ece2130b02ad2a590589dda5146df959001"
 
 [[package]]
 name = "retry-error"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "061ea3484f50bb17b7adfbf69c8a2d97ccdbcf4981375a50f291d3e4cce6f130"
+checksum = "ea40f9c21de3a068f1097fe2348d718c63630e650429aefb72bd04668018d871"
+dependencies = [
+ "humantime",
+]
 
 [[package]]
 name = "rsa"
@@ -2956,9 +2965,9 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tor-error"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3829addfa2f33b56506267ddc02e7ff0586eb70ff506b85c395d2af5299ae4b2"
+checksum = "2a2b140d3cc5d682b3327aa2e2813815062be7a6653250748ce837d26e69eda7"
 dependencies = [
  "derive_more",
  "futures",
@@ -2971,9 +2980,9 @@ dependencies = [
 
 [[package]]
 name = "tor-llcrypto"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c20f163b4614a40f302c6dbd4a09e502f4c5f2637f70fc4986194f55e3e682"
+checksum = "7354b38ac67af62e9cb7f8c3ab912d02357348da1cbdfc14577a21a5cf8754f0"
 dependencies = [
  "aes",
  "base64ct",
