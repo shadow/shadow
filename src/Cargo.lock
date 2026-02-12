@@ -2965,9 +2965,9 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tor-error"
-version = "0.38.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a2b140d3cc5d682b3327aa2e2813815062be7a6653250748ce837d26e69eda7"
+checksum = "accaa220e9e80bee90a74da5c94c14f9d5d06119c380d92e4a75bac5bc1b4c7a"
 dependencies = [
  "derive_more",
  "futures",
@@ -2980,9 +2980,9 @@ dependencies = [
 
 [[package]]
 name = "tor-llcrypto"
-version = "0.38.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7354b38ac67af62e9cb7f8c3ab912d02357348da1cbdfc14577a21a5cf8754f0"
+checksum = "25dfaa94ea513719fd77b82ca8175e9019e8c77705a57f1ab2b10ee0fe4fdc88"
 dependencies = [
  "aes",
  "base64ct",
