@@ -46,6 +46,8 @@ graph [
 - [`edge.latency`](#edgelatency)
 - [`edge.jitter`](#edgejitter)
 - [`edge.packet_loss`](#edgepacket_loss)
+ - [`edge.edge_bandwidth_down`](#edgeedge_bandwidth_down)
+ - [`edge.edge_bandwidth_up`](#edgeedge_bandwidth_up)
 
 #### `graph.directed`
 
@@ -161,3 +163,29 @@ Type: Float
 
 A fractional value between 0 and 1 representing the chance that a packet
 traversing this edge will get dropped.
+
+#### `edge.edge_bandwidth_down`
+
+Required: False  
+Default: n/a  
+Type: String
+
+Optional downstream capacity limit for traffic flowing from `source` to `target`
+on this edge. The format matches other unit strings (e.g., `64 Kbit`, `10 Mbit`).
+
+Used only when [edge bandwidth limiting](shadow_config_spec.md#experimentaledge_bandwidth_limiting_enabled)
+is enabled. If unset, this hop is treated as unlimited in the source→target
+direction.
+
+#### `edge.edge_bandwidth_up`
+
+Required: False  
+Default: n/a  
+Type: String
+
+Optional upstream capacity limit for traffic flowing from `target` to `source`
+on this edge. The format matches other unit strings (e.g., `64 Kbit`, `10 Mbit`).
+
+Used only when [edge bandwidth limiting](shadow_config_spec.md#experimentaledge_bandwidth_limiting_enabled)
+is enabled. If unset, this hop is treated as unlimited in the target→source
+direction.

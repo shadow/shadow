@@ -65,6 +65,9 @@ pub struct ShadowEdge {
     pub latency: units::Time<units::TimePrefix>,
     pub jitter: units::Time<units::TimePrefix>,
     pub packet_loss: f32,
+    // Optional per-edge bandwidth limits
+    pub bandwidth_down: Option<units::BitsPerSec<units::SiPrefixUpper>>,
+    pub bandwidth_up: Option<units::BitsPerSec<units::SiPrefixUpper>>,
 }
 
 impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
@@ -94,6 +97,28 @@ impl TryFrom<gml_parser::gml::Edge<'_>> for ShadowEdge {
                 Some(x) => x.as_float().ok_or("Edge 'packet_loss' is not a float")?,
                 None => 0.0,
             },
+            bandwidth_down: gml_edge
+                .other
+                .remove("edge_bandwidth_down")
+                .map(|bandwidth| {
+                    bandwidth
+                        .as_str()
+                        .ok_or("Edge 'edge_bandwidth_down' is not a string")?
+                        .parse()
+                        .map_err(|e| format!("Edge 'edge_bandwidth_down' is not a valid unit: {e}"))
+                })
+                .transpose()?,
+            bandwidth_up: gml_edge
+                .other
+                .remove("edge_bandwidth_up")
+                .map(|bandwidth| {
+                    bandwidth
+                        .as_str()
+                        .ok_or("Edge 'edge_bandwidth_up' is not a string")?
+                        .parse()
+                        .map_err(|e| format!("Edge 'edge_bandwidth_up' is not a valid unit: {e}"))
+                })
+                .transpose()?,
         };
 
         if rv.packet_loss < 0f32 || rv.packet_loss > 1f32 {
@@ -285,6 +310,46 @@ impl NetworkGraph {
             }
         }
     }
+
+    /// Get a reference to the edge between two nodes.
+    pub fn get_edge(&self, src: NodeIndex, dst: NodeIndex) -> Result<&ShadowEdge, NetGraphError> {
+        self.get_edge_weight(&src, &dst)
+    }
+
+    /// Compute a shortest path between two nodes and return the sequence of
+    /// petgraph node indices along the path, inclusive of endpoints.
+    pub fn shortest_path_nodes(&self, src: NodeIndex, dst: NodeIndex) -> Option<Vec<NodeIndex>> {
+        match &self.graph {
+            GraphWrapper::Directed(graph) => petgraph::algo::astar(
+                graph,
+                src,
+                |n| n == dst,
+                |e| {
+                    e.weight()
+                        .latency
+                        .convert(units::TimePrefix::Nano)
+                        .unwrap()
+                        .value()
+                },
+                |_| 0u64,
+            )
+            .map(|(_cost, path)| path),
+            GraphWrapper::Undirected(graph) => petgraph::algo::astar(
+                graph,
+                src,
+                |n| n == dst,
+                |e| {
+                    e.weight()
+                        .latency
+                        .convert(units::TimePrefix::Nano)
+                        .unwrap()
+                        .value()
+                },
+                |_| 0u64,
+            )
+            .map(|(_cost, path)| path),
+        }
+    }
 }
 
 /// Network characteristics for a path between two nodes.
@@ -427,13 +492,16 @@ impl<T: Copy + Eq + Hash + std::fmt::Display> Default for IpAssignment<T> {
 #[derive(Debug)]
 pub struct RoutingInfo<T: Eq + Hash + std::fmt::Display + Clone + Copy> {
     paths: HashMap<(T, T), PathProperties>,
+    ///  hop sequences for each (src,dst) route, inclusive of endpoints
+    hops: HashMap<(T, T), Vec<T>>,
     packet_counters: std::sync::RwLock<HashMap<(T, T), u64>>,
 }
 
 impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
-    pub fn new(paths: HashMap<(T, T), PathProperties>) -> Self {
+    pub fn new(paths: HashMap<(T, T), PathProperties>, hops: HashMap<(T, T), Vec<T>>) -> Self {
         Self {
             paths,
+            hops,
             packet_counters: std::sync::RwLock::new(HashMap::new()),
         }
     }
@@ -441,6 +509,11 @@ impl<T: Eq + Hash + std::fmt::Display + Clone + Copy> RoutingInfo<T> {
     /// Get properties for the path from one node to another.
     pub fn path(&self, start: T, end: T) -> Option<PathProperties> {
         self.paths.get(&(start, end)).copied()
+    }
+
+    /// Get hop sequence for the path from one node to another, if available.
+    pub fn path_nodes(&self, start: T, end: T) -> Option<&[T]> {
+        self.hops.get(&(start, end)).map(|v| v.as_slice())
     }
 
     /// Increment the number of packets sent from one node to another.
@@ -652,5 +725,115 @@ mod tests {
             incremented,
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(11, 0, 0, 255))
         );
+    }
+
+    #[test]
+    fn test_shortest_path_nodes_sequence() {
+        let graph = r#"graph [
+          directed 0
+          node [
+            id 0
+          ]
+          node [
+            id 1
+          ]
+          node [
+            id 2
+          ]
+          edge [
+            source 0
+            target 0
+            latency "1 ns"
+          ]
+          edge [
+            source 1
+            target 1
+            latency "1 ns"
+          ]
+          edge [
+            source 2
+            target 2
+            latency "1 ns"
+          ]
+          edge [
+            source 0
+            target 1
+            latency "5 ns"
+          ]
+          edge [
+            source 1
+            target 2
+            latency "7 ns"
+          ]
+        ]"#;
+        let g = NetworkGraph::parse(graph).unwrap();
+        let n0 = *g.node_id_to_index(0).unwrap();
+        let n1 = *g.node_id_to_index(1).unwrap();
+        let n2 = *g.node_id_to_index(2).unwrap();
+
+        // direct
+        let p01 = g.shortest_path_nodes(n0, n1).unwrap();
+        assert_eq!(p01.len(), 2);
+        assert_eq!(g.node_index_to_id(p01[0]), Some(0));
+        assert_eq!(g.node_index_to_id(p01[1]), Some(1));
+
+        // multi-hop
+        let p02 = g.shortest_path_nodes(n0, n2).unwrap();
+        assert_eq!(p02.len(), 3);
+        assert_eq!(g.node_index_to_id(p02[0]), Some(0));
+        assert_eq!(g.node_index_to_id(p02[1]), Some(1));
+        assert_eq!(g.node_index_to_id(p02[2]), Some(2));
+    }
+
+    #[test]
+    fn test_parse_edge_bandwidth_attrs() {
+        let graph = r#"graph [
+          directed 1
+          node [
+            id 0
+          ]
+          node [
+            id 1
+          ]
+          edge [
+            source 0
+            target 1
+            latency "10 ns"
+            edge_bandwidth_down "64 Kbit"
+          ]
+          edge [
+            source 1
+            target 0
+            latency "10 ns"
+            edge_bandwidth_up   "128 Kbit"
+          ]
+        ]"#;
+        let g = NetworkGraph::parse(graph).unwrap();
+        let n0 = *g.node_id_to_index(0).unwrap();
+        let n1 = *g.node_id_to_index(1).unwrap();
+
+        // 0->1 should have bandwidth_down
+        let e01 = g.get_edge(n0, n1).unwrap();
+        assert!(e01.bandwidth_down.is_some());
+        let e01_down = e01
+            .bandwidth_down
+            .as_ref()
+            .unwrap()
+            .convert(units::SiPrefixUpper::Base)
+            .unwrap()
+            .value();
+        assert_eq!(e01_down, 64_000);
+
+        // 1->0 should have bandwidth_up
+        let e10 = g.get_edge(n1, n0).unwrap();
+        assert!(e10.bandwidth_up.is_some());
+        let e10_up = e10
+            .bandwidth_up
+            .as_ref()
+            .unwrap()
+            .convert(units::SiPrefixUpper::Base)
+            .unwrap()
+            .value();
+        assert_eq!(e10_up, 128_000);
     }
 }

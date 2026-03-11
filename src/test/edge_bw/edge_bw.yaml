@@ -1,0 +1,61 @@
+general:
+  stop_time: 4 min
+
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          host_bandwidth_down "1 Gbit"
+          host_bandwidth_up   "1 Gbit"
+        ]
+        node [
+          id 1
+          host_bandwidth_down "1 Gbit"
+          host_bandwidth_up   "1 Gbit"
+        ]
+        edge [
+          source 0
+          target 0
+          latency "1 ms"
+          packet_loss 0.0
+        ]
+        edge [
+          source 1
+          target 1
+          latency "1 ms"
+          packet_loss 0.0
+        ]
+        edge [
+          source 0
+          target 1
+          latency "10 ms"
+          packet_loss 0.0
+          edge_bandwidth_down "64 Kbit"
+          edge_bandwidth_up   "64 Kbit"
+        ]
+      ]
+
+experimental:
+  edge_bandwidth_limiting_enabled: true
+
+hosts:
+  server:
+    network_node_id: 0
+    processes:
+    - path: tgen
+      environment: { OPENBLAS_NUM_THREADS: "1" }
+      args: ../../server.graphml
+      start_time: 1
+      expected_final_state: running
+
+  client:
+    network_node_id: 1
+    processes:
+    - path: tgen
+      environment: { OPENBLAS_NUM_THREADS: "1" }
+      args: ../../client.graphml
+      start_time: 5
