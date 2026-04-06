@@ -102,6 +102,14 @@ static uint64_t _frequency_via_cpuid() {
         } else if (family_id == 0x6 && extended_model_id == 0x5 && model == 0xc) {
             trace("goldmont; using 19.2 MHz crystal frequency");
             core = 19200000;
+        } else if (0) {
+            // TODO: check for 6th and 7th generation Intel Core processor models.
+            //
+            // The above-referenced table says that 6th and 7th generation Intel
+            // Core processors have a core frequency of 24 MHz, but doesn't
+            // include the model IDs of any such processors.
+            trace("6th or 7th gen Intel Core processor; using 24 MHz crystal frequency");
+            core = 24000000;
         } else if (freq_via_0x16_MHz) {
             // "On some processors (e.g. Intel Skylake), CPUID_15h_ECX is zero
             // but CPUID_16h_EAX is present and not zero. On all known
@@ -115,10 +123,9 @@ static uint64_t _frequency_via_cpuid() {
             debug("Using %" PRIu64 " cyclesPerSecond via cpuid 16h", freq_via_0x16);
             return freq_via_0x16;
         } else {
-            // Without checking for matching family and model, this isn't much
-            // better than a wild guess. Maybe just fail here?
-            trace("non-goldmont, non-xeon; using 24 MHz crystal frequency");
-            core = 24000000;
+            warning("Couldn't find TSC freq via cpuid 15h. family:%xh model:%x%xh", family_id,
+                    extended_model_id, model);
+            return 0;
         }
     }
 
