@@ -13,7 +13,7 @@
 #include "lib/logger/logger.h"
 
 // Returns 0 on failure.
-static uint64_t _frequency_via_cpuid0x15() {
+static uint64_t _frequency_via_cpuid() {
     unsigned int a = 0, b = 0, c = 0, d = 0;
     // Use the cpuid instruction (wrapped by __get_cpuid) to determine the clock
     // frequency. See "cpuid" in "Intel® 64 and IA-32 Architectures Software
@@ -30,6 +30,19 @@ static uint64_t _frequency_via_cpuid0x15() {
         return 0;
     }
 
+    if (!__get_cpuid(0x1, &a, &b, &c, &d)) {
+        debug("cpuid 0x1 failed");
+        return 0;
+    }
+    // bits 11-8
+    const unsigned int family_id = (a >> 8) & 0xf;
+    // bits 19-16
+    const unsigned int extended_model_id = (a >> 16) & 0xf;
+    // bits 7-4
+    const unsigned int model = (a >> 4) & 0xf;
+    trace("rax %u -> family_id:0x%x extended_model_id:0x%x model:0x%x", a, family_id,
+          extended_model_id, model);
+
     if (!__get_cpuid(0x15, &a, &b, &c, &d)) {
         debug("cpuid 0x15 failed");
         return 0;
@@ -37,20 +50,28 @@ static uint64_t _frequency_via_cpuid0x15() {
     // From "cpuid": "An unsigned integer which is the denominator of the
     // TSC/'core crystal clock' ratio."
     const unsigned int denominator = a;
+    // From "cpuid": "An unsigned integer which is the numerator of the
+    // TSC/'core crystal clock' ratio."
+    const unsigned int numerator = b;
+    // From "cpuid": "An unsigned integer which is the nominal frequency of the
+    // core crystal clock in Hz."
+    unsigned int core = c;
+    debug("cpuid 0x15 denominator:%u numerator:%u core:%u", denominator, numerator, core);
+
+    // Potentially used below, but always grab for logging.
+    const unsigned int freq_via_0x16_MHz = __get_cpuid(0x16, &a, &b, &c, &d) ? (a & 0xffff) : 0;
+    debug("cpuid 0x16 reports base frequency %u MHz", freq_via_0x16_MHz);
+
     if (!denominator) {
         debug("cpuid 0x15 didn't give denominator");
         return 0;
     }
-    // From "cpuid": "An unsigned integer which is the numerator of the
-    // TSC/'core crystal clock' ratio."
-    const unsigned int numerator = b;
+
     if (!numerator) {
         debug("cpuid 0x15 didn't give numerator");
         return 0;
     }
-    // From "cpuid": "An unsigned integer which is the nominal frequency of the
-    // core crystal clock in Hz."
-    unsigned int core = c;
+
     if (!core) {
         // From "cpuid": "If ECX is 0, the nominal core crystal clock frequency
         // is not enumerated".
@@ -75,27 +96,36 @@ static uint64_t _frequency_via_cpuid0x15() {
         // AFAICT from https://www.amd.com/system/files/TechDocs/25481.pdf, AMD
         // processors don't support cpuid 0x15 at all, so we would've already
         // bailed out earlier for those.
-        if (!__get_cpuid(0x1, &a, &b, &c, &d)) {
-            debug("cpuid 0x1 failed");
-            return 0;
-        }
-        // bits 11-8
-        unsigned int family_id = (a >> 8) & 0xf;
-        // bits 19-16
-        unsigned int extended_model_id = (a >> 16) & 0xf;
-        // bits 7-4
-        unsigned int model = (a >> 4) & 0xf;
-        trace("rax %u -> family_id:0x%x extended_model_id:0x%x model:0x%x", a, family_id,
-              extended_model_id, model);
         if (family_id == 0x6 && extended_model_id == 0x5 && model == 0x5) {
             trace("xeon; using 25 MHz crystal frequency");
             core = 25000000;
         } else if (family_id == 0x6 && extended_model_id == 0x5 && model == 0xc) {
             trace("goldmont; using 19.2 MHz crystal frequency");
             core = 19200000;
-        } else {
-            trace("non-goldmont, non-xeon; using 24 MHz crystal frequency");
+        } else if (0) {
+            // TODO: check for 6th and 7th generation Intel Core processor models.
+            //
+            // The above-referenced table says that 6th and 7th generation Intel
+            // Core processors have a core frequency of 24 MHz, but doesn't
+            // include the model IDs of any such processors.
+            trace("6th or 7th gen Intel Core processor; using 24 MHz crystal frequency");
             core = 24000000;
+        } else if (freq_via_0x16_MHz) {
+            // "On some processors (e.g. Intel Skylake), CPUID_15h_ECX is zero
+            // but CPUID_16h_EAX is present and not zero. On all known
+            // processors where this is the case,[133] the TSC frequency is
+            // equal to the Processor Base Frequency"
+            // <https://en.wikipedia.org/wiki/CPUID#EAX=15h_and_EAX=16h:_CPU,_TSC,_Bus_and_Core_Crystal_Clock_Frequencies>
+            //
+            // [133]:
+            // <https://github.com/torvalds/linux/commit/604dc9170f2435d27da5039a3efd757dceadc684>
+            const uint64_t freq_via_0x16 = (uint64_t)freq_via_0x16_MHz * (uint64_t)1000000;
+            debug("Using %" PRIu64 " cyclesPerSecond via cpuid 16h", freq_via_0x16);
+            return freq_via_0x16;
+        } else {
+            warning("Couldn't find TSC freq via cpuid 15h. family:%xh model:%x%xh", family_id,
+                    extended_model_id, model);
+            return 0;
         }
     }
 
@@ -183,7 +213,7 @@ uint64_t TscC_nativeCyclesPerSecond() {
     // we can have the TSC tick at the expected rate when compared to the simulated
     // time retrieved by other means (e.g. clock_gettime).
 
-    uint64_t f = _frequency_via_cpuid0x15();
+    uint64_t f = _frequency_via_cpuid();
     if (f) {
         return f;
     }
