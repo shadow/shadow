@@ -1,6 +1,7 @@
 use linux_api::errno::Errno;
 use linux_api::prctl::{ArchPrctlOp, PrctlOp};
 use linux_api::sched::SuidDump;
+use linux_api::signal::Signal;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -78,13 +79,25 @@ impl SyscallHandler {
             // effect.
             | PrctlOp::PR_SET_TIMERSLACK
             // Wouldn't actually hurt correctness, but could significantly hurt performance.
-            | PrctlOp::PR_SET_SPECULATION_CTRL
-            // We use this signal to ensure managed processes die when Shadow does. Allowing the
-            // process to override it could end up allowing orphaned managed processes to live on
-            // after shadow exits.
-            | PrctlOp::PR_SET_PDEATHSIG => {
+            | PrctlOp::PR_SET_SPECULATION_CTRL => {
                 log::warn!("Not allowing unimplemented prctl {option}");
                 Err(Errno::EINVAL.into())
+            }
+            PrctlOp::PR_SET_PDEATHSIG => {
+                let signal = if arg2 == 0 {
+                    None
+                } else {
+                    let signal = i32::try_from(arg2).or(Err(Errno::EINVAL))?;
+                    Some(Signal::try_from(signal).or(Err(Errno::EINVAL))?)
+                };
+                ctx.objs.process.set_parent_death_signal(signal);
+                Ok(0)
+            }
+            PrctlOp::PR_GET_PDEATHSIG => {
+                let out_ptr = ForeignPtr::from(arg2).cast::<std::ffi::c_int>();
+                let signal = Signal::as_raw(ctx.objs.process.parent_death_signal());
+                ctx.objs.process.memory_borrow_mut().write(out_ptr, &signal)?;
+                Ok(0)
             }
             PrctlOp::PR_GET_TID_ADDRESS => {
                 let out_ptr = ForeignPtr::from(arg2)

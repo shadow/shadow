@@ -154,6 +154,10 @@ struct Common {
     // Signal to send to parent on death.
     exit_signal: Option<Signal>,
 
+    // Signal to send to this process when its parent dies, as configured via
+    // `prctl(PR_SET_PDEATHSIG)`.
+    parent_death_signal: Cell<Option<Signal>>,
+
     // unique id of the program that this process should run
     name: CString,
 
@@ -626,6 +630,7 @@ impl RunnableProcess {
             group_id: Cell::new(process_group_id),
             session_id: Cell::new(session_id),
             exit_signal,
+            parent_death_signal: Cell::new(None),
             rlimits: self.common.rlimits,
         };
 
@@ -1118,6 +1123,7 @@ impl Process {
             // Exit signal is moot; since parent is INIT there will never
             // be a valid target for it.
             exit_signal: None,
+            parent_death_signal: Cell::new(None),
             rlimits,
         };
         Ok(RootedRc::new(
@@ -1734,6 +1740,16 @@ impl Process {
     /// Signal that will be sent to parent process on exit. Typically `Some(SIGCHLD)`.
     pub fn exit_signal(&self) -> Option<Signal> {
         self.common().exit_signal
+    }
+
+    /// Signal that will be sent to this process when its parent exits.
+    pub fn parent_death_signal(&self) -> Option<Signal> {
+        self.common().parent_death_signal.get()
+    }
+
+    /// Set the signal that should be sent to this process when its parent exits.
+    pub fn set_parent_death_signal(&self, signal: Option<Signal>) {
+        self.common().parent_death_signal.set(signal);
     }
 
     pub fn current_working_dir(&self) -> impl Deref<Target = CString> + '_ {
