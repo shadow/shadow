@@ -273,6 +273,20 @@ void test_numeric_host() {
     assert_addrinfo_equals(res, &expected_addrinfo);
     freeaddrinfo(res);
 
+    // Shadow currently models loopback with IPv4 only. Numeric IPv6 loopback
+    // lookups should still succeed so applications that probe "::1" during
+    // startup don't abort.
+    hints = (struct addrinfo){.ai_socktype = SOCK_STREAM};
+    assert_getaddrinfo_rv_equals(getaddrinfo("::1", NULL, &hints, &res), 0);
+    if (running_in_shadow()) {
+        g_assert_nonnull(res);
+        g_assert_cmpint(res->ai_family, ==, AF_INET);
+        const struct sockaddr_in* addr_in = (const struct sockaddr_in*)res->ai_addr;
+        g_assert_nonnull(addr_in);
+        g_assert_cmpuint(ntohl(addr_in->sin_addr.s_addr), ==, INADDR_LOOPBACK);
+    }
+    freeaddrinfo(res);
+
     // Error on nonnumeric node with AI_NUMERICHOST
     hints = (struct addrinfo){.ai_flags = AI_NUMERICHOST};
     assert_getaddrinfo_rv_equals(
