@@ -78,16 +78,15 @@ int addrinfo_count(struct addrinfo* res) {
 }
 
 const char* sockaddr_in_string(const struct sockaddr* addr) {
-    static char ip[20] = {0};
-    static char ip_and_port[30] = {0};
-    // INET6 unhandled
+    static char ip[INET6_ADDRSTRLEN] = {0};
+    static char ip_and_port[80] = {0};
     if (addr->sa_family == AF_INET) {
         const struct sockaddr_in* addr_in = (const struct sockaddr_in*)addr;
-        inet_ntop(AF_INET, &addr_in->sin_addr, ip, 20);
+        inet_ntop(AF_INET, &addr_in->sin_addr, ip, sizeof(ip));
         sprintf(ip_and_port, "%s:%d", ip, ntohs(addr_in->sin_port));
     } else if (addr->sa_family == AF_INET6) {
         const struct sockaddr_in6* addr_in6 = (const struct sockaddr_in6*)addr;
-        inet_ntop(AF_INET6, &addr_in6->sin6_addr, ip, 20);
+        inet_ntop(AF_INET6, &addr_in6->sin6_addr, ip, sizeof(ip));
         sprintf(ip_and_port, "%s:%d", ip, ntohs(addr_in6->sin6_port));
     } else {
         sprintf(ip_and_port, "<Unknown addr family %d>", addr->sa_family);
@@ -120,11 +119,17 @@ bool sockaddr_equals(const struct sockaddr* lhs, const struct sockaddr* rhs) {
         return false;
     if (lhs->sa_family != rhs->sa_family)
         return false;
-    // INET6 unhandled
-    g_assert(lhs->sa_family == AF_INET);
-    const struct sockaddr_in* lhs_in = (const struct sockaddr_in*)lhs;
-    const struct sockaddr_in* rhs_in = (const struct sockaddr_in*)rhs;
-    return !memcmp(lhs_in, rhs_in, sizeof(*lhs_in));
+    if (lhs->sa_family == AF_INET) {
+        const struct sockaddr_in* lhs_in = (const struct sockaddr_in*)lhs;
+        const struct sockaddr_in* rhs_in = (const struct sockaddr_in*)rhs;
+        return !memcmp(lhs_in, rhs_in, sizeof(*lhs_in));
+    }
+    if (lhs->sa_family == AF_INET6) {
+        const struct sockaddr_in6* lhs_in6 = (const struct sockaddr_in6*)lhs;
+        const struct sockaddr_in6* rhs_in6 = (const struct sockaddr_in6*)rhs;
+        return !memcmp(lhs_in6, rhs_in6, sizeof(*lhs_in6));
+    }
+    g_assert_not_reached();
 }
 
 bool addrinfo_equals(const struct addrinfo* lhs, const struct addrinfo* rhs) {
@@ -272,6 +277,30 @@ void test_numeric_host() {
     assert_getaddrinfo_rv_equals(getaddrinfo("1.2.3.4", NULL, &hints, &res), 0);
     assert_addrinfo_equals(res, &expected_addrinfo);
     freeaddrinfo(res);
+
+    // Numeric IPv6 loopback should resolve as IPv6, matching Linux behavior
+    // even though Shadow doesn't support IPv6 sockets.
+    hints = (struct addrinfo){.ai_socktype = SOCK_STREAM};
+    assert_getaddrinfo_rv_equals(getaddrinfo("::1", NULL, &hints, &res), 0);
+    struct in6_addr addr6;
+    g_assert_cmpint(inet_pton(AF_INET6, "::1", &addr6), ==, 1);
+    const struct sockaddr_in6 expected_sockaddr_in6 = {
+        .sin6_family = AF_INET6, .sin6_addr = addr6};
+    struct addrinfo expected_addrinfo6 = {
+        .ai_flags = 0,
+        .ai_family = AF_INET6,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP,
+        .ai_addrlen = sizeof(expected_sockaddr_in6),
+        .ai_addr = (struct sockaddr*)&expected_sockaddr_in6,
+    };
+    assert_addrinfo_equals(res, &expected_addrinfo6);
+    freeaddrinfo(res);
+
+    // Linux reports an address-family mismatch for a numeric IPv6 literal when
+    // asked for IPv4 only.
+    hints = (struct addrinfo){.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
+    assert_getaddrinfo_rv_equals(getaddrinfo("::1", NULL, &hints, &res), EAI_ADDRFAMILY);
 
     // Error on nonnumeric node with AI_NUMERICHOST
     hints = (struct addrinfo){.ai_flags = AI_NUMERICHOST};
