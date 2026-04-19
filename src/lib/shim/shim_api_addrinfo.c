@@ -382,6 +382,14 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
         // TODO: try parsing as IPv6
     }
     if (add_ipv4) {
+        // Shadow doesn't support IPv6 sockets, but some applications still
+        // probe the IPv6 loopback address during startup. Treat "::1" as the
+        // IPv4 loopback so they keep working in Shadow's IPv4-only model.
+        if (strcmp(node, "::1") == 0) {
+            _getaddrinfo_appendv4(
+                res, &tail, add_tcp, add_udp, add_raw, htonl(INADDR_LOOPBACK), port);
+        }
+
         uint32_t addr;
         if (inet_pton(AF_INET, node, &addr) == 1) {
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
