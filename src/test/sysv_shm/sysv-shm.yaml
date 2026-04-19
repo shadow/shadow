@@ -1,0 +1,15 @@
+general:
+  stop_time: 12
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: ./test-sysv-shm
+      args: writer 23057
+      start_time: 1
+    - path: ./test-sysv-shm
+      args: reader 23057
+      start_time: 2

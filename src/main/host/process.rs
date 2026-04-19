@@ -1523,6 +1523,9 @@ impl Process {
             unreachable!("Tried to handle process exit of non-running process");
         };
 
+        host.sysv_shm_borrow_mut()
+            .detach_all_process(runnable.common.id());
+
         #[cfg(feature = "perf_timers")]
         debug!(
             "total runtime for process '{}' was {:?}",
@@ -1774,6 +1777,9 @@ impl Process {
             wait_res.terminating_signal(),
             Some(Signal::SIGKILL.as_i32().try_into().unwrap())
         );
+
+        host.sysv_shm_borrow_mut()
+            .detach_all_process(runnable.common.id());
 
         let execing_thread = runnable.threads.borrow_mut().remove(&tid).unwrap();
 

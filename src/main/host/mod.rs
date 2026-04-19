@@ -16,5 +16,6 @@ pub mod network;
 pub mod process;
 pub mod status_listener;
 pub mod syscall;
+pub mod sysv_shm;
 pub mod thread;
 pub mod timer;
