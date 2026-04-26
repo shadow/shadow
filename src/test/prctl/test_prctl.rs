@@ -1,5 +1,5 @@
 use linux_api::prctl::ArchPrctlOp;
-use nix::poll::{poll, PollFd, PollFlags};
+use nix::poll::{PollFd, PollFlags, poll};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal as NixSignal};
 use rustix::fd::AsRawFd;
 use rustix::io::{read, write};
@@ -45,7 +45,9 @@ fn wait_for_parent_death_signal(fd: libc::c_int) -> Result<(), String> {
                     return Ok(());
                 }
 
-                return Err(format!("Unexpected poll events while waiting for signal: {events:?}"));
+                return Err(format!(
+                    "Unexpected poll events while waiting for signal: {events:?}"
+                ));
             }
             Err(nix::errno::Errno::EINTR) => continue,
             Err(err) => return Err(format!("poll failed while waiting for signal: {err}")),
@@ -196,7 +198,10 @@ fn test_parent_death_signal_delivery() -> Result<(), String> {
             );
             assert!(unsafe { nix::sys::signal::sigaction(NixSignal::SIGUSR1, &action) }.is_ok());
 
-            assert_eq!(unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGUSR1) }, 0);
+            assert_eq!(
+                unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGUSR1) },
+                0
+            );
 
             let mut configured_signal = -1;
             assert_eq!(
@@ -248,7 +253,9 @@ fn test_parent_death_signal_delivery() -> Result<(), String> {
     drop(result_writer);
 
     let mut wait_status = 0;
-    assert_with_errno!(unsafe { libc::waitpid(supervisor_pid, &mut wait_status, 0) } == supervisor_pid);
+    assert_with_errno!(
+        unsafe { libc::waitpid(supervisor_pid, &mut wait_status, 0) } == supervisor_pid
+    );
     assert!(libc::WIFEXITED(wait_status));
     assert_eq!(libc::WEXITSTATUS(wait_status), 0);
 
