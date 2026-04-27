@@ -355,8 +355,10 @@ fn main() -> Result<(), String> {
                                 } else if events == libc::POLLOUT && nfds == 1 {
                                     exp_result = 1;
                                     exp_revents = libc::POLLOUT;
-                                } else if signal_time.is_some() && timeout != Duration::ZERO {
-                                    assert!(signal_time.unwrap() < timeout);
+                                } else if let Some(st) = signal_time
+                                    && timeout != Duration::ZERO
+                                {
+                                    assert!(st < timeout);
                                     exp_result = -1;
                                     exp_error = libc::EINTR;
                                 }
