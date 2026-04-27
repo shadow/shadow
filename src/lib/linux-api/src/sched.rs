@@ -1,10 +1,40 @@
 use linux_syscall::{Result as LinuxSyscallResult, Result64};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::errno::Errno;
 use crate::ldt::linux_user_desc;
 use crate::posix_types::{Pid, kernel_pid_t};
 use crate::signal::Signal;
 use crate::{bindings, const_conversions};
+
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum Sched {
+    SCHED_NORMAL = const_conversions::i32_from_u32(bindings::LINUX_SCHED_NORMAL),
+    SCHED_FIFO = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FIFO),
+    SCHED_RR = const_conversions::i32_from_u32(bindings::LINUX_SCHED_RR),
+    SCHED_BATCH = const_conversions::i32_from_u32(bindings::LINUX_SCHED_BATCH),
+    SCHED_IDLE = const_conversions::i32_from_u32(bindings::LINUX_SCHED_IDLE),
+    SCHED_DEADLINE = const_conversions::i32_from_u32(bindings::LINUX_SCHED_DEADLINE),
+    SCHED_EXT = const_conversions::i32_from_u32(bindings::LINUX_SCHED_EXT),
+}
+
+pub const SCHED_RESET_ON_FORK: i32 =
+    const_conversions::i32_from_u32(bindings::LINUX_SCHED_RESET_ON_FORK);
+
+bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct SchedFlags: i32 {
+        const SCHED_FLAG_RESET_ON_FORK = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_RESET_ON_FORK);
+        const SCHED_FLAG_RECLAIM = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_RECLAIM);
+        const SCHED_FLAG_DL_OVERRUN = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_DL_OVERRUN);
+        const SCHED_FLAG_KEEP_POLICY = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_KEEP_POLICY);
+        const SCHED_FLAG_KEEP_PARAMS = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_KEEP_PARAMS);
+        const SCHED_FLAG_UTIL_CLAMP_MIN = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_UTIL_CLAMP_MIN);
+        const SCHED_FLAG_UTIL_CLAMP_MAX = const_conversions::i32_from_u32(bindings::LINUX_SCHED_FLAG_UTIL_CLAMP_MAX);
+    }
+}
 
 bitflags::bitflags! {
     /// The flags passed to the `clone` and `clone3` syscalls.
