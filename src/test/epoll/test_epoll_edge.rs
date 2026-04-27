@@ -161,12 +161,16 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         )?;
 
         let timeout = Duration::from_millis(100);
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
 
-        let threads = [
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-        ];
+        let threads: [std::thread::JoinHandle<()>; 3] = std::array::from_fn(|_| {
+            let result_tx = result_tx.clone();
+            std::thread::spawn(move || {
+                let result = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
+                result_tx.send(result).unwrap();
+            })
+        });
+        drop(result_tx);
 
         // Wait for readers to block.
         std::thread::sleep(timeout / 3);
@@ -174,11 +178,24 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
 
-        // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        // Wait for the first edge to be consumed, then drain the byte before
+        // generating the next edge. Otherwise the second write can happen
+        // while the fd is still readable and fail to create another wakeup.
+        let first_result = result_rx.recv().unwrap();
+        unistd::read(readfd, &mut [0])?;
+
+        // Make the read-end readable again.
         unistd::write(writefd, &[0])?;
 
-        let mut results = threads.map(|t| t.join().unwrap());
+        let mut results = [
+            first_result,
+            result_rx.recv().unwrap(),
+            result_rx.recv().unwrap(),
+        ];
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
 
         // Two of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
@@ -257,7 +274,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
 
         drop(write_requested_tx);
         thread.join().unwrap()?;
-        let results = vec![results0, results1, results2];
+        let results = [results0, results1, results2];
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
