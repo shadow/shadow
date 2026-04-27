@@ -18,6 +18,7 @@
 #include <linux/rseq.h>
 #include <linux/rtnetlink.h>
 #include <linux/sched.h>
+#include <linux/sched/types.h>
 #include <linux/signal.h>
 #include <linux/sockios.h>
 #include <linux/stat.h>
