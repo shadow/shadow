@@ -215,37 +215,35 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         )?;
 
         let timeout = Duration::from_millis(100);
-        let (wait_started_tx, wait_started_rx) = std::sync::mpsc::channel();
-        let (wait_finished_tx, wait_finished_rx) = std::sync::mpsc::channel();
+        let (write_requested_tx, write_requested_rx) = std::sync::mpsc::channel();
+        let (write_finished_tx, write_finished_rx) = std::sync::mpsc::channel();
 
         let thread = std::thread::spawn(move || {
-            let wait_once = || {
-                wait_started_tx.send(()).unwrap();
-                let res = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
-                wait_finished_tx.send(()).unwrap();
-                res
-            };
-
-            vec![wait_once(), wait_once(), wait_once()]
+            while let Ok(()) = write_requested_rx.recv() {
+                unistd::write(writefd, &[0])?;
+                write_finished_tx.send(()).unwrap();
+            }
+            Ok::<(), anyhow::Error>(())
         });
 
-        // Coordinate each phase explicitly so that the second wait has already
-        // timed out before we rearm the oneshot registration. Using fixed
-        // sleeps here is racy under scheduler delays.
-        wait_started_rx.recv().unwrap();
+        // Keep the waits on this thread and let a helper thread perform only
+        // the writes. In this test, each wait has the same expected result
+        // whether the corresponding write happens just before or during the
+        // wait, and the rearm still happens strictly after the second wait.
+        let request_write = || -> anyhow::Result<()> {
+            write_requested_tx.send(()).unwrap();
+            write_finished_rx.recv().unwrap();
+            Ok(())
+        };
 
         // Make the read-end readable.
-        unistd::write(writefd, &[0])?;
-        wait_finished_rx.recv().unwrap();
+        request_write()?;
+        let results0 = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
 
         // Wait again and make the read-end readable again.
-        wait_started_rx.recv().unwrap();
-        unistd::write(writefd, &[0])?;
+        request_write()?;
+        let results1 = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
 
-        // Wait for the second wait to time out.
-        wait_finished_rx.recv().unwrap();
-
-        wait_started_rx.recv().unwrap();
         epoll::epoll_ctl(
             epollfd,
             epoll::EpollOp::EpollCtlMod,
@@ -254,9 +252,12 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         )?;
 
         // Make the read-end readable.
-        unistd::write(writefd, &[0])?;
+        request_write()?;
+        let results2 = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
 
-        let results = thread.join().unwrap();
+        drop(write_requested_tx);
+        thread.join().unwrap()?;
+        let results = vec![results0, results1, results2];
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
