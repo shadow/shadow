@@ -2482,6 +2482,9 @@ const _: () = {
     ["Offset of field: linux_rlimit64::rlim_max"]
         [::core::mem::offset_of!(linux_rlimit64, rlim_max) - 8usize];
 };
+pub const LINUX_rseq_flags_RSEQ_FLAG_UNREGISTER: linux_rseq_flags = 1;
+pub const LINUX_rseq_flags_RSEQ_FLAG_SLICE_EXT_DEFAULT_ON: linux_rseq_flags = 2;
+pub type linux_rseq_flags = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct linux_rseq_slice_ctrl {

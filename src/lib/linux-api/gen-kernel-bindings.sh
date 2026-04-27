@@ -135,6 +135,7 @@ bindgen_flags+=("--allowlist-type=sched_attr")
 
 # rseq types
 bindgen_flags+=("--allowlist-type=rseq")
+bindgen_flags+=("--allowlist-type=rseq_flags")
 
 # in.h types
 bindgen_flags+=("--allowlist-type=sockaddr_in")
