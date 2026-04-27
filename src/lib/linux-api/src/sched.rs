@@ -36,6 +36,11 @@ bitflags::bitflags! {
     }
 }
 
+/// This is the ABI-stable kernel version of `struct sched_param`, as for
+/// syscall `sched_getparam`.
+#[allow(non_camel_case_types)]
+pub type sched_attr = bindings::linux_sched_attr;
+
 bitflags::bitflags! {
     /// The flags passed to the `clone` and `clone3` syscalls.
     /// While `clone` is documented as taking an i32 parameter for flags,
