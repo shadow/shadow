@@ -215,28 +215,41 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         )?;
 
         let timeout = Duration::from_millis(100);
+        let (wait_started_tx, wait_started_rx) = std::sync::mpsc::channel();
+        let (wait_finished_tx, wait_finished_rx) = std::sync::mpsc::channel();
 
         let thread = std::thread::spawn(move || {
+            let wait_once = || {
+                wait_started_tx.send(()).unwrap();
+                let res = do_epoll_wait(epollfd, timeout, /* do_read= */ false);
+                wait_finished_tx.send(()).unwrap();
+                res
+            };
+
             vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+                wait_once(),
+                wait_once(),
+                wait_once(),
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        // Coordinate each phase explicitly so that the second wait has already
+        // timed out before we rearm the oneshot registration. Using fixed
+        // sleeps here is racy under scheduler delays.
+        wait_started_rx.recv().unwrap();
 
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
+        wait_finished_rx.recv().unwrap();
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        wait_started_rx.recv().unwrap();
         unistd::write(writefd, &[0])?;
 
         // Wait for the second wait to time out.
-        std::thread::sleep(timeout);
+        wait_finished_rx.recv().unwrap();
 
+        wait_started_rx.recv().unwrap();
         epoll::epoll_ctl(
             epollfd,
             epoll::EpollOp::EpollCtlMod,
