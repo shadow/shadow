@@ -226,11 +226,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
                 res
             };
 
-            vec![
-                wait_once(),
-                wait_once(),
-                wait_once(),
-            ]
+            vec![wait_once(), wait_once(), wait_once()]
         });
 
         // Coordinate each phase explicitly so that the second wait has already
