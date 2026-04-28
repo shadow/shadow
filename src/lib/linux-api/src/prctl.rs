@@ -99,6 +99,20 @@ impl PrctlOp {
         Self::from_u32(bindings::LINUX_PR_RISCV_SET_ICACHE_FLUSH_CTX);
     pub const PR_PPC_GET_DEXCR: Self = Self::from_u32(bindings::LINUX_PR_PPC_GET_DEXCR);
     pub const PR_PPC_SET_DEXCR: Self = Self::from_u32(bindings::LINUX_PR_PPC_SET_DEXCR);
+    pub const PR_GET_SHADOW_STACK_STATUS: Self =
+        Self::from_u32(bindings::LINUX_PR_GET_SHADOW_STACK_STATUS);
+    pub const PR_SET_SHADOW_STACK_STATUS: Self =
+        Self::from_u32(bindings::LINUX_PR_SET_SHADOW_STACK_STATUS);
+    pub const PR_LOCK_SHADOW_STACK_STATUS: Self =
+        Self::from_u32(bindings::LINUX_PR_LOCK_SHADOW_STACK_STATUS);
+    pub const PR_TIMER_CREATE_RESTORE_IDS: Self =
+        Self::from_u32(bindings::LINUX_PR_TIMER_CREATE_RESTORE_IDS);
+    pub const PR_FUTEX_HASH: Self = Self::from_u32(bindings::LINUX_PR_FUTEX_HASH);
+    pub const PR_GET_CFI: Self = Self::from_u32(bindings::LINUX_PR_GET_CFI);
+    pub const PR_SET_CFI: Self = Self::from_u32(bindings::LINUX_PR_SET_CFI);
+    pub const PR_RSEQ_SLICE_EXTENSION: Self =
+        Self::from_u32(bindings::LINUX_PR_RSEQ_SLICE_EXTENSION);
+
     // NOTE: only add prctl options here (not prctl args), and add new entries to `to_str` below
 
     pub const fn new(val: i32) -> Self {
@@ -186,6 +200,14 @@ impl PrctlOp {
             Self::PR_RISCV_SET_ICACHE_FLUSH_CTX => Some("PR_RISCV_SET_ICACHE_FLUSH_CTX"),
             Self::PR_PPC_GET_DEXCR => Some("PR_PPC_GET_DEXCR"),
             Self::PR_PPC_SET_DEXCR => Some("PR_PPC_SET_DEXCR"),
+            Self::PR_GET_SHADOW_STACK_STATUS => Some("PR_GET_SHADOW_STACK_STATUS"),
+            Self::PR_SET_SHADOW_STACK_STATUS => Some("PR_SET_SHADOW_STACK_STATUS"),
+            Self::PR_LOCK_SHADOW_STACK_STATUS => Some("PR_LOCK_SHADOW_STACK_STATUS"),
+            Self::PR_TIMER_CREATE_RESTORE_IDS => Some("PR_TIMER_CREATE_RESTORE_IDS"),
+            Self::PR_FUTEX_HASH => Some("PR_FUTEX_HASH"),
+            Self::PR_GET_CFI => Some("PR_GET_CFI"),
+            Self::PR_SET_CFI => Some("PR_SET_CFI"),
+            Self::PR_RSEQ_SLICE_EXTENSION => Some("PR_RSEQ_SLICE_EXTENSION"),
             _ => None,
         }
     }

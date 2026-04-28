@@ -345,6 +345,7 @@ impl SyscallNum {
     pub const NR_io_pgetevents: Self = Self::new(bindings::LINUX___NR_io_pgetevents);
     pub const NR_rseq: Self = Self::new(bindings::LINUX___NR_rseq);
     pub const NR_uretprobe: Self = Self::new(bindings::LINUX___NR_uretprobe);
+    pub const NR_uprobe: Self = Self::new(bindings::LINUX___NR_uprobe);
     pub const NR_pidfd_send_signal: Self = Self::new(bindings::LINUX___NR_pidfd_send_signal);
     pub const NR_io_uring_setup: Self = Self::new(bindings::LINUX___NR_io_uring_setup);
     pub const NR_io_uring_enter: Self = Self::new(bindings::LINUX___NR_io_uring_enter);
@@ -387,6 +388,15 @@ impl SyscallNum {
     pub const NR_lsm_set_self_attr: Self = Self::new(bindings::LINUX___NR_lsm_set_self_attr);
     pub const NR_lsm_list_modules: Self = Self::new(bindings::LINUX___NR_lsm_list_modules);
     pub const NR_mseal: Self = Self::new(bindings::LINUX___NR_mseal);
+    pub const NR_setxattrat: Self = Self::new(bindings::LINUX___NR_setxattrat);
+    pub const NR_getxattrat: Self = Self::new(bindings::LINUX___NR_getxattrat);
+    pub const NR_listxattrat: Self = Self::new(bindings::LINUX___NR_listxattrat);
+    pub const NR_removexattrat: Self = Self::new(bindings::LINUX___NR_removexattrat);
+    pub const NR_open_tree_attr: Self = Self::new(bindings::LINUX___NR_open_tree_attr);
+    pub const NR_file_getattr: Self = Self::new(bindings::LINUX___NR_file_getattr);
+    pub const NR_file_setattr: Self = Self::new(bindings::LINUX___NR_file_setattr);
+    pub const NR_listns: Self = Self::new(bindings::LINUX___NR_listns);
+    pub const NR_rseq_slice_yield: Self = Self::new(bindings::LINUX___NR_rseq_slice_yield);
     // NOTE: add new entries to `to_str` below
 
     pub const fn new(val: u32) -> Self {
@@ -735,6 +745,7 @@ impl SyscallNum {
             Self::NR_io_pgetevents => "io_pgetevents",
             Self::NR_rseq => "rseq",
             Self::NR_uretprobe => "uretprobe",
+            Self::NR_uprobe => "uprobe",
             Self::NR_pidfd_send_signal => "pidfd_send_signal",
             Self::NR_io_uring_setup => "io_uring_setup",
             Self::NR_io_uring_enter => "io_uring_enter",
@@ -774,6 +785,15 @@ impl SyscallNum {
             Self::NR_lsm_set_self_attr => "NR_lsm_set_self_attr",
             Self::NR_lsm_list_modules => "NR_lsm_list_modules",
             Self::NR_mseal => "NR_mseal",
+            Self::NR_setxattrat => "NR_setxattrat",
+            Self::NR_getxattrat => "NR_getxattrat",
+            Self::NR_listxattrat => "NR_listxattrat",
+            Self::NR_removexattrat => "NR_removexattrat",
+            Self::NR_open_tree_attr => "NR_open_tree_attr",
+            Self::NR_file_getattr => "NR_file_getattr",
+            Self::NR_file_setattr => "NR_file_setattr",
+            Self::NR_listns => "NR_listns",
+            Self::NR_rseq_slice_yield => "NR_rseq_slice_yield",
             _ => return None,
         })
     }

@@ -69,6 +69,8 @@ pub enum FcntlCommand {
     F_SET_RW_HINT = bindings::LINUX_F_SET_RW_HINT,
     F_GET_FILE_RW_HINT = bindings::LINUX_F_GET_FILE_RW_HINT,
     F_SET_FILE_RW_HINT = bindings::LINUX_F_SET_FILE_RW_HINT,
+    F_GETDELEG = bindings::LINUX_F_GETDELEG,
+    F_SETDELEG = bindings::LINUX_F_SETDELEG,
 }
 
 /// Owner, as used with [`FcntlCommand::F_SETOWN_EX`] and [`FcntlCommand::F_GETOWN_EX`]
@@ -156,5 +158,6 @@ bitflags::bitflags! {
     pub struct ExecveAtFlags: i32 {
         const AT_EMPTY_PATH = const_conversions::i32_from_u32(bindings::LINUX_AT_EMPTY_PATH);
         const AT_SYMLINK_NOFOLLOW = const_conversions::i32_from_u32(bindings::LINUX_AT_SYMLINK_NOFOLLOW);
+        const AT_EXECVE_CHECK = const_conversions::i32_from_u32(bindings::LINUX_AT_EXECVE_CHECK);
     }
 }
