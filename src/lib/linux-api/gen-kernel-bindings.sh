@@ -131,9 +131,11 @@ bindgen_flags+=("--allowlist-type=__kernel_old_itimerval")
 
 # Sched types
 bindgen_flags+=("--allowlist-type=clone_args")
+bindgen_flags+=("--allowlist-type=sched_attr")
 
 # rseq types
 bindgen_flags+=("--allowlist-type=rseq")
+bindgen_flags+=("--allowlist-type=rseq_flags")
 
 # in.h types
 bindgen_flags+=("--allowlist-type=sockaddr_in")

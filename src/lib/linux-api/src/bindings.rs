@@ -1178,6 +1178,8 @@ pub const LINUX_SCHED_FLAG_UTIL_CLAMP_MAX: u32 = 64;
 pub const LINUX_SCHED_FLAG_KEEP_ALL: u32 = 24;
 pub const LINUX_SCHED_FLAG_UTIL_CLAMP: u32 = 96;
 pub const LINUX_SCHED_FLAG_ALL: u32 = 127;
+pub const LINUX_SCHED_ATTR_SIZE_VER0: u32 = 48;
+pub const LINUX_SCHED_ATTR_SIZE_VER1: u32 = 56;
 pub const LINUX_NSIG: u32 = 32;
 pub const LINUX_SIGHUP: u32 = 1;
 pub const LINUX_SIGINT: u32 = 2;
@@ -2092,6 +2094,7 @@ pub const LINUX_AF_XDP: u32 = 44;
 pub const LINUX_AF_MCTP: u32 = 45;
 pub type linux___u8 = ::core::ffi::c_uchar;
 pub type linux___u16 = ::core::ffi::c_ushort;
+pub type linux___s32 = ::core::ffi::c_int;
 pub type linux___u32 = ::core::ffi::c_uint;
 pub type linux___u64 = ::core::ffi::c_ulonglong;
 #[repr(C)]
@@ -2479,6 +2482,9 @@ const _: () = {
     ["Offset of field: linux_rlimit64::rlim_max"]
         [::core::mem::offset_of!(linux_rlimit64, rlim_max) - 8usize];
 };
+pub const LINUX_rseq_flags_RSEQ_FLAG_UNREGISTER: linux_rseq_flags = 1;
+pub const LINUX_rseq_flags_RSEQ_FLAG_SLICE_EXT_DEFAULT_ON: linux_rseq_flags = 2;
+pub type linux_rseq_flags = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct linux_rseq_slice_ctrl {
@@ -3528,6 +3534,45 @@ const _: () = {
         [::core::mem::offset_of!(linux_clone_args, set_tid_size) - 72usize];
     ["Offset of field: linux_clone_args::cgroup"]
         [::core::mem::offset_of!(linux_clone_args, cgroup) - 80usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_sched_attr {
+    pub size: linux___u32,
+    pub sched_policy: linux___u32,
+    pub sched_flags: linux___u64,
+    pub sched_nice: linux___s32,
+    pub sched_priority: linux___u32,
+    pub sched_runtime: linux___u64,
+    pub sched_deadline: linux___u64,
+    pub sched_period: linux___u64,
+    pub sched_util_min: linux___u32,
+    pub sched_util_max: linux___u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of linux_sched_attr"][::core::mem::size_of::<linux_sched_attr>() - 56usize];
+    ["Alignment of linux_sched_attr"][::core::mem::align_of::<linux_sched_attr>() - 8usize];
+    ["Offset of field: linux_sched_attr::size"]
+        [::core::mem::offset_of!(linux_sched_attr, size) - 0usize];
+    ["Offset of field: linux_sched_attr::sched_policy"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_policy) - 4usize];
+    ["Offset of field: linux_sched_attr::sched_flags"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_flags) - 8usize];
+    ["Offset of field: linux_sched_attr::sched_nice"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_nice) - 16usize];
+    ["Offset of field: linux_sched_attr::sched_priority"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_priority) - 20usize];
+    ["Offset of field: linux_sched_attr::sched_runtime"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_runtime) - 24usize];
+    ["Offset of field: linux_sched_attr::sched_deadline"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_deadline) - 32usize];
+    ["Offset of field: linux_sched_attr::sched_period"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_period) - 40usize];
+    ["Offset of field: linux_sched_attr::sched_util_min"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_util_min) - 48usize];
+    ["Offset of field: linux_sched_attr::sched_util_max"]
+        [::core::mem::offset_of!(linux_sched_attr, sched_util_max) - 52usize];
 };
 pub type linux_sigset_t = ::core::ffi::c_ulong;
 pub type linux___signalfn_t =

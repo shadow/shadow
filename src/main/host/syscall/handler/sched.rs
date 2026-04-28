@@ -1,8 +1,9 @@
 use std::mem::MaybeUninit;
 
+use bitflags::Flags;
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
-use linux_api::rseq::rseq;
+use linux_api::rseq::{rseq, rseq_flags};
 use log::warn;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -13,8 +14,6 @@ use crate::host::thread::ThreadId;
 
 // We always report that the thread is running on CPU 0, Node 0
 const CURRENT_CPU: u32 = 0;
-
-const RSEQ_FLAG_UNREGISTER: i32 = 1;
 
 impl SyscallHandler {
     log_syscall!(
@@ -123,11 +122,14 @@ impl SyscallHandler {
         let rseq_len = rseq_len.try_into().unwrap();
         let rseq_len = std::cmp::min(rseq_len, std::mem::size_of::<rseq>());
 
-        if flags & (!RSEQ_FLAG_UNREGISTER) != 0 {
-            warn!("Unrecognized rseq flags: {flags}");
+        let flags = rseq_flags::from_bits_retain(flags);
+        let unknown_flags = flags.unknown_bits();
+
+        if unknown_flags != 0 {
+            warn!("Unrecognized rseq flags: 0x{unknown_flags:x} in {flags:?}");
             return Err(Errno::EINVAL);
         }
-        if flags & RSEQ_FLAG_UNREGISTER != 0 {
+        if flags.contains(rseq_flags::RSEQ_FLAG_UNREGISTER) {
             // TODO:
             // * Validate that an rseq was previously registered
             // * Validate that `sig` matches registration
