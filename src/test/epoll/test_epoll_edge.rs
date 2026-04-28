@@ -182,7 +182,7 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
 
         // Two of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
-        results.sort_by(|lhs, rhs| lhs.events.len().cmp(&rhs.events.len()));
+        results.sort_by_key(|e| e.events.len());
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));

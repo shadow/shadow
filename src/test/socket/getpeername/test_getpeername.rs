@@ -981,8 +981,10 @@ fn check_getpeername_call(
 
     // if the pointers will be non-null, make sure the length is not greater than the actual data size
     // so that we don't segfault
-    if args.addr.is_some() && args.addr_len.is_some() {
-        assert!(args.addr_len.unwrap() <= addr_max_len);
+    if args.addr.is_some()
+        && let Some(addr_len) = args.addr_len
+    {
+        assert!(addr_len <= addr_max_len);
     }
 
     // will modify args.addr and args.addr_len

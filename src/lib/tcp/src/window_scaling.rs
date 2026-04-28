@@ -120,8 +120,10 @@ impl WindowScaling {
             return 0;
         }
 
-        if self.send_window_scale_shift.is_some() && self.recv_window_scale_shift.is_some() {
-            self.recv_window_scale_shift.unwrap()
+        if let Some(r) = self.recv_window_scale_shift
+            && self.send_window_scale_shift.is_some()
+        {
+            r
         } else {
             0
         }
@@ -132,8 +134,10 @@ impl WindowScaling {
             return 0;
         }
 
-        if self.send_window_scale_shift.is_some() && self.recv_window_scale_shift.is_some() {
-            self.send_window_scale_shift.unwrap()
+        if let Some(s) = self.send_window_scale_shift
+            && self.recv_window_scale_shift.is_some()
+        {
+            s
         } else {
             0
         }

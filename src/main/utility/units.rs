@@ -49,11 +49,12 @@ pub trait Prefix: Clone + Copy + Default + PartialEq + FromStr + Display + Debug
 }
 
 /// Common SI prefixes (including base-2 prefixes since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SiPrefix {
     Nano,
     Micro,
     Milli,
+    #[default]
     Base,
     Kilo,
     Kibi,
@@ -63,12 +64,6 @@ pub enum SiPrefix {
     Gibi,
     Tera,
     Tebi,
-}
-
-impl Default for SiPrefix {
-    fn default() -> Self {
-        Self::Base
-    }
 }
 
 impl FromStr for SiPrefix {
@@ -139,8 +134,9 @@ impl Prefix for SiPrefix {
 
 /// Common SI prefixes larger than the base unit (including base-2 prefixes
 /// since they're similar).
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum SiPrefixUpper {
+    #[default]
     Base,
     Kilo,
     Kibi,
@@ -150,12 +146,6 @@ pub enum SiPrefixUpper {
     Gibi,
     Tera,
     Tebi,
-}
-
-impl Default for SiPrefixUpper {
-    fn default() -> Self {
-        Self::Base
-    }
 }
 
 impl FromStr for SiPrefixUpper {
@@ -215,20 +205,15 @@ impl Prefix for SiPrefixUpper {
 /// Time units, which we pretend are prefixes for implementation simplicity. These
 /// contain both the prefix ("n", "u", "m") and the suffix ("sec", "min", "hr")
 /// and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum TimePrefix {
     Nano,
     Micro,
     Milli,
+    #[default]
     Sec,
     Min,
     Hour,
-}
-
-impl Default for TimePrefix {
-    fn default() -> Self {
-        Self::Sec
-    }
 }
 
 impl FromStr for TimePrefix {
@@ -283,17 +268,12 @@ impl Prefix for TimePrefix {
 /// Time units larger than the base unit, which we pretend are prefixes for
 /// implementation simplicity. These really contain the unit suffix ("sec",
 /// "min", "hr") and should be used with the [`Time`] unit.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum TimePrefixUpper {
+    #[default]
     Sec,
     Min,
     Hour,
-}
-
-impl Default for TimePrefixUpper {
-    fn default() -> Self {
-        Self::Sec
-    }
 }
 
 impl FromStr for TimePrefixUpper {
