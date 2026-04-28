@@ -135,6 +135,9 @@ const fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::EMULTIHOP => Some("EMULTIHOP"),
         Errno::EDOTDOT => Some("EDOTDOT"),
         Errno::EBADMSG => Some("EBADMSG"),
+        // Currently aliased to EBADMSG
+        #[expect(unreachable_patterns)]
+        Errno::EFSBADCRC => Some("EFSBADCRC"),
         Errno::EOVERFLOW => Some("EOVERFLOW"),
         Errno::ENOTUNIQ => Some("ENOTUNIQ"),
         Errno::EBADFD => Some("EBADFD"),
@@ -178,6 +181,9 @@ const fn errno_to_str(e: Errno) -> Option<&'static str> {
         Errno::EINPROGRESS => Some("EINPROGRESS"),
         Errno::ESTALE => Some("ESTALE"),
         Errno::EUCLEAN => Some("EUCLEAN"),
+        // Currently aliased to EUCLEAN
+        #[expect(unreachable_patterns)]
+        Errno::EFSCORRUPTED => Some("EFSCORRUPTED"),
         Errno::ENOTNAM => Some("ENOTNAM"),
         Errno::ENAVAIL => Some("ENAVAIL"),
         Errno::EISNAM => Some("EISNAM"),
@@ -356,6 +362,8 @@ impl Errno {
     pub const EDEADLOCK: Self = Self::from_u32_const(bindings::LINUX_EDEADLOCK);
     pub const EAGAIN: Self = Self::from_u32_const(bindings::LINUX_EAGAIN);
     pub const ENOTSUP: Self = Self::EOPNOTSUPP;
+    pub const EFSBADCRC: Self = Self::from_u32_const(bindings::LINUX_EFSBADCRC);
+    pub const EFSCORRUPTED: Self = Self::from_u32_const(bindings::LINUX_EFSCORRUPTED);
 
     /// From MAX_ERRNO in include/linux/err.h in kernel source. This doesn't
     /// seem to be exposed in the installed kernel headers from which we generate bindings.

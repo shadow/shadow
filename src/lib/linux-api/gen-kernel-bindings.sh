@@ -15,7 +15,7 @@ set -xeuo pipefail
 # Generally it makes sense to use the most recent stable version of the kernel,
 # since the ABI is stable. i.e. managed programs compiled against an older
 # version of the kernel headers should still get ABI-compatible definitions.
-LINUX_TAG=v6.12
+LINUX_TAG=v7.0
 
 LINUX_REPO=https://github.com/torvalds/linux.git
 ARCH=x86_64
@@ -89,6 +89,11 @@ do_bindgen() {
   bindgen "${bindgen_flags[@]}"
   ./rename.py < "$BUILDDIR/$output_basename" > src/"$output_basename"
   rustfmt src/"$output_basename"
+  # Experimentally, rustfmt sometimes produces output that doesn't
+  # pass `cargo fmt --check`. Warn the user that they'll need to run
+  # `cargo fmt` in that case. We don't run it ourselves, since it
+  # doesn't provide a way to only reformat a single file.
+  cargo fmt --check || echo 'You will need to run "cargo fmt"'
 }
 
 # The first invocation is for bindings-wrapper.h, which includes most
