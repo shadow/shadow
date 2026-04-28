@@ -92,9 +92,7 @@ fn test_uuid() {
 }
 
 fn test_tor_llcrypto() {
-    if unsafe { asm_util::cpuid::supports_rdrand() }
-        || unsafe { asm_util::cpuid::supports_rdseed() }
-    {
+    if asm_util::cpuid::supports_rdrand() || asm_util::cpuid::supports_rdseed() {
         // Really we want to know if the host platform supports trapping cpuid,
         // and only skip this test if it doesn't. We can't check that from here
         // within shadow, though, since shadow always reports that it doesn't

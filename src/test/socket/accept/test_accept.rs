@@ -1109,8 +1109,10 @@ fn check_accept_call(
 
     // if the pointer is non-null, make sure the provided size is not greater than the actual data
     // size so that we don't segfault
-    if args.addr.is_some() && args.addr_len.is_some() {
-        assert!(args.addr_len.unwrap() <= addr_max_len);
+    if args.addr.is_some()
+        && let Some(addr_len) = args.addr_len
+    {
+        assert!(addr_len <= addr_max_len);
     }
 
     let rv = match accept_fn {

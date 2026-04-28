@@ -195,9 +195,8 @@ impl<'a> Manager<'a> {
 
         // Determind whether we can and should emulate cpuid in the shim.
         let emulate_cpuid = {
-            // SAFETY: we don't support running in esoteric environments where cpuid isn't available.
-            let supports_rdrand = unsafe { asm_util::cpuid::supports_rdrand() };
-            let supports_rdseed = unsafe { asm_util::cpuid::supports_rdseed() };
+            let supports_rdrand = asm_util::cpuid::supports_rdrand();
+            let supports_rdseed = asm_util::cpuid::supports_rdseed();
             if !(supports_rdrand || supports_rdseed) {
                 // No need to emulate cpuid.
                 debug!(

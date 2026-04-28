@@ -522,8 +522,7 @@ fn emulate_cpuid(
     //   <https://www.felixcloutier.com/x86/cpuid>
     unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 1) }
         .unwrap_or_else(|e| panic!("Couldn't re-enable cpuid: {e:?}"));
-    // SAFETY: We don't support running in environments that don't have cpuid.
-    let mut res = unsafe { asm_util::cpuid::cpuid(leaf, Some(sub_leaf)) };
+    let mut res = asm_util::cpuid::cpuid(leaf, Some(sub_leaf));
     unsafe { linux_api::prctl::arch_prctl(ArchPrctlOp::ARCH_SET_CPUID, 0) }
         .unwrap_or_else(|e| panic!("Couldn't re-disable cpuid: {e:?}"));
 
