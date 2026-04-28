@@ -475,8 +475,7 @@ impl Host {
             return;
         }
 
-        // Reparent children, and collect IDs of children that are dead.
-        let mut orphaned_zombie_pids: Vec<ProcessId> = self
+        let child_pids: Vec<_> = self
             .processes
             .borrow()
             .iter()
@@ -486,20 +485,46 @@ impl Host {
                     // Not a child of the current process
                     return None;
                 }
-                process.set_parent_id(ProcessId::INIT);
-                let Some(z) = process.borrow_as_zombie() else {
-                    // Not a zombie
-                    return None;
-                };
-                if z.reaper(self).is_some() {
-                    // Not an orphan
-                    None
-                } else {
-                    // Is a zombie orphan child
-                    Some(*other_pid)
-                }
+                Some(*other_pid)
             })
             .collect();
+
+        // Reparent children, and collect IDs of children that are dead. Deliver
+        // parent-death signals before reparenting so the old parent PID is still
+        // reported in the siginfo payload. Since Shadow tracks parentage at the
+        // process level, this models parent-process death rather than the more
+        // specific parent-thread behavior Linux implements.
+        let mut orphaned_zombie_pids: Vec<ProcessId> = Vec::new();
+        for child_pid in child_pids {
+            let parent_death_signal = {
+                let Some(processrc) = self.process_borrow(child_pid) else {
+                    continue;
+                };
+                let process = processrc.borrow(&self.root);
+                process.parent_death_signal()
+            };
+
+            if let Some(signal) = parent_death_signal {
+                let siginfo = siginfo_t::new_for_kill(signal, pid.into(), 0);
+                let Some(processrc) = self.process_borrow(child_pid) else {
+                    continue;
+                };
+                let process = processrc.borrow(&self.root);
+                process.signal(self, None, &siginfo);
+            }
+
+            let is_zombie = {
+                let Some(processrc) = self.process_borrow(child_pid) else {
+                    continue;
+                };
+                let process = processrc.borrow(&self.root);
+                process.set_parent_id(ProcessId::INIT);
+                process.borrow_as_zombie().is_some()
+            };
+            if is_zombie {
+                orphaned_zombie_pids.push(child_pid);
+            }
+        }
 
         // Process we ran is a zombie; is it also an orphan?
         debug_assert!(died);

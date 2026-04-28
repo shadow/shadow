@@ -1,6 +1,59 @@
 use linux_api::prctl::ArchPrctlOp;
+use nix::poll::{PollFd, PollFlags, poll};
+use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal as NixSignal};
+use rustix::fd::AsRawFd;
+use rustix::io::{read, write};
+use rustix::pipe::pipe;
+use std::sync::atomic::{AtomicI32, Ordering};
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::{assert_with_errno, set};
+
+static PARENT_DEATH_SIGNAL_WRITE_FD: AtomicI32 = AtomicI32::new(-1);
+static PARENT_DEATH_SIGNAL_NUMBER: AtomicI32 = AtomicI32::new(0);
+static PARENT_DEATH_SIGNAL_SENDER: AtomicI32 = AtomicI32::new(0);
+
+extern "C" fn parent_death_signal_handler(
+    signal: libc::c_int,
+    info: *mut libc::siginfo_t,
+    _ctx: *mut libc::c_void,
+) {
+    PARENT_DEATH_SIGNAL_NUMBER.store(signal, Ordering::SeqCst);
+
+    let sender = if info.is_null() {
+        0
+    } else {
+        unsafe { (*info).si_pid() }
+    };
+    PARENT_DEATH_SIGNAL_SENDER.store(sender, Ordering::SeqCst);
+
+    let fd = PARENT_DEATH_SIGNAL_WRITE_FD.load(Ordering::SeqCst);
+    if fd >= 0 {
+        let byte = [1u8];
+        let _ = unsafe { libc::write(fd, byte.as_ptr().cast(), byte.len()) };
+    }
+}
+
+fn wait_for_parent_death_signal(fd: libc::c_int) -> Result<(), String> {
+    let mut poll_fds = [PollFd::new(fd, PollFlags::POLLIN)];
+
+    loop {
+        match poll(&mut poll_fds, 2000) {
+            Ok(0) => return Err("Timed out waiting for parent-death signal".into()),
+            Ok(_) => {
+                let events = poll_fds[0].revents().unwrap_or(PollFlags::empty());
+                if events.contains(PollFlags::POLLIN) {
+                    return Ok(());
+                }
+
+                return Err(format!(
+                    "Unexpected poll events while waiting for signal: {events:?}"
+                ));
+            }
+            Err(nix::errno::Errno::EINTR) => continue,
+            Err(err) => return Err(format!("poll failed while waiting for signal: {err}")),
+        }
+    }
+}
 
 fn main() -> Result<(), String> {
     // should we restrict the tests we run?
@@ -38,6 +91,16 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new(
             "test_tid_addr",
             test_tid_addr,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_parent_death_signal",
+            test_parent_death_signal,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
+            "test_parent_death_signal_delivery",
+            test_parent_death_signal_delivery,
             set![TestEnv::Libc, TestEnv::Shadow],
         ),
         test_utils::ShadowTest::new("test_name", test_name, set![TestEnv::Libc, TestEnv::Shadow]),
@@ -87,6 +150,118 @@ fn test_tid_addr() -> Result<(), String> {
         // `black_box` aren't enough)
         println!("{}", unsafe { *addr });
     }
+
+    Ok(())
+}
+
+fn test_parent_death_signal() -> Result<(), String> {
+    let mut signal = -1;
+
+    assert_with_errno!(unsafe { libc::prctl(libc::PR_GET_PDEATHSIG, &mut signal) } == 0);
+    assert_eq!(signal, 0);
+
+    assert_with_errno!(unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) } == 0);
+    assert_with_errno!(unsafe { libc::prctl(libc::PR_GET_PDEATHSIG, &mut signal) } == 0);
+    assert_eq!(signal, libc::SIGTERM);
+
+    assert_with_errno!(unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, 0) } == 0);
+    assert_with_errno!(unsafe { libc::prctl(libc::PR_GET_PDEATHSIG, &mut signal) } == 0);
+    assert_eq!(signal, 0);
+
+    Ok(())
+}
+
+fn test_parent_death_signal_delivery() -> Result<(), String> {
+    let (ready_reader, ready_writer) = pipe().unwrap();
+    let (result_reader, result_writer) = pipe().unwrap();
+
+    let supervisor_pid = unsafe { libc::fork() };
+    assert_with_errno!(supervisor_pid >= 0);
+
+    if supervisor_pid == 0 {
+        let worker_pid = unsafe { libc::fork() };
+        if worker_pid < 0 {
+            unsafe { libc::_exit(10) };
+        }
+
+        if worker_pid == 0 {
+            let expected_parent_pid = unsafe { libc::getppid() };
+            let (signal_reader, signal_writer) = pipe().unwrap();
+            PARENT_DEATH_SIGNAL_WRITE_FD.store(signal_writer.as_raw_fd(), Ordering::SeqCst);
+            PARENT_DEATH_SIGNAL_NUMBER.store(0, Ordering::SeqCst);
+            PARENT_DEATH_SIGNAL_SENDER.store(0, Ordering::SeqCst);
+
+            let action = SigAction::new(
+                SigHandler::SigAction(parent_death_signal_handler),
+                SaFlags::SA_SIGINFO,
+                SigSet::empty(),
+            );
+            assert!(unsafe { nix::sys::signal::sigaction(NixSignal::SIGUSR1, &action) }.is_ok());
+
+            assert_eq!(
+                unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGUSR1) },
+                0
+            );
+
+            let mut configured_signal = -1;
+            assert_eq!(
+                unsafe { libc::prctl(libc::PR_GET_PDEATHSIG, &mut configured_signal) },
+                0
+            );
+            assert_eq!(configured_signal, libc::SIGUSR1);
+
+            assert_eq!(write(&ready_writer, &[1]), Ok(1));
+            drop(ready_writer);
+
+            let status = match wait_for_parent_death_signal(signal_reader.as_raw_fd()) {
+                Ok(()) => {
+                    let mut byte = [0];
+                    let read_result = read(&signal_reader, &mut byte);
+                    if read_result == Ok(1)
+                        && PARENT_DEATH_SIGNAL_NUMBER.load(Ordering::SeqCst) == libc::SIGUSR1
+                        && PARENT_DEATH_SIGNAL_SENDER.load(Ordering::SeqCst) == expected_parent_pid
+                    {
+                        0
+                    } else {
+                        1
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    1
+                }
+            };
+
+            PARENT_DEATH_SIGNAL_WRITE_FD.store(-1, Ordering::SeqCst);
+
+            let _ = write(&result_writer, &[status]);
+            unsafe { libc::_exit(status.into()) };
+        }
+
+        drop(ready_writer);
+        drop(result_writer);
+
+        let mut ready = [0];
+        match read(&ready_reader, &mut ready) {
+            Ok(1) if ready[0] == 1 => unsafe { libc::_exit(0) },
+            _ => unsafe { libc::_exit(11) },
+        }
+    }
+
+    drop(ready_reader);
+    drop(ready_writer);
+    drop(result_writer);
+
+    let mut wait_status = 0;
+    assert_with_errno!(
+        unsafe { libc::waitpid(supervisor_pid, &mut wait_status, 0) } == supervisor_pid
+    );
+    assert!(libc::WIFEXITED(wait_status));
+    assert_eq!(libc::WEXITSTATUS(wait_status), 0);
+
+    let mut result = [255];
+    assert_eq!(read(&result_reader, &mut result), Ok(1));
+    assert_eq!(result[0], 0);
 
     Ok(())
 }
