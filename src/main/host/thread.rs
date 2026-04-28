@@ -7,6 +7,7 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 use linux_api::mman::{MapFlags, ProtFlags};
 use linux_api::posix_types::Pid;
+use linux_api::sched::Sched;
 use linux_api::signal::stack_t;
 use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
@@ -46,6 +47,8 @@ pub struct Thread {
     id: ThreadId,
     host_id: HostId,
     process_id: ProcessId,
+    sched_policy: Cell<std::ffi::c_int>,
+    sched_priority: Cell<std::ffi::c_int>,
     // If non-NULL, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
     tid_address: Cell<ForeignPtr<libc::pid_t>>,
@@ -210,6 +213,19 @@ impl Thread {
 
     pub fn id(&self) -> ThreadId {
         self.id
+    }
+
+    pub fn sched_policy(&self) -> std::ffi::c_int {
+        self.sched_policy.get()
+    }
+
+    pub fn sched_priority(&self) -> std::ffi::c_int {
+        self.sched_priority.get()
+    }
+
+    pub fn set_sched_attrs(&self, policy: std::ffi::c_int, priority: std::ffi::c_int) {
+        self.sched_policy.set(policy);
+        self.sched_priority.set(priority);
     }
 
     /// Returns whether the given thread is its thread group (aka process) leader.
@@ -452,6 +468,8 @@ impl Thread {
             id: tid,
             host_id: host.id(),
             process_id: pid,
+            sched_policy: Cell::new(Sched::SCHED_NORMAL.into()),
+            sched_priority: Cell::new(0),
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: shmalloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),

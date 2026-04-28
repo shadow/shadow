@@ -4,17 +4,82 @@ use bitflags::Flags;
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::{rseq, rseq_flags};
+use linux_api::sched::{SCHED_RESET_ON_FORK, Sched};
 use log::warn;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::ForeignArrayPtr;
-use crate::host::thread::ThreadId;
+use crate::host::thread::{Thread, ThreadId};
 
 // We always report that the thread is running on CPU 0, Node 0
 const CURRENT_CPU: u32 = 0;
 
+fn normalize_tid(ctx: &SyscallContext, tid: kernel_pid_t) -> Result<ThreadId, Errno> {
+    if tid == 0 {
+        return Ok(ctx.objs.thread.id());
+    }
+
+    let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
+    if !ctx.objs.host.has_thread(tid) {
+        return Err(Errno::ESRCH);
+    }
+
+    Ok(tid)
+}
+
+fn with_target_thread<T>(
+    ctx: &SyscallContext,
+    tid: kernel_pid_t,
+    f: impl FnOnce(&Thread) -> T,
+) -> Result<T, Errno> {
+    let target_tid = normalize_tid(ctx, tid)?;
+
+    if target_tid == ctx.objs.thread.id() {
+        return Ok(f(ctx.objs.thread));
+    }
+
+    let Some(thread_rc) = ctx.objs.host.thread_cloned_rc(target_tid) else {
+        return Err(Errno::ESRCH);
+    };
+    let thread = thread_rc.borrow(ctx.objs.host.root());
+    Ok(f(&thread))
+}
+
+fn base_policy(policy: std::ffi::c_int) -> Option<Sched> {
+    let policy = policy & !SCHED_RESET_ON_FORK;
+    Sched::try_from(policy).ok().filter(|policy| {
+        matches!(
+            policy,
+            Sched::SCHED_NORMAL
+                | Sched::SCHED_FIFO
+                | Sched::SCHED_RR
+                | Sched::SCHED_BATCH
+                | Sched::SCHED_IDLE
+        )
+    })
+}
+
+fn validate_sched_attrs(policy: std::ffi::c_int, priority: std::ffi::c_int) -> Result<(), Errno> {
+    match base_policy(policy) {
+        Some(Sched::SCHED_NORMAL | Sched::SCHED_BATCH | Sched::SCHED_IDLE) => {
+            if priority == 0 {
+                Ok(())
+            } else {
+                Err(Errno::EINVAL)
+            }
+        }
+        Some(Sched::SCHED_FIFO | Sched::SCHED_RR) => {
+            if (1..=99).contains(&priority) {
+                Ok(())
+            } else {
+                Err(Errno::EINVAL)
+            }
+        }
+        _ => Err(Errno::EINVAL),
+    }
+}
 impl SyscallHandler {
     log_syscall!(
         sched_getaffinity,
@@ -99,6 +164,88 @@ impl SyscallHandler {
         if mask[0] & 0x01 == 0 {
             return Err(Errno::EINVAL);
         }
+
+        Ok(())
+    }
+
+    log_syscall!(
+        sched_getparam,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+        /* param */ *const std::ffi::c_void,
+    );
+    pub fn sched_getparam(
+        ctx: &mut SyscallContext,
+        tid: kernel_pid_t,
+        param_ptr: ForeignPtr<libc::sched_param>,
+    ) -> Result<(), Errno> {
+        let priority = with_target_thread(ctx, tid, |thread| thread.sched_priority())?;
+        let param = libc::sched_param {
+            sched_priority: priority,
+        };
+
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .write(param_ptr, &param)?;
+
+        Ok(())
+    }
+
+    log_syscall!(
+        sched_getscheduler,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+    );
+    pub fn sched_getscheduler(
+        ctx: &mut SyscallContext,
+        tid: kernel_pid_t,
+    ) -> Result<std::ffi::c_int, Errno> {
+        with_target_thread(ctx, tid, |thread| thread.sched_policy())
+    }
+
+    log_syscall!(
+        sched_setparam,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+        /* param */ *const std::ffi::c_void,
+    );
+    pub fn sched_setparam(
+        ctx: &mut SyscallContext,
+        tid: kernel_pid_t,
+        param_ptr: ForeignPtr<libc::sched_param>,
+    ) -> Result<(), Errno> {
+        let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
+        let policy = with_target_thread(ctx, tid, |thread| thread.sched_policy())?;
+
+        validate_sched_attrs(policy, new_param.sched_priority)?;
+
+        with_target_thread(ctx, tid, |thread| {
+            thread.set_sched_attrs(policy, new_param.sched_priority);
+        })?;
+
+        Ok(())
+    }
+
+    log_syscall!(
+        sched_setscheduler,
+        /* rv */ i32,
+        /* pid */ kernel_pid_t,
+        /* policy */ std::ffi::c_int,
+        /* param */ *const std::ffi::c_void,
+    );
+    pub fn sched_setscheduler(
+        ctx: &mut SyscallContext,
+        tid: kernel_pid_t,
+        policy: std::ffi::c_int,
+        param_ptr: ForeignPtr<libc::sched_param>,
+    ) -> Result<(), Errno> {
+        let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
+        validate_sched_attrs(policy, new_param.sched_priority)?;
+
+        with_target_thread(ctx, tid, |thread| {
+            thread.set_sched_attrs(policy, new_param.sched_priority);
+        })?;
 
         Ok(())
     }
