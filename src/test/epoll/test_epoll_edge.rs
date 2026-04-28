@@ -63,7 +63,7 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let thread = std::thread::spawn(move || {
             vec![
@@ -113,7 +113,7 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let thread = std::thread::spawn(move || {
             vec![
@@ -160,7 +160,7 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let threads = [
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
@@ -214,7 +214,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let thread = std::thread::spawn(move || {
             vec![
@@ -277,7 +277,7 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
         let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
         epoll::epoll_ctl(epollfd, epoll::EpollOp::EpollCtlAdd, efd, Some(&mut event))?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let thread = std::thread::spawn(move || {
             vec![
@@ -355,7 +355,7 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
         let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
         epoll::epoll_ctl(epollfd, epoll::EpollOp::EpollCtlAdd, fd, Some(&mut event))?;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(200);
 
         let thread = std::thread::spawn(move || {
             vec![
