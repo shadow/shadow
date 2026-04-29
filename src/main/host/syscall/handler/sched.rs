@@ -80,6 +80,13 @@ fn validate_sched_attrs(policy: std::ffi::c_int, priority: std::ffi::c_int) -> R
         _ => Err(Errno::EINVAL),
     }
 }
+
+fn log_sched_stub_warning() {
+    warn_once_then_debug!(
+        "Scheduler policy/priority syscalls only track requested state; Shadow does not emulate Linux scheduling behavior"
+    );
+}
+
 impl SyscallHandler {
     log_syscall!(
         sched_getaffinity,
@@ -179,6 +186,8 @@ impl SyscallHandler {
         tid: kernel_pid_t,
         param_ptr: ForeignPtr<libc::sched_param>,
     ) -> Result<(), Errno> {
+        log_sched_stub_warning();
+
         let priority = with_target_thread(ctx, tid, |thread| thread.sched_priority())?;
         let param = libc::sched_param {
             sched_priority: priority,
@@ -201,6 +210,8 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
     ) -> Result<std::ffi::c_int, Errno> {
+        log_sched_stub_warning();
+
         with_target_thread(ctx, tid, |thread| thread.sched_policy())
     }
 
@@ -215,6 +226,8 @@ impl SyscallHandler {
         tid: kernel_pid_t,
         param_ptr: ForeignPtr<libc::sched_param>,
     ) -> Result<(), Errno> {
+        log_sched_stub_warning();
+
         let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
         let policy = with_target_thread(ctx, tid, |thread| thread.sched_policy())?;
 
@@ -240,6 +253,8 @@ impl SyscallHandler {
         policy: std::ffi::c_int,
         param_ptr: ForeignPtr<libc::sched_param>,
     ) -> Result<(), Errno> {
+        log_sched_stub_warning();
+
         let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
         validate_sched_attrs(policy, new_param.sched_priority)?;
 
