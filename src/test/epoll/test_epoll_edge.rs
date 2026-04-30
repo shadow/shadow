@@ -74,17 +74,21 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        ////// First epoll wait.
 
-        // Make the read-end readable.
+        // Wait for the epoll wait to block and make the read-end readable.
+        std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
+
+        ////// Second epoll wait.
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
 
         let results = thread.join().unwrap();
+
+        ////// Check results.
 
         // The first two waits should have received the event
         for res in &results[..2] {
@@ -123,17 +127,21 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        ////// First epoll wait.
 
-        // Make the read-end readable.
+        // Wait for the epoll wait to block and make the read-end readable.
+        std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0, 0])?;
+
+        ////// Second epoll wait (should time out).
 
         // Wait and read some, but not all, from the buffer.
         std::thread::sleep(timeout / 3);
         unistd::read(readfd, &mut [0])?;
 
         let results = thread.join().unwrap();
+
+        ////// Check results.
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
@@ -224,11 +232,13 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        ////// First epoll wait.
 
-        // Make the read-end readable.
+        // Wait for the epoll wait to block and make the read-end readable.
+        std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
+
+        ////// Second epoll wait (should time out).
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
@@ -237,6 +247,9 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         // Wait for the second wait to time out.
         std::thread::sleep(timeout);
 
+        ////// Third epoll wait.
+
+        // Rearm the edge-triggered epoll.
         epoll::epoll_ctl(
             epollfd,
             epoll::EpollOp::EpollCtlMod,
@@ -248,6 +261,8 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         unistd::write(writefd, &[0])?;
 
         let results = thread.join().unwrap();
+
+        ////// Check results.
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
@@ -289,21 +304,27 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 4);
+        ////// First epoll wait.
 
-        // Make the read-end readable.
+        // Wait for the epoll wait to block and make the read-end readable.
+        std::thread::sleep(timeout / 4);
         unistd::write(efd, &1u64.to_le_bytes())?;
+
+        ////// Second epoll wait.
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 4);
         unistd::write(efd, &1u64.to_le_bytes())?;
+
+        ////// Third epoll wait.
 
         // Wait again and make the read-end readable again, but with zero value this time.
         std::thread::sleep(timeout / 4);
         unistd::write(efd, &0u64.to_le_bytes())?;
 
         let results = thread.join().unwrap();
+
+        ////// Check results.
 
         // The first three waits should have received the event
         for res in &results[..3] {
@@ -366,17 +387,21 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
             ]
         });
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        ////// First epoll wait.
 
-        // Make the read-end readable.
+        // Wait for the epoll wait to block and make the read-end readable.
+        std::thread::sleep(timeout / 3);
         unistd::write(fd, buffer.as_slice())?;
+
+        ////// Second epoll wait.
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
         unistd::write(fd, buffer.as_slice())?;
 
         let results = thread.join().unwrap();
+
+        ////// Check results.
 
         // The first two waits should have received the event
         for res in &results[..2] {
