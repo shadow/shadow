@@ -4,7 +4,7 @@ use bitflags::Flags;
 use linux_api::errno::Errno;
 use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::{rseq, rseq_flags};
-use linux_api::sched::{SCHED_RESET_ON_FORK, Sched};
+use linux_api::sched::{SCHED_RESET_ON_FORK, Sched, sched_attr};
 use log::warn;
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -42,36 +42,31 @@ fn with_sched_target_thread<T>(
     Ok(f(&thread))
 }
 
-fn base_policy(policy: std::ffi::c_int) -> Option<Sched> {
-    let policy = policy & !SCHED_RESET_ON_FORK;
-    Sched::try_from(policy).ok().filter(|policy| {
-        matches!(
-            policy,
-            Sched::SCHED_NORMAL
-                | Sched::SCHED_FIFO
-                | Sched::SCHED_RR
-                | Sched::SCHED_BATCH
-                | Sched::SCHED_IDLE
-        )
-    })
+/// Parse a raw Linux scheduler policy and return the supported base policy together with the
+/// `SCHED_RESET_ON_FORK` flag.
+fn parse_sched_policy(policy: std::ffi::c_int) -> Option<(Sched, bool)> {
+    let reset_on_fork = (policy & SCHED_RESET_ON_FORK) != 0;
+    let policy = Sched::try_from(policy & !SCHED_RESET_ON_FORK).ok()?;
+
+    // Shadow only tracks the common policies handled by `sched_getparam` and friends.
+    match policy {
+        Sched::SCHED_NORMAL
+        | Sched::SCHED_FIFO
+        | Sched::SCHED_RR
+        | Sched::SCHED_BATCH
+        | Sched::SCHED_IDLE => Some((policy, reset_on_fork)),
+        _ => None,
+    }
 }
 
-fn validate_sched_attrs(policy: std::ffi::c_int, priority: std::ffi::c_int) -> Result<(), Errno> {
-    match base_policy(policy) {
-        Some(Sched::SCHED_NORMAL | Sched::SCHED_BATCH | Sched::SCHED_IDLE) => {
-            if priority == 0 {
-                Ok(())
-            } else {
-                Err(Errno::EINVAL)
-            }
-        }
-        Some(Sched::SCHED_FIFO | Sched::SCHED_RR) => {
-            if (1..=99).contains(&priority) {
-                Ok(())
-            } else {
-                Err(Errno::EINVAL)
-            }
-        }
+/// Validate the priority rules for the scheduler policies Shadow tracks.
+///
+/// Non-realtime policies use a fixed priority of 0, while Linux accepts priorities 1 through 99
+/// for `SCHED_FIFO` and `SCHED_RR`.
+fn validate_sched_attrs(policy: Sched, priority: std::ffi::c_int) -> Result<(), Errno> {
+    match policy {
+        Sched::SCHED_NORMAL | Sched::SCHED_BATCH | Sched::SCHED_IDLE if priority == 0 => Ok(()),
+        Sched::SCHED_FIFO | Sched::SCHED_RR if (1..=99).contains(&priority) => Ok(()),
         _ => Err(Errno::EINVAL),
     }
 }
@@ -174,24 +169,20 @@ impl SyscallHandler {
         sched_getparam,
         /* rv */ i32,
         /* pid */ kernel_pid_t,
-        /* param */ *const std::ffi::c_void,
+        /* param */ *const linux_api::sched::sched_attr,
     );
     pub fn sched_getparam(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
-        param_ptr: ForeignPtr<libc::sched_param>,
+        param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
         log_sched_stub_warning();
 
         let priority = with_sched_target_thread(ctx, tid, |thread| thread.sched_priority())?;
-        let param = libc::sched_param {
-            sched_priority: priority,
-        };
-
         ctx.objs
             .process
             .memory_borrow_mut()
-            .write(param_ptr, &param)?;
+            .write(param_ptr.cast::<std::ffi::c_int>(), &priority)?;
 
         Ok(())
     }
@@ -207,29 +198,41 @@ impl SyscallHandler {
     ) -> Result<std::ffi::c_int, Errno> {
         log_sched_stub_warning();
 
-        with_sched_target_thread(ctx, tid, |thread| thread.sched_policy())
+        with_sched_target_thread(ctx, tid, |thread| {
+            let mut policy = i32::from(thread.sched_policy());
+            if thread.sched_reset_on_fork() {
+                policy |= SCHED_RESET_ON_FORK;
+            }
+            policy
+        })
     }
 
     log_syscall!(
         sched_setparam,
         /* rv */ i32,
         /* pid */ kernel_pid_t,
-        /* param */ *const std::ffi::c_void,
+        /* param */ *const linux_api::sched::sched_attr,
     );
     pub fn sched_setparam(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
-        param_ptr: ForeignPtr<libc::sched_param>,
+        param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
         log_sched_stub_warning();
 
-        let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
-        let policy = with_sched_target_thread(ctx, tid, |thread| thread.sched_policy())?;
+        let new_priority = ctx
+            .objs
+            .process
+            .memory_borrow()
+            .read(param_ptr.cast::<std::ffi::c_int>())?;
+        let (policy, reset_on_fork) = with_sched_target_thread(ctx, tid, |thread| {
+            (thread.sched_policy(), thread.sched_reset_on_fork())
+        })?;
 
-        validate_sched_attrs(policy, new_param.sched_priority)?;
+        validate_sched_attrs(policy, new_priority)?;
 
         with_sched_target_thread(ctx, tid, |thread| {
-            thread.set_sched_attrs(policy, new_param.sched_priority);
+            thread.set_sched_attrs(policy, reset_on_fork, new_priority);
         })?;
 
         Ok(())
@@ -240,21 +243,28 @@ impl SyscallHandler {
         /* rv */ i32,
         /* pid */ kernel_pid_t,
         /* policy */ std::ffi::c_int,
-        /* param */ *const std::ffi::c_void,
+        /* param */ *const linux_api::sched::sched_attr,
     );
     pub fn sched_setscheduler(
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
         policy: std::ffi::c_int,
-        param_ptr: ForeignPtr<libc::sched_param>,
+        param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
         log_sched_stub_warning();
 
-        let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
-        validate_sched_attrs(policy, new_param.sched_priority)?;
+        let new_priority = ctx
+            .objs
+            .process
+            .memory_borrow()
+            .read(param_ptr.cast::<std::ffi::c_int>())?;
+        let Some((policy, reset_on_fork)) = parse_sched_policy(policy) else {
+            return Err(Errno::EINVAL);
+        };
+        validate_sched_attrs(policy, new_priority)?;
 
         with_sched_target_thread(ctx, tid, |thread| {
-            thread.set_sched_attrs(policy, new_param.sched_priority);
+            thread.set_sched_attrs(policy, reset_on_fork, new_priority);
         })?;
 
         Ok(())

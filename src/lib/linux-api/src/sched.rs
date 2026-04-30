@@ -115,6 +115,7 @@ impl clone_args {
 }
 
 unsafe impl shadow_pod::Pod for clone_args {}
+unsafe impl shadow_pod::Pod for sched_attr {}
 
 /// The "dumpable" state, as manipulated via the prctl operations `PR_SET_DUMPABLE` and
 /// `PR_GET_DUMPABLE`.

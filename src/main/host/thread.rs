@@ -7,7 +7,7 @@ use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 use linux_api::mman::{MapFlags, ProtFlags};
 use linux_api::posix_types::Pid;
-use linux_api::sched::Sched;
+use linux_api::sched::{Sched, SchedFlags, sched_attr};
 use linux_api::signal::stack_t;
 use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
@@ -47,8 +47,8 @@ pub struct Thread {
     id: ThreadId,
     host_id: HostId,
     process_id: ProcessId,
-    sched_policy: Cell<std::ffi::c_int>,
-    sched_priority: Cell<std::ffi::c_int>,
+    sched_policy: Cell<Sched>,
+    sched_attr: Cell<sched_attr>,
     // If non-NULL, this address should be cleared and futex-awoken on thread exit.
     // See set_tid_address(2).
     tid_address: Cell<ForeignPtr<libc::pid_t>>,
@@ -215,17 +215,35 @@ impl Thread {
         self.id
     }
 
-    pub fn sched_policy(&self) -> std::ffi::c_int {
+    pub fn sched_policy(&self) -> Sched {
         self.sched_policy.get()
     }
 
     pub fn sched_priority(&self) -> std::ffi::c_int {
-        self.sched_priority.get()
+        self.sched_attr
+            .get()
+            .sched_priority
+            .try_into()
+            .unwrap()
     }
 
-    pub fn set_sched_attrs(&self, policy: std::ffi::c_int, priority: std::ffi::c_int) {
+    pub fn sched_reset_on_fork(&self) -> bool {
+        let flags = self.sched_attr.get().sched_flags;
+        flags == u64::try_from(SchedFlags::SCHED_FLAG_RESET_ON_FORK.bits()).unwrap()
+    }
+
+    pub fn set_sched_attrs(&self, policy: Sched, reset_on_fork: bool, priority: std::ffi::c_int) {
         self.sched_policy.set(policy);
-        self.sched_priority.set(priority);
+
+        let mut sched_attr = self.sched_attr.get();
+        sched_attr.sched_policy = u32::try_from(i32::from(policy)).unwrap();
+        sched_attr.sched_flags = if reset_on_fork {
+            u64::try_from(SchedFlags::SCHED_FLAG_RESET_ON_FORK.bits()).unwrap()
+        } else {
+            0
+        };
+        sched_attr.sched_priority = priority.try_into().unwrap();
+        self.sched_attr.set(sched_attr);
     }
 
     /// Returns whether the given thread is its thread group (aka process) leader.
@@ -468,8 +486,19 @@ impl Thread {
             id: tid,
             host_id: host.id(),
             process_id: pid,
-            sched_policy: Cell::new(Sched::SCHED_NORMAL.into()),
-            sched_priority: Cell::new(0),
+            sched_policy: Cell::new(Sched::SCHED_NORMAL),
+            sched_attr: Cell::new(sched_attr {
+                size: u32::try_from(std::mem::size_of::<sched_attr>()).unwrap(),
+                sched_policy: u32::try_from(i32::from(Sched::SCHED_NORMAL)).unwrap(),
+                sched_flags: 0,
+                sched_nice: 0,
+                sched_priority: 0,
+                sched_runtime: 0,
+                sched_deadline: 0,
+                sched_period: 0,
+                sched_util_min: 0,
+                sched_util_max: 0,
+            }),
             tid_address: Cell::new(ForeignPtr::null()),
             shim_shared_memory: shmalloc(ThreadShmem::new(
                 &host.shim_shmem_lock_borrow().unwrap(),
