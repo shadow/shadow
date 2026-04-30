@@ -3,6 +3,8 @@
  * See LICENSE for licensing information
  */
 
+use std::sync::mpsc;
+
 fn main() {
     // The calling thread should be able to operate on itself both through the special tid 0 and
     // through an explicit thread id.
@@ -10,6 +12,10 @@ fn main() {
 
     // A thread should also be able to operate on itself after it has been created with pthreads.
     check_scheduler_state_in_thread();
+
+    // One thread should also be able to read and update the tracked scheduler state of a sibling
+    // thread in the same process.
+    check_scheduler_state_across_threads();
 
     println!("Success.");
 }
@@ -28,6 +34,23 @@ fn check_scheduler_state_in_thread() {
     })
     .join()
     .unwrap();
+}
+
+fn check_scheduler_state_across_threads() {
+    let (tid_sender, tid_receiver) = mpsc::channel();
+    let (done_sender, done_receiver) = mpsc::channel();
+
+    let thread = std::thread::spawn(move || {
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
+        tid_sender.send(tid).unwrap();
+        done_receiver.recv().unwrap();
+    });
+
+    let tid = tid_receiver.recv().unwrap();
+    check_scheduler_state_for(tid);
+
+    done_sender.send(()).unwrap();
+    thread.join().unwrap();
 }
 
 fn check_scheduler_state_for(tid: libc::pid_t) {

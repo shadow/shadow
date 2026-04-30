@@ -6,6 +6,7 @@ use linux_api::posix_types::kernel_pid_t;
 use linux_api::rseq::{rseq, rseq_flags};
 use linux_api::sched::{SCHED_RESET_ON_FORK, Sched};
 use log::warn;
+use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
@@ -16,33 +17,27 @@ use crate::host::thread::{Thread, ThreadId};
 // We always report that the thread is running on CPU 0, Node 0
 const CURRENT_CPU: u32 = 0;
 
-fn normalize_tid(ctx: &SyscallContext, tid: kernel_pid_t) -> Result<ThreadId, Errno> {
-    if tid == 0 {
-        return Ok(ctx.objs.thread.id());
-    }
-
-    let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
-    if !ctx.objs.host.has_thread(tid) {
-        return Err(Errno::ESRCH);
-    }
-
-    Ok(tid)
-}
-
-fn with_target_thread<T>(
+/// Run `f` on the thread targeted by the scheduler syscalls.
+///
+/// Linux treats a tid of 0 as the current thread for these calls. For any other tid, borrow the
+/// emulated thread through a cloned `RootedRc` and explicitly drop that clone before returning.
+fn with_sched_target_thread<T>(
     ctx: &SyscallContext,
     tid: kernel_pid_t,
     f: impl FnOnce(&Thread) -> T,
 ) -> Result<T, Errno> {
-    let target_tid = normalize_tid(ctx, tid)?;
-
-    if target_tid == ctx.objs.thread.id() {
+    let current_tid = kernel_pid_t::from(ctx.objs.thread.id());
+    if tid == 0 || tid == current_tid {
         return Ok(f(ctx.objs.thread));
     }
 
+    let target_tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
     let Some(thread_rc) = ctx.objs.host.thread_cloned_rc(target_tid) else {
         return Err(Errno::ESRCH);
     };
+    let thread_rc = ExplicitDropper::new(thread_rc, |value| {
+        value.explicit_drop(ctx.objs.host.root())
+    });
     let thread = thread_rc.borrow(ctx.objs.host.root());
     Ok(f(&thread))
 }
@@ -188,7 +183,7 @@ impl SyscallHandler {
     ) -> Result<(), Errno> {
         log_sched_stub_warning();
 
-        let priority = with_target_thread(ctx, tid, |thread| thread.sched_priority())?;
+        let priority = with_sched_target_thread(ctx, tid, |thread| thread.sched_priority())?;
         let param = libc::sched_param {
             sched_priority: priority,
         };
@@ -212,7 +207,7 @@ impl SyscallHandler {
     ) -> Result<std::ffi::c_int, Errno> {
         log_sched_stub_warning();
 
-        with_target_thread(ctx, tid, |thread| thread.sched_policy())
+        with_sched_target_thread(ctx, tid, |thread| thread.sched_policy())
     }
 
     log_syscall!(
@@ -229,11 +224,11 @@ impl SyscallHandler {
         log_sched_stub_warning();
 
         let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
-        let policy = with_target_thread(ctx, tid, |thread| thread.sched_policy())?;
+        let policy = with_sched_target_thread(ctx, tid, |thread| thread.sched_policy())?;
 
         validate_sched_attrs(policy, new_param.sched_priority)?;
 
-        with_target_thread(ctx, tid, |thread| {
+        with_sched_target_thread(ctx, tid, |thread| {
             thread.set_sched_attrs(policy, new_param.sched_priority);
         })?;
 
@@ -258,7 +253,7 @@ impl SyscallHandler {
         let new_param = ctx.objs.process.memory_borrow().read(param_ptr)?;
         validate_sched_attrs(policy, new_param.sched_priority)?;
 
-        with_target_thread(ctx, tid, |thread| {
+        with_sched_target_thread(ctx, tid, |thread| {
             thread.set_sched_attrs(policy, new_param.sched_priority);
         })?;
 
