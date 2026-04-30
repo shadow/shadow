@@ -65,28 +65,37 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
 
         let timeout = Duration::from_millis(200);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        // Results from the epoll waits.
+        let mut results = Vec::new();
 
         ////// First epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
         std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
 
+        results.push(thread.join().unwrap());
+
         ////// Second epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
 
-        let results = thread.join().unwrap();
+        results.push(thread.join().unwrap());
+
+        ////// Third epoll wait (should time out).
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
+
+        results.push(thread.join().unwrap());
 
         ////// Check results.
 
@@ -119,27 +128,30 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
 
         let timeout = Duration::from_millis(200);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The second one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        // Results from the epoll waits.
+        let mut results = Vec::new();
 
         ////// First epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
         std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0, 0])?;
 
+        results.push(thread.join().unwrap());
+
         ////// Second epoll wait (should time out).
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait and read some, but not all, from the buffer.
         std::thread::sleep(timeout / 3);
         unistd::read(readfd, &mut [0])?;
 
-        let results = thread.join().unwrap();
+        results.push(thread.join().unwrap());
 
         ////// Check results.
 
@@ -224,21 +236,24 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
 
         let timeout = Duration::from_millis(200);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        // Results from the epoll waits.
+        let mut results = Vec::new();
 
         ////// First epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
         std::thread::sleep(timeout / 3);
         unistd::write(writefd, &[0])?;
 
+        results.push(thread.join().unwrap());
+
         ////// Second epoll wait (should time out).
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
@@ -247,7 +262,15 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         // Wait for the second wait to time out.
         std::thread::sleep(timeout);
 
+        results.push(thread.join().unwrap());
+
         ////// Third epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
+
+        // Wait for the epoll wait to block.
+        std::thread::sleep(timeout / 5);
 
         // Rearm the edge-triggered epoll.
         epoll::epoll_ctl(
@@ -260,7 +283,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
 
-        let results = thread.join().unwrap();
+        results.push(thread.join().unwrap());
 
         ////// Check results.
 
@@ -294,35 +317,48 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
 
         let timeout = Duration::from_millis(200);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        // Results from the epoll waits.
+        let mut results = Vec::new();
 
         ////// First epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
         std::thread::sleep(timeout / 4);
         unistd::write(efd, &1u64.to_le_bytes())?;
 
+        results.push(thread.join().unwrap());
+
         ////// Second epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 4);
         unistd::write(efd, &1u64.to_le_bytes())?;
 
+        results.push(thread.join().unwrap());
+
         ////// Third epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again, but with zero value this time.
         std::thread::sleep(timeout / 4);
         unistd::write(efd, &0u64.to_le_bytes())?;
 
-        let results = thread.join().unwrap();
+        results.push(thread.join().unwrap());
+
+        ////// Fourth epoll wait (should time out).
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
+
+        results.push(thread.join().unwrap());
 
         ////// Check results.
 
@@ -378,28 +414,37 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
 
         let timeout = Duration::from_millis(200);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        // Results from the epoll waits.
+        let mut results = Vec::new();
 
         ////// First epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
         std::thread::sleep(timeout / 3);
         unistd::write(fd, buffer.as_slice())?;
 
+        results.push(thread.join().unwrap());
+
         ////// Second epoll wait.
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
         std::thread::sleep(timeout / 3);
         unistd::write(fd, buffer.as_slice())?;
 
-        let results = thread.join().unwrap();
+        results.push(thread.join().unwrap());
+
+        ////// Third epoll wait (should time out).
+
+        let thread =
+            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
+
+        results.push(thread.join().unwrap());
 
         ////// Check results.
 
