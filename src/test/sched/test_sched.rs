@@ -4,8 +4,13 @@
  */
 
 fn main() {
+    // The calling thread should be able to operate on itself both through the special tid 0 and
+    // through an explicit thread id.
     check_scheduler_state();
+
+    // A thread should also be able to operate on itself after it has been created with pthreads.
     check_scheduler_state_in_thread();
+
     println!("Success.");
 }
 
