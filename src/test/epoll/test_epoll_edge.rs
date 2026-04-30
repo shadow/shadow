@@ -74,7 +74,7 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(writefd, &[0])?;
 
         results.push(thread.join().unwrap());
@@ -85,7 +85,7 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(writefd, &[0])?;
 
         results.push(thread.join().unwrap());
@@ -137,7 +137,7 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(writefd, &[0, 0])?;
 
         results.push(thread.join().unwrap());
@@ -148,7 +148,7 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait and read some, but not all, from the buffer.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::read(readfd, &mut [0])?;
 
         results.push(thread.join().unwrap());
@@ -189,13 +189,13 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
         ];
 
         // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
 
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 10);
         unistd::write(writefd, &[0])?;
 
         let mut results = threads.map(|t| t.join().unwrap());
@@ -245,7 +245,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(writefd, &[0])?;
 
         results.push(thread.join().unwrap());
@@ -256,7 +256,7 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(writefd, &[0])?;
 
         // Wait for the second wait to time out.
@@ -326,7 +326,7 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
-        std::thread::sleep(timeout / 4);
+        std::thread::sleep(timeout / 5);
         unistd::write(efd, &1u64.to_le_bytes())?;
 
         results.push(thread.join().unwrap());
@@ -337,7 +337,7 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 4);
+        std::thread::sleep(timeout / 5);
         unistd::write(efd, &1u64.to_le_bytes())?;
 
         results.push(thread.join().unwrap());
@@ -348,7 +348,7 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again, but with zero value this time.
-        std::thread::sleep(timeout / 4);
+        std::thread::sleep(timeout / 5);
         unistd::write(efd, &0u64.to_le_bytes())?;
 
         results.push(thread.join().unwrap());
@@ -423,7 +423,7 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait for the epoll wait to block and make the read-end readable.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(fd, buffer.as_slice())?;
 
         results.push(thread.join().unwrap());
@@ -434,7 +434,7 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
             std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false));
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        std::thread::sleep(timeout / 5);
         unistd::write(fd, buffer.as_slice())?;
 
         results.push(thread.join().unwrap());
