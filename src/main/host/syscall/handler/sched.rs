@@ -35,9 +35,8 @@ fn with_sched_target_thread<T>(
     let Some(thread_rc) = ctx.objs.host.thread_cloned_rc(target_tid) else {
         return Err(Errno::ESRCH);
     };
-    let thread_rc = ExplicitDropper::new(thread_rc, |value| {
-        value.explicit_drop(ctx.objs.host.root())
-    });
+    let thread_rc =
+        ExplicitDropper::new(thread_rc, |value| value.explicit_drop(ctx.objs.host.root()));
     let thread = thread_rc.borrow(ctx.objs.host.root());
     Ok(f(&thread))
 }

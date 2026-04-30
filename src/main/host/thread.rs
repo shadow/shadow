@@ -220,11 +220,7 @@ impl Thread {
     }
 
     pub fn sched_priority(&self) -> std::ffi::c_int {
-        self.sched_attr
-            .get()
-            .sched_priority
-            .try_into()
-            .unwrap()
+        self.sched_attr.get().sched_priority.try_into().unwrap()
     }
 
     pub fn sched_reset_on_fork(&self) -> bool {
