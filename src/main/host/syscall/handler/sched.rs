@@ -71,12 +71,6 @@ fn validate_sched_attrs(policy: Sched, priority: std::ffi::c_int) -> Result<(), 
     }
 }
 
-fn log_sched_stub_warning() {
-    warn_once_then_debug!(
-        "Scheduler policy/priority syscalls only track requested state; Shadow does not emulate Linux scheduling behavior"
-    );
-}
-
 impl SyscallHandler {
     log_syscall!(
         sched_getaffinity,
@@ -176,7 +170,9 @@ impl SyscallHandler {
         tid: kernel_pid_t,
         param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
-        log_sched_stub_warning();
+        warn_once_then_debug!(
+            "sched_getparam() only returns tracked scheduler state; Shadow does not emulate Linux scheduling behavior"
+        );
 
         let priority = with_sched_target_thread(ctx, tid, |thread| thread.sched_priority())?;
         ctx.objs
@@ -196,7 +192,9 @@ impl SyscallHandler {
         ctx: &mut SyscallContext,
         tid: kernel_pid_t,
     ) -> Result<std::ffi::c_int, Errno> {
-        log_sched_stub_warning();
+        warn_once_then_debug!(
+            "sched_getscheduler() only returns tracked scheduler state; Shadow does not emulate Linux scheduling behavior"
+        );
 
         with_sched_target_thread(ctx, tid, |thread| {
             let mut policy = i32::from(thread.sched_policy());
@@ -218,7 +216,9 @@ impl SyscallHandler {
         tid: kernel_pid_t,
         param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
-        log_sched_stub_warning();
+        warn_once_then_debug!(
+            "sched_setparam() only updates tracked scheduler state; Shadow does not emulate Linux scheduling behavior"
+        );
 
         let new_priority = ctx
             .objs
@@ -251,7 +251,9 @@ impl SyscallHandler {
         policy: std::ffi::c_int,
         param_ptr: ForeignPtr<sched_attr>,
     ) -> Result<(), Errno> {
-        log_sched_stub_warning();
+        warn_once_then_debug!(
+            "sched_setscheduler() only updates tracked scheduler state; Shadow does not emulate Linux scheduling behavior"
+        );
 
         let new_priority = ctx
             .objs
