@@ -54,7 +54,12 @@ fn parse_sched_policy(policy: std::ffi::c_int) -> Option<(Sched, bool)> {
         | Sched::SCHED_RR
         | Sched::SCHED_BATCH
         | Sched::SCHED_IDLE => Some((policy, reset_on_fork)),
-        _ => None,
+        // We don't emulate the runtime/deadline/period semantics required by deadline scheduling,
+        // so this scheduler stub can't safely track `SCHED_DEADLINE`.
+        Sched::SCHED_DEADLINE => None,
+        // `SCHED_EXT` delegates scheduling to a BPF-defined policy. Shadow has no equivalent
+        // execution model to track or report here.
+        Sched::SCHED_EXT => None,
     }
 }
 
