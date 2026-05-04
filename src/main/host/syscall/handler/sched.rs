@@ -41,28 +41,6 @@ fn with_sched_target_thread<T>(
     Ok(f(&thread))
 }
 
-/// Parse a raw Linux scheduler policy and return the supported base policy together with the
-/// `SCHED_RESET_ON_FORK` flag.
-fn parse_sched_policy(policy: std::ffi::c_int) -> Option<(Sched, bool)> {
-    let reset_on_fork = (policy & SCHED_RESET_ON_FORK) != 0;
-    let policy = Sched::try_from(policy & !SCHED_RESET_ON_FORK).ok()?;
-
-    // Shadow only tracks the common policies handled by `sched_getparam` and friends.
-    match policy {
-        Sched::SCHED_NORMAL
-        | Sched::SCHED_FIFO
-        | Sched::SCHED_RR
-        | Sched::SCHED_BATCH
-        | Sched::SCHED_IDLE => Some((policy, reset_on_fork)),
-        // We don't emulate the runtime/deadline/period semantics required by deadline scheduling,
-        // so this scheduler stub can't safely track `SCHED_DEADLINE`.
-        Sched::SCHED_DEADLINE => None,
-        // `SCHED_EXT` delegates scheduling to a BPF-defined policy. Shadow has no equivalent
-        // execution model to track or report here.
-        Sched::SCHED_EXT => None,
-    }
-}
-
 /// Validate the priority rules for the scheduler policies Shadow tracks.
 ///
 /// Non-realtime policies use a fixed priority of 0, while Linux accepts priorities 1 through 99
@@ -264,8 +242,26 @@ impl SyscallHandler {
             .process
             .memory_borrow()
             .read(param_ptr.cast::<std::ffi::c_int>())?;
-        let Some((policy, reset_on_fork)) = parse_sched_policy(policy) else {
-            return Err(Errno::EINVAL);
+        let reset_on_fork = (policy & SCHED_RESET_ON_FORK) != 0;
+        let policy = Sched::try_from(policy & !SCHED_RESET_ON_FORK).or(Err(Errno::EINVAL))?;
+        let policy = match policy {
+            Sched::SCHED_NORMAL
+            | Sched::SCHED_FIFO
+            | Sched::SCHED_RR
+            | Sched::SCHED_BATCH
+            | Sched::SCHED_IDLE => policy,
+            Sched::SCHED_DEADLINE => {
+                warn_once_then_debug!(
+                    "sched_setscheduler() rejects SCHED_DEADLINE because Shadow does not implement deadline scheduling semantics"
+                );
+                return Err(Errno::EINVAL);
+            }
+            Sched::SCHED_EXT => {
+                warn_once_then_debug!(
+                    "sched_setscheduler() rejects SCHED_EXT because Shadow does not implement BPF-defined scheduler semantics"
+                );
+                return Err(Errno::EINVAL);
+            }
         };
         validate_sched_attrs(policy, new_priority)?;
 
