@@ -146,24 +146,21 @@ static void _getaddrinfo_appendv6(struct addrinfo** head, struct addrinfo** tail
                                   in_port_t port) {
     if (add_tcp) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in6){
-            .sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_STREAM, (struct sockaddr*)sai,
-                            sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(head, tail, AF_INET6, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_udp) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in6){
-            .sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_DGRAM, (struct sockaddr*)sai,
-                            sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(head, tail, AF_INET6, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_raw) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
-        *sai = (struct sockaddr_in6){
-            .sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_RAW, (struct sockaddr*)sai,
-                            sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(head, tail, AF_INET6, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
     }
 }
 
@@ -287,7 +284,7 @@ static bool _shim_api_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
 }
 
 int shimc_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
-                         struct addrinfo** res) {
+                          struct addrinfo** res) {
     // Quoted text is from the man page.
 
     // "Either node or service, but not both, may be NULL."
