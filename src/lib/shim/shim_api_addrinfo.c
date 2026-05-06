@@ -164,6 +164,17 @@ static void _getaddrinfo_appendv6(struct addrinfo** head, struct addrinfo** tail
     }
 }
 
+// Returns the IPv4-mapped IPv6 address for the IPv4 address `addr`.
+static struct in6_addr _getaddrinfo_make_v4mapped_addr(uint32_t addr) {
+    static const unsigned char prefix[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
+    };
+    struct in6_addr mapped_addr = {0};
+    memcpy(mapped_addr.s6_addr, prefix, sizeof(prefix));
+    memcpy(&mapped_addr.s6_addr[sizeof(prefix)], &addr, sizeof(addr));
+    return mapped_addr;
+}
+
 // Looks for matching IPv4 addresses in /etc/hosts and them to the list
 // specified by `head` and `tail`.
 static void _getaddrinfo_add_matching_hosts_ipv4(struct addrinfo** head, struct addrinfo** tail,
@@ -403,27 +414,25 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
     }
 
     // "`node` specifies either a numerical network address..."
+    // Parse both families when needed so we can distinguish a wrong-family
+    // numeric address (EAI_ADDRFAMILY) from a nonnumeric string
+    // (EAI_NONAME with AI_NUMERICHOST).
+    const bool check_ipv6_numeric = add_ipv6 || hints->ai_family == AF_INET;
+    const bool check_ipv4_numeric = add_ipv4 || hints->ai_family == AF_INET6;
+
     struct in6_addr addr6;
-    const bool parsed_ipv6 = inet_pton(AF_INET6, node, &addr6) == 1;
+    const bool parsed_ipv6 = check_ipv6_numeric && inet_pton(AF_INET6, node, &addr6) == 1;
     if (parsed_ipv6 && add_ipv6) {
         _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &addr6, port);
     }
     uint32_t addr;
-    const bool parsed_ipv4 = inet_pton(AF_INET, node, &addr) == 1;
+    const bool parsed_ipv4 = check_ipv4_numeric && inet_pton(AF_INET, node, &addr) == 1;
     if (parsed_ipv4) {
         if (add_ipv4) {
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
         } else if (hints->ai_family == AF_INET6 && (hints->ai_flags & AI_V4MAPPED)) {
-            struct in6_addr mapped_addr = {
-                .s6_addr =
-                    {
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0xff, 0xff,
-                    },
-            };
-            memcpy(&mapped_addr.s6_addr[12], &addr, sizeof(addr));
-            _getaddrinfo_appendv6(
-                res, &tail, add_tcp, add_udp, add_raw, &mapped_addr, port);
+            struct in6_addr mapped_addr = _getaddrinfo_make_v4mapped_addr(addr);
+            _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &mapped_addr, port);
         }
     }
     // If we successfully parsed as a numeric address, there's no need to
@@ -432,6 +441,8 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
         return 0;
     }
     if (parsed_ipv4 || parsed_ipv6) {
+        // We recognized `node` as a numeric address, but it doesn't belong to
+        // an address family that this lookup is allowed to return.
         return EAI_ADDRFAMILY;
     }
     // "If  hints.ai_flags  contains the  AI_NUMERICHOST  flag,  then  node
