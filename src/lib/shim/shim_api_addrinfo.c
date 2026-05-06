@@ -88,8 +88,9 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
 // Creates an `addrinfo` pointing to `addr`, and adds it to the linked list
 // specified by `head` and `tail`. An empty list can be passed in by setting
 // `*head` and `*tail` to NULL.
-static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, int family,
-                                int socktype, struct sockaddr* addr, socklen_t addrlen) {
+static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, int ai_flags,
+                                int family, int socktype, struct sockaddr* addr,
+                                socklen_t addrlen) {
     int protocol = 0;
     if (socktype == SOCK_DGRAM) {
         protocol = IPPROTO_UDP;
@@ -101,7 +102,7 @@ static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, 
         protocol = 0;
     }
     struct addrinfo* new_tail = malloc(sizeof(*new_tail));
-    *new_tail = (struct addrinfo){.ai_flags = 0,
+    *new_tail = (struct addrinfo){.ai_flags = ai_flags,
                                   .ai_family = family,
                                   .ai_socktype = socktype,
                                   .ai_protocol = protocol,
@@ -125,17 +126,19 @@ static void _getaddrinfo_appendv4(struct addrinfo** head, struct addrinfo** tail
     if (add_tcp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, AF_INET, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, 0, AF_INET, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_udp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, AF_INET, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, 0, AF_INET, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_raw) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, AF_INET, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(head, tail, 0, AF_INET, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
     }
 }
 
@@ -143,24 +146,27 @@ static void _getaddrinfo_appendv4(struct addrinfo** head, struct addrinfo** tail
 // port for each requested socket type.
 static void _getaddrinfo_appendv6(struct addrinfo** head, struct addrinfo** tail, bool add_tcp,
                                   bool add_udp, bool add_raw, const struct in6_addr* addr6,
-                                  in_port_t port) {
+                                  in_port_t port, int ai_flags) {
     if (add_tcp) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
         *sai =
             (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_udp) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
         *sai =
             (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_raw) {
         struct sockaddr_in6* sai = malloc(sizeof(*sai));
         *sai =
             (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
-        _getaddrinfo_append(head, tail, AF_INET6, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
     }
 }
 
@@ -423,7 +429,7 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
     struct in6_addr addr6;
     const bool parsed_ipv6 = check_ipv6_numeric && inet_pton(AF_INET6, node, &addr6) == 1;
     if (parsed_ipv6 && add_ipv6) {
-        _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &addr6, port);
+        _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &addr6, port, 0);
     }
     uint32_t addr;
     const bool parsed_ipv4 = check_ipv4_numeric && inet_pton(AF_INET, node, &addr) == 1;
@@ -432,7 +438,8 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
         } else if (hints->ai_family == AF_INET6 && (hints->ai_flags & AI_V4MAPPED)) {
             struct in6_addr mapped_addr = _getaddrinfo_make_v4mapped_addr(addr);
-            _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &mapped_addr, port);
+            _getaddrinfo_appendv6(
+                res, &tail, add_tcp, add_udp, add_raw, &mapped_addr, port, AI_V4MAPPED);
         }
     }
     // If we successfully parsed as a numeric address, there's no need to

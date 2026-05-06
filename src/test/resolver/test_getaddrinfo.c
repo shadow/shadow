@@ -302,6 +302,31 @@ void test_numeric_host() {
     hints = (struct addrinfo){.ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
     assert_getaddrinfo_rv_equals(getaddrinfo("::1", NULL, &hints, &res), EAI_ADDRFAMILY);
 
+    // Likewise, a numeric IPv4 literal should fail when only IPv6 results are
+    // allowed and AI_V4MAPPED is not set.
+    hints = (struct addrinfo){.ai_family = AF_INET6, .ai_socktype = SOCK_STREAM};
+    assert_getaddrinfo_rv_equals(getaddrinfo("127.0.0.1", NULL, &hints, &res), EAI_ADDRFAMILY);
+
+    // With AI_V4MAPPED, the same IPv4 literal should be returned as an
+    // IPv4-mapped IPv6 address.
+    hints = (struct addrinfo){
+        .ai_family = AF_INET6, .ai_socktype = SOCK_STREAM, .ai_flags = AI_V4MAPPED};
+    assert_getaddrinfo_rv_equals(getaddrinfo("127.0.0.1", NULL, &hints, &res), 0);
+    struct in6_addr mapped_addr6;
+    g_assert_cmpint(inet_pton(AF_INET6, "::ffff:127.0.0.1", &mapped_addr6), ==, 1);
+    const struct sockaddr_in6 expected_mapped_sockaddr_in6 = {
+        .sin6_family = AF_INET6, .sin6_addr = mapped_addr6};
+    struct addrinfo expected_mapped_addrinfo6 = {
+        .ai_flags = AI_V4MAPPED,
+        .ai_family = AF_INET6,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP,
+        .ai_addrlen = sizeof(expected_mapped_sockaddr_in6),
+        .ai_addr = (struct sockaddr*)&expected_mapped_sockaddr_in6,
+    };
+    assert_addrinfo_equals(res, &expected_mapped_addrinfo6);
+    freeaddrinfo(res);
+
     // Error on nonnumeric node with AI_NUMERICHOST
     hints = (struct addrinfo){.ai_flags = AI_NUMERICHOST};
     assert_getaddrinfo_rv_equals(
