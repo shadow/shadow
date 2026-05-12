@@ -546,3 +546,17 @@ impl TryFrom<SyscallReg> for linux_api::resource::Resource {
         Ok(value)
     }
 }
+
+impl TryFrom<SyscallReg> for linux_api::fcntl::FcntlCommand {
+    type Error = ();
+
+    fn try_from(value: SyscallReg) -> Result<Self, Self::Error> {
+        let Ok(value) = u32::try_from(u64::from(value)) else {
+            return Err(());
+        };
+        let Ok(value) = linux_api::fcntl::FcntlCommand::try_from(value) else {
+            return Err(());
+        };
+        Ok(value)
+    }
+}

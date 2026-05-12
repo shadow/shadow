@@ -214,11 +214,12 @@ safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
-// nix still uses an old bitflags version which isn't supported by `bitflags_impl`
+simple_debug_impl!(linux_api::fcntl::FcntlCommand);
 simple_debug_impl!(linux_api::resource::Resource);
 simple_debug_impl!(linux_api::sched::CloneFlags);
 simple_debug_impl!(linux_api::time::ITimerId);
 simple_debug_impl!(linux_api::time::ClockId);
+// nix still uses an old bitflags version which isn't supported by `bitflags_impl`
 simple_debug_impl!(nix::sys::stat::Mode);
 simple_debug_impl!(nix::sys::eventfd::EfdFlags);
 simple_debug_impl!(nix::sys::socket::MsgFlags);
