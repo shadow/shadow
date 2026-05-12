@@ -508,6 +508,7 @@ impl SyscallHandler {
             SyscallNum::NR_timerfd_settime => handle!(timerfd_settime),
             SyscallNum::NR_tkill => handle!(tkill),
             SyscallNum::NR_uname => handle!(uname),
+            SyscallNum::NR_unlink => handle!(unlink),
             SyscallNum::NR_unlinkat => handle!(unlinkat),
             SyscallNum::NR_utimensat => handle!(utimensat),
             SyscallNum::NR_vfork => handle!(vfork),
@@ -585,7 +586,6 @@ impl SyscallHandler {
             | SyscallNum::NR_statfs
             | SyscallNum::NR_symlink
             | SyscallNum::NR_truncate
-            | SyscallNum::NR_unlink
             | SyscallNum::NR_utime
             | SyscallNum::NR_utimes => {
                 log::trace!("Native syscall {} ({})", syscall_name, ctx.args.number);
