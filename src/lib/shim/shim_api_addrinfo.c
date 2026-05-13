@@ -420,19 +420,13 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
     }
 
     // "`node` specifies either a numerical network address..."
-    // Parse both families when needed so we can distinguish a wrong-family
-    // numeric address (EAI_ADDRFAMILY) from a nonnumeric string
-    // (EAI_NONAME with AI_NUMERICHOST).
-    const bool check_ipv6_numeric = add_ipv6 || hints->ai_family == AF_INET;
-    const bool check_ipv4_numeric = add_ipv4 || hints->ai_family == AF_INET6;
-
     struct in6_addr addr6;
-    const bool parsed_ipv6 = check_ipv6_numeric && inet_pton(AF_INET6, node, &addr6) == 1;
+    const bool parsed_ipv6 = inet_pton(AF_INET6, node, &addr6) == 1;
     if (parsed_ipv6 && add_ipv6) {
         _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &addr6, port, 0);
     }
     uint32_t addr;
-    const bool parsed_ipv4 = check_ipv4_numeric && inet_pton(AF_INET, node, &addr) == 1;
+    const bool parsed_ipv4 = inet_pton(AF_INET, node, &addr) == 1;
     if (parsed_ipv4) {
         if (add_ipv4) {
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
