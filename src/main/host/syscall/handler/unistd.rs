@@ -988,4 +988,16 @@ impl SyscallHandler {
         process.process.set_current_working_dir(newcwd);
         Ok(())
     }
+
+    log_syscall!(
+        unlink,
+        /* rv */ std::ffi::c_int,
+        /* path */ SyscallStringArg,
+    );
+    pub fn unlink(
+        _ctx: &mut SyscallContext,
+        _path: ForeignPtr<std::ffi::c_char>,
+    ) -> Result<(), SyscallError> {
+        Err(SyscallError::Native)
+    }
 }
