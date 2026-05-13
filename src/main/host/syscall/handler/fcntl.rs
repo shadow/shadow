@@ -13,7 +13,7 @@ impl SyscallHandler {
         fcntl,
         /* rv */ std::ffi::c_long,
         /* fd */ std::ffi::c_uint,
-        /* cmd */ std::ffi::c_uint,
+        /* cmd */ FcntlCommand,
         /* arg */ SyscallNonDeterministicArg<std::ffi::c_ulong>,
     );
     pub fn fcntl(
