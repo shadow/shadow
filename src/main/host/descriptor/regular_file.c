@@ -826,6 +826,12 @@ int regularfile_flock(RegularFile* file, int operation) {
 
     trace("RegularFile %p flock os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
+    // This is incorrect, since it has the shadow process take the lock.
+    // See <https://github.com/shadow/shadow/issues/2258>.
+    // To avoid excess log noise in simulations that use this, we use
+    // `warn_once_then_debug` in the rust syscall handler rather than logging a
+    // warning here. (We don't have an implementation of `warn_once_then_debug`
+    // for C).
     int result = flock(_regularfile_getOSBackedFD(file), operation);
     return (result < 0) ? -errno : result;
 }

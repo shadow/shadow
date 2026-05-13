@@ -124,6 +124,10 @@ impl SyscallHandler {
         /* cmd */ std::ffi::c_uint
     );
     pub fn flock(ctx: &mut SyscallContext) -> SyscallResult {
+        warn_once_then_debug!(
+            "Using flock implementation that assumes no lock contention. \
+            See https://github.com/shadow/shadow/issues/2258"
+        );
         Self::legacy_syscall(cshadow::syscallhandler_flock, ctx)
     }
 
