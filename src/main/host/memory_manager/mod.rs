@@ -659,7 +659,7 @@ impl MemoryManager {
         }
     }
 
-    fn do_munmap(
+    pub(crate) fn do_munmap(
         &mut self,
         ctx: &ThreadContext,
         addr: ForeignPtr<u8>,
