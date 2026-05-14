@@ -88,8 +88,9 @@ static int _getaddrinfo_service(in_port_t* port, const char* service,
 // Creates an `addrinfo` pointing to `addr`, and adds it to the linked list
 // specified by `head` and `tail`. An empty list can be passed in by setting
 // `*head` and `*tail` to NULL.
-static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, int socktype,
-                                struct sockaddr* addr, socklen_t addrlen) {
+static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, int ai_flags,
+                                int family, int socktype, struct sockaddr* addr,
+                                socklen_t addrlen) {
     int protocol = 0;
     if (socktype == SOCK_DGRAM) {
         protocol = IPPROTO_UDP;
@@ -101,8 +102,8 @@ static void _getaddrinfo_append(struct addrinfo** head, struct addrinfo** tail, 
         protocol = 0;
     }
     struct addrinfo* new_tail = malloc(sizeof(*new_tail));
-    *new_tail = (struct addrinfo){.ai_flags = 0,
-                                  .ai_family = AF_INET,
+    *new_tail = (struct addrinfo){.ai_flags = ai_flags,
+                                  .ai_family = family,
                                   .ai_socktype = socktype,
                                   .ai_protocol = protocol,
                                   .ai_addrlen = addrlen,
@@ -125,18 +126,59 @@ static void _getaddrinfo_appendv4(struct addrinfo** head, struct addrinfo** tail
     if (add_tcp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, 0, AF_INET, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_udp) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(
+            head, tail, 0, AF_INET, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
     }
     if (add_raw) {
         struct sockaddr_in* sai = malloc(sizeof(*sai));
         *sai = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = port, .sin_addr = {s_addr}};
-        _getaddrinfo_append(head, tail, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
+        _getaddrinfo_append(head, tail, 0, AF_INET, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
     }
+}
+
+// IPv6 wrapper for _getaddrinfo_append. Appends an entry for the address and
+// port for each requested socket type.
+static void _getaddrinfo_appendv6(struct addrinfo** head, struct addrinfo** tail, bool add_tcp,
+                                  bool add_udp, bool add_raw, const struct in6_addr* addr6,
+                                  in_port_t port, int ai_flags) {
+    if (add_tcp) {
+        struct sockaddr_in6* sai = malloc(sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_STREAM, (struct sockaddr*)sai, sizeof(*sai));
+    }
+    if (add_udp) {
+        struct sockaddr_in6* sai = malloc(sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_DGRAM, (struct sockaddr*)sai, sizeof(*sai));
+    }
+    if (add_raw) {
+        struct sockaddr_in6* sai = malloc(sizeof(*sai));
+        *sai =
+            (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_port = port, .sin6_addr = *addr6};
+        _getaddrinfo_append(
+            head, tail, ai_flags, AF_INET6, SOCK_RAW, (struct sockaddr*)sai, sizeof(*sai));
+    }
+}
+
+// Returns the IPv4-mapped IPv6 address for the IPv4 address `addr`.
+static struct in6_addr _getaddrinfo_make_v4mapped_addr(uint32_t addr) {
+    static const unsigned char prefix[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
+    };
+    struct in6_addr mapped_addr = {0};
+    memcpy(mapped_addr.s6_addr, prefix, sizeof(prefix));
+    memcpy(&mapped_addr.s6_addr[sizeof(prefix)], &addr, sizeof(addr));
+    return mapped_addr;
 }
 
 // Looks for matching IPv4 addresses in /etc/hosts and them to the list
@@ -259,7 +301,7 @@ static bool _shim_api_hostname_to_addr_ipv4(const char* node, uint32_t* addr) {
 }
 
 int shimc_api_getaddrinfo(const char* node, const char* service, const struct addrinfo* hints,
-                         struct addrinfo** res) {
+                          struct addrinfo** res) {
     // Quoted text is from the man page.
 
     // "Either node or service, but not both, may be NULL."
@@ -378,19 +420,31 @@ int shimc_api_getaddrinfo(const char* node, const char* service, const struct ad
     }
 
     // "`node` specifies either a numerical network address..."
-    if (add_ipv6) {
-        // TODO: try parsing as IPv6
+    struct in6_addr addr6;
+    const bool parsed_ipv6 = inet_pton(AF_INET6, node, &addr6) == 1;
+    if (parsed_ipv6 && add_ipv6) {
+        _getaddrinfo_appendv6(res, &tail, add_tcp, add_udp, add_raw, &addr6, port, 0);
     }
-    if (add_ipv4) {
-        uint32_t addr;
-        if (inet_pton(AF_INET, node, &addr) == 1) {
+    uint32_t addr;
+    const bool parsed_ipv4 = inet_pton(AF_INET, node, &addr) == 1;
+    if (parsed_ipv4) {
+        if (add_ipv4) {
             _getaddrinfo_appendv4(res, &tail, add_tcp, add_udp, add_raw, addr, port);
+        } else if (hints->ai_family == AF_INET6 && (hints->ai_flags & AI_V4MAPPED)) {
+            struct in6_addr mapped_addr = _getaddrinfo_make_v4mapped_addr(addr);
+            _getaddrinfo_appendv6(
+                res, &tail, add_tcp, add_udp, add_raw, &mapped_addr, port, AI_V4MAPPED);
         }
     }
     // If we successfully parsed as a numeric address, there's no need to
     // continue on to doing name-based lookups.
     if (*res != NULL) {
         return 0;
+    }
+    if (parsed_ipv4 || parsed_ipv6) {
+        // We recognized `node` as a numeric address, but it doesn't belong to
+        // an address family that this lookup is allowed to return.
+        return EAI_ADDRFAMILY;
     }
     // "If  hints.ai_flags  contains the  AI_NUMERICHOST  flag,  then  node
     // must be a numerical network address."
