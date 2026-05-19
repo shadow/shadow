@@ -10,6 +10,7 @@
 #include <linux/fcntl.h>
 #include <linux/futex.h>
 #include <linux/in.h>
+#include <linux/ipc.h>
 #include <linux/limits.h>
 #include <linux/mman.h>
 #include <linux/netlink.h>

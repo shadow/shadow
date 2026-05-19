@@ -565,6 +565,30 @@ pub const LINUX_INADDR_ALLRTRS_GROUP: u32 = 3758096386;
 pub const LINUX_INADDR_ALLSNOOPERS_GROUP: u32 = 3758096490;
 pub const LINUX_INADDR_MAX_LOCAL_GROUP: u32 = 3758096639;
 pub const LINUX___LITTLE_ENDIAN: u32 = 1234;
+pub const LINUX_IPC_CREAT: u32 = 512;
+pub const LINUX_IPC_EXCL: u32 = 1024;
+pub const LINUX_IPC_NOWAIT: u32 = 2048;
+pub const LINUX_IPC_DIPC: u32 = 4096;
+pub const LINUX_IPC_OWN: u32 = 8192;
+pub const LINUX_IPC_RMID: u32 = 0;
+pub const LINUX_IPC_SET: u32 = 1;
+pub const LINUX_IPC_STAT: u32 = 2;
+pub const LINUX_IPC_INFO: u32 = 3;
+pub const LINUX_IPC_OLD: u32 = 0;
+pub const LINUX_IPC_64: u32 = 256;
+pub const LINUX_SEMOP: u32 = 1;
+pub const LINUX_SEMGET: u32 = 2;
+pub const LINUX_SEMCTL: u32 = 3;
+pub const LINUX_SEMTIMEDOP: u32 = 4;
+pub const LINUX_MSGSND: u32 = 11;
+pub const LINUX_MSGRCV: u32 = 12;
+pub const LINUX_MSGGET: u32 = 13;
+pub const LINUX_MSGCTL: u32 = 14;
+pub const LINUX_SHMAT: u32 = 21;
+pub const LINUX_SHMDT: u32 = 22;
+pub const LINUX_SHMGET: u32 = 23;
+pub const LINUX_SHMCTL: u32 = 24;
+pub const LINUX_DIPC: u32 = 25;
 pub const LINUX_NR_OPEN: u32 = 1024;
 pub const LINUX_NGROUPS_MAX: u32 = 65536;
 pub const LINUX_ARG_MAX: u32 = 131072;
@@ -1324,30 +1348,6 @@ pub const LINUX_SIGEV_MAX_SIZE: u32 = 64;
 pub const LINUX_SS_ONSTACK: u32 = 1;
 pub const LINUX_SS_DISABLE: u32 = 2;
 pub const LINUX_SS_FLAG_BITS: u32 = 2147483648;
-pub const LINUX_IPC_CREAT: u32 = 512;
-pub const LINUX_IPC_EXCL: u32 = 1024;
-pub const LINUX_IPC_NOWAIT: u32 = 2048;
-pub const LINUX_IPC_DIPC: u32 = 4096;
-pub const LINUX_IPC_OWN: u32 = 8192;
-pub const LINUX_IPC_RMID: u32 = 0;
-pub const LINUX_IPC_SET: u32 = 1;
-pub const LINUX_IPC_STAT: u32 = 2;
-pub const LINUX_IPC_INFO: u32 = 3;
-pub const LINUX_IPC_OLD: u32 = 0;
-pub const LINUX_IPC_64: u32 = 256;
-pub const LINUX_SEMOP: u32 = 1;
-pub const LINUX_SEMGET: u32 = 2;
-pub const LINUX_SEMCTL: u32 = 3;
-pub const LINUX_SEMTIMEDOP: u32 = 4;
-pub const LINUX_MSGSND: u32 = 11;
-pub const LINUX_MSGRCV: u32 = 12;
-pub const LINUX_MSGGET: u32 = 13;
-pub const LINUX_MSGCTL: u32 = 14;
-pub const LINUX_SHMAT: u32 = 21;
-pub const LINUX_SHMDT: u32 = 22;
-pub const LINUX_SHMGET: u32 = 23;
-pub const LINUX_SHMCTL: u32 = 24;
-pub const LINUX_DIPC: u32 = 25;
 pub const LINUX_SHMMIN: u32 = 1;
 pub const LINUX_SHMMNI: u32 = 4096;
 pub const LINUX_SHMSEG: u32 = 4096;
@@ -2370,6 +2370,33 @@ const _: () = {
         [::core::mem::offset_of!(linux_sockaddr_in, sin_addr) - 4usize];
     ["Offset of field: linux_sockaddr_in::l__pad"]
         [::core::mem::offset_of!(linux_sockaddr_in, l__pad) - 8usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct linux_ipc_perm {
+    pub key: linux___kernel_key_t,
+    pub uid: linux___kernel_uid_t,
+    pub gid: linux___kernel_gid_t,
+    pub cuid: linux___kernel_uid_t,
+    pub cgid: linux___kernel_gid_t,
+    pub mode: linux___kernel_mode_t,
+    pub seq: ::core::ffi::c_ushort,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of linux_ipc_perm"][::core::mem::size_of::<linux_ipc_perm>() - 28usize];
+    ["Alignment of linux_ipc_perm"][::core::mem::align_of::<linux_ipc_perm>() - 4usize];
+    ["Offset of field: linux_ipc_perm::key"][::core::mem::offset_of!(linux_ipc_perm, key) - 0usize];
+    ["Offset of field: linux_ipc_perm::uid"][::core::mem::offset_of!(linux_ipc_perm, uid) - 4usize];
+    ["Offset of field: linux_ipc_perm::gid"][::core::mem::offset_of!(linux_ipc_perm, gid) - 8usize];
+    ["Offset of field: linux_ipc_perm::cuid"]
+        [::core::mem::offset_of!(linux_ipc_perm, cuid) - 12usize];
+    ["Offset of field: linux_ipc_perm::cgid"]
+        [::core::mem::offset_of!(linux_ipc_perm, cgid) - 16usize];
+    ["Offset of field: linux_ipc_perm::mode"]
+        [::core::mem::offset_of!(linux_ipc_perm, mode) - 20usize];
+    ["Offset of field: linux_ipc_perm::seq"]
+        [::core::mem::offset_of!(linux_ipc_perm, seq) - 24usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -4094,33 +4121,6 @@ impl ::core::fmt::Debug for linux_siginfo {
     }
 }
 pub type linux_siginfo_t = linux_siginfo;
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_ipc_perm {
-    pub key: linux___kernel_key_t,
-    pub uid: linux___kernel_uid_t,
-    pub gid: linux___kernel_gid_t,
-    pub cuid: linux___kernel_uid_t,
-    pub cgid: linux___kernel_gid_t,
-    pub mode: linux___kernel_mode_t,
-    pub seq: ::core::ffi::c_ushort,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of linux_ipc_perm"][::core::mem::size_of::<linux_ipc_perm>() - 28usize];
-    ["Alignment of linux_ipc_perm"][::core::mem::align_of::<linux_ipc_perm>() - 4usize];
-    ["Offset of field: linux_ipc_perm::key"][::core::mem::offset_of!(linux_ipc_perm, key) - 0usize];
-    ["Offset of field: linux_ipc_perm::uid"][::core::mem::offset_of!(linux_ipc_perm, uid) - 4usize];
-    ["Offset of field: linux_ipc_perm::gid"][::core::mem::offset_of!(linux_ipc_perm, gid) - 8usize];
-    ["Offset of field: linux_ipc_perm::cuid"]
-        [::core::mem::offset_of!(linux_ipc_perm, cuid) - 12usize];
-    ["Offset of field: linux_ipc_perm::cgid"]
-        [::core::mem::offset_of!(linux_ipc_perm, cgid) - 16usize];
-    ["Offset of field: linux_ipc_perm::mode"]
-        [::core::mem::offset_of!(linux_ipc_perm, mode) - 20usize];
-    ["Offset of field: linux_ipc_perm::seq"]
-        [::core::mem::offset_of!(linux_ipc_perm, seq) - 24usize];
-};
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_shmid_ds {

@@ -158,6 +158,9 @@ bindgen_flags+=("--allowlist-type=new_utsname")
 # futex.h
 bindgen_flags+=("--allowlist-type=robust_list_head")
 
+# ipc.h
+bindgen_flags+=("--allowlist-type=ipc_perm")
+
 # For poll
 bindgen_flags+=("--allowlist-type=pollfd")
 
