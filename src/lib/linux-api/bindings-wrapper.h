@@ -20,6 +20,7 @@
 #include <linux/sched.h>
 #include <linux/sched/types.h>
 #include <linux/signal.h>
+#include <linux/shm.h>
 #include <linux/sockios.h>
 #include <linux/stat.h>
 #include <linux/time.h>

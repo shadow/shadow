@@ -177,6 +177,9 @@ bindgen_flags+=("--allowlist-type=ifinfomsg")
 # select.h
 bindgen_flags+=("--allowlist-type=stat")
 
+# shm.h
+bindgen_flags+=("--allowlist-type=shmid_ds")
+
 # non-exposed socket types
 bindgen_flags+=("--allowlist-type=sock_shutdown_cmd")
 
