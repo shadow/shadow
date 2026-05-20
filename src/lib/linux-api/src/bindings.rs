@@ -2372,31 +2372,46 @@ const _: () = {
         [::core::mem::offset_of!(linux_sockaddr_in, l__pad) - 8usize];
 };
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_ipc_perm {
+#[derive(Debug)]
+pub struct linux_ipc64_perm {
     pub key: linux___kernel_key_t,
-    pub uid: linux___kernel_uid_t,
-    pub gid: linux___kernel_gid_t,
-    pub cuid: linux___kernel_uid_t,
-    pub cgid: linux___kernel_gid_t,
+    pub uid: linux___kernel_uid32_t,
+    pub gid: linux___kernel_gid32_t,
+    pub cuid: linux___kernel_uid32_t,
+    pub cgid: linux___kernel_gid32_t,
     pub mode: linux___kernel_mode_t,
+    pub l__pad1: linux___IncompleteArrayField<::core::ffi::c_uchar>,
     pub seq: ::core::ffi::c_ushort,
+    pub l__pad2: ::core::ffi::c_ushort,
+    pub l__unused1: linux___kernel_ulong_t,
+    pub l__unused2: linux___kernel_ulong_t,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of linux_ipc_perm"][::core::mem::size_of::<linux_ipc_perm>() - 28usize];
-    ["Alignment of linux_ipc_perm"][::core::mem::align_of::<linux_ipc_perm>() - 4usize];
-    ["Offset of field: linux_ipc_perm::key"][::core::mem::offset_of!(linux_ipc_perm, key) - 0usize];
-    ["Offset of field: linux_ipc_perm::uid"][::core::mem::offset_of!(linux_ipc_perm, uid) - 4usize];
-    ["Offset of field: linux_ipc_perm::gid"][::core::mem::offset_of!(linux_ipc_perm, gid) - 8usize];
-    ["Offset of field: linux_ipc_perm::cuid"]
-        [::core::mem::offset_of!(linux_ipc_perm, cuid) - 12usize];
-    ["Offset of field: linux_ipc_perm::cgid"]
-        [::core::mem::offset_of!(linux_ipc_perm, cgid) - 16usize];
-    ["Offset of field: linux_ipc_perm::mode"]
-        [::core::mem::offset_of!(linux_ipc_perm, mode) - 20usize];
-    ["Offset of field: linux_ipc_perm::seq"]
-        [::core::mem::offset_of!(linux_ipc_perm, seq) - 24usize];
+    ["Size of linux_ipc64_perm"][::core::mem::size_of::<linux_ipc64_perm>() - 48usize];
+    ["Alignment of linux_ipc64_perm"][::core::mem::align_of::<linux_ipc64_perm>() - 8usize];
+    ["Offset of field: linux_ipc64_perm::key"]
+        [::core::mem::offset_of!(linux_ipc64_perm, key) - 0usize];
+    ["Offset of field: linux_ipc64_perm::uid"]
+        [::core::mem::offset_of!(linux_ipc64_perm, uid) - 4usize];
+    ["Offset of field: linux_ipc64_perm::gid"]
+        [::core::mem::offset_of!(linux_ipc64_perm, gid) - 8usize];
+    ["Offset of field: linux_ipc64_perm::cuid"]
+        [::core::mem::offset_of!(linux_ipc64_perm, cuid) - 12usize];
+    ["Offset of field: linux_ipc64_perm::cgid"]
+        [::core::mem::offset_of!(linux_ipc64_perm, cgid) - 16usize];
+    ["Offset of field: linux_ipc64_perm::mode"]
+        [::core::mem::offset_of!(linux_ipc64_perm, mode) - 20usize];
+    ["Offset of field: linux_ipc64_perm::l__pad1"]
+        [::core::mem::offset_of!(linux_ipc64_perm, l__pad1) - 24usize];
+    ["Offset of field: linux_ipc64_perm::seq"]
+        [::core::mem::offset_of!(linux_ipc64_perm, seq) - 24usize];
+    ["Offset of field: linux_ipc64_perm::l__pad2"]
+        [::core::mem::offset_of!(linux_ipc64_perm, l__pad2) - 26usize];
+    ["Offset of field: linux_ipc64_perm::l__unused1"]
+        [::core::mem::offset_of!(linux_ipc64_perm, l__unused1) - 32usize];
+    ["Offset of field: linux_ipc64_perm::l__unused2"]
+        [::core::mem::offset_of!(linux_ipc64_perm, l__unused2) - 40usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -4122,46 +4137,43 @@ impl ::core::fmt::Debug for linux_siginfo {
 }
 pub type linux_siginfo_t = linux_siginfo;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct linux_shmid_ds {
-    pub shm_perm: linux_ipc_perm,
-    pub shm_segsz: ::core::ffi::c_int,
-    pub shm_atime: linux___kernel_old_time_t,
-    pub shm_dtime: linux___kernel_old_time_t,
-    pub shm_ctime: linux___kernel_old_time_t,
-    pub shm_cpid: linux___kernel_ipc_pid_t,
-    pub shm_lpid: linux___kernel_ipc_pid_t,
-    pub shm_nattch: ::core::ffi::c_ushort,
-    pub shm_unused: ::core::ffi::c_ushort,
-    pub shm_unused2: *mut ::core::ffi::c_void,
-    pub shm_unused3: *mut ::core::ffi::c_void,
+#[derive(Debug)]
+pub struct linux_shmid64_ds {
+    pub shm_perm: linux_ipc64_perm,
+    pub shm_segsz: linux___kernel_size_t,
+    pub shm_atime: ::core::ffi::c_long,
+    pub shm_dtime: ::core::ffi::c_long,
+    pub shm_ctime: ::core::ffi::c_long,
+    pub shm_cpid: linux___kernel_pid_t,
+    pub shm_lpid: linux___kernel_pid_t,
+    pub shm_nattch: ::core::ffi::c_ulong,
+    pub l__unused4: ::core::ffi::c_ulong,
+    pub l__unused5: ::core::ffi::c_ulong,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of linux_shmid_ds"][::core::mem::size_of::<linux_shmid_ds>() - 88usize];
-    ["Alignment of linux_shmid_ds"][::core::mem::align_of::<linux_shmid_ds>() - 8usize];
-    ["Offset of field: linux_shmid_ds::shm_perm"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_perm) - 0usize];
-    ["Offset of field: linux_shmid_ds::shm_segsz"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_segsz) - 28usize];
-    ["Offset of field: linux_shmid_ds::shm_atime"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_atime) - 32usize];
-    ["Offset of field: linux_shmid_ds::shm_dtime"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_dtime) - 40usize];
-    ["Offset of field: linux_shmid_ds::shm_ctime"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_ctime) - 48usize];
-    ["Offset of field: linux_shmid_ds::shm_cpid"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_cpid) - 56usize];
-    ["Offset of field: linux_shmid_ds::shm_lpid"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_lpid) - 60usize];
-    ["Offset of field: linux_shmid_ds::shm_nattch"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_nattch) - 64usize];
-    ["Offset of field: linux_shmid_ds::shm_unused"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_unused) - 66usize];
-    ["Offset of field: linux_shmid_ds::shm_unused2"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_unused2) - 72usize];
-    ["Offset of field: linux_shmid_ds::shm_unused3"]
-        [::core::mem::offset_of!(linux_shmid_ds, shm_unused3) - 80usize];
+    ["Size of linux_shmid64_ds"][::core::mem::size_of::<linux_shmid64_ds>() - 112usize];
+    ["Alignment of linux_shmid64_ds"][::core::mem::align_of::<linux_shmid64_ds>() - 8usize];
+    ["Offset of field: linux_shmid64_ds::shm_perm"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_perm) - 0usize];
+    ["Offset of field: linux_shmid64_ds::shm_segsz"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_segsz) - 48usize];
+    ["Offset of field: linux_shmid64_ds::shm_atime"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_atime) - 56usize];
+    ["Offset of field: linux_shmid64_ds::shm_dtime"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_dtime) - 64usize];
+    ["Offset of field: linux_shmid64_ds::shm_ctime"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_ctime) - 72usize];
+    ["Offset of field: linux_shmid64_ds::shm_cpid"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_cpid) - 80usize];
+    ["Offset of field: linux_shmid64_ds::shm_lpid"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_lpid) - 84usize];
+    ["Offset of field: linux_shmid64_ds::shm_nattch"]
+        [::core::mem::offset_of!(linux_shmid64_ds, shm_nattch) - 88usize];
+    ["Offset of field: linux_shmid64_ds::l__unused4"]
+        [::core::mem::offset_of!(linux_shmid64_ds, l__unused4) - 96usize];
+    ["Offset of field: linux_shmid64_ds::l__unused5"]
+        [::core::mem::offset_of!(linux_shmid64_ds, l__unused5) - 104usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
