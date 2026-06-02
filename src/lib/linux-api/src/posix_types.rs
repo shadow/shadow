@@ -38,6 +38,10 @@ pub use bindings::linux___kernel_gid32_t;
 #[allow(non_camel_case_types)]
 pub type kernel_gid32_t = linux___kernel_gid32_t;
 
+pub use bindings::linux___kernel_key_t;
+#[allow(non_camel_case_types)]
+pub type kernel_key_t = linux___kernel_key_t;
+
 /// Type-safe wrapper around [`kernel_pid_t`]. Value is strictly positive.
 /// Interface inspired by `rustix::process::Pid`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]

@@ -158,6 +158,9 @@ bindgen_flags+=("--allowlist-type=new_utsname")
 # futex.h
 bindgen_flags+=("--allowlist-type=robust_list_head")
 
+# ipc.h
+bindgen_flags+=("--allowlist-type=ipc64_perm")
+
 # For poll
 bindgen_flags+=("--allowlist-type=pollfd")
 
@@ -176,6 +179,9 @@ bindgen_flags+=("--allowlist-type=ifinfomsg")
 
 # select.h
 bindgen_flags+=("--allowlist-type=stat")
+
+# shm.h
+bindgen_flags+=("--allowlist-type=shmid64_ds")
 
 # non-exposed socket types
 bindgen_flags+=("--allowlist-type=sock_shutdown_cmd")
