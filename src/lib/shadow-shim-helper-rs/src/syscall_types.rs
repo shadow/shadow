@@ -560,3 +560,13 @@ impl TryFrom<SyscallReg> for linux_api::fcntl::FcntlCommand {
         Ok(value)
     }
 }
+
+mod export {
+    use super::*;
+
+    /// Returns whether `ptr` is NULL.
+    #[unsafe(no_mangle)]
+    extern "C-unwind" fn untypedforeignpointer_is_null(ptr: UntypedForeignPtr) -> bool {
+        ptr.is_null()
+    }
+}
