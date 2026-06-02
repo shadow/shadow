@@ -381,6 +381,7 @@ INTERPOSE(listen);
 #ifdef SYS_listmount // kernel entry: num=458 func=sys_listmount
 INTERPOSE(listmount);
 #endif
+// Skipping SYS_listns
 #ifdef SYS_listxattr // kernel entry: num=194 func=sys_listxattr
 INTERPOSE(listxattr);
 #endif
@@ -651,6 +652,7 @@ INTERPOSE(request_key);
 INTERPOSE(rmdir);
 #endif
 // Skipping SYS_rseq
+// Skipping SYS_rseq_slice_yield
 // Skipping SYS_rt_sigaction
 // Skipping SYS_rt_sigpending
 // Skipping SYS_rt_sigprocmask
