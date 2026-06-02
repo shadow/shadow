@@ -918,9 +918,7 @@ INTERPOSE(ustat);
 #ifdef SYS_utime // kernel entry: num=132 func=sys_utime
 INTERPOSE(utime);
 #endif
-#ifdef SYS_utimensat // kernel entry: num=280 func=sys_utimensat
-INTERPOSE(utimensat);
-#endif
+// Skipping SYS_utimensat
 #ifdef SYS_utimes // kernel entry: num=235 func=sys_utimes
 INTERPOSE(utimes);
 #endif

@@ -83,6 +83,7 @@ skip.update([
     'signalfd',
     'signalfd4',
     'timer_create',
+    'utimensat',
     'vfork',
     'wait4',
     'waitid',
