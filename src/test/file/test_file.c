@@ -896,6 +896,14 @@ static void _test_empty_paths() {
     // Test the directory of the temporary file.
     assert_nonneg_errno(utimensat(this_dirfd, ".", times_timespec, 0));
 
+    // The utimensat *syscall* (NOT the libc wrapper), supports a NULL pathname.
+    // See utimensat(2).
+    assert_nonneg_errno(syscall(SYS_utimensat, this_dirfd, NULL, times_timespec, 0));
+
+    // Behavior of path=NULL + AT_FDCWD is undocumented, but experimentally returns EFAULT.
+    g_assert_cmpint(syscall(SYS_utimensat, AT_FDCWD, NULL, times_timespec, 0), ==, -1);
+    assert_errno_is(EFAULT);
+
     // Test the current working directory.
     assert_nonneg_errno(utimensat(AT_FDCWD, ".", times_timespec, 0));
 

@@ -1197,10 +1197,27 @@ int regularfile_utimensat(RegularFile* dir, const char* pathname, const struct t
         debug("Failed to get OS fd for 'RegularFile' in 'regularfile_utimensat'");
         return -EINVAL;
     }
+    trace("RegularFile %p utimensat os-backed file %i", dir, osFd);
+
+    if (pathname == NULL) {
+        // utimensat(2): the Linux utimensat() system call implements a
+        // nonstandard feature: if path is NULL, then the call modifies the
+        // timestamps of the file referred to by the file descriptor dirfd
+        // (which may refer to any type of file).
+
+        // Experimentally, Linux returns EFAULT if `dir` is AT_FDCWD.
+        // Handle explicitly though in case the behavior changes, so that
+        // we don't accidentally operate on shadow's cwd.
+        if (osFd == AT_FDCWD) {
+            return -EFAULT;
+        }
+
+        // Delegate to the *syscall*. The libc wrapper rejects a NULL path.
+        int result = syscall(SYS_utimensat, osFd, NULL, times, flags);
+        return (result < 0) ? -errno : result;
+    }
 
     const char* pathnameTmp = pathname;
-
-    trace("RegularFile %p utimesat os-backed file %i", dir, osFd);
 
     if (osFd == AT_FDCWD) {
         if (strlen(pathnameTmp) == 0 && !(flags & AT_EMPTY_PATH)) {
