@@ -277,10 +277,19 @@ SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    const char* pathname = NULL;
+    int errcode = 0;
 
-    int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    if (untypedforeignpointer_is_null(pathnamePtr)) {
+        // utimensat(2): the Linux utimensat() system call implements a
+        // nonstandard feature: if path is NULL, then the call modifies the
+        // timestamps of the file referred to by the file descriptor dirfd
+        // (which may refer to any type of file).
+        errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
+    } else {
+        errcode = _syscallhandler_validateDirAndPathnameHelper(
+            sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }

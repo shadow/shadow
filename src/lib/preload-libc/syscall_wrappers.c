@@ -381,6 +381,7 @@ INTERPOSE(listen);
 #ifdef SYS_listmount // kernel entry: num=458 func=sys_listmount
 INTERPOSE(listmount);
 #endif
+// Skipping SYS_listns
 #ifdef SYS_listxattr // kernel entry: num=194 func=sys_listxattr
 INTERPOSE(listxattr);
 #endif
@@ -651,6 +652,7 @@ INTERPOSE(request_key);
 INTERPOSE(rmdir);
 #endif
 // Skipping SYS_rseq
+// Skipping SYS_rseq_slice_yield
 // Skipping SYS_rt_sigaction
 // Skipping SYS_rt_sigpending
 // Skipping SYS_rt_sigprocmask
@@ -916,9 +918,7 @@ INTERPOSE(ustat);
 #ifdef SYS_utime // kernel entry: num=132 func=sys_utime
 INTERPOSE(utime);
 #endif
-#ifdef SYS_utimensat // kernel entry: num=280 func=sys_utimensat
-INTERPOSE(utimensat);
-#endif
+// Skipping SYS_utimensat
 #ifdef SYS_utimes // kernel entry: num=235 func=sys_utimes
 INTERPOSE(utimes);
 #endif
