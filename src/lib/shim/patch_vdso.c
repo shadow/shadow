@@ -1,14 +1,65 @@
 #include <assert.h>
 #include <elf.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "lib/logger/logger.h"
+
+// Read `filename` into an mmap'd buffer. `*buffer` is set to the mmap'd buffer. `*buflen` is set to
+// the size of the buffer.  `*filelen` is set to the number of bytes read from the file into the
+// buffer.
+//
+// Doesn't attempt to mmap or stat the file, making it suitable for `/proc` files.
+//
+// Avoids known-not-signal-safe libc functions (e.g. anything that allocates other than mmap).
+//
+// Caller is responsible for deallocating `*buffer`, by `munmap(*buffer, *buflen)`.
+static void _read_file_into_mmapd(const char* filename, char** buffer, size_t* buflen,
+                                  size_t* filelen) {
+    *buflen = 4096;
+    *buffer = mmap(NULL, *buflen, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    if (*buffer == MAP_FAILED) {
+        panic("mmap: %s", strerror(errno));
+    }
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1) {
+        panic("open: %s", strerror(errno));
+    }
+    *filelen = 0;
+    while (true) {
+        ssize_t remaining_capacity = *buflen - *filelen;
+        if (remaining_capacity <= 0) {
+            // We ran out of space. Reallocate a larger buffer.
+            size_t old_region_size = *buflen;
+            *buflen *= 2;
+            *buffer = mremap(*buffer, old_region_size, *buflen, MREMAP_MAYMOVE);
+            if (*buffer == MAP_FAILED) {
+                panic("mremap: %s", strerror(errno));
+            }
+            continue;
+        }
+        ssize_t this_read = read(fd, &(*buffer)[*filelen], remaining_capacity);
+        if (this_read < 0) {
+            panic("read: %s", strerror(errno));
+        }
+        if (this_read == 0) {
+            // EOF
+            break;
+        }
+        *filelen += this_read;
+    }
+    if (close(fd) == -1) {
+        panic("close: %s", strerror(errno));
+    }
+}
 
 static void _getVdsoBounds(void** start, void** end) {
     assert(start);
@@ -16,39 +67,37 @@ static void _getVdsoBounds(void** start, void** end) {
     assert(end);
     *end = NULL;
 
-    FILE* maps = fopen("/proc/self/maps", "r");
-    size_t n = 100;
-    char* line = malloc(n);
-    while (true) {
-        ssize_t rv = getline(&line, &n, maps);
-        if (rv < 0) {
-            break;
-        }
-        const char* name = "[vdso]\n";
-        size_t name_len = strlen(name);
-        if (rv < name_len) {
-            // Can't be [vdso].
-            continue;
-        }
-        if (strcmp(&line[rv - name_len], name) != 0) {
-            // Isn't [vdso].
-            continue;
-        }
-        // *is* [vdso]. Parse the line.
-        if (sscanf(line, "%p-%p", start, end) != 2) {
-            warning("Couldn't parse maps line: %s", line);
-            // Ensure both are still NULL.
-            *start = NULL;
-            *end = NULL;
-            // Might as well keep going and see if another line matches and parses.
-            continue;
-        }
-        // Success
-        break;
-    }
+    // First read all of /proc/self/maps into an mmap'd buffer.
+    char* maps_buffer = NULL;
+    size_t maps_buffer_size = 0;
+    size_t maps_file_size = 0;
+    _read_file_into_mmapd("/proc/self/maps", &maps_buffer, &maps_buffer_size, &maps_file_size);
 
-    free(line);
-    fclose(maps);
+    const char* label = "[vdso]\n";
+    char* line_end = memmem(maps_buffer, maps_file_size, label, strlen(label));
+    if (line_end == NULL) {
+        panic("Couldn't find [vdso] line");
+    }
+    // terminate the string. this overwrites the first bracket of "[vdso]", but
+    // that's ok.
+    *line_end = '\0';
+    // Look backwards for the preceding newline.
+    const char* last_newline = rindex(maps_buffer, '\n');
+    const char* line = NULL;
+    if (last_newline != NULL) {
+        // the [vdso] line starts just after the newline.
+        line = last_newline + 1;
+    } else {
+        // the [vdso] line is the first line in the file
+        line = maps_buffer;
+    }
+    // Parse the line.
+    if (sscanf(line, "%p-%p", start, end) != 2) {
+        panic("Couldn't parse maps line: %s", line);
+    }
+    if (munmap(maps_buffer, maps_buffer_size) == -1) {
+        panic("munmap: %s", strerror(errno));
+    };
 }
 
 static void _checkIdentByte(const unsigned char ident[EI_NIDENT], size_t idx, char expected) {
