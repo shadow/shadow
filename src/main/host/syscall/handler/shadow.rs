@@ -3,6 +3,7 @@ use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::core::worker::Worker;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::{SyscallSockAddrArg, SyscallStringArg};
 use crate::host::syscall::types::ForeignArrayPtr;
 use crate::utility::case_insensitive_eq;
 
@@ -32,9 +33,9 @@ impl SyscallHandler {
     log_syscall!(
         shadow_hostname_to_addr_ipv4,
         /* rv */ std::ffi::c_int,
-        /* name_ptr */ *const std::ffi::c_char,
+        /* name_ptr */ SyscallStringArg,
         /* name_len */ u64,
-        /* addr_ptr */ *const std::ffi::c_void,
+        /* addr_ptr */ SyscallSockAddrArg<3>,
         /* addr_len */ u64,
     );
     pub fn shadow_hostname_to_addr_ipv4(
