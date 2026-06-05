@@ -265,6 +265,10 @@ impl SyscallHandler {
             ctx.objs
                 .host
                 .add_and_schedule_forked_process(ctx.objs.host, process);
+            ctx.objs
+                .host
+                .sysv_shm_borrow_mut()
+                .fork_process(ctx.objs.process.id(), child_process.id());
         }
 
         if do_parent_settid {

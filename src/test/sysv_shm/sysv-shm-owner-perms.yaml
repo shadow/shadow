@@ -1,0 +1,12 @@
+general:
+  stop_time: 6
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  testnode:
+    network_node_id: 0
+    processes:
+    - path: ./test-sysv-shm
+      args: owner-perms 23059
+      start_time: 1
