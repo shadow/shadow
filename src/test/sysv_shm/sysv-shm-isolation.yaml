@@ -1,0 +1,18 @@
+general:
+  stop_time: 8
+network:
+  graph:
+    type: 1_gbit_switch
+hosts:
+  hosta:
+    network_node_id: 0
+    processes:
+    - path: ./test-sysv-shm
+      args: isolation-writer 23058
+      start_time: 1
+  hostb:
+    network_node_id: 0
+    processes:
+    - path: ./test-sysv-shm
+      args: isolation-reader 23058
+      start_time: 2

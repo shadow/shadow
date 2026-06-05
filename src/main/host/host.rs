@@ -42,6 +42,7 @@ use crate::host::futex_table::FutexTable;
 use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, PcapOptions};
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
+use crate::host::sysv_shm::SysvShmNamespace;
 use crate::host::thread::{Thread, ThreadId};
 use crate::network::PacketDevice;
 use crate::network::relay::{RateLimit, Relay};
@@ -130,6 +131,9 @@ pub struct Host {
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
+
+    // Host-local SysV shared-memory namespace.
+    sysv_shm: RefCell<SysvShmNamespace>,
 
     #[cfg(feature = "perf_timers")]
     execution_timer: RefCell<PerfTimer>,
@@ -293,6 +297,7 @@ impl Host {
             relay_inet_in: Arc::new(relay_inet_in),
             relay_loopback: Arc::new(relay_loopback),
             futex_table: RefCell::new(FutexTable::new()),
+            sysv_shm: RefCell::new(SysvShmNamespace::new()),
             random,
             shim_shmem,
             shim_shmem_lock: RefCell::new(None),
@@ -853,6 +858,16 @@ impl Host {
         }
 
         false
+    }
+
+    #[track_caller]
+    pub fn sysv_shm_borrow(&self) -> impl Deref<Target = SysvShmNamespace> + '_ {
+        self.sysv_shm.borrow()
+    }
+
+    #[track_caller]
+    pub fn sysv_shm_borrow_mut(&self) -> impl DerefMut<Target = SysvShmNamespace> + '_ {
+        self.sysv_shm.borrow_mut()
     }
 
     /// Locks the Host's shared memory, caching the lock internally.
