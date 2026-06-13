@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use atomic_refcell::{AtomicRef, AtomicRefCell};
 use linux_api::posix_types::Pid;
 use once_cell::sync::Lazy;
-use rand::Rng;
+use rand::RngExt;
 use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::rootedcell::rc::RootedRc;

@@ -408,12 +408,12 @@ impl Host {
                         return;
                     };
                     let process = process.borrow(host.root());
-                    let siginfo_t = siginfo_t::new_for_kill(
+                    let siginfo = siginfo_t::new_for_kill(
                         Signal::try_from(shutdown_signal as i32).unwrap(),
                         1,
                         0,
                     );
-                    process.signal(host, None, &siginfo_t);
+                    process.signal(host, None, &siginfo);
                 });
                 host.schedule_task_at_emulated_time(
                     task,
@@ -998,7 +998,7 @@ mod export {
     use std::{os::raw::c_char, time::Duration};
 
     use libc::{in_addr_t, in_port_t};
-    use rand::{Rng, RngCore};
+    use rand::{Rng, RngExt};
     use shadow_shim_helper_rs::shim_shmem;
 
     use super::*;
