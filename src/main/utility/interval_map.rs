@@ -356,7 +356,7 @@ mod tests {
     // Too slow for miri
     #[cfg_attr(miri, ignore)]
     fn test_insert_random() {
-        use rand::Rng;
+        use rand::RngExt;
         use rand_core::SeedableRng;
         let dist = rand::distr::Uniform::new_inclusive(0, 10).unwrap();
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
@@ -587,7 +587,7 @@ mod tests {
     // Too slow for miri
     #[cfg_attr(miri, ignore)]
     fn test_clear_random() {
-        use rand::Rng;
+        use rand::RngExt;
         use rand_core::SeedableRng;
         let dist = rand::distr::Uniform::new_inclusive(0, 10).unwrap();
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);

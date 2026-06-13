@@ -492,7 +492,7 @@ impl ByteChunk {
 
 #[cfg(test)]
 mod tests {
-    use rand::{Rng, RngCore};
+    use rand::{Rng, RngExt};
     use rand_chacha::ChaCha20Rng;
     use rand_core::SeedableRng;
 

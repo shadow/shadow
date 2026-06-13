@@ -136,7 +136,7 @@ impl NetworkNamespace {
         protocol_type: IanaProtocol,
         interface_ip: Ipv4Addr,
         peer: SocketAddrV4,
-        mut rng: impl rand::Rng,
+        mut rng: impl rand::RngExt,
     ) -> Option<u16> {
         // we need a random port that is free everywhere we need it to be.
         // we have two modes here: first we just try grabbing a random port until we

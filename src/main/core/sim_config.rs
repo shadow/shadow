@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use once_cell::sync::Lazy;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
