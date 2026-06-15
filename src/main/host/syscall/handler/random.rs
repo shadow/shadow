@@ -1,6 +1,6 @@
 use linux_api::errno::Errno;
 use log::*;
-use rand::RngCore;
+use rand::Rng;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};

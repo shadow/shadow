@@ -15,7 +15,7 @@ use linux_api::posix_types::Pid;
 use linux_api::sched::CloneFlags;
 use linux_api::signal::tgkill;
 use log::{Level, debug, error, log_enabled, trace};
-use rand::Rng as _;
+use rand::RngExt as _;
 use rustix::pipe::PipeFlags;
 use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::ipc::IPCData;
