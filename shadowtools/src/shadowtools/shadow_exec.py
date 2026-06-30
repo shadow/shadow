@@ -33,7 +33,7 @@ import textwrap
 import yaml
 
 from pathlib import Path
-from typing import TextIO, BinaryIO, Final, Optional, List, Iterable
+from typing import TextIO, BinaryIO, Final, Optional, List, Iterable, Dict
 
 import shadowtools.config as scfg
 
@@ -98,7 +98,7 @@ def _make_base_config() -> scfg.Config:
     )
 
 
-def _make_controller_host(args: Iterable[str]) -> scfg.Host:
+def _make_controller_host(args: Iterable[str], environ: Dict[str, str]) -> scfg.Host:
     """Generate a shadow host configuration to run the command in `args`"""
     wrapper_script = textwrap.dedent(f"""
         set -eu
@@ -118,6 +118,7 @@ def _make_controller_host(args: Iterable[str]) -> scfg.Host:
                     "-c",
                     wrapper_script,
                 ],
+                environment=environ,
             )
         ],
     )
@@ -246,6 +247,7 @@ def _run_shadow_watching_process(
 def _main(
     progname: str,
     args: Iterable[str],
+    environ: Dict[str, str],
     preserve: PreserveChoice = PreserveChoice.NEVER,
     temp_dir: Optional[Path] = None,
     stdout: TextIO = sys.stdout,
@@ -270,7 +272,7 @@ def _main(
 
     config = _make_base_config()
     hostname = "host"
-    config["hosts"][hostname] = _make_controller_host(args)
+    config["hosts"][hostname] = _make_controller_host(args, environ)
 
     config_path = tmpdir.joinpath("shadow.yaml")
     config_path.write_text(yaml.safe_dump(config))
@@ -349,6 +351,11 @@ def __main__() -> None:
         type=Path,
         help="shadow binary basename or path",
     )
+    parser.add_argument(
+        "--ignore-env",
+        action=argparse.BooleanOptionalAction,
+        help=("Don't pass current environment variables through to simulated process"),
+    )
     # We take a single shell-encoded string here and split it instead of taking
     # multiple strings, because otherwise argparse will try to interpret tokens
     # starting with - as a new option for itself.
@@ -361,9 +368,11 @@ def __main__() -> None:
     )
     parser.add_argument("args", nargs="+", help="command and arguments to execute")
     res = parser.parse_args()
+    environ = {} if res.ignore_env else dict(os.environ)
     _main(
         progname=PROGNAME,
         args=res.args,
+        environ=environ,
         # parser should have enforced a valid value here
         preserve=PreserveChoice[res.preserve.upper().translate({ord("-"): "_"})],
         shadow_bin=res.shadow_bin,
