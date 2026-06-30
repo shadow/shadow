@@ -23,6 +23,7 @@ import argparse
 import glob
 import re
 import enum
+import os
 import subprocess
 import shlex
 import shutil
@@ -105,8 +106,8 @@ def _make_controller_host(args: Iterable[str]) -> scfg.Host:
         # Change back to host working dir
         cd {shlex.quote(str(Path('.').resolve()))}
 
-        # Run specified command, merging stderr to stdout
-        exec {shlex.join(args)} 2>&1
+        # Run specified command
+        exec {shlex.join(args)}
         """)
     return scfg.Host(
         network_node_id=0,
@@ -131,8 +132,8 @@ def _run_shadow_watching_process(
     shadow_config_path: Path,
     shadow_args: Iterable[str] = (),
     stdout: BinaryIO = sys.stdout.buffer,
-    stderr: TextIO = sys.stderr,
-) -> int:
+    stderr: BinaryIO = sys.stderr.buffer,
+) -> None:
     """Run shadow, forwarding the stdout of one simulated process to `stdout`
 
     watch_host: Name of the host inside the shadow sim to watch.
@@ -149,9 +150,8 @@ def _run_shadow_watching_process(
         # It wouldn't be *terribly* hard to support this, but not today.
         # Naively allowing this override would break our stdout pass-through
         # below.
-        print(
+        raise Exception(
             f"ERROR: Overriding shadow's --data-directory currently unsupported.",
-            file=stderr,
         )
     shadow_stdout_path = dstdir.joinpath("shadow.stdout")
     shadow_stderr_path = dstdir.joinpath("shadow.stderr")
@@ -167,28 +167,49 @@ def _run_shadow_watching_process(
             stderr=shadow_stderr_file,
         )
         simulated_stdout_file = None
+        simulated_stderr_file = None
         shadow_exited = False
         while True:
             processed_data = False
 
-            # Try opening the simulated process's stdout if we haven't
-            # successfully done so yet.
+            # Try opening the simulated process's stdout and stderr if we
+            # haven't successfully done so yet.
             if simulated_stdout_file is None:
                 simulated_stdout_file = _try_open_glob(
                     host_dir, f"*.{watch_pid}.stdout"
                 )
+            if simulated_stderr_file is None:
+                simulated_stderr_file = _try_open_glob(
+                    host_dir, f"*.{watch_pid}.stderr"
+                )
 
-            # Pump data from sim stdout to our stdout
-            data = None
-            if simulated_stdout_file is not None:
-                # Fairly arbitrary, but might as well avoid excessive memory
-                # usage here.
-                bufsize = 1_000_000
-                data = simulated_stdout_file.read(bufsize)
-            while data:
-                processed_data = True
-                count = stdout.write(data)
-                data = data[count:]
+            # Pump data from sim stdout and stderr to our stdout and stderr.
+            # TODO: maybe this could be simplified using shutil.copyfileobj?
+            for src, dest in [
+                (simulated_stdout_file, stdout),
+                (simulated_stderr_file, stderr),
+            ]:
+                data = None
+                if src is not None:
+                    # Fairly arbitrary, but impose *some* limit to avoid
+                    # excessive buffering.
+                    bufsize = 1_000_000
+                    data = src.read(bufsize)
+                if data:
+                    processed_data = True
+                    while data:
+                        count = dest.write(data)
+                        data = data[count:]
+                else:
+                    # Flush when there's currently no data available to read.
+                    # Flushing makes output more responsive for interactive
+                    # usage, but potentially intermingles stdout and stderr
+                    # output, e.g. if they're both ultimately going to a
+                    # console.  Only flushing when there's no more data tries to
+                    # at least ensure we do it on reasonable boundaries. e.g. if
+                    # the target program line-buffers its output, then this will
+                    # *tend* to flush only at line boundaries.
+                    dest.flush()
 
             if not processed_data and shadow_exited:
                 # Done
@@ -197,8 +218,6 @@ def _run_shadow_watching_process(
             if not processed_data:
                 # No data ready to handle right now.
 
-                # Flush anything we've pumped so far.
-                stdout.flush()
                 try:
                     # Wait a bit for shadow to exit.
                     # We want this to be long enough to avoid burning CPU
@@ -214,13 +233,14 @@ def _run_shadow_watching_process(
                     # shadow didn't exit. Loop to see if there's more data to
                     # process.
                     pass
+    stdout.flush()
+    stderr.flush()
     # if shadow failed, dump its stderr
     if shadow_ps.returncode:
-        shadow_stderr = shadow_stderr_path.read_text()
-        while shadow_stderr:
-            count = stderr.write(textwrap.indent(shadow_stderr, "shadow: "))
-            shadow_stderr = shadow_stderr[count:]
-    return shadow_ps.returncode
+        raise Exception(
+            f"shadow exited with code {shadow_ps.returncode}. stderr:\n"
+            + shadow_stderr_path.read_text()
+        )
 
 
 def _main(
@@ -228,11 +248,11 @@ def _main(
     args: Iterable[str],
     preserve: PreserveChoice = PreserveChoice.NEVER,
     temp_dir: Optional[Path] = None,
-    stdout: BinaryIO = sys.stdout.buffer,
+    stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
     shadow_bin: Path = Path("shadow"),
     shadow_args: Iterable[str] = (),
-) -> int:
+) -> None:
     """
     Run a program under shadow.
 
@@ -255,27 +275,37 @@ def _main(
     config_path = tmpdir.joinpath("shadow.yaml")
     config_path.write_text(yaml.safe_dump(config))
 
-    shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
-    shadow_stderr_path = tmpdir.joinpath("shadow.stderr")
-    shadow_rc = _run_shadow_watching_process(
-        watch_host=hostname,
-        watch_pid=1000,
-        dstdir=tmpdir,
-        shadow_bin=shadow_bin,
-        shadow_config_path=config_path,
-        shadow_args=shadow_args,
-        stdout=stdout,
-        stderr=stderr,
-    )
-    # clean up temp files
-    if preserve == PreserveChoice.ALWAYS or (
-        preserve == PreserveChoice.ON_ERROR and shadow_rc
-    ):
-        print(f"{progname}: Preserving tmpdir {tmpdir}", file=stderr)
-    else:
-        shutil.rmtree(tmpdir)
+    # Flush before handing the underlying buffers over
+    stdout.flush()
+    stderr.flush()
 
-    return shadow_rc
+    error = False
+    try:
+        _run_shadow_watching_process(
+            watch_host=hostname,
+            watch_pid=1000,
+            dstdir=tmpdir,
+            shadow_bin=shadow_bin,
+            shadow_config_path=config_path,
+            shadow_args=shadow_args,
+            stdout=stdout.buffer,
+            stderr=stderr.buffer,
+        )
+    except Exception:
+        error = True
+        raise
+    finally:
+        # Ensure all raw data written into the buffers are flushed
+        stdout.flush()
+        stderr.flush()
+
+        # clean up temp files
+        if preserve == PreserveChoice.ALWAYS or (
+            preserve == PreserveChoice.ON_ERROR and error
+        ):
+            print(f"{progname}: Preserving tmpdir {tmpdir}", file=stderr)
+        else:
+            shutil.rmtree(tmpdir)
 
 
 def __main__() -> None:
@@ -331,7 +361,7 @@ def __main__() -> None:
     )
     parser.add_argument("args", nargs="+", help="command and arguments to execute")
     res = parser.parse_args()
-    rv = _main(
+    _main(
         progname=PROGNAME,
         args=res.args,
         # parser should have enforced a valid value here
@@ -340,7 +370,6 @@ def __main__() -> None:
         temp_dir=res.temp_dir,
         shadow_args=shlex.split(res.shadow_args),
     )
-    sys.exit(rv)
 
 
 if __name__ == "__main__":
