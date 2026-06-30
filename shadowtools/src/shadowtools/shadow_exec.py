@@ -43,6 +43,32 @@ class PreserveChoice(enum.Enum):
     ON_ERROR = enum.auto()
 
 
+def _glob_with_root_dir(pattern: str, root_dir: Path) -> List[str]:
+    """Wrapper around glob.glob, backporting root_dir param.
+
+    glob.glob added the root_dir parameter in python 3.10. When we stop
+    supporting python 3.10 we can replace calls to this function with
+    `glob.glob(pattern, root_dir=root_dir)`.
+    """
+    prefix = str(root_dir).removesuffix(os.sep) + os.sep
+    rooted_pattern = prefix + pattern
+    return [s.removeprefix(prefix) for s in glob.glob(rooted_pattern)]
+
+
+def _try_open_glob(root_dir: Path, pattern: str) -> Optional[BinaryIO]:
+    """Open and return a file matching `pattern` in `root_dir`, if one exists.
+
+    Raises an exception if there are multiple matches."""
+    matches = _glob_with_root_dir(pattern, root_dir)
+    if len(matches) == 0:
+        return None
+    if len(matches) != 1:
+        raise Exception(
+            f"Unexpectedly more than 1 match at {root_dir}/{pattern}: {matches}"
+        )
+    return root_dir.joinpath(matches[0]).open("rb")
+
+
 def _make_base_config() -> scfg.Config:
     """Generate a simple shadow configuration, suitable for one-off ad-hoc simulations.
 
@@ -147,14 +173,10 @@ def _run_shadow_watching_process(
 
             # Try opening the simulated process's stdout if we haven't
             # successfully done so yet.
-            if simulated_stdout_file is None and (
-                stdout_paths := glob.glob(f"*.{watch_pid}.stdout", root_dir=host_dir)
-            ):
-                if len(stdout_paths) != 1:
-                    raise Exception(
-                        f"Unexpectedly more than 1 matching path: {stdout_paths}"
-                    )
-                simulated_stdout_file = host_dir.joinpath(stdout_paths[0]).open("rb")
+            if simulated_stdout_file is None:
+                simulated_stdout_file = _try_open_glob(
+                    host_dir, f"*.{watch_pid}.stdout"
+                )
 
             # Pump data from sim stdout to our stdout
             data = None
