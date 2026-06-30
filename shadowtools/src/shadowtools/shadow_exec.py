@@ -20,6 +20,7 @@ Sat Jan  1 00:16:40 GMT 2000
 """
 
 import argparse
+import glob
 import re
 import enum
 import subprocess
@@ -42,45 +43,12 @@ class PreserveChoice(enum.Enum):
     ON_ERROR = enum.auto()
 
 
-def _main(
-    progname: str,
-    args: Iterable[str],
-    preserve: PreserveChoice = PreserveChoice.NEVER,
-    temp_dir: Optional[Path] = None,
-    stdout: BinaryIO = sys.stdout.buffer,
-    stderr: TextIO = sys.stderr,
-    shadow_bin: Path = Path("shadow"),
-    shadow_args: Iterable[str] = (),
-) -> int:
+def _make_base_config() -> scfg.Config:
+    """Generate a simple shadow configuration, suitable for one-off ad-hoc simulations.
+
+    Does *not* include any hosts, which must be added separately.
     """
-    Run a program under shadow.
-
-    args:
-    progname -- String prefix to use for output originating from this function.
-    args -- List of arguments of program to be run under shadow.
-    preserve -- Whether to save the temporary directory containing the raw
-                simulation config and results.
-    stdout -- Destination for the simulated program's merged stdout and stderr.
-    stderr -- Destination for other "meta" output.
-    shadow_bin -- Shadow binary basename or path.
-    """
-
-    tmpdir = Path(tempfile.mkdtemp(prefix=f"{progname}-", dir=temp_dir))
-
-    wrapper_script = textwrap.dedent(
-        f"""
-        set -euo pipefail
-
-        # Change back to host working dir
-        cd {shlex.quote(str(Path('.').resolve()))}
-
-        # Run specified command, merging stderr to stdout
-        exec {shlex.join(args)} 2>&1
-        """
-    )
-
-    data_dir = tmpdir.joinpath("shadow.data")
-    config = scfg.Config(
+    return scfg.Config(
         general=scfg.General(
             # It'd be nice to set a higher stop-time here, but some simulations
             # (chutney) take a long time to fast-forward empty time after all
@@ -91,7 +59,6 @@ def _main(
             log_level="warning",
             heartbeat_interval=None,
             progress=False,
-            data_directory=str(data_dir),
         ),
         experimental=scfg.Experimental(
             # For the sort of small simulations this tool is meant for, cpu
@@ -100,24 +67,58 @@ def _main(
             use_cpu_pinning=False,
         ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
-        hosts={
-            "host": scfg.Host(
-                network_node_id=0,
-                processes=[
-                    scfg.Process(
-                        path="bash",
-                        args=[
-                            "-c",
-                            wrapper_script,
-                        ],
-                    )
+        hosts={},
+    )
+
+
+def _make_controller_host(args: Iterable[str]) -> scfg.Host:
+    """Generate a shadow host configuration to run the command in `args`"""
+    wrapper_script = textwrap.dedent(f"""
+        set -euo pipefail
+
+        # Change back to host working dir
+        cd {shlex.quote(str(Path('.').resolve()))}
+
+        # Run specified command, merging stderr to stdout
+        exec {shlex.join(args)} 2>&1
+        """)
+    return scfg.Host(
+        network_node_id=0,
+        processes=[
+            scfg.Process(
+                path="bash",
+                args=[
+                    "-c",
+                    wrapper_script,
                 ],
             )
-        },
+        ],
     )
-    config_path = tmpdir.joinpath("shadow.yaml")
-    config_path.write_text(yaml.safe_dump(config))
 
+
+def _run_shadow_watching_process(
+    *,
+    watch_host: str,
+    watch_pid: int,
+    dstdir: Path,
+    shadow_bin: Path = Path("shadow"),
+    shadow_config_path: Path,
+    shadow_args: Iterable[str] = (),
+    stdout: BinaryIO = sys.stdout.buffer,
+    stderr: TextIO = sys.stderr,
+) -> int:
+    """Run shadow, forwarding the stdout of one simulated process to `stdout`
+
+    watch_host: Name of the host inside the shadow sim to watch.
+    watch_pid: pid of the process on watch_host to watch.
+    dstdir: directory in which to put output files.
+    shadow_bin: path to the shadow executable.
+    shadow_config_path: path to the shadow config file.
+    shadow_args: additional command-line arguments to pass to shadow.
+    stdout: where to write the watched process's stdout.
+    stderr: where to write the watched process's stderr.
+    """
+    data_dir = dstdir.joinpath("shadow.data")
     if any((re.match(r"^--data-directory(=|$)|^-d", s) for s in shadow_args)):
         # It wouldn't be *terribly* hard to support this, but not today.
         # Naively allowing this override would break our stdout pass-through
@@ -126,14 +127,16 @@ def _main(
             f"ERROR: Overriding shadow's --data-directory currently unsupported.",
             file=stderr,
         )
-        sys.exit(1)
-    shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
-    shadow_stderr_path = tmpdir.joinpath("shadow.stderr")
+    shadow_stdout_path = dstdir.joinpath("shadow.stdout")
+    shadow_stderr_path = dstdir.joinpath("shadow.stderr")
+    host_dir = data_dir.joinpath("hosts", watch_host)
     with shadow_stdout_path.open("w") as shadow_stdout_file, shadow_stderr_path.open(
         "w"
     ) as shadow_stderr_file:
         shadow_ps = subprocess.Popen(
-            [str(shadow_bin)] + list(shadow_args) + ["--", str(config_path)],
+            [str(shadow_bin)]
+            + list(shadow_args)
+            + [f"--data-directory={data_dir}", "--", str(shadow_config_path)],
             stdout=shadow_stdout_file,
             stderr=shadow_stderr_file,
         )
@@ -144,14 +147,14 @@ def _main(
 
             # Try opening the simulated process's stdout if we haven't
             # successfully done so yet.
-            if simulated_stdout_file is None:
-                try:
-                    simulated_stdout_file = open(
-                        str(data_dir.joinpath("hosts/host/bash.1000.stdout")), "rb"
+            if simulated_stdout_file is None and (
+                stdout_paths := glob.glob(f"*.{watch_pid}.stdout", root_dir=host_dir)
+            ):
+                if len(stdout_paths) != 1:
+                    raise Exception(
+                        f"Unexpectedly more than 1 matching path: {stdout_paths}"
                     )
-                except FileNotFoundError:
-                    # Not created yet, presumably
-                    pass
+                simulated_stdout_file = host_dir.joinpath(stdout_paths[0]).open("rb")
 
             # Pump data from sim stdout to our stdout
             data = None
@@ -195,16 +198,62 @@ def _main(
         while shadow_stderr:
             count = stderr.write(textwrap.indent(shadow_stderr, "shadow: "))
             shadow_stderr = shadow_stderr[count:]
+    return shadow_ps.returncode
 
+
+def _main(
+    progname: str,
+    args: Iterable[str],
+    preserve: PreserveChoice = PreserveChoice.NEVER,
+    temp_dir: Optional[Path] = None,
+    stdout: BinaryIO = sys.stdout.buffer,
+    stderr: TextIO = sys.stderr,
+    shadow_bin: Path = Path("shadow"),
+    shadow_args: Iterable[str] = (),
+) -> int:
+    """
+    Run a program under shadow.
+
+    args:
+    progname -- String prefix to use for output originating from this function.
+    args -- List of arguments of program to be run under shadow.
+    preserve -- Whether to save the temporary directory containing the raw
+                simulation config and results.
+    stdout -- Destination for the simulated program's merged stdout and stderr.
+    stderr -- Destination for other "meta" output.
+    shadow_bin -- Shadow binary basename or path.
+    """
+
+    tmpdir = Path(tempfile.mkdtemp(prefix=f"{progname}-", dir=temp_dir))
+
+    config = _make_base_config()
+    hostname = "host"
+    config["hosts"][hostname] = _make_controller_host(args)
+
+    config_path = tmpdir.joinpath("shadow.yaml")
+    config_path.write_text(yaml.safe_dump(config))
+
+    shadow_stdout_path = tmpdir.joinpath("shadow.stdout")
+    shadow_stderr_path = tmpdir.joinpath("shadow.stderr")
+    shadow_rc = _run_shadow_watching_process(
+        watch_host=hostname,
+        watch_pid=1000,
+        dstdir=tmpdir,
+        shadow_bin=shadow_bin,
+        shadow_config_path=config_path,
+        shadow_args=shadow_args,
+        stdout=stdout,
+        stderr=stderr,
+    )
     # clean up temp files
     if preserve == PreserveChoice.ALWAYS or (
-        preserve == PreserveChoice.ON_ERROR and shadow_ps.returncode
+        preserve == PreserveChoice.ON_ERROR and shadow_rc
     ):
         print(f"{progname}: Preserving tmpdir {tmpdir}", file=stderr)
     else:
         shutil.rmtree(tmpdir)
 
-    return shadow_ps.returncode
+    return shadow_rc
 
 
 def __main__() -> None:
@@ -214,15 +263,13 @@ def __main__() -> None:
 
     parser = argparse.ArgumentParser(
         prog=PROGNAME,
-        description=textwrap.dedent(
-            f"""
+        description=textwrap.dedent(f"""
             Executes the command `args` inside a single-host shadow simulation.
 
             Examples:
               {PROGNAME} date
               {PROGNAME} -- bash -c 'date; sleep 100; date'
-            """
-        ),
+            """),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
