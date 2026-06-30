@@ -101,7 +101,7 @@ def _make_base_config() -> scfg.Config:
 def _make_controller_host(args: Iterable[str]) -> scfg.Host:
     """Generate a shadow host configuration to run the command in `args`"""
     wrapper_script = textwrap.dedent(f"""
-        set -euo pipefail
+        set -eu
 
         # Change back to host working dir
         cd {shlex.quote(str(Path('.').resolve()))}
@@ -113,7 +113,7 @@ def _make_controller_host(args: Iterable[str]) -> scfg.Host:
         network_node_id=0,
         processes=[
             scfg.Process(
-                path="bash",
+                path="sh",
                 args=[
                     "-c",
                     wrapper_script,
