@@ -326,7 +326,7 @@ fn test_prlimit_child() {
                 rustix::process::WaitId::Pid(
                     rustix::process::Pid::from_raw(child_pid.as_raw_nonzero().get()).unwrap(),
                 ),
-                rustix::process::WaitidOptions::NOWAIT | rustix::process::WaitidOptions::EXITED,
+                rustix::process::WaitIdOptions::NOWAIT | rustix::process::WaitIdOptions::EXITED,
             )
             .unwrap();
             assert_eq!(child_status.unwrap().exit_status(), Some(0));
@@ -353,7 +353,7 @@ fn test_prlimit_child() {
                 rustix::process::WaitOptions::empty(),
             )
             .unwrap();
-            assert_eq!(child_status.unwrap().exit_status(), Some(0));
+            assert_eq!(child_status.unwrap().1.exit_status(), Some(0));
         }
         std::cmp::Ordering::Less => {
             panic!("fork failed: {:?}", Errno::from_libc_errno());

@@ -145,7 +145,7 @@ impl ManagedThread {
                     rustix::process::waitpid(Some(native_pid.into()), WaitOptions::empty())
                         .unwrap()
                         .unwrap();
-                if status.exit_status() == Some(127) {
+                if status.1.exit_status() == Some(127) {
                     // posix_spawn(3):
                     // > If  the child  fails  in  any  of the
                     // > housekeeping steps described below, or fails to
@@ -764,7 +764,7 @@ impl ManagedThread {
     /// thread!) and then drops `self`.
     pub fn kill_and_drop(self) {
         if let Err(err) =
-            rustix::process::kill_process(self.native_pid().into(), rustix::process::Signal::Kill)
+            rustix::process::kill_process(self.native_pid().into(), rustix::process::Signal::KILL)
         {
             log::warn!(
                 "Couldn't kill managed process {:?}. kill: {:?}",

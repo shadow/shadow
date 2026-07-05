@@ -22,7 +22,7 @@ use linux_api::signal::{
     sigset_t,
 };
 use log::{debug, trace, warn};
-use rustix::process::{WaitOptions, WaitStatus};
+use rustix::process::WaitOptions;
 use shadow_shim_helper_rs::HostId;
 use shadow_shim_helper_rs::explicit_drop::{ExplicitDrop, ExplicitDropper};
 use shadow_shim_helper_rs::rootedcell::Root;
@@ -515,8 +515,8 @@ impl RunnableProcess {
     /// is set, and belongs to the process `self`, and doesn't have the signal
     /// blocked.  In that the signal will be processed synchronously when
     /// returning from the current syscall.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo_t: &siginfo_t) {
-        let signal = match siginfo_t.signal() {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, info: &siginfo_t) {
+        let signal = match info.signal() {
             Ok(s) => s,
             Err(SignalFromI32Error(0)) => return,
             Err(SignalFromI32Error(n)) => panic!("Bad signo {n}"),
@@ -550,7 +550,7 @@ impl RunnableProcess {
                 return;
             }
             process_shmem_protected.pending_signals.add(signal);
-            process_shmem_protected.set_pending_standard_siginfo(signal, siginfo_t);
+            process_shmem_protected.set_pending_standard_siginfo(signal, info);
         }
 
         if let Some(thread) = current_thread
@@ -901,8 +901,8 @@ fn itimer_real_expiration(host: &Host, pid: ProcessId) {
     // The siginfo_t structure only has an i32. Presumably we want to just truncate in
     // case of overflow.
     let expiration_count = timer.expiration_count() as i32;
-    let siginfo_t = siginfo_t::new_for_timer(Signal::SIGALRM, 0, expiration_count);
-    process.signal(host, None, &siginfo_t);
+    let info = siginfo_t::new_for_timer(Signal::SIGALRM, 0, expiration_count);
+    process.signal(host, None, &info);
 }
 
 impl Process {
@@ -1080,7 +1080,7 @@ impl Process {
             );
             eprintln!("{msg}");
 
-            rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::Tstp)
+            rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::TSTP)
                 .unwrap();
         }
 
@@ -1318,7 +1318,7 @@ impl Process {
 
             if let Err(err) = rustix::process::kill_process(
                 runnable.native_pid().into(),
-                rustix::process::Signal::Kill,
+                rustix::process::Signal::KILL,
             ) {
                 warn!("kill: {err:?}");
             }
@@ -1339,10 +1339,10 @@ impl Process {
     /// See `RunnableProcess::signal`.
     ///
     /// No-op if the `self` is a `ZombieProcess`.
-    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, siginfo_t: &siginfo_t) {
+    pub fn signal(&self, host: &Host, current_thread: Option<&Thread>, info: &siginfo_t) {
         // Using full-match here to force update if we add more states later.
         match self.state.borrow().as_ref().unwrap() {
-            ProcessState::Runnable(r) => r.signal(host, current_thread, siginfo_t),
+            ProcessState::Runnable(r) => r.signal(host, current_thread, info),
             ProcessState::Zombie(_) => {
                 // Sending a signal to a zombie process is a no-op.
                 debug!("Process {} no longer running", &*self.name());
@@ -1536,23 +1536,21 @@ impl Process {
             runnable.total_run_time.get()
         );
 
-        let wait_res: Option<WaitStatus> =
+        let wait_res =
             rustix::process::waitpid(Some(runnable.native_pid().into()), WaitOptions::empty())
                 .unwrap_or_else(|e| {
                     panic!("Error waiting for {:?}: {:?}", runnable.native_pid(), e)
                 });
-        let wait_status = wait_res.unwrap();
+        let wait_status = wait_res.unwrap().1;
         let exit_status = if killed_by_shadow {
-            if wait_status.terminating_signal()
-                != Some(Signal::SIGKILL.as_i32().try_into().unwrap())
-            {
+            if wait_status.terminating_signal() != Some(Signal::SIGKILL.as_i32()) {
                 warn!("Unexpected waitstatus after killed by shadow: {wait_status:?}");
             }
             ExitStatus::StoppedByShadow
         } else if let Some(code) = wait_status.exit_status() {
-            ExitStatus::Normal(code.try_into().unwrap())
+            ExitStatus::Normal(code)
         } else if let Some(signal) = wait_status.terminating_signal() {
-            ExitStatus::Signaled(Signal::try_from(i32::try_from(signal).unwrap()).unwrap())
+            ExitStatus::Signaled(Signal::try_from(signal).unwrap())
         } else {
             panic!(
                 "Unexpected status: {wait_status:?} for pid {:?}",
@@ -1781,14 +1779,14 @@ impl Process {
         let old_native_pid = std::mem::replace(&mut runnable.native_pid, mthread.native_pid());
 
         // Kill the previous native process
-        rustix::process::kill_process(old_native_pid.into(), rustix::process::Signal::Kill)
+        rustix::process::kill_process(old_native_pid.into(), rustix::process::Signal::KILL)
             .expect("Unable to send kill signal to managed process {old_native_pid:?}");
         let wait_res = rustix::process::waitpid(Some(old_native_pid.into()), WaitOptions::empty())
             .unwrap()
             .unwrap();
         assert_eq!(
-            wait_res.terminating_signal(),
-            Some(Signal::SIGKILL.as_i32().try_into().unwrap())
+            wait_res.1.terminating_signal(),
+            Some(Signal::SIGKILL.into())
         );
 
         let execing_thread = runnable.threads.borrow_mut().remove(&tid).unwrap();
