@@ -94,8 +94,11 @@ fn die_with_fatal_signal(sig: Signal) -> ! {
         unsafe { linux_api::signal::rt_sigaction(sig, &action, None) }.unwrap();
     }
     let pid = rustix::process::getpid();
-    rustix::process::kill_process(pid, rustix::process::Signal::from_raw(sig.into()).unwrap())
-        .unwrap();
+    rustix::process::kill_process(
+        pid,
+        rustix::process::Signal::from_named_raw(sig.into()).unwrap(),
+    )
+    .unwrap();
     unreachable!()
 }
 
