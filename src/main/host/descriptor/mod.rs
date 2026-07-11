@@ -986,7 +986,7 @@ mod tests {
             // We can't easily compare the value to the roundtripped result, since
             // roundtripping consumes the original value, and SyscallReturn doesn't implement Clone.
             // Compare their debug strings instead.
-            let orig_debug = format!("{:?}", &val);
+            let orig_debug = format!("{:?}", val);
             let roundtripped = SyscallResult::from(SyscallReturn::from(val));
             let roundtripped_debug = format!("{roundtripped:?}");
             assert_eq!(orig_debug, roundtripped_debug);
@@ -1021,7 +1021,7 @@ mod tests {
             // since roundtripping consumes the original value, and
             // SyscallReturn doesn't implement Clone. Compare their debug
             // strings instead.
-            let orig_debug = format!("{:?}", &val);
+            let orig_debug = format!("{:?}", val);
             let roundtripped = SyscallReturn::from(SyscallResult::from(val));
             let roundtripped_debug = format!("{roundtripped:?}");
             assert_eq!(orig_debug, roundtripped_debug);
