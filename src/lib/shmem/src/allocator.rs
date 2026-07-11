@@ -243,7 +243,7 @@ impl core::str::FromStr for ShMemBlockSerialized {
 
             let mut chunk_format = FormatBuffer::<{ crate::util::PATH_MAX_NBYTES }>::new();
 
-            write!(&mut chunk_format, "{}", &path_str).unwrap();
+            write!(&mut chunk_format, "{}", path_str).unwrap();
 
             let mut chunk_name = crate::util::NULL_PATH_BUF;
             chunk_name
