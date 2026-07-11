@@ -22,7 +22,9 @@ struct WaiterResult {
 
 fn do_epoll_wait(epoll_fd: i32, timeout: Duration, do_read: bool) -> WaiterResult {
     let mut events = Vec::new();
-    events.resize(10, epoll::EpollEvent::empty());
+    // All tests assume that each thread will only receive a single event. Let's
+    // enforce that by limiting the event set to 1.
+    events.resize(1, epoll::EpollEvent::empty());
 
     let t0 = std::time::Instant::now();
 

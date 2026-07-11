@@ -12,25 +12,25 @@ rustix = ["dep:rustix"]
 c_bindings = ["dep:shadow-build-common", "dep:cbindgen"]
 
 [dependencies]
-bitflags = "2.11.0"
-log = { version = "0.4.28", default-features = false }
+bitflags = "2.13.0"
+log = { version = "0.4.33", default-features = false }
 shadow-pod = { path = "../pod" }
 static_assertions = "1.1.0"
 vasi = { path = "../vasi" }
-num_enum = { version = "0.7.4", default-features = false }
+num_enum = { version = "0.7.6", default-features = false }
 memoffset = "0.9.1"
-bytemuck = "1.25.0"
+bytemuck = "1.25.1"
 linux-syscall = "1.2.0"
 linux-errno = "1.1.0"
 naked-function = "0.1.5"
-linux-raw-sys = "0.12.0"
-rustix = { optional = true, version = "0.38.44", default-features = false, features = ["process"] }
-libc = { optional = true, default-features = false, version = "0.2.176" }
-bytemuck_derive = "1.10.2"
+linux-raw-sys = "0.12.1"
+rustix = { optional = true, version = "1.1.4", default-features = false, features = ["process"] }
+libc = { optional = true, default-features = false, version = "0.2.186" }
+bytemuck_derive = "1.11.0"
 
 [dev-dependencies]
-rustix = { version = "0.38.44", default-features=false, features = ["thread", "process", "time"] }
+rustix = { version = "1.1.4", default-features=false, features = ["thread", "process", "time"] }
 
 [build-dependencies]
 shadow-build-common = { optional = true, path = "../shadow-build-common", features = ["cbindgen"] }
-cbindgen = { optional = true, version = "0.29.0", default-features = false }
+cbindgen = { optional = true, version = "0.29.4", default-features = false }

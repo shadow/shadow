@@ -8,7 +8,7 @@ use std::hash::Hasher;
 use std::os::unix::io::AsRawFd;
 
 use nix::sys::socket::MsgFlags;
-use rand::RngCore;
+use rand::Rng;
 use rand::SeedableRng;
 use test_utils::TestEnvironment as TestEnv;
 use test_utils::running_in_shadow;

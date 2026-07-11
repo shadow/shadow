@@ -37,7 +37,7 @@ loom::lazy_static! {
 
 #[cfg(not(loom))]
 pub fn sched_yield() {
-    rustix::process::sched_yield();
+    rustix::thread::sched_yield();
 }
 #[cfg(loom)]
 pub fn sched_yield() {
@@ -59,21 +59,12 @@ unsafe fn futex(
 ) -> rustix::io::Result<usize> {
     #[cfg(not(miri))]
     {
-        let futex_operation = match futex_operation {
-            FutexOperation::Wait => rustix::thread::FutexOperation::Wait,
-            FutexOperation::Wake => rustix::thread::FutexOperation::Wake,
-        };
-
-        unsafe {
-            rustix::thread::futex(
-                futex_word.as_ptr(),
-                futex_operation,
-                rustix::thread::FutexFlags::empty(),
-                val,
-                core::ptr::null(),
-                core::ptr::null_mut(),
-                0u32,
-            )
+        let flags = rustix::thread::futex::Flags::empty();
+        match futex_operation {
+            FutexOperation::Wait => {
+                rustix::thread::futex::wait(futex_word, flags, val, None).map(|_| 0)
+            }
+            FutexOperation::Wake => rustix::thread::futex::wake(futex_word, flags, val),
         }
     }
     // Rustix doesn't include `futex` at all under miri. miri understands

@@ -28,15 +28,9 @@ pub fn split_at_first_char(buf: &[u8]) -> Option<(&str, &[u8])> {
 #[test]
 fn test_split_at_first_char() {
     // Valid first char; multiple lengths
-    assert_eq!(
-        split_at_first_char(&[b'1', b'2', b'3'][..]),
-        Some(("1", &[b'2', b'3'][..]))
-    );
-    assert_eq!(
-        split_at_first_char(&[b'1', b'2'][..]),
-        Some(("1", &[b'2'][..]))
-    );
-    assert_eq!(split_at_first_char(&[b'1'][..]), Some(("1", &[][..])));
+    assert_eq!(split_at_first_char(&b"123"[..]), Some(("1", &b"23"[..])));
+    assert_eq!(split_at_first_char(&b"12"[..]), Some(("1", &b"2"[..])));
+    assert_eq!(split_at_first_char(&b"1"[..]), Some(("1", &[][..])));
 
     // Invalid first char; multiple lengths
     assert_eq!(split_at_first_char(&[0x80, b'2', b'3'][..]), None);
