@@ -16,27 +16,27 @@ formatting-nostd = { path = "../formatting-nostd" }
 libc = { version = "0.2", default-features = false }
 linux-api = { path = "../linux-api", features = ["rustix"] }
 linux-syscall = "1.2.0"
-num_enum = { version = "0.7.4", default-features=false }
+num_enum = { version = "0.7.6", default-features=false }
 shadow-shim-helper-rs = { path = "../shadow-shim-helper-rs" }
 shadow_shmem = { path = "../shmem" }
 asm_util = { path = "../asm-util" }
 logger = { path = "../logger" }
-log = { version = "0.4.28", default-features = false }
+log = { version = "0.4.33", default-features = false }
 log-c2rust = { path = "../log-c2rust" }
 rustix = { version = "1.1.4", default-features = false, features = ["process", "thread", "time", "mm"] }
-linux-raw-sys = { version = "0.12.0" }
+linux-raw-sys = { version = "0.12.1" }
 shadow-pod = { path = "../pod" }
 vasi-sync = { path = "../vasi-sync"}
 static_assertions = "1.1.0"
 va_list = { version = "0.2.1", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.11.8"
-test-log = "0.2.18"
+env_logger = "0.11.11"
+test-log = "0.2.21"
 
 [build-dependencies]
 bindgen = { version = "0.72.1" }
-cbindgen = { version = "0.29.0", default-features = false }
+cbindgen = { version = "0.29.4", default-features = false }
 cc = { version = "1.2", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }
 # Building the C code from this crate's build script requires

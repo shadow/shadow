@@ -215,7 +215,7 @@ mod tests {
     use std::time::Duration;
 
     use atomic_refcell::AtomicRefCell;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     use super::*;
 

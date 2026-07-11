@@ -1,6 +1,6 @@
 use std::{ffi::CStr, io::Read};
 
-use rand::RngCore as _;
+use rand::Rng;
 
 fn test_open_read(filename: &str) {
     let mut f = std::fs::File::open(filename).unwrap();
