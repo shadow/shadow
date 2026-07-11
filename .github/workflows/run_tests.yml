@@ -101,7 +101,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Restore cargo registry cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -117,7 +117,7 @@ jobs:
         run: |
           echo rustv=\"$(rustc --version)\" >> $GITHUB_OUTPUT
       - name: Restore sccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         continue-on-error: false
         with:
           path: ${{ env.SCCACHE_DIR }}
