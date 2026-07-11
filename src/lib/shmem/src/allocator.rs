@@ -387,7 +387,7 @@ unsafe impl Sync for SharedMemDeserializer<'_> {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    use rand::RngExt;
     use std::str::FromStr;
     use std::string::ToString;
     use std::sync::atomic::{AtomicI32, Ordering};
