@@ -43,8 +43,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v6
         with:
-          # Oldest python version supported by shadowtools package
-          python-version: '3.8'
+          # Oldest python version supported by shadowtools package.
+          # See shadowtools/pyproject.toml, `requires-python`
+          python-version: '3.9'
       # Last bumped 2024-12-02
       - run: pip install mypy==1.11.2
       # Type annotations of dependencies
