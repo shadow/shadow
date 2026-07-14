@@ -124,10 +124,9 @@ def _make_controller_host(args: Iterable[str], environ: Dict[str, str]) -> scfg.
     )
 
 
-def _run_shadow_watching_process(
+def run_shadow_watching_process(
     *,
     watch_host: str,
-    watch_pid: int,
     dstdir: Path,
     shadow_bin: Path = Path("shadow"),
     shadow_config_path: Path,
@@ -135,10 +134,14 @@ def _run_shadow_watching_process(
     stdout: BinaryIO = sys.stdout.buffer,
     stderr: BinaryIO = sys.stderr.buffer,
 ) -> None:
-    """Run shadow, forwarding the stdout of one simulated process to `stdout`
+    """Run shadow, forwarding the output of one simulated process.
+
+    The simulated process's simulated stdout and stderr are continuously
+    forwarded to `stdout` and `stderr`.
 
     watch_host: Name of the host inside the shadow sim to watch.
-    watch_pid: pid of the process on watch_host to watch.
+      There should be exactly one "root" process configured for this host.
+      (But that process is allowed to launch additional processes).
     dstdir: directory in which to put output files.
     shadow_bin: path to the shadow executable.
     shadow_config_path: path to the shadow config file.
@@ -172,6 +175,11 @@ def _run_shadow_watching_process(
         shadow_exited = False
         while True:
             processed_data = False
+
+            # We use the shadow implementation detail that pid's start from
+            # 1000. To avoid exposing that detail to the caller, this function
+            # currently only supports simulated hosts with 1 root process.
+            watch_pid = 1000
 
             # Try opening the simulated process's stdout and stderr if we
             # haven't successfully done so yet.
@@ -283,9 +291,8 @@ def _main(
 
     error = False
     try:
-        _run_shadow_watching_process(
+        run_shadow_watching_process(
             watch_host=hostname,
-            watch_pid=1000,
             dstdir=tmpdir,
             shadow_bin=shadow_bin,
             shadow_config_path=config_path,
