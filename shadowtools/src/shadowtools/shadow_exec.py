@@ -155,7 +155,7 @@ def run_shadow_watching_process(
         # Naively allowing this override would break our stdout pass-through
         # below.
         raise Exception(
-            f"ERROR: Overriding shadow's --data-directory currently unsupported.",
+            f"Overriding shadow's --data-directory currently unsupported.",
         )
     shadow_stdout_path = dstdir.joinpath("shadow.stdout")
     shadow_stderr_path = dstdir.joinpath("shadow.stderr")
