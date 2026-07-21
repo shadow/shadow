@@ -20,6 +20,7 @@ Sat Jan  1 00:16:40 GMT 2000
 """
 
 import argparse
+import fnmatch
 import glob
 import re
 import enum
@@ -33,7 +34,7 @@ import textwrap
 import yaml
 
 from pathlib import Path
-from typing import TextIO, BinaryIO, Final, Optional, List, Iterable, Dict
+from typing import TextIO, BinaryIO, Final, Optional, List, Iterable, Dict, Literal
 
 import shadowtools.config as scfg
 
@@ -44,23 +45,32 @@ class PreserveChoice(enum.Enum):
     ON_ERROR = enum.auto()
 
 
-def _glob_with_root_dir(pattern: str, root_dir: Path) -> List[str]:
-    """Wrapper around glob.glob, backporting root_dir param.
+def _glob(pattern: str, root_dir: Path, include_hidden: Literal[True]) -> List[str]:
+    """Reimplementation of glob.glob, backporting root_dir and include_hidden.
 
-    glob.glob added the root_dir parameter in python 3.10. When we stop
-    supporting python 3.10 we can replace calls to this function with
-    `glob.glob(pattern, root_dir=root_dir)`.
+    glob.glob added the root_dir parameter in python 3.10. For simplicity, we
+    *require* it here.
+
+    glob.glob added the include_hidden parameter in python 3.11. For simplicity
+    we require it to be True here.
+
+    When our minimum version is >= 3.11 we can replace calls to this function with
+    `glob.glob(pattern, root_dir=root_dir, include_hidden=True)`.
     """
-    prefix = str(root_dir).removesuffix(os.sep) + os.sep
-    rooted_pattern = prefix + pattern
-    return [s.removeprefix(prefix) for s in glob.glob(rooted_pattern)]
+    try:
+        paths = os.listdir(root_dir)
+    except FileNotFoundError:
+        # root_dir doesn't exist. glob.glob behavior is to return empty.
+        return []
+    return [path for path in paths if fnmatch.fnmatchcase(path, pattern)]
 
 
 def _try_open_glob(root_dir: Path, pattern: str) -> Optional[BinaryIO]:
     """Open and return a file matching `pattern` in `root_dir`, if one exists.
 
     Raises an exception if there are multiple matches."""
-    matches = _glob_with_root_dir(pattern, root_dir)
+    # TODO: call glob.glob when our minimum python is >= 3.11.
+    matches = _glob(pattern, root_dir=root_dir, include_hidden=True)
     if len(matches) == 0:
         return None
     if len(matches) != 1:
