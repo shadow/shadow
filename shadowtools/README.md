@@ -6,16 +6,18 @@ This is a python package containing tools for working with the [shadow] simulato
 
 [shadow]: <https://shadow.github.io/>
 
-It currently contains two modules:
+It currently contains the modules:
 
 * `shadowtools.config` - `TypedDict`s defining shadow's configuration file format.
   These are meant to facilitate dynamic generation of shadow config files
   from python code.
 
-* `shadowtools.shadow_exec` - Streamlines running a single command in a
-  single-host shadow simulation.
+* `shadowtools.shadow_exec` - Tools for running shadow simulations.
 
-See the respective modules for further documentation and examples.
+And the CLI script:
+
+* `shadow-exec` - Streamlines running a single command in a single-host shadow
+  simulation.
 
 ## Installation
 
