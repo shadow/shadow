@@ -43,6 +43,10 @@ name = "test_exit"
 path = "exit/test_exit.rs"
 
 [[bin]]
+name = "test_file_locks"
+path = "file_locks/test_file_locks.rs"
+
+[[bin]]
 name = "test_sched_affinity"
 path = "sched_affinity/test_sched_affinity.rs"
 
