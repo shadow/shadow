@@ -384,6 +384,45 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
+    let file = tempfile::tempfile()?;
+
+    // Lock a range
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into()?,
+        l_whence: libc::SEEK_SET.try_into()?,
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_flock)?, ==,wr_flock);
+
+    // Unlocking the locked range should work.
+    let unlk_flock = libc::flock {
+        l_type: libc::F_UNLCK.try_into()?,
+        ..wr_flock
+    };
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+
+    // Unlocking a range where there are no locks should still work.
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+
+    // Take a write lock in a child process
+    let mut child = ForkedChild::new(handle_lock_request)?;
+    ensure_ord!(child.send_recv(&SerializedLockRequest { fd: file.as_raw_fd(), cmd: libc::F_SETLK, flock: wr_flock })?.rv, ==, 0);
+
+    // Unlocking a range where we don't have a lock *and othes do*, should still succeed.
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+
+    // The child lock should still be there, of course.
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &wr_flock)?, ==, libc::flock {
+        l_pid: child.pid(),
+        ..wr_flock
+    });
+
+    Ok(())
+}
+
 fn test_block_on_pid_locks() -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
@@ -502,6 +541,12 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new(
             "query-overlapping-pid-locks",
             test_query_overlapping_pid_locks,
+            // TODO: <https://github.com/shadow/shadow/issues/2258>
+            no_shadow_envs.clone(),
+        ),
+        ShadowTest::new(
+            "unlock-pid-locks-edge-cases",
+            test_unlock_pid_locks_edge_cases,
             // TODO: <https://github.com/shadow/shadow/issues/2258>
             no_shadow_envs.clone(),
         ),
