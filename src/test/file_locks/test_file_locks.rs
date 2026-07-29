@@ -102,19 +102,22 @@ struct SerializedLockResponse {
 }
 unsafe impl shadow_pod::Pod for SerializedLockResponse {}
 
+/// Perform the operation specified by `req`.
+fn handle_lock_request(req: &SerializedLockRequest) -> SerializedLockResponse {
+    let mut flock = req.flock;
+    let rv = unsafe { libc::fcntl(req.fd, req.cmd, &mut flock) };
+    SerializedLockResponse {
+        rv,
+        flock,
+        errno: unsafe { *libc::__errno_location() },
+    }
+}
+
 fn test_contested_pid_locks() -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
 
-    let mut child = ForkedChild::<SerializedLockRequest, SerializedLockResponse>::new(|req| {
-        let mut flock = req.flock;
-        let rv = unsafe { libc::fcntl(req.fd, req.cmd, &mut flock) };
-        SerializedLockResponse {
-            rv,
-            flock,
-            errno: unsafe { *libc::__errno_location() },
-        }
-    })?;
+    let mut child = ForkedChild::new(handle_lock_request)?;
 
     // Take a read lock
     let rd_flock = libc::flock {
@@ -183,15 +186,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
 
-    let mut child = ForkedChild::<SerializedLockRequest, SerializedLockResponse>::new(|req| {
-        let mut flock = req.flock;
-        let rv = unsafe { libc::fcntl(req.fd, req.cmd, &mut flock) };
-        SerializedLockResponse {
-            rv,
-            flock,
-            errno: unsafe { *libc::__errno_location() },
-        }
-    })?;
+    let mut child = ForkedChild::new(handle_lock_request)?;
 
     // Lock first 100 bytes
     let wr100_flock = libc::flock {
