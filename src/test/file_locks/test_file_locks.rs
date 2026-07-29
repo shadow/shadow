@@ -297,6 +297,93 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
+    // Open file before forking, so that child also has the descriptor.
+    let file = tempfile::tempfile()?;
+
+    // child1 takes a reader lock of bytes 0..100
+    let child1_flock = libc::flock {
+        l_type: libc::F_RDLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    let mut child1 = ForkedChild::new(handle_lock_request)?;
+    child1.send_recv(&SerializedLockRequest {
+        fd: file.as_raw_fd(),
+        cmd: libc::F_SETLK,
+        flock: child1_flock,
+    })?;
+
+    // child2 takes an overlapping reader lock of bytes 25..50
+    let child2_flock = libc::flock {
+        l_type: libc::F_RDLCK.try_into()?,
+        l_whence: libc::SEEK_SET.try_into()?,
+        l_start: 25,
+        l_len: 25,
+        l_pid: 0,
+    };
+    let mut child2 = ForkedChild::new(handle_lock_request)?;
+    child2.send_recv(&SerializedLockRequest {
+        fd: file.as_raw_fd(),
+        cmd: libc::F_SETLK,
+        flock: child2_flock,
+    })?;
+
+    // querying the first byte of the child1 lock should describe the *whole*
+    // child1 lock, even though some of the lock's range is shared. (e.g. it
+    // can't return just the first, unshared, part of the child1 lock).
+    ensure_ord!(fcntl_lock(
+        file.as_raw_fd(),
+        libc::F_GETLK,
+        &libc::flock {
+            l_type: libc::F_WRLCK.try_into()?,
+            l_whence: libc::SEEK_SET.try_into()?,
+            l_start: child1_flock.l_start,
+            l_len: 1,
+            l_pid: 0,
+        },
+    )?, ==, libc::flock{
+        l_pid: child1.pid(),
+        ..child1_flock
+    });
+
+    // querying the first byte of the child2 lock can return *either* of the two
+    // locks covering that byte.
+    let res = fcntl_lock(
+        file.as_raw_fd(),
+        libc::F_GETLK,
+        &libc::flock {
+            l_type: libc::F_WRLCK.try_into()?,
+            l_whence: libc::SEEK_SET.try_into()?,
+            l_start: child2_flock.l_start,
+            l_len: 1,
+            l_pid: 0,
+        },
+    )?;
+    ensure!([child1.pid(), child2.pid()].contains(&res.l_pid));
+
+    // querying the last byte of the child1 lock should return that one (again
+    // describing the whole range covered by that lock)
+    ensure_ord!(fcntl_lock(
+        file.as_raw_fd(),
+        libc::F_GETLK,
+        &libc::flock {
+            l_type: libc::F_WRLCK.try_into()?,
+            l_whence: libc::SEEK_SET.try_into()?,
+            l_start: child1_flock.l_start + child1_flock.l_len - 1,
+            l_len: 1,
+            l_pid: 0,
+        },
+    )?, ==, libc::flock{
+        l_pid: child1.pid(),
+        ..child1_flock
+    });
+
+    Ok(())
+}
+
 fn test_block_on_pid_locks() -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
@@ -409,6 +496,12 @@ fn main() -> anyhow::Result<()> {
         ShadowTest::new(
             "block-on-pid-locks",
             test_block_on_pid_locks,
+            // TODO: <https://github.com/shadow/shadow/issues/2258>
+            no_shadow_envs.clone(),
+        ),
+        ShadowTest::new(
+            "query-overlapping-pid-locks",
+            test_query_overlapping_pid_locks,
             // TODO: <https://github.com/shadow/shadow/issues/2258>
             no_shadow_envs.clone(),
         ),
