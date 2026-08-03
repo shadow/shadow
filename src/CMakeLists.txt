@@ -103,7 +103,7 @@ add_test(NAME rust-unit-tests
             ${RUST_BUILD_FLAG} \
             --manifest-path \"${CMAKE_CURRENT_SOURCE_DIR}\"/Cargo.toml \
             --target-dir \"${TARGETDIR}\" \
-            --features \"${RUST_FEATURES}\" \
+            --all-features \
             "
          )
 # Longer timeout here and run serially, since it's running a whole test suite,
