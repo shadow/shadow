@@ -45,7 +45,7 @@ jobs:
         # Disable leak-checking for now. Some tests intentionally panic, causing leaks.
         export MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks"
 
-        cargo miri test --workspace
+        cargo miri test --workspace --all-features
 
   # See <https://docs.rs/loom/latest/loom/>
   loom:
