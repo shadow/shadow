@@ -181,6 +181,54 @@ where
     }
 }
 
+#[cfg(feature = "std")]
+pub trait WriteExt {
+    /// Write `val`.
+    fn write_pod<T: Pod>(&mut self, val: &T) -> std::io::Result<()>;
+}
+
+#[cfg(feature = "std")]
+impl<W> WriteExt for W
+where
+    // It'd be nice to implement for std::io::Write, but it's unclear how to do
+    // so while dealing with padding bytes in the source value (which are
+    // uninitialized).
+    W: std::os::fd::AsRawFd,
+{
+    fn write_pod<T: Pod>(&mut self, val: &T) -> std::io::Result<()> {
+        let bytes = as_u8_slice(val);
+        let mut total_written = 0;
+        while total_written != bytes.len() {
+            // SAFETY: we're passing this pointer directly to a Linux syscall,
+            // which shouldn't care that some of the memory it's reading is
+            // "uninitialized" from a rust compiler standpoint.
+            //
+            // We don't use `libc::write` or even `libc::syscall`, since it's
+            // conceivable that in some environment, the libc implementation
+            // could be statically linked and access the memory in user-space,
+            // which could result in undefined behavior.
+            //
+            // Unfortunately that makes this function impossible to analyze in
+            // miri, which doesn't know how to interpret the raw syscall. (Its
+            // stub for libc::write doesn't permit unitialized bytes, presumably
+            // for the reason above).
+            use linux_syscall::Result64 as _;
+            let nwritten = unsafe {
+                linux_syscall::syscall!(
+                    linux_syscall::SYS_write,
+                    self.as_raw_fd(),
+                    bytes.as_ptr().add(total_written),
+                    bytes.len() - total_written,
+                )
+            }
+            .try_u64()
+            .map_err(|x| std::io::Error::from_raw_os_error(x.get().into()))?;
+            total_written += usize::try_from(nwritten).unwrap();
+        }
+        Ok(())
+    }
+}
+
 // Integer primitives
 unsafe impl Pod for u8 {}
 unsafe impl Pod for u16 {}
@@ -436,5 +484,22 @@ mod test {
                 end: 0
             })
         );
+    }
+
+    // TODO: convince miri that `write_pod` is sound.
+    #[cfg(all(feature = "std", not(miri)))]
+    #[test]
+    fn test_write_pod() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let val = TypeWithPadding {
+            begin: 1u8,
+            middle: 0x1122334455667788u64,
+            end: 2u8,
+        };
+        writer.write_pod(&val).unwrap();
+        let read_value =
+            super::ReadExt::read_pod::<TypeWithPadding>(&mut NosyReader(SlowReader(reader)))
+                .unwrap();
+        assert_eq!(read_value, Some(val));
     }
 }

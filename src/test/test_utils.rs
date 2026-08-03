@@ -6,9 +6,8 @@
 //! Utilities helpful for writing Rust integration tests.
 
 use std::collections::HashSet;
-use std::io::{PipeReader, Write};
+use std::io::{PipeReader, PipeWriter, Write};
 use std::marker::PhantomData;
-use std::os::fd::AsRawFd as _;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
@@ -16,7 +15,7 @@ use std::{fmt, thread};
 use nix::poll::PollFlags;
 use nix::sys::signal;
 use nix::sys::time::TimeVal;
-use shadow_pod::ReadExt as _;
+use shadow_pod::{ReadExt as _, WriteExt as _};
 
 pub mod socket_utils;
 pub mod time;
@@ -646,18 +645,19 @@ where
     Ok(())
 }
 
-/// Wraps a writable `OwnedFd` to accept values of type `T`.
+/// Wraps a writable, blocking, file-descriptor to accept values of type `T`.
 // TODO: It'd be nice to wrap a generic `Write` object instead, but this is
 // tricky to do in a sound way when T may have undefined padding bytes.
-pub struct TypedWriter<T> {
-    fd: std::os::fd::OwnedFd,
+pub struct TypedWriter<W, T> {
+    fd: W,
     _t: PhantomData<T>,
 }
-impl<T> TypedWriter<T>
+impl<W, T> TypedWriter<W, T>
 where
     T: shadow_pod::Pod,
+    W: std::os::fd::AsRawFd,
 {
-    fn new(fd: std::os::fd::OwnedFd) -> Self {
+    fn new(fd: W) -> Self {
         Self {
             fd,
             _t: PhantomData,
@@ -666,22 +666,7 @@ where
 
     /// Send `val`
     pub fn send(&mut self, val: &T) -> Result<(), std::io::Error> {
-        let bytes = shadow_pod::as_u8_slice(val);
-        let mut total_written = 0;
-        while total_written != bytes.len() {
-            let nwritten = unsafe {
-                libc::write(
-                    self.fd.as_raw_fd(),
-                    bytes.as_ptr().add(total_written).cast(),
-                    bytes.len() - total_written,
-                )
-            };
-            if nwritten == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            total_written += usize::try_from(nwritten).unwrap();
-        }
-        Ok(())
+        self.fd.write_pod(val)
     }
 }
 
@@ -716,7 +701,8 @@ where
 
 /// Creates a pipe for transferring values of type `T`.
 #[allow(clippy::type_complexity)]
-pub fn typed_pipe<T>() -> Result<(TypedReader<PipeReader, T>, TypedWriter<T>), std::io::Error>
+pub fn typed_pipe<T>()
+-> Result<(TypedReader<PipeReader, T>, TypedWriter<PipeWriter, T>), std::io::Error>
 where
     T: shadow_pod::Pod,
 {
@@ -733,7 +719,7 @@ where
 /// The child exits when this object is dropped.
 pub struct ForkedChild<RequestType, ResponseType> {
     pid: libc::c_int,
-    cmd_writer: TypedWriter<RequestType>,
+    cmd_writer: TypedWriter<PipeWriter, RequestType>,
     res_reader: TypedReader<PipeReader, ResponseType>,
 }
 

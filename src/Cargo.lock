@@ -2514,6 +2514,7 @@ name = "shadow-pod"
 version = "0.0.0"
 dependencies = [
  "libc",
+ "linux-syscall",
 ]
 
 [[package]]
