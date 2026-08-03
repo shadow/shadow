@@ -1,6 +1,6 @@
 //! Utilities for working with POD (Plain Old Data)
 
-#![no_std]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 // https://github.com/rust-lang/rfcs/blob/master/text/2585-unsafe-block-in-unsafe-fn.md
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -132,6 +132,53 @@ impl<const N: usize, T: Pod> PodTransmute<N, T> {
 /// Interpret the bytes of `x` as a value of type `T`.
 pub fn from_array<const N: usize, T: Pod>(x: &[u8; N]) -> T {
     PodTransmute::transmute_array(x)
+}
+
+#[cfg(feature = "std")]
+pub trait ReadExt {
+    /// Receive a `T`, or `None` if EOF is reached without reading any bytes.
+    ///
+    /// If EOF is reached in the middle of a value, an error with
+    /// ErrorKind::UnexpectedEof is returned.
+    fn read_pod<T: Pod>(&mut self) -> std::io::Result<Option<T>>;
+}
+
+#[cfg(feature = "std")]
+impl<R> ReadExt for R
+where
+    R: std::io::Read,
+{
+    fn read_pod<T: Pod>(&mut self) -> std::io::Result<Option<T>> {
+        let mut dst = std::mem::MaybeUninit::<T>::uninit();
+        // SAFETY: we don't write any uninitialized bytes into the returned slice.
+        let dst_slice = unsafe { as_u8_slice_mut(&mut dst) };
+        dst_slice.fill(MaybeUninit::new(0u8));
+        // SAFETY: all bytes are now initialized.
+        let dst_slice = unsafe { dst_slice.assume_init_mut() };
+
+        // Try to read all the bytes.
+        // We *don't* use Read::read_all here, since it doesn't allow us to
+        // distinguish between the "read nothing" case and the "read partial"
+        // case.
+        let mut total_read = 0;
+        while total_read != dst_slice.len() {
+            let nread = self.read(&mut dst_slice[total_read..])?;
+            if nread == 0 {
+                return if total_read != 0 {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "EOF in middle of value",
+                    ))
+                } else {
+                    Ok(None)
+                };
+            }
+            total_read += nread;
+        }
+        // SAFETY: we've initialized all bytes, and any bit pattern is a valid T
+        // because T is Pod.
+        Ok(Some(unsafe { dst.assume_init() }))
+    }
 }
 
 // Integer primitives
@@ -324,3 +371,70 @@ unsafe impl Pod for libc::utmpx {}
 unsafe impl Pod for libc::utsname {}
 unsafe impl Pod for libc::winsize {}
 unsafe impl Pod for libc::clone_args {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::Write;
+
+    /// A type guaranteed to have some padding bytes.
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    #[repr(C)]
+    struct TypeWithPadding {
+        begin: u8,
+        middle: u64,
+        end: u8,
+    }
+    unsafe impl Pod for TypeWithPadding {}
+
+    /// A reader that reads the buffer its given, resulting in miri-detectable
+    /// unsoundness if it's uninitialized.
+    struct NosyReader<R>(R);
+    impl<R> std::io::Read for NosyReader<R>
+    where
+        R: std::io::Read,
+    {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            // The "nosy" access to the input buffer bytes, which miri should
+            // detect as unsound if they're uninitialized.
+            println!("overwriting {buf:?}");
+            self.0.read(buf)
+        }
+    }
+
+    /// A reader that reads at-most 1 byte at a time, to exercise read-loops.
+    struct SlowReader<R>(R);
+    impl<R> std::io::Read for SlowReader<R>
+    where
+        R: std::io::Read,
+    {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            // Only access the first byte.
+            let buf = match buf.get_mut(0..1) {
+                Some(x) => x,
+                None => buf,
+            };
+            self.0.read(buf)
+        }
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_read_pod() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let bytes = [0u8; std::mem::size_of::<TypeWithPadding>()];
+        writer.write_all(&bytes).unwrap();
+
+        let read_value =
+            super::ReadExt::read_pod::<TypeWithPadding>(&mut NosyReader(SlowReader(reader)))
+                .unwrap();
+        assert_eq!(
+            read_value,
+            Some(TypeWithPadding {
+                begin: 0,
+                middle: 0,
+                end: 0
+            })
+        );
+    }
+}

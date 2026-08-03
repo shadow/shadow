@@ -7,3 +7,6 @@ publish.workspace = true
 
 [dependencies]
 libc = { version = "0.2.176", default-features = false }
+
+[features]
+std = []

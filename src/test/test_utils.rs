@@ -6,7 +6,7 @@
 //! Utilities helpful for writing Rust integration tests.
 
 use std::collections::HashSet;
-use std::io::Write;
+use std::io::{PipeReader, Write};
 use std::marker::PhantomData;
 use std::os::fd::AsRawFd as _;
 use std::sync::mpsc;
@@ -16,6 +16,7 @@ use std::{fmt, thread};
 use nix::poll::PollFlags;
 use nix::sys::signal;
 use nix::sys::time::TimeVal;
+use shadow_pod::ReadExt as _;
 
 pub mod socket_utils;
 pub mod time;
@@ -684,20 +685,22 @@ where
     }
 }
 
-/// Wraps a readable `OwnedFd` to read values of type `T`.
-// TODO: It'd be nice to wrap a generic `Read` object instead, but this is
-// tricky to do in a sound way when T may have undefined padding bytes.
-pub struct TypedReader<T> {
-    fd: std::os::fd::OwnedFd,
+/// Wraps a `std::io::Read` to read values of type `T`.
+///
+/// Assumes that no more data will become available after EOF is reached.
+pub struct TypedReader<R, T> {
+    reader: R,
     _t: PhantomData<T>,
 }
-impl<T> TypedReader<T>
+
+impl<R, T> TypedReader<R, T>
 where
+    R: std::io::Read,
     T: shadow_pod::Pod,
 {
-    pub fn new(fd: std::os::fd::OwnedFd) -> Self {
+    pub fn new(reader: R) -> Self {
         Self {
-            fd,
+            reader,
             _t: PhantomData,
         }
     }
@@ -707,45 +710,18 @@ where
     /// If EOF is reached in the middle of a value, an error with
     /// ErrorKind::UnexpectedEof is returned.
     pub fn recv(&mut self) -> Result<Option<T>, std::io::Error> {
-        let mut res = shadow_pod::zeroed::<T>();
-        let bytes = unsafe { shadow_pod::as_u8_slice_mut(&mut res) };
-        let mut total_read = 0;
-        while total_read != bytes.len() {
-            let nread = unsafe {
-                libc::read(
-                    self.fd.as_raw_fd(),
-                    bytes.as_mut_ptr().add(total_read).cast(),
-                    bytes.len() - total_read,
-                )
-            };
-            if nread == -1 {
-                return Err(std::io::Error::last_os_error());
-            } else if nread == 0 {
-                return if total_read != 0 {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::UnexpectedEof,
-                        "EOF in middle of value",
-                    ))
-                } else {
-                    Ok(None)
-                };
-            }
-            total_read += usize::try_from(nread).unwrap();
-        }
-        Ok(Some(res))
+        self.reader.read_pod()
     }
 }
 
 /// Creates a pipe for transferring values of type `T`.
-pub fn typed_pipe<T>() -> Result<(TypedReader<T>, TypedWriter<T>), std::io::Error>
+#[allow(clippy::type_complexity)]
+pub fn typed_pipe<T>() -> Result<(TypedReader<PipeReader, T>, TypedWriter<T>), std::io::Error>
 where
     T: shadow_pod::Pod,
 {
     let (reader, writer) = std::io::pipe()?;
-    Ok((
-        TypedReader::new(reader.into()),
-        TypedWriter::new(writer.into()),
-    ))
+    Ok((TypedReader::new(reader), TypedWriter::new(writer)))
 }
 
 /// A forked child process that runs some function in a loop.
@@ -758,7 +734,7 @@ where
 pub struct ForkedChild<RequestType, ResponseType> {
     pid: libc::c_int,
     cmd_writer: TypedWriter<RequestType>,
-    res_reader: TypedReader<ResponseType>,
+    res_reader: TypedReader<PipeReader, ResponseType>,
 }
 
 impl<RequestType, ResponseType> ForkedChild<RequestType, ResponseType>
