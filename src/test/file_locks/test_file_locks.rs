@@ -517,7 +517,7 @@ fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_block_on_pid_locks() -> anyhow::Result<()> {
+fn test_block_on_pid_locks(setlk_cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
 
@@ -541,14 +541,14 @@ fn test_block_on_pid_locks() -> anyhow::Result<()> {
     let sleep_duration = std::time::Duration::from_secs(1);
 
     let mut child = ForkedChild::<u8, u8>::new(|cmd| match *cmd {
-        LOCK => match fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &flock) {
+        LOCK => match fcntl_lock(file.as_raw_fd(), setlk_cmd.into(), &flock) {
             Ok(_) => OK,
             Err(_) => ERR,
         },
         UNLOCK => {
             match fcntl_lock(
                 file.as_raw_fd(),
-                FcntlFlockCommand::F_SETLK,
+                setlk_cmd.into(),
                 &libc::flock {
                     l_type: libc::F_UNLCK.try_into().unwrap(),
                     ..flock
@@ -641,22 +641,20 @@ fn main() -> anyhow::Result<()> {
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
+            ShadowTest::new(
+                &format!("block-on-pid-locks {cmd:?}"),
+                move || test_block_on_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
         ]);
     }
-    tests.extend([
-        ShadowTest::new(
-            "block-on-pid-locks",
-            test_block_on_pid_locks,
-            // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
-        ShadowTest::new(
-            "unlock-pid-locks-edge-cases",
-            test_unlock_pid_locks_edge_cases,
-            // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
-    ]);
+    tests.extend([ShadowTest::new(
+        "unlock-pid-locks-edge-cases",
+        test_unlock_pid_locks_edge_cases,
+        // TODO: <https://github.com/shadow/shadow/issues/2258>
+        no_shadow_envs.clone(),
+    )]);
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
