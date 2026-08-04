@@ -212,7 +212,8 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
+/// Tests setting a lock with `l_len=0` using `cmd`. Queries are done with F_GETLK.
+fn test_zero_len_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile().unwrap();
     let mut child = ForkedChild::new(handle_lock_request)?;
 
@@ -230,7 +231,7 @@ fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: zerolen_flock,
         })
         .unwrap().to_result()?, ==, zerolen_flock);
@@ -606,24 +607,28 @@ fn main() -> anyhow::Result<()> {
         FcntlPosixSetlkUncontestedCommand::F_SETLKW,
     ];
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = Vec::new();
+    // We test both F_SETLK and F_SETLKW in cases where we expect the operation
+    // to immediately succeed, in which case they should behave identically.
     for cmd in posix_uncontested_setlk_commands {
-        tests.push(ShadowTest::new(
-            &format!("uncontested-pid-locks {cmd:?}"),
-            move || test_uncontested_pid_locks(cmd),
-            all_envs.clone(),
-        ));
+        tests.extend([
+            ShadowTest::new(
+                &format!("uncontested-pid-locks {cmd:?}"),
+                move || test_uncontested_pid_locks(cmd),
+                all_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("zero-len-pid-locks {cmd:?}"),
+                move || test_zero_len_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
+        ]);
     }
     tests.extend([
         ShadowTest::new(
             "contested-pid-locks",
             test_contested_pid_locks,
             // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
-        // TODO: <https://github.com/shadow/shadow/issues/2258>
-        ShadowTest::new(
-            "contested-zero-len-pid-locks",
-            test_contested_zero_len_pid_locks,
             no_shadow_envs.clone(),
         ),
         ShadowTest::new(
