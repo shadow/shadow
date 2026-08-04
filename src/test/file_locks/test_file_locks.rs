@@ -147,7 +147,7 @@ fn handle_lock_request(req: &SerializedLockRequest) -> SerializedLockResponse {
     }
 }
 
-fn test_contested_pid_locks() -> anyhow::Result<()> {
+fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
 
@@ -161,13 +161,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &rd_flock)?, ==, rd_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &rd_flock)?, ==, rd_flock);
 
     // Child should be able to take the same read lock.
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: rd_flock,
         })
         .unwrap().to_result()?, ==, rd_flock);
@@ -187,6 +187,7 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     }));
 
     // Trying to take the lock anyway should fail.
+    // (We only test F_SETLK here rather than `cmd`; blocking behavior with F_SETLKW is in another test).
     let res = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock);
     ensure!(
         res == Err(Errno::EACCES) || res == Err(Errno::EAGAIN),
@@ -201,13 +202,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: unlck_flock,
         })
         .unwrap().to_result()?, ==, unlck_flock);
 
     // We should now be free to upgrade to a write lock.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock), ==, Ok(wr_flock));
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock), ==, Ok(wr_flock));
 
     Ok(())
 }
@@ -622,15 +623,15 @@ fn main() -> anyhow::Result<()> {
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
+            ShadowTest::new(
+                &format!("contested-pid-locks {cmd:?}"),
+                move || test_contested_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
         ]);
     }
     tests.extend([
-        ShadowTest::new(
-            "contested-pid-locks",
-            test_contested_pid_locks,
-            // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
         ShadowTest::new(
             "coalese-and-split-pid-locks",
             test_coalesce_and_split_pid_locks,
