@@ -6,7 +6,8 @@
 //! Utilities helpful for writing Rust integration tests.
 
 use std::collections::HashSet;
-use std::io::Write;
+use std::io::{PipeReader, PipeWriter, Write};
+use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
@@ -14,6 +15,7 @@ use std::{fmt, thread};
 use nix::poll::PollFlags;
 use nix::sys::signal;
 use nix::sys::time::TimeVal;
+use shadow_pod::{ReadExt as _, WriteExt as _};
 
 pub mod socket_utils;
 pub mod time;
@@ -641,4 +643,164 @@ where
     ensure_ord!(diff, <=, tolerance);
 
     Ok(())
+}
+
+/// Wraps a writable, blocking, file-descriptor to accept values of type `T`.
+// TODO: It'd be nice to wrap a generic `Write` object instead, but this is
+// tricky to do in a sound way when T may have undefined padding bytes.
+pub struct TypedWriter<W, T> {
+    fd: W,
+    _t: PhantomData<T>,
+}
+impl<W, T> TypedWriter<W, T>
+where
+    T: shadow_pod::Pod,
+    W: std::os::fd::AsRawFd,
+{
+    fn new(fd: W) -> Self {
+        Self {
+            fd,
+            _t: PhantomData,
+        }
+    }
+
+    /// Send `val`
+    pub fn send(&mut self, val: &T) -> Result<(), std::io::Error> {
+        self.fd.write_pod(val)
+    }
+}
+
+/// Wraps a `std::io::Read` to read values of type `T`.
+///
+/// Assumes that no more data will become available after EOF is reached.
+pub struct TypedReader<R, T> {
+    reader: R,
+    _t: PhantomData<T>,
+}
+
+impl<R, T> TypedReader<R, T>
+where
+    R: std::io::Read,
+    T: shadow_pod::Pod,
+{
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader,
+            _t: PhantomData,
+        }
+    }
+
+    /// Receive a `T`, or `None` if EOF is reached without reading any bytes.
+    ///
+    /// If EOF is reached in the middle of a value, an error with
+    /// ErrorKind::UnexpectedEof is returned.
+    pub fn recv(&mut self) -> Result<Option<T>, std::io::Error> {
+        self.reader.read_pod()
+    }
+}
+
+/// Creates a pipe for transferring values of type `T`.
+#[allow(clippy::type_complexity)]
+pub fn typed_pipe<T>()
+-> Result<(TypedReader<PipeReader, T>, TypedWriter<PipeWriter, T>), std::io::Error>
+where
+    T: shadow_pod::Pod,
+{
+    let (reader, writer) = std::io::pipe()?;
+    Ok((TypedReader::new(reader), TypedWriter::new(writer)))
+}
+
+/// A forked child process that runs some function in a loop.
+///
+/// The child process runs in a loop, accepting values of `RequestType`,
+/// processing them with some given handler function to generate a
+/// `ResponseType`, and sends them back.
+///
+/// The child exits when this object is dropped.
+pub struct ForkedChild<RequestType, ResponseType> {
+    pid: libc::c_int,
+    cmd_writer: TypedWriter<PipeWriter, RequestType>,
+    res_reader: TypedReader<PipeReader, ResponseType>,
+}
+
+impl<RequestType, ResponseType> ForkedChild<RequestType, ResponseType>
+where
+    RequestType: shadow_pod::Pod,
+    ResponseType: shadow_pod::Pod,
+{
+    /// Create a forked child process that used `f` as its handler function.
+    pub fn new<FnType>(mut f: FnType) -> Result<Self, std::io::Error>
+    where
+        FnType: FnMut(&RequestType) -> ResponseType,
+    {
+        let (mut cmd_reader, cmd_writer) = typed_pipe::<RequestType>()?;
+        let (res_reader, mut res_writer) = typed_pipe::<ResponseType>()?;
+        let fork_res = unsafe { libc::fork() };
+        let pid = match fork_res.cmp(&0) {
+            std::cmp::Ordering::Equal => {
+                // Child will run in a loop, processing requests.
+                let child_closure = || {
+                    // Close our cmd writer, to ensure we get EOF when the parent closes their copy,
+                    // which happens implicitly when the ForkedChild is dropped.
+                    drop(cmd_writer);
+                    // Close our response reader while we're at it, though not strictly necessary.
+                    drop(res_reader);
+                    while let Some(cmd) = cmd_reader.recv().expect("Couldn't read from parent") {
+                        let res = f(&cmd);
+                        res_writer.send(&res).expect("Couldn't send to parent");
+                    }
+                };
+                // Run the child closure while catching panics. This is to prevent returning
+                // from this frame and circumventing the fast exit below.
+                //
+                // Normally the callable passed to `catch_unwind` must be
+                // `UnwindSafe` to ensure that we won't see data with broken
+                // invariants after a panic. It doesn't matter in this case
+                // since we're exiting immediately afterwards, so we ignore this
+                // requirement using the `AssertUnwindSafe` wrapper.
+                let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(child_closure));
+                // exit the child process. avoid returning or doing any normal
+                // runtime teardown, which could have unintended consequences
+                // due to resources being inherited from the parent.
+                unsafe {
+                    libc::_exit(if res.is_ok() { 0 } else { 1 });
+                }
+            }
+            std::cmp::Ordering::Greater => fork_res,
+            std::cmp::Ordering::Less => return Err(std::io::Error::last_os_error()),
+        };
+        Ok(Self {
+            pid,
+            cmd_writer,
+            res_reader,
+        })
+    }
+
+    /// Send a value to the child process.
+    pub fn send(&mut self, req: &RequestType) -> Result<(), std::io::Error> {
+        self.cmd_writer.send(req)
+    }
+
+    /// Receive a value from the child process.
+    pub fn recv(&mut self) -> Result<ResponseType, std::io::Error> {
+        let Some(res) = self.res_reader.recv()? else {
+            // EOF from child is an error; child shouldn't close their end before we close ours.
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Child closed pipe",
+            ));
+        };
+        Ok(res)
+    }
+
+    /// Send a value to the child process and get its response.
+    pub fn send_recv(&mut self, req: &RequestType) -> Result<ResponseType, std::io::Error> {
+        self.send(req)?;
+        self.recv()
+    }
+
+    /// pid of the child process.
+    pub fn pid(&self) -> i32 {
+        self.pid
+    }
 }
