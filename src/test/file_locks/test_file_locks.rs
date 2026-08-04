@@ -102,6 +102,18 @@ struct SerializedLockResponse {
 }
 unsafe impl shadow_pod::Pod for SerializedLockResponse {}
 
+impl SerializedLockResponse {
+    fn to_result(self) -> Result<libc::flock, Errno> {
+        if self.rv == -1 {
+            return Err(Errno::from_libc_errnum(self.errno).expect("Bad errno"));
+        }
+        if self.rv != 0 {
+            panic!("Unexpected rv: {}", self.rv);
+        }
+        Ok(self.flock)
+    }
+}
+
 /// Perform the operation specified by `req`.
 fn handle_lock_request(req: &SerializedLockRequest) -> SerializedLockResponse {
     let mut flock = req.flock;
@@ -130,15 +142,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &rd_flock)?, ==, rd_flock);
 
     // Child should be able to take the same read lock.
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_SETLK,
             flock: rd_flock,
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, rd_flock);
+        .unwrap().to_result()?, ==, rd_flock);
 
     // We should *not* be able to upgrade to a write lock, since the child now
     // has a read lock.
@@ -166,15 +176,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
         l_type: libc::F_UNLCK.try_into().unwrap(),
         ..rd_flock
     };
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_SETLK,
             flock: unlck_flock,
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, unlck_flock);
+        .unwrap().to_result()?, ==, unlck_flock);
 
     // We should now be free to upgrade to a write lock.
     ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_flock), ==, Ok(wr_flock));
@@ -197,15 +205,13 @@ fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
         l_len: 0,
         l_pid: 0,
     };
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_SETLK,
             flock: zerolen_flock,
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, zerolen_flock);
+        .unwrap().to_result()?, ==, zerolen_flock);
 
     // first 100 bytes should still be available to lock
     let begin_flock = libc::flock {
@@ -268,15 +274,13 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_next_100_flock)?, ==, wr_next_100_flock);
 
     // Child querying any part of the locked region should see a coalesced lock.
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_GETLK,
             flock: wr100_flock,
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, libc::flock {
+        .unwrap().to_result()?, ==, libc::flock {
         l_len: wr100_flock.l_len*2,
         l_pid: std::process::id().try_into().unwrap(),
         ..wr100_flock
@@ -292,7 +296,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
 
     // Querying byte 0 should return a conflicting lock extending to the
     // beginning of where we unlocked.
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_GETLK,
@@ -304,9 +308,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
                 l_pid: 0,
             },
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, libc::flock {
+        .unwrap().to_result()?, ==, libc::flock {
         l_len: unlock_middle_flock.l_start,
         l_pid: std::process::id().try_into().unwrap(),
         ..wr100_flock
@@ -320,22 +322,20 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
         l_len: 1,
         l_pid: 0,
     };
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_GETLK,
             flock: query_flock,
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, libc::flock {
+        .unwrap().to_result()?, ==, libc::flock {
         l_type: libc::F_UNLCK.try_into().unwrap(),
         ..query_flock
     });
 
     // Querying first byte after the locked region should return a conflicting lock extending to the
     // end of the still-locked region.
-    let res = child
+    ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
             cmd: libc::F_GETLK,
@@ -347,9 +347,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
                 l_pid: 0,
             },
         })
-        .unwrap();
-    ensure_ord!(res.rv, ==, 0);
-    ensure_ord!(res.flock, ==, libc::flock {
+        .unwrap().to_result()?, ==, libc::flock {
         l_start: unlock_middle_flock.l_start+unlock_middle_flock.l_len,
         l_len: wr_next_100_flock.l_len/2,
         l_pid: std::process::id().try_into().unwrap(),
@@ -372,11 +370,13 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
         l_pid: 0,
     };
     let mut child1 = ForkedChild::new(handle_lock_request)?;
-    child1.send_recv(&SerializedLockRequest {
-        fd: file.as_raw_fd(),
-        cmd: libc::F_SETLK,
-        flock: child1_flock,
-    })?;
+    child1
+        .send_recv(&SerializedLockRequest {
+            fd: file.as_raw_fd(),
+            cmd: libc::F_SETLK,
+            flock: child1_flock,
+        })?
+        .to_result()?;
 
     // child2 takes an overlapping reader lock of bytes 25..50
     let child2_flock = libc::flock {
@@ -387,11 +387,13 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
         l_pid: 0,
     };
     let mut child2 = ForkedChild::new(handle_lock_request)?;
-    child2.send_recv(&SerializedLockRequest {
-        fd: file.as_raw_fd(),
-        cmd: libc::F_SETLK,
-        flock: child2_flock,
-    })?;
+    child2
+        .send_recv(&SerializedLockRequest {
+            fd: file.as_raw_fd(),
+            cmd: libc::F_SETLK,
+            flock: child2_flock,
+        })?
+        .to_result()?;
 
     // querying the first byte of the child1 lock should describe the *whole*
     // child1 lock, even though some of the lock's range is shared. (e.g. it
@@ -471,7 +473,13 @@ fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
 
     // Take a write lock in a child process
     let mut child = ForkedChild::new(handle_lock_request)?;
-    ensure_ord!(child.send_recv(&SerializedLockRequest { fd: file.as_raw_fd(), cmd: libc::F_SETLK, flock: wr_flock })?.rv, ==, 0);
+    child
+        .send_recv(&SerializedLockRequest {
+            fd: file.as_raw_fd(),
+            cmd: libc::F_SETLK,
+            flock: wr_flock,
+        })?
+        .to_result()?;
 
     // Unlocking a range where we don't have a lock *and othes do*, should still succeed.
     ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
