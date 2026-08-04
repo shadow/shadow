@@ -719,7 +719,7 @@ where
 /// The child exits when this object is dropped.
 pub struct ForkedChild<RequestType, ResponseType> {
     pid: libc::c_int,
-    cmd_writer: TypedWriter<PipeWriter, RequestType>,
+    cmd_writer: Option<TypedWriter<PipeWriter, RequestType>>,
     res_reader: TypedReader<PipeReader, ResponseType>,
 }
 
@@ -771,14 +771,14 @@ where
         };
         Ok(Self {
             pid,
-            cmd_writer,
+            cmd_writer: Some(cmd_writer),
             res_reader,
         })
     }
 
     /// Send a value to the child process.
     pub fn send(&mut self, req: &RequestType) -> Result<(), std::io::Error> {
-        self.cmd_writer.send(req)
+        self.cmd_writer.as_mut().unwrap().send(req)
     }
 
     /// Receive a value from the child process.
@@ -802,5 +802,22 @@ where
     /// pid of the child process.
     pub fn pid(&self) -> i32 {
         self.pid
+    }
+}
+
+impl<RequestType, ResponseType> Drop for ForkedChild<RequestType, ResponseType> {
+    fn drop(&mut self) {
+        // Take the command writer, which closes the underlying file and signals child to exit.
+        assert!(self.cmd_writer.take().is_some());
+        let pid = rustix::process::Pid::from_raw(self.pid).expect("corrupted pid");
+        let waitopts = rustix::process::WaitOptions::empty();
+        let res = rustix::process::waitpid(Some(pid), waitopts)
+            .expect("failed to wait for child {pid:?}")
+            .expect("missing exit status for child {pid:?}");
+        assert_eq!(
+            res.exit_status(),
+            Some(0),
+            "Unexpected child {pid:?} exit status: {res:?}"
+        );
     }
 }
