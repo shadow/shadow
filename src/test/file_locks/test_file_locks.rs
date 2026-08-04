@@ -381,7 +381,7 @@ fn test_coalesce_and_split_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> 
     Ok(())
 }
 
-fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
+fn test_overlapping_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile()?;
 
@@ -397,7 +397,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     child1
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: child1_flock,
         })?
         .to_result()?;
@@ -414,7 +414,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     child2
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: child2_flock,
         })?
         .to_result()?;
@@ -635,18 +635,18 @@ fn main() -> anyhow::Result<()> {
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
+            ShadowTest::new(
+                &format!("overlapping-pid-locks {cmd:?}"),
+                move || test_overlapping_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
         ]);
     }
     tests.extend([
         ShadowTest::new(
             "block-on-pid-locks",
             test_block_on_pid_locks,
-            // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
-        ShadowTest::new(
-            "query-overlapping-pid-locks",
-            test_query_overlapping_pid_locks,
             // TODO: <https://github.com/shadow/shadow/issues/2258>
             no_shadow_envs.clone(),
         ),
