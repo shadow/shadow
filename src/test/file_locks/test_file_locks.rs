@@ -472,7 +472,7 @@ fn test_overlapping_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow:
     Ok(())
 }
 
-fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
+fn test_unlock_pid_locks_edge_cases(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile()?;
 
     // Lock a range
@@ -483,30 +483,30 @@ fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock)?, ==,wr_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?, ==,wr_flock);
 
     // Unlocking the locked range should work.
     let unlk_flock = libc::flock {
         l_type: libc::F_UNLCK.try_into()?,
         ..wr_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlk_flock)?, ==,unlk_flock);
 
     // Unlocking a range where there are no locks should still work.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlk_flock)?, ==,unlk_flock);
 
     // Take a write lock in a child process
     let mut child = ForkedChild::new(handle_lock_request)?;
     child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: FcntlFlockCommand::F_SETLK.into(),
+            cmd: cmd.into(),
             flock: wr_flock,
         })?
         .to_result()?;
 
     // Unlocking a range where we don't have a lock *and othes do*, should still succeed.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlk_flock)?, ==,unlk_flock);
 
     // The child lock should still be there, of course.
     ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &wr_flock)?, ==, libc::flock {
@@ -647,14 +647,14 @@ fn main() -> anyhow::Result<()> {
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
+            ShadowTest::new(
+                &format!("unlock-pid-locks-edge-cases {cmd:?}"),
+                move || test_unlock_pid_locks_edge_cases(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
         ]);
     }
-    tests.extend([ShadowTest::new(
-        "unlock-pid-locks-edge-cases",
-        test_unlock_pid_locks_edge_cases,
-        // TODO: <https://github.com/shadow/shadow/issues/2258>
-        no_shadow_envs.clone(),
-    )]);
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
