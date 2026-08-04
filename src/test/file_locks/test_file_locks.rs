@@ -1,7 +1,37 @@
 use anyhow::ensure;
 use linux_api::errno::Errno;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::os::fd::AsRawFd;
 use test_utils::{ForkedChild, ShadowTest, TestEnvironment, ensure_ord, set};
+
+// fcntl commands that set (or clear) a range lock, and that should behave
+// identically when the requested lock is uncontested.
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, IntoPrimitive, TryFromPrimitive)]
+enum FcntlPosixSetlkUncontestedCommand {
+    F_SETLK = libc::F_SETLK,
+    F_SETLKW = libc::F_SETLKW,
+}
+
+// fcntl commands whose third argument is a pointer to `libc::flock`.
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, IntoPrimitive, TryFromPrimitive)]
+enum FcntlFlockCommand {
+    F_SETLK = libc::F_SETLK,
+    F_SETLKW = libc::F_SETLKW,
+    F_GETLK = libc::F_GETLK,
+    F_OFD_SETLK = libc::F_OFD_SETLK,
+    F_OFD_SETLKW = libc::F_OFD_SETLKW,
+    F_OFD_GETLK = libc::F_OFD_GETLK,
+}
+
+impl From<FcntlPosixSetlkUncontestedCommand> for FcntlFlockCommand {
+    fn from(value: FcntlPosixSetlkUncontestedCommand) -> Self {
+        Self::try_from(i32::from(value)).unwrap()
+    }
+}
 
 /// safer, convenient wrapper around fcntl for lock operations.
 ///
@@ -9,24 +39,16 @@ use test_utils::{ForkedChild, ShadowTest, TestEnvironment, ensure_ord, set};
 /// version that uses them instead of its own.
 fn fcntl_lock(
     raw_fd: libc::c_int,
-    cmd: libc::c_int,
+    cmd: FcntlFlockCommand,
     flock: &libc::flock,
 ) -> Result<libc::flock, Errno> {
-    assert!(
-        [libc::F_SETLK, libc::F_SETLKW, libc::F_GETLK].contains(&cmd),
-        "Unhandled command"
-    );
     let mut res = *flock;
-    Errno::result_from_libc_errno(-1, unsafe { libc::fcntl(raw_fd, cmd, &mut res) })?;
+    Errno::result_from_libc_errno(-1, unsafe { libc::fcntl(raw_fd, cmd.into(), &mut res) })?;
     Ok(res)
 }
 
 /// test taking uncontested locks, using either F_SETLK or F_SETLKW.
-fn test_uncontested_pid_locks(cmd: libc::c_int) -> anyhow::Result<()> {
-    assert!(
-        [libc::F_SETLK, libc::F_SETLKW].contains(&cmd),
-        "Unhandled command"
-    );
+fn test_uncontested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile().unwrap();
 
     let rd_flock = libc::flock {
@@ -39,21 +61,21 @@ fn test_uncontested_pid_locks(cmd: libc::c_int) -> anyhow::Result<()> {
 
     // Taking a read lock succeeds. (Doesn't matter that the file is empty; non-existent ranges can be locked).
     // flock struct should be unmodified.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd, &rd_flock)?, ==, rd_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &rd_flock)?, ==, rd_flock);
 
     // Taking a read lock where we already have one still succeeds.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd, &rd_flock)?, ==, rd_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &rd_flock)?, ==, rd_flock);
 
     // Upgrading a read lock to a write lock succeeds.
     let wr_flock = libc::flock {
         l_type: libc::F_WRLCK.try_into().unwrap(),
         ..rd_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd, &wr_flock)?, ==, wr_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?, ==, wr_flock);
 
     // GETLK, when there is no conflicting lock (which is the case when we own the only existing lock)...
     {
-        let mut res_flock = fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &rd_flock)?;
+        let mut res_flock = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &rd_flock)?;
         // ... should set l_type to F_UNLCK
         ensure_ord!(res_flock.l_type, ==, i16::try_from(libc::F_UNLCK).unwrap());
         // ... and leave other fields unchanged.
@@ -66,20 +88,20 @@ fn test_uncontested_pid_locks(cmd: libc::c_int) -> anyhow::Result<()> {
         l_type: libc::F_UNLCK.try_into().unwrap(),
         ..rd_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd, &unlck)?, ==, unlck);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlck)?, ==, unlck);
     // should still succeed with nothing holding the lock.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd, &unlck)?, ==, unlck);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlck)?, ==, unlck);
 
     let named_file = tempfile::NamedTempFile::new().unwrap();
     let read_only_file = std::fs::File::open(named_file.path()).unwrap();
 
     // We can take a read lock from a read-only descriptor.
     Errno::result_from_libc_errno(-1, unsafe {
-        libc::fcntl(read_only_file.as_raw_fd(), cmd, &rd_flock)
+        libc::fcntl(read_only_file.as_raw_fd(), cmd.into(), &rd_flock)
     })?;
 
     // We *cannot* take a write lock from a read-only descriptor.
-    ensure_ord!(Errno::result_from_libc_errno(-1, unsafe { libc::fcntl(read_only_file.as_raw_fd(), cmd, &wr_flock)}), ==, Err(Errno::EBADF));
+    ensure_ord!(Errno::result_from_libc_errno(-1, unsafe { libc::fcntl(read_only_file.as_raw_fd(), cmd.into(), &wr_flock)}), ==, Err(Errno::EBADF));
 
     Ok(())
 }
@@ -139,13 +161,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &rd_flock)?, ==, rd_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &rd_flock)?, ==, rd_flock);
 
     // Child should be able to take the same read lock.
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: rd_flock,
         })
         .unwrap().to_result()?, ==, rd_flock);
@@ -158,14 +180,14 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     };
 
     // GETLK should tell us about the child's conflicting lock.
-    let res = fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &wr_flock);
+    let res = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &wr_flock);
     ensure_ord!(res, ==, Ok(libc::flock {
         l_pid: child.pid(),
         ..rd_flock
     }));
 
     // Trying to take the lock anyway should fail.
-    let res = fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_flock);
+    let res = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock);
     ensure!(
         res == Err(Errno::EACCES) || res == Err(Errno::EAGAIN),
         "Expected EACCES or EGAIN, got {res:?}"
@@ -179,13 +201,13 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: unlck_flock,
         })
         .unwrap().to_result()?, ==, unlck_flock);
 
     // We should now be free to upgrade to a write lock.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_flock), ==, Ok(wr_flock));
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock), ==, Ok(wr_flock));
 
     Ok(())
 }
@@ -208,7 +230,7 @@ fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: zerolen_flock,
         })
         .unwrap().to_result()?, ==, zerolen_flock);
@@ -221,10 +243,10 @@ fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &begin_flock)?.l_type, ==, i16::try_from(libc::F_UNLCK).unwrap());
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &begin_flock)?.l_type, ==, i16::try_from(libc::F_UNLCK).unwrap());
 
     // next byte should conflict with child's lock
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &libc::flock{
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &libc::flock{
         l_type: libc::F_WRLCK.try_into().unwrap(),
         l_whence: libc::SEEK_SET.try_into().unwrap(),
         l_start: 100,
@@ -236,7 +258,7 @@ fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
     );
 
     // last byte should conflict with child's lock
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &libc::flock{
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &libc::flock{
         l_type: libc::F_WRLCK.try_into().unwrap(),
         l_whence: libc::SEEK_SET.try_into().unwrap(),
         l_start: i64::MAX,
@@ -264,20 +286,20 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr100_flock)?, ==, wr100_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr100_flock)?, ==, wr100_flock);
 
     // Lock next 100 bytes
     let wr_next_100_flock = libc::flock {
         l_start: wr100_flock.l_start + wr100_flock.l_len,
         ..wr100_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_next_100_flock)?, ==, wr_next_100_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_next_100_flock)?, ==, wr_next_100_flock);
 
     // Child querying any part of the locked region should see a coalesced lock.
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_GETLK,
+            cmd: FcntlFlockCommand::F_GETLK.into(),
             flock: wr100_flock,
         })
         .unwrap().to_result()?, ==, libc::flock {
@@ -292,14 +314,14 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
         l_start: wr100_flock.l_len / 2,
         ..wr100_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlock_middle_flock)?, ==, unlock_middle_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlock_middle_flock)?, ==, unlock_middle_flock);
 
     // Querying byte 0 should return a conflicting lock extending to the
     // beginning of where we unlocked.
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_GETLK,
+            cmd: FcntlFlockCommand::F_GETLK.into(),
             flock: libc::flock {
                 l_type: libc::F_WRLCK.try_into().unwrap(),
                 l_whence: libc::SEEK_SET.try_into().unwrap(),
@@ -325,7 +347,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_GETLK,
+            cmd: FcntlFlockCommand::F_GETLK.into(),
             flock: query_flock,
         })
         .unwrap().to_result()?, ==, libc::flock {
@@ -338,7 +360,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     ensure_ord!(child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_GETLK,
+            cmd: FcntlFlockCommand::F_GETLK.into(),
             flock: libc::flock {
                 l_type: libc::F_WRLCK.try_into().unwrap(),
                 l_whence: libc::SEEK_SET.try_into().unwrap(),
@@ -373,7 +395,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     child1
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: child1_flock,
         })?
         .to_result()?;
@@ -390,7 +412,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     child2
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: child2_flock,
         })?
         .to_result()?;
@@ -400,7 +422,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     // can't return just the first, unshared, part of the child1 lock).
     ensure_ord!(fcntl_lock(
         file.as_raw_fd(),
-        libc::F_GETLK,
+        FcntlFlockCommand::F_GETLK,
         &libc::flock {
             l_type: libc::F_WRLCK.try_into()?,
             l_whence: libc::SEEK_SET.try_into()?,
@@ -417,7 +439,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     // locks covering that byte.
     let res = fcntl_lock(
         file.as_raw_fd(),
-        libc::F_GETLK,
+        FcntlFlockCommand::F_GETLK,
         &libc::flock {
             l_type: libc::F_WRLCK.try_into()?,
             l_whence: libc::SEEK_SET.try_into()?,
@@ -432,7 +454,7 @@ fn test_query_overlapping_pid_locks() -> anyhow::Result<()> {
     // describing the whole range covered by that lock)
     ensure_ord!(fcntl_lock(
         file.as_raw_fd(),
-        libc::F_GETLK,
+        FcntlFlockCommand::F_GETLK,
         &libc::flock {
             l_type: libc::F_WRLCK.try_into()?,
             l_whence: libc::SEEK_SET.try_into()?,
@@ -459,33 +481,33 @@ fn test_unlock_pid_locks_edge_cases() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &wr_flock)?, ==,wr_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock)?, ==,wr_flock);
 
     // Unlocking the locked range should work.
     let unlk_flock = libc::flock {
         l_type: libc::F_UNLCK.try_into()?,
         ..wr_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
 
     // Unlocking a range where there are no locks should still work.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
 
     // Take a write lock in a child process
     let mut child = ForkedChild::new(handle_lock_request)?;
     child
         .send_recv(&SerializedLockRequest {
             fd: file.as_raw_fd(),
-            cmd: libc::F_SETLK,
+            cmd: FcntlFlockCommand::F_SETLK.into(),
             flock: wr_flock,
         })?
         .to_result()?;
 
     // Unlocking a range where we don't have a lock *and othes do*, should still succeed.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &unlk_flock)?, ==,unlk_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlk_flock)?, ==,unlk_flock);
 
     // The child lock should still be there, of course.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &wr_flock)?, ==, libc::flock {
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &wr_flock)?, ==, libc::flock {
         l_pid: child.pid(),
         ..wr_flock
     });
@@ -517,14 +539,14 @@ fn test_block_on_pid_locks() -> anyhow::Result<()> {
     let sleep_duration = std::time::Duration::from_secs(1);
 
     let mut child = ForkedChild::<u8, u8>::new(|cmd| match *cmd {
-        LOCK => match fcntl_lock(file.as_raw_fd(), libc::F_SETLK, &flock) {
+        LOCK => match fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &flock) {
             Ok(_) => OK,
             Err(_) => ERR,
         },
         UNLOCK => {
             match fcntl_lock(
                 file.as_raw_fd(),
-                libc::F_SETLK,
+                FcntlFlockCommand::F_SETLK,
                 &libc::flock {
                     l_type: libc::F_UNLCK.try_into().unwrap(),
                     ..flock
@@ -553,7 +575,7 @@ fn test_block_on_pid_locks() -> anyhow::Result<()> {
 
     // Try to take the lock ourselves, using F_SETLKW to block.
     // This should block until after the child wakes up and unlocks.
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_SETLKW, &flock), ==, Ok(flock));
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLKW, &flock), ==, Ok(flock));
 
     let t1 = std::time::Instant::now();
 
@@ -579,17 +601,19 @@ fn main() -> anyhow::Result<()> {
     let summarize = std::env::args().any(|x| x == "--summarize");
     let all_envs = set![TestEnvironment::Libc, TestEnvironment::Shadow];
     let no_shadow_envs = set![TestEnvironment::Libc];
-    let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = vec![
-        ShadowTest::new(
-            "uncontested-pid-locks SETLK",
-            || test_uncontested_pid_locks(libc::F_SETLK),
+    let posix_uncontested_setlk_commands = [
+        FcntlPosixSetlkUncontestedCommand::F_SETLK,
+        FcntlPosixSetlkUncontestedCommand::F_SETLKW,
+    ];
+    let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = Vec::new();
+    for cmd in posix_uncontested_setlk_commands {
+        tests.push(ShadowTest::new(
+            &format!("uncontested-pid-locks {cmd:?}"),
+            move || test_uncontested_pid_locks(cmd),
             all_envs.clone(),
-        ),
-        ShadowTest::new(
-            "uncontested-pid-locks SETLKW",
-            || test_uncontested_pid_locks(libc::F_SETLKW),
-            all_envs.clone(),
-        ),
+        ));
+    }
+    tests.extend([
         ShadowTest::new(
             "contested-pid-locks",
             test_contested_pid_locks,
@@ -626,7 +650,7 @@ fn main() -> anyhow::Result<()> {
             // TODO: <https://github.com/shadow/shadow/issues/2258>
             no_shadow_envs.clone(),
         ),
-    ];
+    ]);
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
     }
