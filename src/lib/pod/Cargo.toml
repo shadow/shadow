@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 libc = { version = "0.2.176", default-features = false }
-linux-syscall = "1.2.0"
+linux-syscall = { version = "1.2.0", optional = true }
 
 [features]
-std = []
+std = ["dep:linux-syscall"]
