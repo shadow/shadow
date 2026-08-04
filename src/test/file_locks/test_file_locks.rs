@@ -274,7 +274,7 @@ fn test_zero_len_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Re
     Ok(())
 }
 
-fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
+fn test_coalesce_and_split_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
 
@@ -288,14 +288,14 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
         l_len: 100,
         l_pid: 0,
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr100_flock)?, ==, wr100_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &wr100_flock)?, ==, wr100_flock);
 
     // Lock next 100 bytes
     let wr_next_100_flock = libc::flock {
         l_start: wr100_flock.l_start + wr100_flock.l_len,
         ..wr100_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_next_100_flock)?, ==, wr_next_100_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_next_100_flock)?, ==, wr_next_100_flock);
 
     // Child querying any part of the locked region should see a coalesced lock.
     ensure_ord!(child
@@ -316,7 +316,7 @@ fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
         l_start: wr100_flock.l_len / 2,
         ..wr100_flock
     };
-    ensure_ord!(fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &unlock_middle_flock)?, ==, unlock_middle_flock);
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), cmd.into(), &unlock_middle_flock)?, ==, unlock_middle_flock);
 
     // Querying byte 0 should return a conflicting lock extending to the
     // beginning of where we unlocked.
@@ -629,15 +629,15 @@ fn main() -> anyhow::Result<()> {
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
+            ShadowTest::new(
+                &format!("coalesce-and-split-pid-locks {cmd:?}"),
+                move || test_coalesce_and_split_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
         ]);
     }
     tests.extend([
-        ShadowTest::new(
-            "coalese-and-split-pid-locks",
-            test_coalesce_and_split_pid_locks,
-            // TODO: <https://github.com/shadow/shadow/issues/2258>
-            no_shadow_envs.clone(),
-        ),
         ShadowTest::new(
             "block-on-pid-locks",
             test_block_on_pid_locks,
