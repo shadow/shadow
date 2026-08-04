@@ -182,6 +182,68 @@ fn test_contested_pid_locks() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn test_contested_zero_len_pid_locks() -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+    let mut child = ForkedChild::new(handle_lock_request)?;
+
+    // fcntl(2):
+    // "Specifying 0 for l_len has the special meaning: > lock all bytes
+    // starting at the location specified by l_whence and l_start through to the
+    // end of file, no matter how large the file grows."
+    let zerolen_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 100,
+        l_len: 0,
+        l_pid: 0,
+    };
+    let res = child
+        .send_recv(&SerializedLockRequest {
+            fd: file.as_raw_fd(),
+            cmd: libc::F_SETLK,
+            flock: zerolen_flock,
+        })
+        .unwrap();
+    ensure_ord!(res.rv, ==, 0);
+    ensure_ord!(res.flock, ==, zerolen_flock);
+
+    // first 100 bytes should still be available to lock
+    let begin_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &begin_flock)?.l_type, ==, i16::try_from(libc::F_UNLCK).unwrap());
+
+    // next byte should conflict with child's lock
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &libc::flock{
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 100,
+        l_len: 1,
+        l_pid: 0,
+    })?, ==, libc::flock{
+        l_pid: child.pid(),
+        ..zerolen_flock}
+    );
+
+    // last byte should conflict with child's lock
+    ensure_ord!(fcntl_lock(file.as_raw_fd(), libc::F_GETLK, &libc::flock{
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: i64::MAX,
+        l_len: 1,
+        l_pid: 0,
+    })?, ==, libc::flock{
+        l_pid: child.pid(),
+        ..zerolen_flock}
+    );
+
+    Ok(())
+}
+
 fn test_coalesce_and_split_pid_locks() -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
@@ -524,6 +586,12 @@ fn main() -> anyhow::Result<()> {
             "contested-pid-locks",
             test_contested_pid_locks,
             // TODO: <https://github.com/shadow/shadow/issues/2258>
+            no_shadow_envs.clone(),
+        ),
+        // TODO: <https://github.com/shadow/shadow/issues/2258>
+        ShadowTest::new(
+            "contested-zero-len-pid-locks",
+            test_contested_zero_len_pid_locks,
             no_shadow_envs.clone(),
         ),
         ShadowTest::new(
