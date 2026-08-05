@@ -250,6 +250,83 @@ fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::R
     Ok(())
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum CloseDescriptor {
+    Original,
+    Secondary,
+}
+
+fn test_pid_owner_closes_descriptor(
+    cmd: FcntlPosixSetlkUncontestedCommand,
+    close_descriptor: CloseDescriptor,
+) -> anyhow::Result<()> {
+    let mut file1 = Some(tempfile::NamedTempFile::new().unwrap());
+    let fd1 = file1.as_ref().unwrap().as_raw_fd();
+
+    // Get another descriptor to the same file.
+    let mut file2 = Some(
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file1.as_ref().unwrap().path())
+            .unwrap(),
+    );
+    let fd2 = file2.as_ref().unwrap().as_raw_fd();
+
+    let mut child = ForkedChild::new(handle_lock_request)?;
+
+    // Take a write lock
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    fcntl_lock(fd1, cmd.into(), &wr_flock)?;
+
+    // child should see the lock, through either descriptor.
+    for fd in [fd1, fd2] {
+        let out_flock = child
+            .send_recv(&SerializedLockRequest {
+                fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: wr_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(out_flock.l_pid, ==, i32::try_from(std::process::id()).unwrap());
+    }
+
+    // close one of our descriptors to the file
+    match close_descriptor {
+        CloseDescriptor::Original => {
+            file1.take().unwrap();
+        }
+        CloseDescriptor::Secondary => {
+            file2.take().unwrap();
+        }
+    }
+
+    // whichever descriptor we closed, our locks should be gone.
+    // fcntl(2): "If a process closes any file descriptor referring to a file,
+    // then all of the process's locks on that file are released, regardless of
+    // the file descriptor(s) on which the locks were obtained."
+    //
+    // child should be able to take the lock, through either descriptor.
+    for fd in [fd1, fd2] {
+        let out_flock = child
+            .send_recv(&SerializedLockRequest {
+                fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: wr_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(out_flock.l_pid, ==, 0);
+    }
+
+    Ok(())
+}
+
 fn test_pid_lock_threads(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile().unwrap();
 
@@ -1066,6 +1143,16 @@ fn main() -> anyhow::Result<()> {
                 no_shadow_envs.clone(),
             ),
         ]);
+    }
+    for cmd in posix_uncontested_setlk_commands {
+        for close_descriptor in [CloseDescriptor::Original, CloseDescriptor::Secondary] {
+            tests.extend([ShadowTest::new(
+                &format!("pid-owner-closes-descriptor {cmd:?} {close_descriptor:?}"),
+                move || test_pid_owner_closes_descriptor(cmd, close_descriptor),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            )])
+        }
     }
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
