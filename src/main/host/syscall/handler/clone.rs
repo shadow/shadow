@@ -221,7 +221,7 @@ impl SyscallHandler {
             desc_table.into_value(),
             child_pid,
             child_tid,
-        )?;
+        );
 
         let childrc = ExplicitDropper::new(
             RootedRc::new(

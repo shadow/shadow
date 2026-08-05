@@ -471,8 +471,8 @@ impl Thread {
         desc_table: RootedRc<RootedRefCell<DescriptorTable>>,
         pid: ProcessId,
         tid: ThreadId,
-    ) -> Result<Thread, Errno> {
-        let child = Self {
+    ) -> Thread {
+        Self {
             mthread: RefCell::new(mthread),
             syscallhandler: RootedRefCell::new(
                 host.root(),
@@ -502,8 +502,7 @@ impl Thread {
             )),
             desc_table: Some(desc_table),
             _counter: ObjectCounter::new("Thread"),
-        };
-        Ok(child)
+        }
     }
 
     /// Shared memory for this thread.

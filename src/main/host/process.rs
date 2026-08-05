@@ -1054,7 +1054,7 @@ impl Process {
         )?;
         let native_pid = mthread.native_pid();
         let main_thread =
-            Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id).unwrap();
+            Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id);
 
         debug!("process '{plugin_name:?}' started");
 
