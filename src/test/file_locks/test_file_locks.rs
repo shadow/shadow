@@ -382,6 +382,136 @@ fn test_pid_lock_seek_end(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Res
     Ok(())
 }
 
+fn test_pid_lock_seek_cur(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    // Open file before forking, so that child also has the descriptor.
+    let mut file = tempfile::tempfile().unwrap();
+
+    let mut child = ForkedChild::new(handle_lock_request)?;
+
+    // Push EOF to 10 bytes.
+    file.write_all(&[0u8; 10])?;
+
+    // Seek back to byte 5, so that EOF != current position.
+    file.seek(SeekFrom::Start(5))?;
+
+    // Take a write lock, from SEEK_CUR + positive offset.
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_CUR.try_into().unwrap(),
+        l_start: 1,
+        l_len: 1,
+        l_pid: 0,
+    };
+    fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?;
+
+    // This should overlap the lock taken by the parent.
+    let child_attempted_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 5 + 1,
+        l_len: 100,
+        l_pid: 0,
+    };
+    // parent's lock should conflict, and it should be specified in absolute
+    // terms - relative to SEEK_SET not SEEK_CUR.
+    let expected_conflict = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 5 + 1,
+        l_len: 1,
+        l_pid: std::process::id().try_into().unwrap(),
+    };
+    {
+        let flock_out = child
+            .send_recv(&SerializedLockRequest {
+                fd: file.as_raw_fd(),
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: child_attempted_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(flock_out, ==, expected_conflict);
+    }
+
+    // Seeking to a different position shouldn't move the lock.
+    file.seek(SeekFrom::Start(1))?;
+    {
+        let flock_out = child
+            .send_recv(&SerializedLockRequest {
+                fd: file.as_raw_fd(),
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: child_attempted_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(flock_out, ==, expected_conflict);
+    }
+
+    // Release previous locks.
+    fcntl_lock(
+        file.as_raw_fd(),
+        cmd.into(),
+        &libc::flock {
+            l_type: libc::F_UNLCK.try_into().unwrap(),
+            l_whence: libc::SEEK_SET.try_into().unwrap(),
+            l_start: 0,
+            l_len: i64::MAX,
+            l_pid: 0,
+        },
+    )?;
+
+    // Take a write lock, from current position + negative offset.
+    file.seek(SeekFrom::Start(2))?;
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_CUR.try_into().unwrap(),
+        l_start: -1,
+        l_len: 1,
+        l_pid: 0,
+    };
+    fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?;
+
+    // This should overlap the lock taken by the parent.
+    let child_attempted_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 1,
+        l_len: 100,
+        l_pid: 0,
+    };
+    // parent's lock should conflict, and it should be specified in absolute
+    // terms - relative to SEEK_SET not SEEK_CUR.
+    let expected_conflict = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 1,
+        l_len: 1,
+        l_pid: std::process::id().try_into().unwrap(),
+    };
+    {
+        let flock_out = child
+            .send_recv(&SerializedLockRequest {
+                fd: file.as_raw_fd(),
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: child_attempted_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(flock_out, ==, expected_conflict);
+    }
+
+    // A negative start that goes beyond beginning of file should fail.
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_CUR.try_into().unwrap(),
+        l_start: -3,
+        l_len: 1,
+        l_pid: 0,
+    };
+    {
+        let lock_res = fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock);
+        ensure_ord!(lock_res, ==, Err(Errno::EINVAL));
+    }
+    Ok(())
+}
+
 /// Tests setting a lock with `l_len=0` using `cmd`. Queries are done with F_GETLK.
 fn test_zero_len_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile().unwrap();
@@ -847,6 +977,12 @@ fn main() -> anyhow::Result<()> {
             ShadowTest::new(
                 &format!("pid-lock-seek-end {cmd:?}"),
                 move || test_pid_lock_seek_end(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-lock-seek-cur {cmd:?}"),
+                move || test_pid_lock_seek_cur(cmd),
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
