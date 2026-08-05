@@ -84,10 +84,10 @@ impl<T> ExplicitDrop for RootedRefCell<T>
 where
     T: ExplicitDrop,
 {
-    type ExplicitDropParam = <T as ExplicitDrop>::ExplicitDropParam;
+    type ExplicitDropParam<'p> = <T as ExplicitDrop>::ExplicitDropParam<'p>;
     type ExplicitDropResult = <T as ExplicitDrop>::ExplicitDropResult;
 
-    fn explicit_drop(self, param: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(self, param: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         self.val.into_inner().explicit_drop(param)
     }
 }

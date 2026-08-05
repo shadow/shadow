@@ -9,9 +9,9 @@
 /// dropped. One workaround is for a type to also implement `Drop`, and have
 /// that implementation validate that `ExplicitDrop::explicit_drop` was called.
 pub trait ExplicitDrop {
-    type ExplicitDropParam;
+    type ExplicitDropParam<'p>;
     type ExplicitDropResult;
-    fn explicit_drop(self, param: &Self::ExplicitDropParam) -> Self::ExplicitDropResult;
+    fn explicit_drop<'p>(self, param: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult;
 }
 
 /// Wrapper that uses a provided function to drop the inner value.

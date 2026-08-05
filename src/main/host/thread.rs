@@ -608,10 +608,10 @@ impl Drop for Thread {
 }
 
 impl ExplicitDrop for Thread {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Host) {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
         if let Some(table) = self.desc_table.take() {
             table.explicit_drop_recursive(host.root(), host);
         }

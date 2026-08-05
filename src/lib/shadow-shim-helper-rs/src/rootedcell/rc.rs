@@ -227,10 +227,10 @@ impl<T> RootedRc<T> {
 
     /// Drops `self`, and if `self` was the last strong reference, call
     /// `ExplicitDrop::explicit_drop` on the internal value.
-    pub fn explicit_drop_recursive(
+    pub fn explicit_drop_recursive<'p>(
         self,
         root: &Root,
-        param: &T::ExplicitDropParam,
+        param: T::ExplicitDropParam<'p>,
     ) -> Option<T::ExplicitDropResult>
     where
         T: ExplicitDrop,
@@ -240,14 +240,14 @@ impl<T> RootedRc<T> {
 }
 
 impl<T> ExplicitDrop for RootedRc<T> {
-    type ExplicitDropParam = Root;
+    type ExplicitDropParam<'p> = &'p Root;
 
     type ExplicitDropResult = ();
 
     /// If T itself implements `ExplicitDrop`, consider
     /// `RootedRc::explicit_drop_recursive` instead to call it when dropping the
     /// last strong reference.
-    fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(self, root: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         self.common.safely_drop(root, RefType::Strong);
     }
 }
@@ -413,10 +413,13 @@ mod test_rooted_rc {
         // to safely drop the inner `RootedRc` when dropping a `RootedRc<MyOuter>`.
         struct MyOuter(RootedRc<()>);
         impl ExplicitDrop for MyOuter {
-            type ExplicitDropParam = Root;
+            type ExplicitDropParam<'p> = &'p Root;
             type ExplicitDropResult = ();
 
-            fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+            fn explicit_drop<'p>(
+                self,
+                root: Self::ExplicitDropParam<'p>,
+            ) -> Self::ExplicitDropResult {
                 self.0.explicit_drop(root);
             }
         }
@@ -462,12 +465,12 @@ impl<T> RootedRcWeak<T> {
 }
 
 impl<T> ExplicitDrop for RootedRcWeak<T> {
-    type ExplicitDropParam = Root;
+    type ExplicitDropParam<'p> = &'p Root;
 
     type ExplicitDropResult = ();
 
     #[inline]
-    fn explicit_drop(self, root: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(self, root: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         let val = self.common.safely_drop(root, RefType::Weak);
         // Since this isn't a strong reference, this can't be the *last* strong
         // reference, so the value should never be returned.

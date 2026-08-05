@@ -236,10 +236,10 @@ impl Default for DescriptorTable {
 }
 
 impl ExplicitDrop for DescriptorTable {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Host) {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
         // Drop all descriptors using a callback queue.
         //
         // Doing this explicitly instead of letting `DescriptorTable`'s `Drop`
