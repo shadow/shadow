@@ -250,6 +250,43 @@ fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::R
     Ok(())
 }
 
+fn test_pid_lock_threads(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+
+    // Take a write lock
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?;
+
+    // child thread should be able to take the same lock, since it's owned by the *process*.
+    let fd = file.as_raw_fd();
+    std::thread::spawn(move || fcntl_lock(fd, cmd.into(), &wr_flock))
+        .join()
+        .unwrap()?;
+
+    // child *process* should see conflicting lock; i.e. should not have been
+    // dropped as a result of tearing down the thread.
+    let mut child = ForkedChild::new(handle_lock_request)?;
+    let out_flock = child
+        .send_recv(&SerializedLockRequest {
+            fd,
+            cmd: FcntlFlockCommand::F_GETLK.into(),
+            flock: wr_flock,
+        })?
+        .to_result()?;
+    ensure_ord!(out_flock, ==, libc::flock {
+        l_pid: std::process::id().try_into().unwrap(),
+        ..wr_flock
+    });
+
+    Ok(())
+}
+
 fn test_pid_lock_seek_end(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let mut file = tempfile::tempfile().unwrap();
@@ -995,6 +1032,12 @@ fn main() -> anyhow::Result<()> {
             ShadowTest::new(
                 &format!("contested-pid-locks {cmd:?}"),
                 move || test_contested_pid_locks(cmd),
+                // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-lock-threads {cmd:?}"),
+                move || test_pid_lock_threads(cmd),
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
             ),
