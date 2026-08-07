@@ -11,10 +11,10 @@ use crate::cshadow as c;
 use crate::host::host::Host;
 use crate::network::PacketRc;
 use crate::network::packet::PacketStatus;
-use crate::network::relay::token_bucket::TokenBucket;
 use crate::utility::ObjectCounter;
 
 mod token_bucket;
+pub use token_bucket::TokenBucket;
 
 /// A `Relay` forwards `PacketRc`s between `PacketDevice`s, optionally enforcing a
 /// bandwidth limit on the rate at which we forward `PacketRc`s between devices.
