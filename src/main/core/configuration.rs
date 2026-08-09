@@ -210,6 +210,7 @@ impl ConfigOptions {
         match self.experimental.strace_logging_mode.as_ref().unwrap() {
             StraceLoggingMode::Standard => Some(FmtOptions::Standard),
             StraceLoggingMode::Deterministic => Some(FmtOptions::Deterministic),
+            StraceLoggingMode::Long => Some(FmtOptions::Long),
             StraceLoggingMode::Off => None,
         }
     }
@@ -1175,6 +1176,7 @@ pub enum StraceLoggingMode {
     Off,
     Standard,
     Deterministic,
+    Long,
 }
 
 impl FromStr for StraceLoggingMode {
