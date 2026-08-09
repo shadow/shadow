@@ -335,6 +335,70 @@ fn fmt_string(
     }
 }
 
+fn fmt_array<'a, T>(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: ForeignPtr<T>,
+    len: usize,
+    args: [shadow_shim_helper_rs::syscall_types::SyscallReg; 6],
+    options: FmtOptions,
+    mem: &'a MemoryManager,
+) -> std::fmt::Result
+where
+    SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    // How many bytes we want to show.
+    // We try not to exceed this, but there may be some edge cases which do.
+    const DISPLAY_LEN: usize = 100;
+
+    // Separator for items.
+    const SEPARATOR: &str = ", ";
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    let mut s = String::with_capacity(DISPLAY_LEN);
+
+    s.push('[');
+
+    let mut num_items_displayed = 0;
+
+    for idx in 0..len {
+        // We reuse the same code for displaying a `*const T` here, since an array is essentially a
+        // pointer to the first item. So we make a fake register value containing the pointer with
+        // the required offset.
+        //
+        // TODO: This is a little awkward since `deref_pointer_impl!()` prints the pointer address
+        // for each item. Ideally we'd want to print only one pointer address for the start of the
+        // array.
+        let fake_reg = ptr.add(idx).into();
+        let syscall_val: SyscallVal<'_, *const T> = SyscallVal::new(fake_reg, args, options, mem);
+
+        let item_str = format!("{syscall_val}");
+
+        let maybe_separator = if idx != 0 { SEPARATOR } else { "" };
+
+        // current string length + separator length + item length + closing ']' length
+        if s.len() + maybe_separator.len() + item_str.len() + 1 > DISPLAY_LEN {
+            // not enough room, so stop
+            break;
+        }
+
+        // we have enough room, so add the item
+        s.push_str(maybe_separator);
+        s.push_str(&item_str);
+
+        num_items_displayed += 1;
+    }
+
+    if len > num_items_displayed {
+        // we may exceed DISPLAY_LEN here, but it's not worth worrying about that
+        write!(f, "{s}, ...]")
+    } else {
+        write!(f, "{s}]")
+    }
+}
+
 /// Format a plugin's `libc::msghdr`. Any pointers contained in the `libc::msghdr` must be pointers
 /// within the plugin's memory space.
 fn fmt_msghdr(
@@ -409,6 +473,34 @@ impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
     ) -> std::fmt::Result {
         let ptr = self.reg.into();
         fmt_string(f, ptr, None, mem)
+    }
+}
+
+/// Displays an array with a length that is specified by another syscall argument.
+///
+/// For an array of bytes (like a string or buffer),
+/// typically prefer [`SyscallBufferArg`].
+pub struct SyscallArrayArg<const LEN_INDEX: usize, T>
+where
+    for<'a> SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<const LEN_INDEX: usize, T> SyscallDisplay for SyscallVal<'_, SyscallArrayArg<LEN_INDEX, T>>
+where
+    for<'a> SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        let ptr: ForeignPtr<T> = self.reg.into();
+        let len: libc::size_t = self.args[LEN_INDEX].into();
+        let args = self.args;
+        fmt_array::<T>(f, ptr, len, args, options, mem)
     }
 }
 
