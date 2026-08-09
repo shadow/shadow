@@ -16,6 +16,7 @@ use crate::host::thread::ThreadId;
 pub enum FmtOptions {
     Standard,
     Deterministic,
+    Long,
 }
 
 // this type is required until we no longer need to access the format options from C
@@ -25,6 +26,7 @@ pub enum StraceFmtMode {
     Off,
     Standard,
     Deterministic,
+    Long,
 }
 
 impl From<StraceFmtMode> for Option<FmtOptions> {
@@ -33,6 +35,7 @@ impl From<StraceFmtMode> for Option<FmtOptions> {
             StraceFmtMode::Off => None,
             StraceFmtMode::Standard => Some(FmtOptions::Standard),
             StraceFmtMode::Deterministic => Some(FmtOptions::Deterministic),
+            StraceFmtMode::Long => Some(FmtOptions::Long),
         }
     }
 }
@@ -43,6 +46,7 @@ impl From<Option<FmtOptions>> for StraceFmtMode {
             None => StraceFmtMode::Off,
             Some(FmtOptions::Standard) => StraceFmtMode::Standard,
             Some(FmtOptions::Deterministic) => StraceFmtMode::Deterministic,
+            Some(FmtOptions::Long) => StraceFmtMode::Long,
         }
     }
 }

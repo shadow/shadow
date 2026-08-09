@@ -127,9 +127,9 @@ macro_rules! deref_pointer_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
+                    (FmtOptions::Standard | FmtOptions::Long, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
+                    (FmtOptions::Standard | FmtOptions::Long, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -154,7 +154,7 @@ macro_rules! safe_pointer_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<()>::from(self.reg);
                 match options {
-                    FmtOptions::Standard => write!(f, "{ptr:p}"),
+                    FmtOptions::Standard | FmtOptions::Long => write!(f, "{ptr:p}"),
                     FmtOptions::Deterministic => write!(f, "<pointer>"),
                 }
             }
@@ -179,9 +179,9 @@ macro_rules! deref_array_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
+                    (FmtOptions::Standard | FmtOptions::Long, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
+                    (FmtOptions::Standard | FmtOptions::Long, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -243,7 +243,11 @@ fn fmt_buffer(
     options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
-    const DISPLAY_LEN: usize = 40;
+    let display_len = if options == FmtOptions::Long {
+        2000
+    } else {
+        40
+    };
 
     if options == FmtOptions::Deterministic {
         return write!(f, "<pointer>");
@@ -255,7 +259,7 @@ fn fmt_buffer(
         Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
     };
 
-    let mut s = String::with_capacity(DISPLAY_LEN);
+    let mut s = String::with_capacity(display_len);
 
     // the number of plugin mem bytes used; num_bytes <= s.len()
     let mut num_plugin_bytes = 0;
@@ -263,7 +267,7 @@ fn fmt_buffer(
     for c in mem_ref.iter() {
         let escaped = std::ascii::escape_default(*c);
 
-        if s.len() + escaped.len() > DISPLAY_LEN {
+        if s.len() + escaped.len() > display_len {
             break;
         }
 
@@ -348,7 +352,11 @@ where
 {
     // How many bytes we want to show.
     // We try not to exceed this, but there may be some edge cases which do.
-    const DISPLAY_LEN: usize = 100;
+    let display_len = if options == FmtOptions::Long {
+        2000
+    } else {
+        100
+    };
 
     // Separator for items.
     const SEPARATOR: &str = ", ";
@@ -357,7 +365,7 @@ where
         return write!(f, "<pointer>");
     }
 
-    let mut s = String::with_capacity(DISPLAY_LEN);
+    let mut s = String::with_capacity(display_len);
 
     s.push('[');
 
@@ -379,7 +387,7 @@ where
         let maybe_separator = if idx != 0 { SEPARATOR } else { "" };
 
         // current string length + separator length + item length + closing ']' length
-        if s.len() + maybe_separator.len() + item_str.len() + 1 > DISPLAY_LEN {
+        if s.len() + maybe_separator.len() + item_str.len() + 1 > display_len {
             // not enough room, so stop
             break;
         }
@@ -392,7 +400,7 @@ where
     }
 
     if len > num_items_displayed {
-        // we may exceed DISPLAY_LEN here, but it's not worth worrying about that
+        // we may exceed `display_len` here, but it's not worth worrying about that
         write!(f, "{s}, ...]")
     } else {
         write!(f, "{s}]")
