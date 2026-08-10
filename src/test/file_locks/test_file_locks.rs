@@ -780,6 +780,46 @@ fn test_zero_len_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Re
     Ok(())
 }
 
+/// Tests setting a lock with `l_len<0` using `cmd`. Queries are done with F_GETLK.
+fn test_negative_len_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+    let mut child = ForkedChild::new(handle_lock_request)?;
+
+    // fcntl(2): if l_len is negative, the interval described by lock covers
+    // bytes l_start+l_len  up  to  and  including  l_start-1.
+
+    let negative_len_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 100,
+        l_len: -10,
+        l_pid: 0,
+    };
+
+    // Take the lock, which should succeed.
+    fcntl_lock(file.as_raw_fd(), cmd.into(), &negative_len_flock)?;
+
+    // Use GETLK from child to inspect the lock.
+    {
+        let out_flock = child
+            .send_recv(&SerializedLockRequest {
+                fd: file.as_raw_fd(),
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: negative_len_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(out_flock, ==, libc::flock {
+            l_type: libc::F_WRLCK.try_into().unwrap(),
+            l_whence: libc::SEEK_SET.try_into().unwrap(),
+            l_start: 90,
+            l_len: 10,
+            l_pid: std::process::id().try_into().unwrap(),
+        });
+    }
+
+    Ok(())
+}
+
 fn test_coalesce_and_split_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     // Open file before forking, so that child also has the descriptor.
     let file = tempfile::tempfile().unwrap();
@@ -1177,6 +1217,11 @@ fn main() -> anyhow::Result<()> {
                 &format!("zero-len-pid-locks {cmd:?}"),
                 move || test_zero_len_pid_locks(cmd),
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("negative-len-pid-locks {cmd:?}"),
+                move || test_negative_len_pid_locks(cmd),
                 no_shadow_envs.clone(),
             ),
             ShadowTest::new(
