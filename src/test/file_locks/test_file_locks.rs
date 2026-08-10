@@ -1,4 +1,3 @@
-use anyhow::ensure;
 use linux_api::errno::Errno;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{
@@ -6,7 +5,7 @@ use std::{
     ops::Neg as _,
     os::fd::AsRawFd,
 };
-use test_utils::{ForkedChild, ShadowTest, TestEnvironment, ensure_ord, set};
+use test_utils::{ForkedChild, ShadowTest, TestEnvironment, ensure_in, ensure_ord, set};
 
 // fcntl commands that set (or clear) a range lock, and that should behave
 // identically when the requested lock is uncontested.
@@ -219,7 +218,7 @@ fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::R
     // (We only test F_SETLK here rather than `cmd`; blocking behavior with F_SETLKW is in another test).
     {
         let res = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_SETLK, &wr_flock);
-        ensure!([Err(Errno::EACCES), Err(Errno::EAGAIN)].contains(&res));
+        ensure_in!(&res, [Err(Errno::EACCES), Err(Errno::EAGAIN)]);
     }
 
     // Tell the child to release its lock, which should succeed.
@@ -1012,7 +1011,7 @@ fn test_overlapping_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow:
                 l_pid: 0,
             },
         )?;
-        ensure!([child1.pid(), child2.pid()].contains(&out_flock.l_pid));
+        ensure_in!(&out_flock.l_pid, [child1.pid(), child2.pid()]);
     }
     // querying the last byte of the child1 lock should return that one (again
     // describing the whole range covered by that lock)
