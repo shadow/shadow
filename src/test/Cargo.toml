@@ -271,3 +271,4 @@ vasi-sync = { path = "../lib/vasi-sync" }
 static_assertions = "1.1.0"
 tempfile = "3.27.0"
 tor-llcrypto = "0.41.0"
+num_enum = "0.7.6"
