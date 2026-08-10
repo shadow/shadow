@@ -250,6 +250,40 @@ fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::R
     Ok(())
 }
 
+fn test_pid_lock_overflow(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    // Open file before forking, so that child also has the descriptor.
+    let file = tempfile::tempfile().unwrap();
+
+    // Experimentally, max start+len is (i64::MAX+1). Presumably Linux
+    // internally uses a "closed" calculated end-offset, such that it is exactly
+    // `i64` in this case.
+    let wr_flock_max = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: i64::MAX,
+        l_len: 1,
+        l_pid: 0,
+    };
+
+    // One beyond what we think is the max should result in an overflow error.
+    {
+        let res = fcntl_lock(
+            file.as_raw_fd(),
+            cmd.into(),
+            &libc::flock {
+                l_len: wr_flock_max.l_len + 1,
+                ..wr_flock_max
+            },
+        );
+        ensure_ord!(res, ==, Err(Errno::EOVERFLOW));
+    }
+
+    // Taking `wr_flock_max` should succeed.
+    fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock_max)?;
+
+    Ok(())
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum CloseDescriptor {
     Original,
@@ -1141,6 +1175,11 @@ fn main() -> anyhow::Result<()> {
                 move || test_unlock_pid_locks_edge_cases(cmd),
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
                 no_shadow_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-lock-overflow {cmd:?}"),
+                move || test_pid_lock_overflow(cmd),
+                all_envs.clone(),
             ),
         ]);
     }
