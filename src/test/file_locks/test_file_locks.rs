@@ -361,6 +361,45 @@ fn test_pid_owner_closes_descriptor(
     Ok(())
 }
 
+fn test_pid_owner_exits(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+    let mut child = ForkedChild::new(handle_lock_request)?;
+
+    // Have child take a write lock.
+    let wr_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+    child
+        .send_recv(&SerializedLockRequest {
+            fd: file.as_raw_fd(),
+            cmd: cmd.into(),
+            flock: wr_flock,
+        })?
+        .to_result()?;
+
+    // Double-check that we see the lock.
+    {
+        let out_flock = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &wr_flock)?;
+        ensure_ord!(out_flock, ==, libc::flock {l_pid: child.pid(), ..wr_flock });
+        ensure_ord!(out_flock.l_pid, ==, child.pid());
+    }
+
+    // Have child exit, which should cause the lock to be released.
+    drop(child);
+
+    // We should no longer see the lock.
+    {
+        let out_flock = fcntl_lock(file.as_raw_fd(), FcntlFlockCommand::F_GETLK, &wr_flock)?;
+        ensure_ord!(out_flock, ==, libc::flock {l_type: libc::F_UNLCK.try_into().unwrap(), ..wr_flock });
+    }
+
+    Ok(())
+}
+
 fn test_pid_lock_threads(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
     let file = tempfile::tempfile().unwrap();
 
@@ -1144,6 +1183,11 @@ fn main() -> anyhow::Result<()> {
                 &format!("contested-pid-locks {cmd:?}"),
                 move || test_contested_pid_locks(cmd),
                 // TODO: <https://github.com/shadow/shadow/issues/2258>
+                no_shadow_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-owner_exits {cmd:?}"),
+                move || test_pid_owner_exits(cmd),
                 no_shadow_envs.clone(),
             ),
             ShadowTest::new(
