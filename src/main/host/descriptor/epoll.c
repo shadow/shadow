@@ -322,7 +322,8 @@ static void _epoll_close(LegacyFile* descriptor, const Host* host) {
     epoll_clearWatchListeners(epoll);
 }
 
-LegacyFileFunctionTable epollFunctions = {_epoll_close, NULL, _epoll_free, MAGIC_VALUE};
+LegacyFileFunctionTable epollFunctions = {
+    .close = _epoll_close, .cleanup = NULL, .free = _epoll_free, MAGIC_INITIALIZER};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);
