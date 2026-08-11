@@ -76,6 +76,16 @@ pub enum FcntlCommand {
 pub use bindings::linux_flock as flock;
 unsafe impl shadow_pod::Pod for flock {}
 
+// Valid values for `flock::l_whence`.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(i16)]
+#[allow(non_camel_case_types)]
+pub enum FlockWhence {
+    SEEK_SET = const_conversions::i16_from_u32(bindings::LINUX_SEEK_SET),
+    SEEK_CUR = const_conversions::i16_from_u32(bindings::LINUX_SEEK_CUR),
+    SEEK_END = const_conversions::i16_from_u32(bindings::LINUX_SEEK_END),
+}
+
 /// Owner, as used with [`FcntlCommand::F_SETOWN_EX`] and [`FcntlCommand::F_GETOWN_EX`]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
