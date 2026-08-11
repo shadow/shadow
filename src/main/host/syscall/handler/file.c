@@ -348,21 +348,6 @@ SyscallReturn syscallhandler_readahead(SyscallHandler* sys, const SyscallArgs* a
     return syscallreturn_makeDoneI64(regularfile_readahead(file_desc, offset, count));
 }
 
-SyscallReturn syscallhandler_lseek(SyscallHandler* sys, const SyscallArgs* args) {
-    int fd = args->args[0].as_i64;
-    off_t offset = args->args[1].as_u64;
-    int whence = args->args[2].as_i64;
-
-    /* Get and validate the file descriptor. */
-    RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
-    if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
-    }
-
-    return syscallreturn_makeDoneI64(regularfile_lseek(file_desc, offset, whence));
-}
-
 SyscallReturn syscallhandler_getdents(SyscallHandler* sys, const SyscallArgs* args) {
     int fd = args->args[0].as_i64;
     UntypedForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*

@@ -247,6 +247,14 @@ impl Pipe {
         Err(Errno::EINVAL.into())
     }
 
+    pub fn lseek(
+        &mut self,
+        _off: linux_api::posix_types::kernel_off_t,
+        _whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        Err(Errno::ESPIPE.into())
+    }
+
     pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
         warn_once_then_debug!("Not all fields of 'struct stat' are implemented for pipes");
 

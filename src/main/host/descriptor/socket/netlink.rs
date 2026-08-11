@@ -338,6 +338,15 @@ impl NetlinkSocket {
         Err(Errno::EINVAL.into())
     }
 
+    pub fn lseek(
+        &mut self,
+        _off: linux_api::posix_types::kernel_off_t,
+        _whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        warn_once_then_debug!("We do not yet handle lseek calls on netlink sockets");
+        Err(Errno::EBADF.into())
+    }
+
     pub fn add_listener(
         &mut self,
         monitoring_state: FileState,

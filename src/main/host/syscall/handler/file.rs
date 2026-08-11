@@ -3,8 +3,6 @@ use linux_api::posix_types::kernel_mode_t;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow;
-use crate::host::descriptor::CompatFile;
-use crate::host::syscall::File;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallStringArg;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
@@ -205,29 +203,13 @@ impl SyscallHandler {
     pub fn lseek(
         ctx: &mut SyscallContext,
         fd: std::ffi::c_uint,
-        _offset: linux_api::posix_types::kernel_off_t,
-        _whence: std::ffi::c_uint,
+        offset: linux_api::posix_types::kernel_off_t,
+        whence: std::ffi::c_uint,
     ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        let whence = linux_api::unistd::LSeekWhence::try_from(whence).map_err(|_| Errno::EINVAL)?;
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
-
-        let file = {
-            match Self::get_descriptor(&desc_table, fd)?.file() {
-                CompatFile::New(file) => file,
-                // if it's a legacy file, use the C syscall handler instead
-                CompatFile::Legacy(_) => {
-                    drop(desc_table);
-                    return Self::legacy_syscall(cshadow::syscallhandler_lseek, ctx);
-                }
-            }
-        };
-
-        match file.inner_file() {
-            File::Pipe(_) => Err(Errno::ESPIPE.into()),
-            _ => {
-                warn_once_then_debug!("lseek() is not implemented for this type");
-                Err(Errno::ENOTSUP.into())
-            }
-        }
+        let file = Self::get_descriptor(&desc_table, fd)?.file();
+        file.lseek(offset, whence)
     }
 
     log_syscall!(

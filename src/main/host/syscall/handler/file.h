@@ -24,7 +24,6 @@ SYSCALL_HANDLER(fsync);
 SYSCALL_HANDLER(ftruncate);
 SYSCALL_HANDLER(getdents);
 SYSCALL_HANDLER(getdents64);
-SYSCALL_HANDLER(lseek);
 SYSCALL_HANDLER(open);
 SYSCALL_HANDLER(readahead);
 SYSCALL_HANDLER(sync_file_range);

@@ -290,6 +290,9 @@ impl FileRefMut<'_> {
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn state(&self) -> FileState
     );
+    enum_passthrough!(self, (off, whence), Pipe, EventFd, Socket, TimerFd, Epoll;
+        pub fn lseek(&mut self, off: linux_api::posix_types::kernel_off_t, whence: linux_api::unistd::LSeekWhence) -> Result<linux_api::posix_types::kernel_off_t, SyscallError>
+    );
     enum_passthrough!(self, (), Pipe, EventFd, Socket, TimerFd, Epoll;
         pub fn mode(&self) -> FileMode
     );
@@ -658,7 +661,7 @@ impl LegacyFileCounter {
     }
 
     pub fn lseek(
-        &mut self,
+        &self,
         off: linux_api::posix_types::kernel_off_t,
         whence: linux_api::unistd::LSeekWhence,
     ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
@@ -748,19 +751,13 @@ impl CompatFile {
     }
 
     pub fn lseek(
-        &mut self,
+        &self,
         off: linux_api::posix_types::kernel_off_t,
         whence: linux_api::unistd::LSeekWhence,
     ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
         match self {
-            CompatFile::New(open_file) => match open_file.inner_file() {
-                File::Pipe(_) => Err(Errno::ESPIPE.into()),
-                _ => {
-                    warn_once_then_debug!("lseek() is not implemented for this type");
-                    Err(Errno::ENOTSUP.into())
-                }
-            },
-            CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.lseek(off, whence)?),
+            CompatFile::New(file) => file.inner_file().borrow_mut().lseek(off, whence),
+            CompatFile::Legacy(file) => file.lseek(off, whence),
         }
     }
 
