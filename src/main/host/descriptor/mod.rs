@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
 use linux_api::fcntl::{DescriptorFlags, OFlag};
 use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -656,6 +657,49 @@ impl LegacyFileCounter {
         unsafe { self.file.as_ref().unwrap().ptr() }
     }
 
+    pub fn lseek(
+        &mut self,
+        off: linux_api::posix_types::kernel_off_t,
+        whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        let rv = unsafe {
+            c::legacyfile_lseek(self.ptr(), off, i32::try_from(u32::from(whence)).unwrap())
+        };
+        if rv < 0 {
+            return Err(Errno::from_libc_errnum(-i32::try_from(rv).unwrap())
+                .unwrap()
+                .into());
+        }
+        Ok(rv)
+    }
+
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        let mut libc_stat: libc::stat = shadow_pod::zeroed();
+        let rv = unsafe { c::legacyfile_fstat(self.ptr(), &mut libc_stat) };
+        if rv < 0 {
+            return Err(Errno::from_libc_errnum(-rv).unwrap().into());
+        }
+        Ok(linux_api::stat::linux_stat {
+            st_dev: libc_stat.st_dev,
+            st_ino: libc_stat.st_ino,
+            st_nlink: libc_stat.st_nlink,
+            st_mode: libc_stat.st_mode,
+            st_uid: libc_stat.st_uid,
+            st_gid: libc_stat.st_gid,
+            st_rdev: libc_stat.st_rdev,
+            st_size: libc_stat.st_size,
+            st_blksize: libc_stat.st_blksize,
+            st_blocks: libc_stat.st_blocks,
+            st_atime: libc_stat.st_atime as u64,
+            st_atime_nsec: libc_stat.st_atime_nsec as u64,
+            st_mtime: libc_stat.st_mtime as u64,
+            st_mtime_nsec: libc_stat.st_mtime_nsec as u64,
+            st_ctime: libc_stat.st_ctime as u64,
+            st_ctime_nsec: libc_stat.st_ctime_nsec as u64,
+            ..shadow_pod::zeroed()
+        })
+    }
+
     /// Should drop `self` immediately after calling this.
     fn close_helper(&mut self, host: &Host) {
         // this isn't subject to race conditions since we should never access descriptors
@@ -700,6 +744,30 @@ impl CompatFile {
                 file.close(host);
                 Some(Ok(()))
             }
+        }
+    }
+
+    pub fn lseek(
+        &mut self,
+        off: linux_api::posix_types::kernel_off_t,
+        whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        match self {
+            CompatFile::New(open_file) => match open_file.inner_file() {
+                File::Pipe(_) => Err(Errno::ESPIPE.into()),
+                _ => {
+                    warn_once_then_debug!("lseek() is not implemented for this type");
+                    Err(Errno::ENOTSUP.into())
+                }
+            },
+            CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.lseek(off, whence)?),
+        }
+    }
+
+    pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow().stat(),
+            CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.stat()?),
         }
     }
 }
