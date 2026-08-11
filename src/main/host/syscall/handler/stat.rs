@@ -1,7 +1,6 @@
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow;
-use crate::host::descriptor::CompatFile;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallStringArg;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
@@ -31,18 +30,8 @@ impl SyscallHandler {
         statbuf_ptr: ForeignPtr<linux_api::stat::stat>,
     ) -> Result<(), SyscallError> {
         let desc_table = ctx.objs.thread.descriptor_table_borrow(ctx.objs.host);
-        let file = match Self::get_descriptor(&desc_table, fd)?.file() {
-            CompatFile::New(file) => file.clone(),
-            // if it's a legacy file, use the C syscall handler instead
-            CompatFile::Legacy(_) => {
-                drop(desc_table);
-                let rv: i32 = Self::legacy_syscall(cshadow::syscallhandler_fstat, ctx)?;
-                assert_eq!(rv, 0);
-                return Ok(());
-            }
-        };
-
-        let stat = file.inner_file().borrow().stat()?;
+        let file = Self::get_descriptor(&desc_table, fd)?.file();
+        let stat = file.stat()?;
 
         ctx.objs
             .process

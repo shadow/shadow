@@ -19,7 +19,6 @@ SYSCALL_HANDLER(flistxattr);
 SYSCALL_HANDLER(flock);
 SYSCALL_HANDLER(fremovexattr);
 SYSCALL_HANDLER(fsetxattr);
-SYSCALL_HANDLER(fstat);
 SYSCALL_HANDLER(fstatfs);
 SYSCALL_HANDLER(fsync);
 SYSCALL_HANDLER(ftruncate);

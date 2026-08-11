@@ -104,27 +104,6 @@ SyscallReturn syscallhandler_open(SyscallHandler* sys, const SyscallArgs* args) 
         sys, args->args[0].as_ptr, args->args[1].as_i64, args->args[2].as_u64);
 }
 
-SyscallReturn syscallhandler_fstat(SyscallHandler* sys, const SyscallArgs* args) {
-    int fd = args->args[0].as_i64;
-    UntypedForeignPtr bufPtr = args->args[1].as_ptr; // struct stat*
-
-    /* Get and validate the file descriptor. */
-    RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
-    if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
-    }
-
-    /* Get some memory in which to return the result. */
-    struct stat* buf =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    return syscallreturn_makeDoneI64(regularfile_fstat(file_desc, buf));
-}
-
 SyscallReturn syscallhandler_fstatfs(SyscallHandler* sys, const SyscallArgs* args) {
     int fd = args->args[0].as_i64;
     UntypedForeignPtr bufPtr = args->args[1].as_ptr; // struct statfs*
