@@ -154,6 +154,29 @@ void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     descriptor->funcTable->close(descriptor, host);
 }
 
+int legacyfile_fstat(LegacyFile* descriptor, struct stat* statbuf) {
+    MAGIC_ASSERT(descriptor);
+    MAGIC_ASSERT(descriptor->funcTable);
+
+    if (descriptor->funcTable->fstat == NULL) {
+        debug("fstat not implemented for LegacyFile type %d", descriptor->type);
+        return -EBADF;
+    }
+    return descriptor->funcTable->fstat(descriptor, statbuf);
+}
+
+off_t legacyfile_lseek(LegacyFile* descriptor, off_t offset, int whence) {
+    MAGIC_ASSERT(descriptor);
+    MAGIC_ASSERT(descriptor->funcTable);
+
+    utility_alwaysAssert(descriptor->funcTable->lseek);
+    if (descriptor->funcTable->fstat == NULL) {
+        debug("lseek not implemented for LegacyFile type %d", descriptor->type);
+        return -EBADF;
+    }
+    return descriptor->funcTable->lseek(descriptor, offset, whence);
+}
+
 LegacyFileType legacyfile_getType(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     return descriptor->type;

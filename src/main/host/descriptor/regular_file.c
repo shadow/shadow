@@ -183,25 +183,6 @@ static void _regularfile_free(LegacyFile* desc) {
     worker_count_deallocation(RegularFile);
 }
 
-static LegacyFileFunctionTable _fileFunctions = (LegacyFileFunctionTable){
-    .close = _regularfile_close,
-    .cleanup = NULL,
-    .free = _regularfile_free,
-};
-
-RegularFile* regularfile_new() {
-    RegularFile* file = malloc(sizeof(RegularFile));
-
-    *file = (RegularFile){0};
-
-    legacyfile_init(&(file->super), DT_FILE, &_fileFunctions);
-    MAGIC_INIT(file);
-    file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
-
-    worker_count_allocation(RegularFile);
-    return file;
-}
-
 static char* _regularfile_getConcatStr(const char* prefix, const char sep, const char* suffix) {
     char* path = NULL;
     if (asprintf(&path, "%s%c%s", prefix, sep, suffix) < 0) {
@@ -726,6 +707,11 @@ int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
     return (result < 0) ? -errno : result;
 }
 
+int _regularfile_fstat(LegacyFile* desc, struct stat* statbuf) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
+    return regularfile_fstat(file, statbuf);
+}
+
 int regularfile_fstatfs(RegularFile* file, struct statfs* statbuf) {
     MAGIC_ASSERT(file);
 
@@ -928,6 +914,11 @@ off_t regularfile_lseek(RegularFile* file, off_t offset, int whence) {
 
     ssize_t result = lseek(_regularfile_getOSBackedFD(file), offset, whence);
     return (result < 0) ? -errno : result;
+}
+
+off_t _regularfile_lseek(LegacyFile* desc, off_t offset, int whence) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
+    return regularfile_lseek(file, offset, whence);
 }
 
 int regularfile_getdents(RegularFile* file, struct linux_dirent* dirp, unsigned int count) {
@@ -1581,3 +1572,24 @@ int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigne
     return (result < 0) ? -errno : result;
 }
 #endif
+
+static LegacyFileFunctionTable _fileFunctions = (LegacyFileFunctionTable){
+    .close = _regularfile_close,
+    .fstat = _regularfile_fstat,
+    .lseek = _regularfile_lseek,
+    .cleanup = NULL,
+    .free = _regularfile_free,
+};
+
+RegularFile* regularfile_new() {
+    RegularFile* file = malloc(sizeof(RegularFile));
+
+    *file = (RegularFile){0};
+
+    legacyfile_init(&(file->super), DT_FILE, &_fileFunctions);
+    MAGIC_INIT(file);
+    file->osfile.fd = OSFILE_INVALID; // negative means uninitialized (0 is a valid fd)
+
+    worker_count_allocation(RegularFile);
+    return file;
+}

@@ -8,6 +8,8 @@
 #define SHD_DESCRIPTOR_H_
 
 #include <glib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "main/bindings/c/bindings-opaque.h"
 #include "main/host/descriptor/descriptor_types.h"
@@ -27,6 +29,8 @@ void legacyfile_unref(gpointer data);
 void legacyfile_refWeak(gpointer data);
 void legacyfile_unrefWeak(gpointer data);
 void legacyfile_close(LegacyFile* descriptor, const Host* host);
+int legacyfile_fstat(LegacyFile* descriptor, struct stat* statbuf);
+off_t legacyfile_lseek(LegacyFile* descriptor, off_t offset, int whence);
 
 const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* descriptor);
 
