@@ -701,6 +701,14 @@ impl LegacyFileCounter {
     pub fn close(mut self, host: &Host) {
         self.close_helper(host);
     }
+
+    pub fn mode(&self) -> FileMode {
+        let raw_flags = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        let oflags = OFlag::from_bits_retain(raw_flags);
+        let (mode, _other_flags) =
+            FileMode::from_o_flags(oflags).expect("Invalid flags for open file");
+        mode
+    }
 }
 
 impl std::ops::Drop for LegacyFileCounter {
@@ -747,6 +755,13 @@ impl CompatFile {
         match self {
             CompatFile::New(open_file) => open_file.inner_file().borrow().stat(),
             CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.stat()?),
+        }
+    }
+
+    pub fn mode(&self) -> FileMode {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow().mode(),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.mode(),
         }
     }
 }
