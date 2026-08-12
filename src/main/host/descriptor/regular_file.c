@@ -405,7 +405,12 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         file->type = FILE_TYPE_REGULAR;
     }
 
-    int originalFlags = flags;
+    // store original flags in superclass, LegacyDescriptor.
+    // (Primarily so that rust code operating on a LegacyDescriptor
+    // can work out whether the file is readable and/or writable)
+    // TODO: maybe it'd be better to push `flags` down into the subclasses,
+    // and have a callback for fetching them from the LegacyDescriptor?
+    file->super.flags = flags;
 
     // move any flags that shadow handles from 'flags' to 'shadowFlags'
     file->shadowFlags = flags & SHADOW_FLAG_MASK;
