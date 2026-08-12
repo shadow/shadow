@@ -198,7 +198,7 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_uint,
         /* offset */ linux_api::posix_types::kernel_off_t,
-        /* whence */ std::ffi::c_uint,
+        /* whence */ linux_api::unistd::LSeekWhence,
     );
     pub fn lseek(
         ctx: &mut SyscallContext,
