@@ -59,20 +59,23 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         case F_OFD_GETLK:
 #endif
         {
-            struct flock* flk =
-                process_getMutablePtr(rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
-            result = regularfile_fcntl(file, command, (void*)flk);
+            struct flock flk = {0};
+            result = process_readPtr(
+                rustsyscallhandler_getProcess(sys), &flk, argReg.as_ptr, sizeof(flk));
+            if (result < 0) {
+                break;
+            }
+            result = regularfile_fcntl(file, command, &flk);
+            if (result < 0) {
+                break;
+            }
+            int write_result = process_writePtr(
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, &flk, sizeof(flk));
+            if (write_result < 0) {
+                result = write_result;
+            }
             break;
         }
-
-#if defined(F_GETLK64) && F_GETLK64 != F_GETLK
-        case F_GETLK64: {
-            struct flock64* flk =
-                process_getMutablePtr(rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
-            result = regularfile_fcntl(file, command, (void*)flk);
-            break;
-        }
-#endif
 
         case F_SETLK:
 #ifdef F_OFD_SETLK
@@ -83,38 +86,35 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         case F_OFD_SETLKW:
 #endif
         {
-            const struct flock* flk = process_getReadablePtr(
-                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*flk));
-            result = regularfile_fcntl(file, command, (void*)flk);
+            struct flock flk = {0};
+            result = process_readPtr(
+                rustsyscallhandler_getProcess(sys), &flk, argReg.as_ptr, sizeof(flk));
+            if (result < 0) {
+                break;
+            }
+            result = regularfile_fcntl(file, command, &flk);
             break;
         }
-
-#if defined(F_SETLK64) && F_SETLK64 != F_SETLK
-        case F_SETLK64:
-#endif
-#if defined(F_SETLKW64) && F_SETLKW64 != F_SETLKW
-        case F_SETLKW64:
-#endif
-#if (defined(F_SETLK64) && F_SETLK64 != F_SETLK) || (defined(F_SETLKW64) && F_SETLKW64 != F_SETLKW)
-        {
-            const struct flock64* flk =
-                process_getReadablePtr(sys->process, sys->thread, argReg.as_ptr, sizeof(*flk));
-            result = regularfile_fcntl(file, command, (void*)flk);
-            break;
-        }
-#endif
 
         case F_GETOWN_EX: {
-            struct f_owner_ex* foe = process_getWriteablePtr(
-                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
-            result = regularfile_fcntl(file, command, foe);
+            struct f_owner_ex foe = {0};
+            result = regularfile_fcntl(file, command, &foe);
+            if (result < 0) {
+                break;
+            }
+            int write_rv = process_writePtr(
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, &foe, sizeof(foe));
+            if (write_rv < 0) {
+                result = write_rv;
+            }
             break;
         }
 
         case F_SETOWN_EX: {
-            const struct f_owner_ex* foe = process_getReadablePtr(
-                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*foe));
-            result = regularfile_fcntl(file, command, (void*)foe);
+            struct f_owner_ex foe = {0};
+            result = process_readPtr(
+                rustsyscallhandler_getProcess(sys), &foe, argReg.as_ptr, sizeof(foe));
+            result = regularfile_fcntl(file, command, &foe);
             break;
         }
 
@@ -125,9 +125,17 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         case F_GET_FILE_RW_HINT:
 #endif
         {
-            uint64_t* hint = process_getWriteablePtr(
-                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
-            result = regularfile_fcntl(file, command, hint);
+            uint64_t hint = 0;
+            result = regularfile_fcntl(file, command, &hint);
+            if (result < 0) {
+                break;
+            }
+            int write_rv = process_writePtr(
+                rustsyscallhandler_getProcess(sys), argReg.as_ptr, &hint, sizeof(hint));
+            if (write_rv < 0) {
+                result = write_rv;
+                break;
+            }
             break;
         }
 
@@ -138,8 +146,12 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         case F_SET_FILE_RW_HINT:
 #endif
         {
-            const uint64_t* hint = process_getReadablePtr(
-                rustsyscallhandler_getProcess(sys), argReg.as_ptr, sizeof(*hint));
+            uint64_t hint = 0;
+            result = process_readPtr(
+                rustsyscallhandler_getProcess(sys), &hint, argReg.as_ptr, sizeof(hint));
+            if (result < 0) {
+                break;
+            }
             result = regularfile_fcntl(file, command, (void*)hint);
             break;
         }
