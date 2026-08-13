@@ -453,6 +453,46 @@ macro_rules! ensure_ord {
     };
 }
 
+/// Convenience wrapper around `anyhow::ensure` for testing that an element of
+/// type `E` is present in a container of type `C`. `C`` must have a method
+/// `contains(&E) -> bool`, and both `E` and `C` must implement `Debug`.
+///
+/// Example:
+///
+/// ```
+/// # use test_utils::*;
+/// # use anyhow::anyhow;
+/// fn fail1() -> Result<(), anyhow::Error> {
+///     ensure_in!(&5, [1, 2, 3]);
+///     Ok(())
+/// }
+///
+/// fn fail2() -> Result<(), anyhow::Error> {
+///     return Err(anyhow!("5 not in [1, 2, 3]"));
+/// }
+///
+/// fn pass() -> Result<(), anyhow::Error> {
+///     ensure_in!(&2, [1, 2, 3]);
+///     Ok(())
+/// }
+///
+/// assert_eq!(format!("{}", fail1().unwrap_err()),
+///            format!("{}", fail2().unwrap_err()));
+///
+/// pass().unwrap();
+/// ```
+#[macro_export]
+macro_rules! ensure_in {
+    ($elt:expr, $container:expr) => {
+        let eval_elt = $elt;
+        let eval_container = $container;
+        anyhow::ensure!(
+            eval_container.contains(eval_elt),
+            "{eval_elt:?} not in {eval_container:?}"
+        );
+    };
+}
+
 /// Convert a `&[u8]` to `&[i8]`. Useful when making C syscalls.
 pub fn u8_to_i8_slice(s: &[u8]) -> &[i8] {
     // assume that if try_from() was successful, then a direct cast would also be
