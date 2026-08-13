@@ -147,12 +147,6 @@ where
     }
 }
 
-#[derive(Debug)]
-enum CopiedOrMappedMut<T: Pod> {
-    // Data copied from process memory, to be written back.
-    Copied(MemoryCopier, ForeignArrayPtr<T>, Vec<T>),
-}
-
 /// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
 /// allowing, e.g.:
 ///
@@ -167,7 +161,9 @@ enum CopiedOrMappedMut<T: Pod> {
 /// the object without doing so will result in a panic.
 #[derive(Debug)]
 pub struct ProcessMemoryRefMut<'a, T: Pod> {
-    copied_or_mapped: CopiedOrMappedMut<T>,
+    copier: MemoryCopier,
+    ptr: ForeignArrayPtr<T>,
+    data: Vec<T>,
     dirty: bool,
     _phantom: PhantomData<&'a mut MemoryManager>,
 }
@@ -175,7 +171,9 @@ pub struct ProcessMemoryRefMut<'a, T: Pod> {
 impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
     fn new_copied(copier: MemoryCopier, ptr: ForeignArrayPtr<T>, v: Vec<T>) -> Self {
         Self {
-            copied_or_mapped: CopiedOrMappedMut::Copied(copier, ptr, v),
+            copier,
+            ptr,
+            data: v,
             dirty: true,
             _phantom: PhantomData,
         }
@@ -193,16 +191,12 @@ impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
         // dirty; the fact that it failed will be captured in an error result.
         self.dirty = false;
 
-        match &self.copied_or_mapped {
-            CopiedOrMappedMut::Copied(copier, ptr, v) => {
-                trace!(
-                    "Flushing {} bytes to {:x}",
-                    ptr.len() * std::mem::size_of::<T>(),
-                    usize::from(ptr.ptr())
-                );
-                unsafe { copier.copy_to_ptr(*ptr, v)? };
-            }
-        };
+        trace!(
+            "Flushing {} bytes to {:x}",
+            self.ptr.len() * std::mem::size_of::<T>(),
+            usize::from(self.ptr.ptr())
+        );
+        unsafe { self.copier.copy_to_ptr(self.ptr, &self.data)? };
         Ok(())
     }
 
@@ -228,9 +222,7 @@ where
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
-        match &self.copied_or_mapped {
-            CopiedOrMappedMut::Copied(_, _, v) => v,
-        }
+        &self.data
     }
 }
 
@@ -239,9 +231,7 @@ where
     T: Pod,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.copied_or_mapped {
-            CopiedOrMappedMut::Copied(_, _, v) => v,
-        }
+        &mut self.data
     }
 }
 
