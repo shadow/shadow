@@ -13,23 +13,6 @@ impl SyscallHandler {
         Ok(())
     }
 
-    log_syscall!(shadow_init_memory_manager, /* rv */ std::ffi::c_int);
-    pub fn shadow_init_memory_manager(ctx: &mut SyscallContext) -> Result<(), Errno> {
-        if !ctx.objs.host.params.use_mem_mapper {
-            log::trace!("Not initializing memory mapper");
-            return Ok(());
-        }
-
-        log::trace!("Initializing memory mapper");
-
-        let mut memory_manager = ctx.objs.process.memory_borrow_mut();
-        if !memory_manager.has_mapper() {
-            memory_manager.init_mapper(ctx.objs)
-        }
-
-        Ok(())
-    }
-
     log_syscall!(
         shadow_hostname_to_addr_ipv4,
         /* rv */ std::ffi::c_int,
