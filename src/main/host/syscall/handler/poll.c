@@ -175,16 +175,41 @@ static SyscallReturn _syscallhandler_pollHelperUntypedForeignPtr(SyscallHandler*
                                                                  UntypedForeignPtr fds_ptr,
                                                                  nfds_t nfds,
                                                                  const struct timespec* timeout) {
-    // Get the pollfd struct in our memory so we can read from and write to it.
     struct pollfd* fds = NULL;
+    size_t sz = nfds * sizeof(*fds);
+    int errcode = 0;
+    SyscallReturn res;
+
+    // Get the pollfd struct in our memory so we can read from and write to it.
     if (nfds > 0) {
-        fds = process_getMutablePtr(rustsyscallhandler_getProcess(sys), fds_ptr, nfds * sizeof(*fds));
-        if (!fds) {
-            return syscallreturn_makeDoneErrno(EFAULT);
+        fds = malloc(sz);
+        if (fds == NULL) {
+            warning("Internally failed to allocate buffer of size %lu", sz);
+            res = syscallreturn_makeDoneErrno(ENOMEM);
+            goto out;
+        }
+        errcode = process_readPtr(rustsyscallhandler_getProcess(sys), fds, fds_ptr, sz);
+        if (errcode < 0) {
+            res = syscallreturn_makeDoneErrno(-errcode);
+            goto out;
         }
     }
 
-    return _syscallhandler_pollHelper(sys, fds, nfds, timeout);
+    res = _syscallhandler_pollHelper(sys, fds, nfds, timeout);
+    if (fds != NULL && res.tag == SYSCALL_RETURN_DONE &&
+        syscallreturn_done(&res)->retval.as_i64 >= 0) {
+        errcode = process_writePtr(rustsyscallhandler_getProcess(sys), fds_ptr, fds, sz);
+        if (errcode < 0) {
+            res = syscallreturn_makeDoneErrno(-errcode);
+            goto out;
+        }
+    }
+
+out:
+    if (fds != NULL) {
+        free(fds);
+    }
+    return res;
 }
 
 static int _syscallhandler_checkPollArgs(UntypedForeignPtr fds_ptr, nfds_t nfds) {
