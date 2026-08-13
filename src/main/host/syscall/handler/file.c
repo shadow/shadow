@@ -53,9 +53,9 @@ static SyscallReturn _syscallhandler_openHelper(SyscallHandler* sys, UntypedFore
           (void*)pathnamePtr.val);
 
     /* Get the path string from the plugin. */
-    const char* pathname;
-    int errcode = process_getReadableString(
-        rustsyscallhandler_getProcess(sys), pathnamePtr, PATH_MAX, &pathname, NULL);
+    char pathname[PATH_MAX];
+    int errcode = process_readString(
+        rustsyscallhandler_getProcess(sys), pathname, pathnamePtr, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -116,13 +116,16 @@ SyscallReturn syscallhandler_fstat(SyscallHandler* sys, const SyscallArgs* args)
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
+    struct stat buf = {0};
+
+    int res = regularfile_fstat(file_desc, &buf);
+    if (res < 0) {
+        return syscallreturn_makeDoneErrno(-res);
     }
 
-    return syscallreturn_makeDoneI64(regularfile_fstat(file_desc, buf));
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), bufPtr, &buf, sizeof(buf));
+
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_fstatfs(SyscallHandler* sys, const SyscallArgs* args) {
@@ -137,13 +140,19 @@ SyscallReturn syscallhandler_fstatfs(SyscallHandler* sys, const SyscallArgs* arg
     }
 
     /* Get some memory in which to return the result. */
-    struct statfs* buf =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
+    struct statfs buf = {0};
+
+    int res = regularfile_fstatfs(file_desc, &buf);
+    if (res < 0) {
+        syscallreturn_makeDoneErrno(-res);
     }
 
-    return syscallreturn_makeDoneI64(regularfile_fstatfs(file_desc, buf));
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), bufPtr, &buf, sizeof(buf));
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_fsync(SyscallHandler* sys, const SyscallArgs* args) {
@@ -246,27 +255,47 @@ SyscallReturn syscallhandler_fsetxattr(SyscallHandler* sys, const SyscallArgs* a
     size_t size = args->args[3].as_u64;
     int flags = args->args[4].as_i64;
 
-    /* Get and validate the file descriptor. */
+    int res = 0;
+    int errcode = 0;
+    char* value = NULL;
     RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+
+    /* Get and validate the file descriptor. */
+    errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
+        goto out;
     }
 
     /* Get the name/value strings from the plugin. */
-    const char* name;
-    errcode =
-        process_getReadableString(rustsyscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
+    char name[PATH_MAX];
+    errcode = process_readString(rustsyscallhandler_getProcess(sys), name, namePtr, sizeof(name));
+    if (errcode < 0) {
+        goto out;
+    }
+
+    if (valuePtr.val && size > 0) {
+        value = malloc(size);
+        if (value == NULL) {
+            warning("Internally failed to allocate %lu bytes", size);
+            errcode = -ENOMEM;
+            goto out;
+        }
+        errcode = process_readPtr(rustsyscallhandler_getProcess(sys), value, valuePtr, size);
+        if (errcode < 0) {
+            goto out;
+        }
+    }
+
+    res = regularfile_fsetxattr(file_desc, name, value, size, flags);
+
+out:
+    if (value) {
+        free(value);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
-
-    const void* value =
-        (valuePtr.val && size > 0)
-            ? process_getReadablePtr(rustsyscallhandler_getProcess(sys), valuePtr, size)
-            : NULL;
-
-    return syscallreturn_makeDoneI64(regularfile_fsetxattr(file_desc, name, value, size, flags));
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_fgetxattr(SyscallHandler* sys, const SyscallArgs* args) {
@@ -275,26 +304,55 @@ SyscallReturn syscallhandler_fgetxattr(SyscallHandler* sys, const SyscallArgs* a
     UntypedForeignPtr valuePtr = args->args[2].as_ptr; // void*
     size_t size = args->args[3].as_u64;
 
+    ssize_t res = 0;
+    ssize_t errcode = 0;
+    char* value = NULL;
+
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
     if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
+        goto out;
     }
 
     /* Get the name/value strings from the plugin. */
-    const char* name;
-    errcode =
-        process_getReadableString(rustsyscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
+    char name[PATH_MAX];
+    errcode = process_readString(rustsyscallhandler_getProcess(sys), name, namePtr, sizeof(name));
+    if (errcode < 0) {
+        goto out;
+    }
+
+    if (valuePtr.val && size > 0) {
+        value = malloc(size);
+        if (value == NULL) {
+            warning("Internally failed to allocate %lu bytes", size);
+            errcode = -ENOMEM;
+            goto out;
+        }
+    }
+
+    errcode = regularfile_fgetxattr(file_desc, name, value, size);
+    if (errcode < 0) {
+        goto out;
+    }
+    res = errcode;
+
+    if (value) {
+        // Write back `res` bytes of the result buffer..
+        errcode = process_writePtr(rustsyscallhandler_getProcess(sys), valuePtr, value, res);
+        if (errcode < 0) {
+            goto out;
+        }
+    }
+
+out:
+    if (value) {
+        free(value);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
-
-    void* value = (valuePtr.val && size > 0)
-                      ? process_getWriteablePtr(rustsyscallhandler_getProcess(sys), valuePtr, size)
-                      : NULL;
-
-    return syscallreturn_makeDoneI64(regularfile_fgetxattr(file_desc, name, value, size));
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_flistxattr(SyscallHandler* sys, const SyscallArgs* args) {
@@ -302,18 +360,48 @@ SyscallReturn syscallhandler_flistxattr(SyscallHandler* sys, const SyscallArgs* 
     UntypedForeignPtr listPtr = args->args[1].as_ptr; // char*
     size_t size = args->args[2].as_u64;
 
+    void* list = NULL;
+    ssize_t errcode = 0;
+    ssize_t res = -1;
+
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        goto out;
+    }
+
+    if (listPtr.val && size > 0) {
+        list = malloc(size);
+        if (list == NULL) {
+            warning("Internally failed to allocate %lu bytes", size);
+            errcode = -ENOMEM;
+            goto out;
+        }
+    }
+
+    errcode = regularfile_flistxattr(file_desc, list, size);
+    if (errcode < 0) {
+        goto out;
+    }
+    res = errcode;
+
+    if (list) {
+        // Write back `res` bytes of the list buffer.
+        errcode = process_writePtr(rustsyscallhandler_getProcess(sys), listPtr, list, res);
+        if (errcode < 0) {
+            goto out;
+        }
+    }
+
+out:
+    if (list) {
+        free(list);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
-
-    void* list = (listPtr.val && size > 0)
-                     ? process_getWriteablePtr(rustsyscallhandler_getProcess(sys), listPtr, size)
-                     : NULL;
-
-    return syscallreturn_makeDoneI64(regularfile_flistxattr(file_desc, list, size));
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_fremovexattr(SyscallHandler* sys, const SyscallArgs* args) {
@@ -328,9 +416,8 @@ SyscallReturn syscallhandler_fremovexattr(SyscallHandler* sys, const SyscallArgs
     }
 
     /* Get the name string from the plugin. */
-    const char* name;
-    errcode =
-        process_getReadableString(rustsyscallhandler_getProcess(sys), namePtr, PATH_MAX, &name, NULL);
+    char name[PATH_MAX];
+    errcode = process_readString(rustsyscallhandler_getProcess(sys), name, namePtr, sizeof(name));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -389,21 +476,44 @@ SyscallReturn syscallhandler_getdents(SyscallHandler* sys, const SyscallArgs* ar
     UntypedForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent*
     unsigned int count = args->args[2].as_u64;
 
+    struct linux_dirent* dirp = NULL;
+    ssize_t errcode = 0;
+    ssize_t res = -1;
+
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        goto out;
+    }
+
+    dirp = malloc(count);
+    if (dirp == NULL) {
+        warning("Internally failed to allocate %u bytes", count);
+        errcode = -ENOMEM;
+        goto out;
+    }
+
+    errcode = regularfile_getdents(file_desc, dirp, count);
+    if (errcode < 0) {
+        goto out;
+    }
+    res = errcode;
+
+    // Write back `res` bytes of the dirp buffer.
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), dirpPtr, dirp, res);
+    if (errcode < 0) {
+        goto out;
+    }
+
+out:
+    if (dirp) {
+        free(dirp);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
-
-    /* Get the path string from the plugin. */
-    struct linux_dirent* dirp =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), dirpPtr, count);
-    if (!dirp) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    return syscallreturn_makeDoneI64(regularfile_getdents(file_desc, dirp, count));
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_getdents64(SyscallHandler* sys, const SyscallArgs* args) {
@@ -411,19 +521,42 @@ SyscallReturn syscallhandler_getdents64(SyscallHandler* sys, const SyscallArgs* 
     UntypedForeignPtr dirpPtr = args->args[1].as_ptr; // struct linux_dirent64*
     unsigned int count = args->args[2].as_u64;
 
+    struct linux_dirent64* dirp = NULL;
+    ssize_t errcode = 0;
+    ssize_t res = -1;
+
     /* Get and validate the file descriptor. */
     RegularFile* file_desc = NULL;
-    int errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    errcode = _syscallhandler_validateFileHelper(sys, fd, &file_desc);
+    if (errcode < 0) {
+        goto out;
+    }
+
+    dirp = malloc(count);
+    if (dirp == NULL) {
+        warning("Internally failed to allocate %u bytes", count);
+        errcode = -ENOMEM;
+        goto out;
+    }
+
+    errcode = regularfile_getdents64(file_desc, dirp, count);
+    if (errcode < 0) {
+        goto out;
+    }
+    res = errcode;
+
+    // Write back `res` bytes of the `dirp` buffer.
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), dirpPtr, dirp, res);
+    if (errcode < 0) {
+        goto out;
+    }
+
+out:
+    if (dirp) {
+        free(dirp);
+    }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
-
-    /* Get the path string from the plugin. */
-    struct linux_dirent64* dirp =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), dirpPtr, count);
-    if (!dirp) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
-
-    return syscallreturn_makeDoneI64(regularfile_getdents64(file_desc, dirp, count));
+    return syscallreturn_makeDoneI64(res);
 }
