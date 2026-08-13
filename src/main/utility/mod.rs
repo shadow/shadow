@@ -11,7 +11,6 @@ pub mod callback_queue;
 pub mod childpid_watcher;
 pub mod counter;
 pub mod give;
-pub mod interval_map;
 pub mod legacy_callback_queue;
 pub mod once_set;
 pub mod pcap_writer;
