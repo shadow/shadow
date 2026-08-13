@@ -111,11 +111,6 @@ impl std::io::Seek for MemoryWriterCursor<'_> {
     }
 }
 
-enum CopiedOrMapped<T: Pod> {
-    // Data copied from plugin memory.
-    Copied(Vec<T>),
-}
-
 /// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
 /// allowing, e.g.:
 ///
@@ -125,11 +120,11 @@ enum CopiedOrMapped<T: Pod> {
 /// assert_eq!(pmr.len(), 10);
 /// let x = pmr[5];
 /// ```
-pub struct ProcessMemoryRef<'a, T: Pod>(CopiedOrMapped<T>, PhantomData<&'a MemoryManager>);
+pub struct ProcessMemoryRef<'a, T: Pod>(Vec<T>, PhantomData<&'a MemoryManager>);
 
 impl<'a, T: Pod> ProcessMemoryRef<'a, T> {
     fn new_copied(v: Vec<T>) -> Self {
-        Self(CopiedOrMapped::Copied(v), PhantomData)
+        Self(v, PhantomData)
     }
 }
 
@@ -148,9 +143,7 @@ where
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
-        match &self.0 {
-            CopiedOrMapped::Copied(v) => v,
-        }
+        &self.0
     }
 }
 
