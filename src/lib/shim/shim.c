@@ -59,52 +59,6 @@ static void _shim_init_death_signal() {
     }
 }
 
-static void _shim_parent_init_memory_manager_internal() {
-    syscall(SHADOW_SYSCALL_NUM_INIT_MEMORY_MANAGER);
-}
-
-// Tell Shadow to initialize the MemoryManager, which includes remapping the
-// stack.
-static void _shim_parent_init_memory_manager() {
-    if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
-        panic("Unexpectedly called from non-shadow context");
-    }
-
-    // Temporarily allocate some memory for a separate stack. The MemoryManager
-    // is going to remap the original stack, and we can't actively use it while
-    // it does so.
-    const size_t stack_sz = 4096*10;
-    void *stack = mmap(NULL, stack_sz, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    if (stack == MAP_FAILED) {
-        panic("mmap: %s", strerror(errno));
-    }
-
-    ucontext_t remap_ctx, orig_ctx;
-    if (getcontext(&remap_ctx) != 0) {
-        panic("getcontext: %s", strerror(errno));
-    }
-
-    // Run on our temporary stack.
-    remap_ctx.uc_stack.ss_sp = stack;
-    remap_ctx.uc_stack.ss_size = stack_sz;
-
-    // Return to the original ctx (which is initialized by swapcontext, below).
-    remap_ctx.uc_link = &orig_ctx;
-
-    makecontext(&remap_ctx, _shim_parent_init_memory_manager_internal, 0);
-
-    // Call _shim_parent_init_memory_manager_internal on the configured stack.
-    // Returning from _shim_parent_init_memory_manager_internal will return to
-    // here.
-    if (swapcontext(&orig_ctx, &remap_ctx) != 0) {
-        panic("swapcontext: %s", strerror(errno));
-    }
-
-    if (munmap(stack, stack_sz) != 0) {
-        panic("munmap: %s", strerror(errno));
-    }
-}
-
 static void _shim_parent_init_seccomp() {
     shim_seccomp_init();
 }
@@ -128,7 +82,6 @@ void _shim_parent_init_preload() {
     _shim_parent_init_logging();
     _shim_init_signal_stack();
     _shim_init_death_signal();
-    _shim_parent_init_memory_manager();
     _shim_parent_init_insn_emu();
     _shim_parent_init_seccomp();
     _shim_parent_close_stdin();

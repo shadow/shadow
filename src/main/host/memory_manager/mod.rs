@@ -25,7 +25,6 @@ use linux_api::mman::{MapFlags, ProtFlags};
 use linux_api::posix_types::Pid;
 use log::*;
 use memory_copier::MemoryCopier;
-use memory_mapper::MemoryMapper;
 use shadow_pod::Pod;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -33,7 +32,6 @@ use super::context::ThreadContext;
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 
 mod memory_copier;
-mod memory_mapper;
 
 /// An object implementing std::io::Read and std::io::Seek for
 /// a range of plugin memory.
@@ -295,12 +293,6 @@ pub struct MemoryManager {
     // some cases extra copies of the referenced data.
     memory_copier: MemoryCopier,
 
-    // Memory accessor that works by remapping memory of the target process into
-    // the calling process's address space. Individual accesses are fast, but
-    // this accessor isn't available at program start, and doesn't support all
-    // accesses.
-    memory_mapper: Option<MemoryMapper>,
-
     // Native pid of the plugin process.
     pid: Pid,
 }
@@ -324,67 +316,33 @@ impl MemoryManager {
         Self {
             pid,
             memory_copier: MemoryCopier::new(pid),
-            memory_mapper: None,
         }
-    }
-
-    // Internal helper for getting a reference to memory via the
-    // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
-    // on failure.
-    fn mapped_ref<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Option<&[T]> {
-        let mm = self.memory_mapper.as_ref()?;
-        // SAFETY: No mutable refs to process memory exist by preconditions of
-        // MemoryManager::new + we have a reference.
-        unsafe { mm.get_ref(ptr) }
-    }
-
-    // Internal helper for getting a reference to memory via the
-    // `memory_mapper`.  Calling methods should fall back to the `memory_copier`
-    // on failure.
-    fn mapped_mut<T: Pod>(&mut self, ptr: ForeignArrayPtr<T>) -> Option<&mut [T]> {
-        let mm = self.memory_mapper.as_mut()?;
-        // SAFETY: No other refs to process memory exist by preconditions of
-        // MemoryManager::new + we have an exclusive reference.
-        unsafe { mm.get_mut(ptr) }
     }
 
     /// Returns a reference to the given memory, copying to a local buffer if
     /// the memory isn't mapped into Shadow.
+    #[deprecated(note = "This now always copies the data. Do so explicitly instead.")]
     pub fn memory_ref<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
-        if let Some(mref) = self.mapped_ref(ptr) {
-            Ok(ProcessMemoryRef::new_mapped(mref))
-        } else {
-            Ok(ProcessMemoryRef::new_copied(unsafe {
-                self.memory_copier.clone_mem(ptr)?
-            }))
-        }
+        Ok(ProcessMemoryRef::new_copied(unsafe {
+            self.memory_copier.clone_mem(ptr)?
+        }))
     }
 
     /// Returns a reference to the memory from the beginning of the given
     /// pointer to the last address in the pointer that's accessible. Useful for
     /// accessing string data of unknown size. The data is copied to a local
     /// buffer if the memory isn't mapped into Shadow.
+    #[deprecated(note = "This now always copies the data. Do so explicitly instead.")]
     pub fn memory_ref_prefix<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRef<'_, T>, Errno> {
-        // Only use the mapped ref if it's able to get the whole region,
-        // since otherwise the copying version might be able to get more
-        // data.
-        //
-        // TODO: Implement and use MemoryMapper::memory_ref_prefix if and
-        // when we're confident that the MemoryMapper always knows about all
-        // mapped regions and merges adjacent regions.
-        if let Some(mref) = self.mapped_ref(ptr) {
-            Ok(ProcessMemoryRef::new_mapped(mref))
-        } else {
-            Ok(ProcessMemoryRef::new_copied(unsafe {
-                self.memory_copier.clone_mem_prefix(ptr)?
-            }))
-        }
+        Ok(ProcessMemoryRef::new_copied(unsafe {
+            self.memory_copier.clone_mem_prefix(ptr)?
+        }))
     }
 
     /// Creates a std::io::Read accessor for the specified plugin memory. Useful
@@ -463,10 +421,6 @@ impl MemoryManager {
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
     ) -> Result<(), Errno> {
-        if let Some(src) = self.mapped_ref(src) {
-            dst.copy_from_slice(src);
-            return Ok(());
-        }
         unsafe { self.memory_copier.copy_from_ptr(dst, src) }
     }
 
@@ -479,10 +433,6 @@ impl MemoryManager {
         buf: &mut [T],
         ptr: ForeignArrayPtr<T>,
     ) -> Result<usize, Errno> {
-        if let Some(src) = self.mapped_ref(ptr) {
-            buf.copy_from_slice(src);
-            return Ok(src.len());
-        }
         unsafe { self.memory_copier.copy_prefix_from_ptr(buf, ptr) }
     }
 
@@ -504,57 +454,36 @@ impl MemoryManager {
         std::ffi::CStr::from_bytes_until_nul(dst).or(Err(Errno::ENAMETOOLONG))
     }
 
-    /// Returns a mutable reference to the given memory. If the memory isn't
-    /// mapped into Shadow, copies the data to a local buffer, which is written
-    /// back into the process if and when the reference is flushed.
+    /// Returns a mutable reference to the given memory.
+    /// Copies the data to a local buffer, which is written back into the
+    /// process if and when the reference is flushed.
+    #[deprecated(note = "This now always copies the data. Do so explicitly instead.")]
     pub fn memory_ref_mut<T: Pod>(
         &mut self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
-        // Work around a limitation of the borrow checker by getting this
-        // immutable borrow of self out of the way before we do a mutable
-        // borrow.
-        let pid = self.pid;
-
-        if let Some(mref) = self.mapped_mut(ptr) {
-            Ok(ProcessMemoryRefMut::new_mapped(mref))
-        } else {
-            let copier = MemoryCopier::new(pid);
-            let v = unsafe { copier.clone_mem(ptr)? };
-            Ok(ProcessMemoryRefMut::new_copied(copier, ptr, v))
-        }
+        let copier = MemoryCopier::new(self.pid);
+        let v = unsafe { copier.clone_mem(ptr)? };
+        Ok(ProcessMemoryRefMut::new_copied(copier, ptr, v))
     }
 
-    /// Returns a mutable reference to the given memory. If the memory isn't
-    /// mapped into Shadow, just returns a buffer with unspecified contents,
-    /// which will be written back into the process if and when the reference
-    /// is flushed.
+    /// Returns a mutable reference to the given memory. Will be written back
+    /// into the process if and when the reference is flushed.
     //
     // In some cases we initialize data to avoid actually returning
     // uninitialized memory.  We use inline(always) so that the compiler can
     // hopefully optimize away this initialization, in cases where the caller
     // overwrites the data.
-    // TODO: return ProcessMemoryRefMut<MaybeUninit<T>> instead.
     #[inline(always)]
+    #[deprecated(note = "This now always copies the data. Do so explicitly instead.")]
     pub fn memory_ref_mut_uninit<T: Pod>(
         &mut self,
         ptr: ForeignArrayPtr<T>,
     ) -> Result<ProcessMemoryRefMut<'_, T>, Errno> {
-        // Work around a limitation of the borrow checker by getting this
-        // immutable borrow of self out of the way before we do a mutable
-        // borrow.
-        let pid = self.pid;
-
-        let mut mref = if let Some(mref) = self.mapped_mut(ptr) {
-            // Even if we haven't initialized the data from this process, the
-            // data is initialized from the Rust compiler's perspective; it has
-            // *some* set contents via mmap, even if the other process hasn't
-            // initialized it either.
-            ProcessMemoryRefMut::new_mapped(mref)
-        } else {
+        let mut mref = {
             let mut v = Vec::with_capacity(ptr.len());
             v.resize(ptr.len(), shadow_pod::zeroed());
-            ProcessMemoryRefMut::new_copied(MemoryCopier::new(pid), ptr, v)
+            ProcessMemoryRefMut::new_copied(MemoryCopier::new(self.pid), ptr, v)
         };
 
         // In debug builds, overwrite with garbage to shake out bugs where
@@ -575,10 +504,6 @@ impl MemoryManager {
     /// using `memory_ref_mut_uninit` and initializing the data in that
     /// reference saves a copy.
     pub fn copy_to_ptr<T: Pod>(&mut self, dst: ForeignArrayPtr<T>, src: &[T]) -> Result<(), Errno> {
-        if let Some(dst) = self.mapped_mut(dst) {
-            dst.copy_from_slice(src);
-            return Ok(());
-        }
         // SAFETY: No other refs to process memory exist by preconditions of
         // MemoryManager::new + we have an exclusive reference.
         unsafe { self.memory_copier.copy_to_ptr(dst, src) }
@@ -587,18 +512,6 @@ impl MemoryManager {
     /// Which process's address space this MemoryManager manages.
     pub fn pid(&self) -> Pid {
         self.pid
-    }
-
-    /// Initialize the MemoryMapper, allowing for more efficient access. Needs a
-    /// running thread.
-    pub fn init_mapper(&mut self, ctx: &ThreadContext) {
-        assert!(self.memory_mapper.is_none());
-        self.memory_mapper = Some(MemoryMapper::new(self, ctx));
-    }
-
-    /// Whether the internal MemoryMapper has been initialized.
-    pub fn has_mapper(&self) -> bool {
-        self.memory_mapper.is_some()
     }
 
     /// Create a write accessor for the specified plugin memory.
@@ -612,13 +525,10 @@ impl MemoryManager {
 
     pub fn handle_brk(
         &mut self,
-        ctx: &ThreadContext,
-        ptr: ForeignPtr<u8>,
+        _ctx: &ThreadContext,
+        _ptr: ForeignPtr<u8>,
     ) -> Result<ForeignPtr<u8>, SyscallError> {
-        match &mut self.memory_mapper {
-            Some(mm) => Ok(mm.handle_brk(ctx, ptr)?),
-            None => Err(SyscallError::Native),
-        }
+        Err(SyscallError::Native)
     }
 
     pub fn do_mmap(
@@ -635,28 +545,18 @@ impl MemoryManager {
             let (ctx, thread) = ctx.split_thread();
             thread.native_mmap(&ctx, addr, length, prot, flags, fd, offset)?
         };
-        if let Some(mm) = &mut self.memory_mapper {
-            mm.handle_mmap_result(ctx, ForeignArrayPtr::new(addr, length), prot, flags, fd);
-        }
         Ok(addr)
     }
 
     pub fn handle_munmap(
         &mut self,
-        ctx: &ThreadContext,
-        addr: ForeignPtr<u8>,
-        length: usize,
+        _ctx: &ThreadContext,
+        _addr: ForeignPtr<u8>,
+        _length: usize,
     ) -> Result<(), SyscallError> {
-        if self.memory_mapper.is_some() {
-            // Do it ourselves so that we can update our mappings based on
-            // whether it succeeded.
-            self.do_munmap(ctx, addr, length)?;
-            Ok(())
-        } else {
-            // We don't need to know the result, and it's more efficient to let
-            // the original syscall complete than to do it ourselves.
-            Err(SyscallError::Native)
-        }
+        // We don't need to know the result, and it's more efficient to let
+        // the original syscall complete than to do it ourselves.
+        Err(SyscallError::Native)
     }
 
     fn do_munmap(
@@ -667,40 +567,29 @@ impl MemoryManager {
     ) -> Result<(), Errno> {
         let (ctx, thread) = ctx.split_thread();
         thread.native_munmap(&ctx, addr, length)?;
-        if let Some(mm) = &mut self.memory_mapper {
-            mm.handle_munmap_result(addr, length);
-        }
         Ok(())
     }
 
     pub fn handle_mremap(
         &mut self,
-        ctx: &ThreadContext,
-        old_address: ForeignPtr<u8>,
-        old_size: usize,
-        new_size: usize,
-        flags: i32,
-        new_address: ForeignPtr<u8>,
+        _ctx: &ThreadContext,
+        _old_address: ForeignPtr<u8>,
+        _old_size: usize,
+        _new_size: usize,
+        _flags: i32,
+        _new_address: ForeignPtr<u8>,
     ) -> Result<ForeignPtr<u8>, SyscallError> {
-        match &mut self.memory_mapper {
-            Some(mm) => {
-                Ok(mm.handle_mremap(ctx, old_address, old_size, new_size, flags, new_address)?)
-            }
-            None => Err(SyscallError::Native),
-        }
+        Err(SyscallError::Native)
     }
 
     pub fn handle_mprotect(
         &mut self,
-        ctx: &ThreadContext,
-        addr: ForeignPtr<u8>,
-        size: usize,
-        prot: ProtFlags,
+        _ctx: &ThreadContext,
+        _addr: ForeignPtr<u8>,
+        _size: usize,
+        _prot: ProtFlags,
     ) -> Result<(), SyscallError> {
-        match &mut self.memory_mapper {
-            Some(mm) => Ok(mm.handle_mprotect(ctx, addr, size, prot)?),
-            None => Err(SyscallError::Native),
-        }
+        Err(SyscallError::Native)
     }
 }
 
