@@ -16,6 +16,7 @@
 //! modify the process address space (such as `mmap`).
 
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_void;
@@ -110,11 +111,9 @@ impl std::io::Seek for MemoryWriterCursor<'_> {
     }
 }
 
-enum CopiedOrMapped<'a, T: Pod> {
+enum CopiedOrMapped<T: Pod> {
     // Data copied from plugin memory.
     Copied(Vec<T>),
-    // Data memory-mapped from plugin memory.
-    Mapped(&'a [T]),
 }
 
 /// An immutable reference to a slice of plugin memory. Implements `Deref<[T]>`,
@@ -126,15 +125,11 @@ enum CopiedOrMapped<'a, T: Pod> {
 /// assert_eq!(pmr.len(), 10);
 /// let x = pmr[5];
 /// ```
-pub struct ProcessMemoryRef<'a, T: Pod>(CopiedOrMapped<'a, T>);
+pub struct ProcessMemoryRef<'a, T: Pod>(CopiedOrMapped<T>, PhantomData<&'a MemoryManager>);
 
 impl<'a, T: Pod> ProcessMemoryRef<'a, T> {
     fn new_copied(v: Vec<T>) -> Self {
-        Self(CopiedOrMapped::Copied(v))
-    }
-
-    fn new_mapped(s: &'a [T]) -> Self {
-        Self(CopiedOrMapped::Mapped(s))
+        Self(CopiedOrMapped::Copied(v), PhantomData)
     }
 }
 
@@ -155,17 +150,14 @@ where
     fn deref(&self) -> &Self::Target {
         match &self.0 {
             CopiedOrMapped::Copied(v) => v,
-            CopiedOrMapped::Mapped(s) => s,
         }
     }
 }
 
 #[derive(Debug)]
-enum CopiedOrMappedMut<'a, T: Pod> {
+enum CopiedOrMappedMut<T: Pod> {
     // Data copied from process memory, to be written back.
     Copied(MemoryCopier, ForeignArrayPtr<T>, Vec<T>),
-    // Memory-mapped process memory.
-    Mapped(&'a mut [T]),
 }
 
 /// A mutable reference to a slice of plugin memory. Implements `DerefMut<[T]>`,
@@ -182,8 +174,9 @@ enum CopiedOrMappedMut<'a, T: Pod> {
 /// the object without doing so will result in a panic.
 #[derive(Debug)]
 pub struct ProcessMemoryRefMut<'a, T: Pod> {
-    copied_or_mapped: CopiedOrMappedMut<'a, T>,
+    copied_or_mapped: CopiedOrMappedMut<T>,
     dirty: bool,
+    _phantom: PhantomData<&'a mut MemoryManager>,
 }
 
 impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
@@ -191,13 +184,7 @@ impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
         Self {
             copied_or_mapped: CopiedOrMappedMut::Copied(copier, ptr, v),
             dirty: true,
-        }
-    }
-
-    fn new_mapped(s: &'a mut [T]) -> Self {
-        Self {
-            copied_or_mapped: CopiedOrMappedMut::Mapped(s),
-            dirty: true,
+            _phantom: PhantomData,
         }
     }
 
@@ -222,7 +209,6 @@ impl<'a, T: Pod> ProcessMemoryRefMut<'a, T> {
                 );
                 unsafe { copier.copy_to_ptr(*ptr, v)? };
             }
-            CopiedOrMappedMut::Mapped(_) => (),
         };
         Ok(())
     }
@@ -251,7 +237,6 @@ where
     fn deref(&self) -> &Self::Target {
         match &self.copied_or_mapped {
             CopiedOrMappedMut::Copied(_, _, v) => v,
-            CopiedOrMappedMut::Mapped(s) => s,
         }
     }
 }
@@ -263,7 +248,6 @@ where
     fn deref_mut(&mut self) -> &mut Self::Target {
         match &mut self.copied_or_mapped {
             CopiedOrMappedMut::Copied(_, _, v) => v,
-            CopiedOrMappedMut::Mapped(s) => s,
         }
     }
 }
