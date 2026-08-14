@@ -89,7 +89,6 @@ hosts:
 - [`experimental.unblocked_vdso_latency`](#experimentalunblocked_vdso_latency)
 - [`experimental.use_cpu_pinning`](#experimentaluse_cpu_pinning)
 - [`experimental.use_dynamic_runahead`](#experimentaluse_dynamic_runahead)
-- [`experimental.use_memory_manager`](#experimentaluse_memory_manager)
 - [`experimental.use_new_tcp`](#experimentaluse_new_tcp)
 - [`experimental.use_object_counters`](#experimentaluse_object_counters)
 - [`experimental.use_preload_libc`](#experimentaluse_preload_libc)
@@ -498,15 +497,6 @@ Default: false
 Type: Bool
 
 Update the minimum runahead dynamically throughout the simulation.
-
-#### `experimental.use_memory_manager`
-
-Default: false  
-Type: Bool
-
-Use the MemoryManager in memory-mapping mode. This can improve
-performance, but disables support for dynamically spawning processes
-inside the simulation (e.g. the `fork` syscall).
 
 #### `experimental.use_new_tcp`
 
