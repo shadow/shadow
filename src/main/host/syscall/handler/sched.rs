@@ -53,6 +53,9 @@ fn validate_sched_attrs(policy: Sched, priority: std::ffi::c_int) -> Result<(), 
     }
 }
 
+// Our simulated cpu set size.
+const KERNEL_CPUSETSIZE_BYTES: usize = 1;
+
 impl SyscallHandler {
     log_syscall!(
         sched_getaffinity,
@@ -73,30 +76,28 @@ impl SyscallHandler {
         // > mask
         mask_ptr: ForeignPtr<std::ffi::c_ulong>,
     ) -> Result<std::ffi::c_int, Errno> {
-        let mask_ptr = mask_ptr.cast::<u8>();
-        let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
-
+        // Check that `tid` is valid.
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && kernel_pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH);
         }
+        // We currently always write back a mask that says the thread can
+        // execute only on CPU 0.
 
-        // Shadow doesn't have users, so no need to check for permissions
-
-        if cpusetsize == 0 {
+        if cpusetsize < KERNEL_CPUSETSIZE_BYTES {
             return Err(Errno::EINVAL);
         }
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr.cast::<u8>(), KERNEL_CPUSETSIZE_BYTES);
+        // Our simulated mask says we can run only on CPU 0, which is 1 in the
+        // first byte, assuming little endian.
+        let mask: [u8; KERNEL_CPUSETSIZE_BYTES] = [1u8];
 
-        let mut mem = ctx.objs.process.memory_borrow_mut();
-        let mut mask = mem.memory_ref_mut(mask_ptr)?;
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .copy_to_ptr(mask_ptr, &mask)?;
 
-        // this assumes little endian
-        let bytes_written = 1;
-        mask[0] = 1;
-
-        mask.flush()?;
-
-        Ok(bytes_written)
+        Ok(KERNEL_CPUSETSIZE_BYTES.try_into().unwrap())
     }
 
     log_syscall!(
@@ -116,9 +117,6 @@ impl SyscallHandler {
         // > mask
         mask_ptr: ForeignPtr<std::ffi::c_ulong>,
     ) -> Result<(), Errno> {
-        let mask_ptr = mask_ptr.cast::<u8>();
-        let mask_ptr = ForeignArrayPtr::new(mask_ptr, cpusetsize);
-
         let tid = ThreadId::try_from(tid).or(Err(Errno::ESRCH))?;
         if !ctx.objs.host.has_thread(tid) && kernel_pid_t::from(tid) != 0 {
             return Err(Errno::ESRCH);
@@ -126,15 +124,23 @@ impl SyscallHandler {
 
         // Shadow doesn't have users, so no need to check for permissions
 
-        if cpusetsize == 0 {
+        if cpusetsize < KERNEL_CPUSETSIZE_BYTES {
             return Err(Errno::EINVAL);
         }
+        let mut mask = [0u8; KERNEL_CPUSETSIZE_BYTES];
+        let mask_ptr = mask_ptr.cast::<u8>();
+        let mask_ptr = ForeignArrayPtr::new(mask_ptr, KERNEL_CPUSETSIZE_BYTES);
+        ctx.objs
+            .process
+            .memory_borrow()
+            .copy_from_ptr(&mut mask, mask_ptr)?;
 
-        let mem = ctx.objs.process.memory_borrow_mut();
-        let mask = mem.memory_ref(mask_ptr)?;
-
+        // We simulate that
         // this assumes little endian
         if mask[0] & 0x01 == 0 {
+            // "the  affinity  bit  mask  mask  contains  no  processors  that
+            // are currently physically on the system and permitted to the
+            // thread"
             return Err(Errno::EINVAL);
         }
 
@@ -315,9 +321,12 @@ impl SyscallHandler {
         //
         // Instead, we should treat the rseq struct as a bunch of bytes and write to individual
         // fields if possible without making assumptions about the size of the data.
-        let mut mem = ctx.objs.process.memory_borrow_mut();
-        let mut rseq_mem = mem.memory_ref_mut(ForeignArrayPtr::new(rseq_ptr, rseq_len))?;
-        let rseq_bytes = &mut *rseq_mem;
+        let rseq_byte_array_ptr = ForeignArrayPtr::new(rseq_ptr, rseq_len);
+        let mut rseq_bytes = ctx
+            .objs
+            .process
+            .memory_borrow()
+            .read_vec(ForeignArrayPtr::new(rseq_ptr, rseq_len))?;
 
         // rseq is mostly unimplemented, but also mostly unneeded in Shadow.
         // We'd only need to implement the "real" functionality if we ever implement
@@ -335,7 +344,8 @@ impl SyscallHandler {
         //
         // For now we just update to reflect that the thread is running on CPU 0.
 
-        let Some((cpu_id, cpu_id_start)) = field_project!(rseq_bytes, rseq, (cpu_id, cpu_id_start))
+        let Some((cpu_id, cpu_id_start)) =
+            field_project!(&mut rseq_bytes, rseq, (cpu_id, cpu_id_start))
         else {
             return Err(Errno::EINVAL);
         };
@@ -343,7 +353,10 @@ impl SyscallHandler {
         cpu_id.write(CURRENT_CPU);
         cpu_id_start.write(CURRENT_CPU);
 
-        rseq_mem.flush()?;
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .copy_to_ptr(rseq_byte_array_ptr, &rseq_bytes)?;
 
         Ok(())
     }
