@@ -459,15 +459,13 @@ fn write_events_to_ptr(
     ready: Vec<(EpollEvents, u64)>,
     events_ptr: ForeignPtr<linux_api::epoll::epoll_event>,
 ) -> Result<(), Errno> {
-    let events_ptr = ForeignArrayPtr::new(events_ptr, ready.len());
-    let mut mem_ref = mem.memory_ref_mut(events_ptr)?;
-
-    for ((ev, data), plugin_ev) in ready.iter().zip(mem_ref.deref_mut().iter_mut()) {
-        plugin_ev.events = ev.bits();
-        plugin_ev.data = *data;
-    }
-
-    mem_ref.flush()?;
-
+    let events_bits: Vec<_> = ready
+        .iter()
+        .map(|(events, data)| linux_api::epoll::epoll_event {
+            events: events.bits(),
+            data: *data,
+        })
+        .collect();
+    mem.copy_to_ptr(ForeignArrayPtr::new(events_ptr, ready.len()), &events_bits)?;
     Ok(())
 }
