@@ -30,20 +30,6 @@ impl MemoryCopier {
         Ok(v)
     }
 
-    /// Copy the readable prefix of the region.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem_prefix<T: Pod>(
-        &self,
-        ptr: ForeignArrayPtr<T>,
-    ) -> Result<Vec<T>, Errno> {
-        let mut v = Vec::with_capacity(ptr.len());
-        unsafe { v.set_len(v.capacity()) };
-        let copied = unsafe { self.copy_prefix_from_ptr(&mut v, ptr)? };
-        v.truncate(copied);
-        Ok(v)
-    }
-
     // Read as much of `ptr` as is accessible into `dst`.
     /// SAFETY: A mutable reference to the process memory must not exist.
     pub unsafe fn copy_prefix_from_ptr<T>(
