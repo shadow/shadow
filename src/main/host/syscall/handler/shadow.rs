@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -38,52 +40,36 @@ impl SyscallHandler {
             return Err(Errno::EINVAL);
         }
 
-        // TODO: Don't add 1 byte to length (if the application gave us a length of X bytes, don't
-        // read more than X bytes). This might not be valid memory. I'm guessing we do this now to
-        // avoid needing to allocate a new `CString` with a NUL byte when calling into the C DNS
-        // code. But in the future when the DNS code is in rust, we won't need NUL-terminated
-        // strings.
-
         let name_ptr = name_ptr.cast::<u8>();
-        // add one byte to the length and hope that it contains a NUL
-        let name_ptr = ForeignArrayPtr::new(name_ptr, name_len + 1);
+        let name_ptr = ForeignArrayPtr::new(name_ptr, name_len);
         let addr_ptr = addr_ptr.cast::<u32>();
 
         let mut mem = ctx.objs.process.memory_borrow_mut();
 
-        let lookup_name_ref = mem.memory_ref_prefix(name_ptr)?;
-        let lookup_name = lookup_name_ref.get_cstr()?;
-        let lookup_name_bytes = lookup_name.to_bytes();
+        let name = mem.read_vec(name_ptr)?;
+        let Ok(name) = CString::new(name) else {
+            // name contained an internal (or trailing) nul byte.
+            // treat as not-found.
 
-        if case_insensitive_eq(lookup_name_bytes, &b"localhost"[..]) {
-            let addr = u32::from(std::net::Ipv4Addr::LOCALHOST);
-            mem.write(addr_ptr, &addr.to_be())?;
-            log::trace!("Returning loopback address for localhost");
-            return Ok(());
-        }
-
-        // TODO: why do we truncate at `NI_MAXHOST`?
-        let max_len = libc::NI_MAXHOST.try_into().unwrap();
-        let host_name = ctx.objs.host.info().name.as_bytes();
-        let host_name = &host_name[..std::cmp::min(host_name.len(), max_len)];
-        let lookup_name_bytes =
-            &lookup_name_bytes[..std::cmp::min(lookup_name_bytes.len(), max_len)];
-
-        let addr = if case_insensitive_eq(lookup_name_bytes, host_name) {
-            log::trace!("Using default address for my own hostname {lookup_name:?}");
-            Some(ctx.objs.host.default_ip())
-        } else {
-            log::trace!("Looking up name {lookup_name:?}");
-            Worker::resolve_name_to_ip(lookup_name)
+            // Following existing comment to "return EFAULT like gethostname".
+            return Err(Errno::EFAULT);
         };
 
-        let Some(addr) = addr else {
-            log::trace!("Unable to find address for name {lookup_name:?}");
+        let addr = if case_insensitive_eq(name.as_bytes(), &b"localhost"[..]) {
+            log::trace!("Returning loopback address for localhost");
+            std::net::Ipv4Addr::LOCALHOST
+        } else if case_insensitive_eq(name.as_bytes(), ctx.objs.host.info().name.as_bytes()) {
+            log::trace!("Using default address for my own hostname {name:?}");
+            ctx.objs.host.default_ip()
+        } else if let Some(addr) = Worker::resolve_name_to_ip(&name) {
+            addr
+        } else {
+            log::trace!("Unable to find address for name {name:?}");
             // return EFAULT like gethostname
             return Err(Errno::EFAULT);
         };
 
-        log::trace!("Found address {addr} for name {lookup_name:?}");
+        log::trace!("Found address {addr} for name {name:?}");
 
         let addr = u32::from(addr);
         mem.write(addr_ptr, &addr.to_be())?;
