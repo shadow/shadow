@@ -316,7 +316,20 @@ impl MemoryManager {
     /// pointer to the last address in the pointer that's accessible. Useful for
     /// accessing string data of unknown size.
     pub fn read_prefix<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Result<Vec<T>, Errno> {
-        unsafe { self.memory_copier.clone_mem_prefix(ptr) }
+        let mut values = Box::<[T]>::new_uninit_slice(ptr.len());
+        let ptr = ptr.cast::<MaybeUninit<T>>().unwrap();
+        let copied = unsafe { self.memory_copier.copy_prefix_from_ptr(&mut values, ptr)? };
+
+        // Drop the still uninitd values. Is there a way to directly resize the boxed slice
+        // without having to go through Vec?
+        let mut values = Vec::from(values);
+        values.resize(copied, MaybeUninit::uninit());
+        let values = values.into_boxed_slice();
+
+        // SAFETY: should now contain only initialized values.
+        let values = unsafe { values.assume_init() };
+
+        Ok(Vec::from(values))
     }
 
     /// Creates a std::io::Read accessor for the specified plugin memory. Useful
