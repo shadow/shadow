@@ -1,6 +1,5 @@
 use std::ffi::CString;
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
 
 use linux_api::errno::Errno;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -20,12 +19,12 @@ pub fn write_sockaddr_and_len(
     mem: &mut MemoryManager,
     addr: Option<&SockaddrStorage>,
     plugin_addr: ForeignPtr<u8>,
-    plugin_addr_len: ForeignPtr<libc::socklen_t>,
+    plugin_addr_len_ptr: ForeignPtr<libc::socklen_t>,
 ) -> Result<(), Errno> {
     let addr = match addr {
         Some(x) => x,
         None => {
-            mem.write(plugin_addr_len, &0)?;
+            mem.write(plugin_addr_len_ptr, &0)?;
             return Ok(());
         }
     };
@@ -34,18 +33,8 @@ pub fn write_sockaddr_and_len(
     let from_len: u32 = from_addr_slice.len().try_into().unwrap();
 
     // get the provided address buffer length, and overwrite it with the real address length
-    let plugin_addr_len = {
-        let mut plugin_addr_len = mem.memory_ref_mut(ForeignArrayPtr::new(plugin_addr_len, 1))?;
-        let plugin_addr_len_value = plugin_addr_len.get_mut(0).unwrap();
-
-        // keep a copy before we change it
-        let plugin_addr_len_copy = *plugin_addr_len_value;
-
-        *plugin_addr_len_value = from_len;
-
-        plugin_addr_len.flush()?;
-        plugin_addr_len_copy
-    };
+    let plugin_addr_len = mem.read(plugin_addr_len_ptr)?;
+    mem.write(plugin_addr_len_ptr, &from_len)?;
 
     // return early if the address length is 0
     if plugin_addr_len == 0 {
@@ -356,18 +345,14 @@ pub fn read_iovecs(
         return Err(Errno::EINVAL);
     }
 
-    let mut iovs = Vec::with_capacity(count);
-
-    let iov_ptr = ForeignArrayPtr::new(iov_ptr, count);
-    let mem_ref = mem.memory_ref(iov_ptr)?;
-    let plugin_iovs = mem_ref.deref();
-
-    for plugin_iov in plugin_iovs {
-        iovs.push(IoVec {
+    let plugin_iovs = mem.read_vec(ForeignArrayPtr::new(iov_ptr, count))?;
+    let iovs = plugin_iovs
+        .into_iter()
+        .map(|plugin_iov| IoVec {
             base: ForeignPtr::from_raw_ptr(plugin_iov.iov_base as *mut u8),
             len: plugin_iov.iov_len,
-        });
-    }
+        })
+        .collect();
 
     Ok(iovs)
 }
@@ -377,10 +362,7 @@ pub fn read_msghdr(
     mem: &MemoryManager,
     msg_ptr: ForeignPtr<libc::msghdr>,
 ) -> Result<MsgHdr, Errno> {
-    let msg_ptr = ForeignArrayPtr::new(msg_ptr, 1);
-    let mem_ref = mem.memory_ref(msg_ptr)?;
-    let plugin_msg = mem_ref.deref()[0];
-
+    let plugin_msg = mem.read(msg_ptr)?;
     msghdr_to_rust(&plugin_msg, mem)
 }
 
@@ -392,18 +374,14 @@ pub fn update_msghdr(
     msg_ptr: ForeignPtr<libc::msghdr>,
     msg: MsgHdr,
 ) -> Result<(), Errno> {
-    let msg_ptr = ForeignArrayPtr::new(msg_ptr, 1);
-    let mut mem_ref = mem.memory_ref_mut(msg_ptr)?;
-    let plugin_msg = &mut mem_ref.deref_mut()[0];
+    let mut plugin_msg = mem.read(msg_ptr)?;
 
     // write only the msg fields that may have changed
     plugin_msg.msg_namelen = msg.name_len;
     plugin_msg.msg_controllen = msg.control_len;
     plugin_msg.msg_flags = msg.flags;
 
-    mem_ref.flush()?;
-
-    Ok(())
+    mem.write(msg_ptr, &plugin_msg)
 }
 
 /// Helper to read a plugin's [`libc::msghdr`] into a [`MsgHdr`]. While `msg` is a local struct, it
