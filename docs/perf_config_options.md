@@ -77,17 +77,6 @@ circumstances.
 
 [scheduler]: https://shadow.github.io/docs/guide/shadow_config_spec.html#experimentalscheduler
 
-### [`use_memory_manager`][use_memory_manager]
-
-Shadow supports a memory manager that uses shared memory maps to reduce the
-overhead of accessing a managed process' data from Shadow's main process, but
-this is disabled by default as it does not support other Shadow features such
-as emulating the fork/exec syscalls. If you do not need support for these
-features, enabling this memory manager may slightly improve simulation
-performance.
-
-[use_memory_manager]: https://shadow.github.io/docs/guide/shadow_config_spec.html#experimentaluse_memory_manager
-
 ### [`use_worker_spinning`][use_worker_spinning]
 
 Shadow's thread-per-core scheduler uses a spinloop by default. While this

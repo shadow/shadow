@@ -79,7 +79,6 @@ pub struct HostParameters {
     pub strace_logging_options: Option<FmtOptions>,
     pub shim_log_level: LogLevel,
     pub use_new_tcp: bool,
-    pub use_mem_mapper: bool,
     pub use_syscall_counters: bool,
 }
 
