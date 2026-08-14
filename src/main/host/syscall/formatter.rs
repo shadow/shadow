@@ -328,7 +328,7 @@ mod test {
         let mut proc = Command::new("sleep").arg(10.to_string()).spawn().unwrap();
         let pid = Pid::from_raw(proc.id().try_into().unwrap()).unwrap();
 
-        let mem = unsafe { MemoryManager::new(pid) };
+        let mem = MemoryManager::new(pid);
 
         // make sure that we can construct a `SyscallArgsFmt` with no generic types
         let _syscall_args = <SyscallArgsFmt>::new(args.args, FmtOptions::Standard, &mem);

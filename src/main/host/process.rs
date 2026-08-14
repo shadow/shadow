@@ -622,7 +622,7 @@ impl RunnableProcess {
             total_run_time: Cell::new(Duration::ZERO),
             itimer_real,
             threads,
-            memory_manager: RefCell::new(unsafe { MemoryManager::new(native_pid) }),
+            memory_manager: RefCell::new(MemoryManager::new(native_pid)),
             child_process_event_listeners: Default::default(),
             shimlog_file: self.shimlog_file.clone(),
         };
@@ -1057,7 +1057,7 @@ impl Process {
             .unwrap();
         }
 
-        let memory_manager = unsafe { MemoryManager::new(native_pid) };
+        let memory_manager = MemoryManager::new(native_pid);
         let threads = RefCell::new(BTreeMap::from([(
             main_thread_id,
             RootedRc::new(host.root(), RootedRefCell::new(host.root(), main_thread)),
@@ -1744,7 +1744,7 @@ impl Process {
         // Recreate the `MemoryManager`
         runnable
             .memory_manager
-            .replace(unsafe { MemoryManager::new(mthread.native_pid()) });
+            .replace(MemoryManager::new(mthread.native_pid()));
 
         let new_tid = runnable.common.thread_group_leader_id();
         log::trace!(
