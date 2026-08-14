@@ -193,10 +193,6 @@ impl ManagedThread {
 
         self.sync_affinity_with_worker();
 
-        // Flush any pending writes, e.g. from a previous mthread that exited
-        // without flushing.
-        ctx.process.free_unsafe_borrows_flush().unwrap();
-
         loop {
             let mut current_event = self.current_event.borrow_mut();
             let last_event = *current_event;
@@ -284,10 +280,6 @@ impl ManagedThread {
                     ctx.thread.cleanup_syscall_condition();
 
                     assert!(self.is_running());
-
-                    // Flush any writes that legacy C syscallhandlers may have
-                    // made.
-                    ctx.process.free_unsafe_borrows_flush().unwrap();
 
                     match scr {
                         SyscallReturn::Block(b) => {

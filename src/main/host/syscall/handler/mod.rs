@@ -253,21 +253,6 @@ impl SyscallHandler {
             }
         }
 
-        // we only use unsafe borrows from C code, and we should have only called into C syscall
-        // handlers through `Self::legacy_syscall` which should have already flushed the pointers,
-        // but we may as well do it again here just to be safe
-        if rv.is_err() {
-            // the syscall didn't complete successfully; don't write back pointers
-            log::trace!(
-                "Syscall didn't complete successfully; discarding plugin ptrs without writing back"
-            );
-            ctx.process.free_unsafe_borrows_noflush();
-        } else {
-            ctx.process
-                .free_unsafe_borrows_flush()
-                .expect("flushing syscall ptrs");
-        }
-
         if ctx.process.is_running() && !matches!(rv, Err(SyscallError::Blocked(_))) {
             let host_shmem = ctx.host.shim_shmem();
             let mut host_shmem_prot = ctx.host.shim_shmem_lock_borrow_mut().unwrap();
@@ -702,21 +687,6 @@ impl SyscallHandler {
     ) -> Result<T, SyscallError> {
         let rv: SyscallResult =
             unsafe { syscall(ctx.handler, std::ptr::from_ref(ctx.args)) }.into();
-
-        // we need to flush pointers here so that the syscall formatter can reliably borrow process
-        // memory without an incompatible borrow
-        if rv.is_err() {
-            // the syscall didn't complete successfully; don't write back pointers
-            log::trace!(
-                "Syscall didn't complete successfully; discarding plugin ptrs without writing back."
-            );
-            ctx.objs.process.free_unsafe_borrows_noflush();
-        } else {
-            ctx.objs
-                .process
-                .free_unsafe_borrows_flush()
-                .expect("flushing syscall ptrs");
-        }
 
         rv.map(Into::into)
     }
