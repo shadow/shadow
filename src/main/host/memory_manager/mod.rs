@@ -362,6 +362,17 @@ impl MemoryManager {
         Ok(unsafe { res.assume_init() })
     }
 
+    /// Read an array of `T` into a `Vec`. If you already have storage allocated,
+    /// consider `copy_from_ptr` instead.
+    pub fn read_vec<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Result<Vec<T>, Errno> {
+        let mut values = Box::<[T]>::new_uninit_slice(ptr.len());
+        let ptr = ptr.cast::<MaybeUninit<T>>().unwrap();
+        self.copy_from_ptr(&mut values, ptr)?;
+        // SAFETY: we've initialized the data.
+        let value = unsafe { values.assume_init() };
+        Ok(Vec::from(value))
+    }
+
     /// Writes a local value `val` into the memory at `ptr`.
     ///
     /// ```no_run
