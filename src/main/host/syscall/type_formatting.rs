@@ -126,8 +126,8 @@ macro_rules! deref_pointer_impl {
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
-                match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
+                match (options, mem.read(ptr)) {
+                    (FmtOptions::Standard, Ok(val)) => write!(f, "{:?} ({:p})", &val, ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
@@ -178,7 +178,7 @@ macro_rules! deref_array_impl {
                 mem: &MemoryManager,
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
-                match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
+                match (options, mem.read_vec(ForeignArrayPtr::new(ptr, K))) {
                     (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
                     (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
@@ -248,7 +248,7 @@ fn fmt_buffer(
         return write!(f, "<pointer>");
     }
 
-    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
+    let mem_ref = match mem.read_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
@@ -298,7 +298,7 @@ fn fmt_string(
         DISPLAY_LEN + 1,
     );
 
-    let mem_ref = match mem.memory_ref_prefix(ForeignArrayPtr::new(ptr, len)) {
+    let mem_ref = match mem.read_prefix(ForeignArrayPtr::new(ptr, len)) {
         Ok(x) => x,
         // the pointer didn't reference any valid memory
         Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
@@ -483,17 +483,15 @@ impl SyscallDisplay for SyscallVal<'_, *const libc::msghdr> {
         }
 
         // read the msghdr
-        let ptr = ForeignArrayPtr::new(ptr, 1);
-        let Ok(msg) = mem.memory_ref(ptr) else {
+        let Ok(msg) = mem.read(ptr) else {
             // if we couldn't read the memory, just show the pointer instead
-            return fmt_ptr_with_suffix(f, ptr.ptr(), "<invalid-read>");
+            return fmt_ptr_with_suffix(f, ptr, "<invalid-read>");
         };
-        let msg = &(*msg)[0];
 
         // format the msghdr
-        fmt_msghdr(f, msg, options, mem)?;
+        fmt_msghdr(f, &msg, options, mem)?;
 
         // show the original pointer
-        write!(f, " ({:p})", ptr.ptr())
+        write!(f, " ({:p})", ptr)
     }
 }
