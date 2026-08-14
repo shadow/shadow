@@ -302,7 +302,7 @@ impl MemoryManager {
     /// pointer to the last address in the pointer that's accessible. Useful for
     /// accessing string data of unknown size. The data is copied to a local
     /// buffer if the memory isn't mapped into Shadow.
-    #[deprecated(note = "This now always copies the data. Do so explicitly instead.")]
+    #[deprecated(note = "This now always copies the data. Consider `read_prefix` instead")]
     pub fn memory_ref_prefix<T: Pod>(
         &self,
         ptr: ForeignArrayPtr<T>,
@@ -310,6 +310,13 @@ impl MemoryManager {
         Ok(ProcessMemoryRef::new_copied(unsafe {
             self.memory_copier.clone_mem_prefix(ptr)?
         }))
+    }
+
+    /// Copy data from the beginning of the given
+    /// pointer to the last address in the pointer that's accessible. Useful for
+    /// accessing string data of unknown size.
+    pub fn read_prefix<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Result<Vec<T>, Errno> {
+        unsafe { self.memory_copier.clone_mem_prefix(ptr) }
     }
 
     /// Creates a std::io::Read accessor for the specified plugin memory. Useful
