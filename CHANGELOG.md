@@ -12,7 +12,16 @@ MAJOR changes (breaking):
 
 MINOR changes (backwards-compatible):
 
-*
+* The experimental command-line option `--use-memory-manager` (experimental
+  config option `use_memory_manager`) has been removed. This was a complex
+  optimization that mapped managed process memory into memory shared with shadow
+  so that it could access it directly. At the time that it was introduced, this
+  was a huge improvement over copying a word at a time through `ptrace`
+  operations. Since then, we've migrated the "copying" path to use the much more
+  efficient `process_vm_readv` and `process_vm_writev` syscalls instead of
+  `ptrace`, which made it nearly as fast as the "mapped" path.  Meanwhile, the
+  "mapped" path has been expensive to maintain and prone to subtle bugs, and has
+  never updated to be compatible with emulating the `exec` syscall. (#3780)
 
 PATCH changes (bugfixes):
 
