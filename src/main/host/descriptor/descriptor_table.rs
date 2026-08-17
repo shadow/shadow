@@ -261,7 +261,9 @@ impl ExplicitDrop for DescriptorTable {
 impl Drop for DescriptorTable {
     fn drop(&mut self) {
         if !self.descriptors.is_empty() {
-            debug_panic!("Dropped DescriptorTable without closing (or taking) descriptors");
+            warn_and_debug_panic!(
+                "Dropped DescriptorTable without closing (or taking) descriptors"
+            );
         }
     }
 }

@@ -767,7 +767,7 @@ impl ZombieProcess {
 
         let Some(parent_runnable) = parent.as_runnable() else {
             trace!("Not notifying parent of exit: {parent_pid:?} not running");
-            debug_panic!("Non-running parent process shouldn't be possible.");
+            warn_and_debug_panic!("Non-running parent process shouldn't be possible.");
             #[allow(unreachable_code)]
             {
                 return;

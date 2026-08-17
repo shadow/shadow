@@ -454,7 +454,7 @@ impl Worker {
 
             // while we handle this okay, this probably indicates an issue somewhere else in the
             // code so panic only in debug builds
-            debug_panic!("Trying to add syscall counts when there is no worker");
+            warn_and_debug_panic!("Trying to add syscall counts when there is no worker");
         });
     }
 

@@ -404,12 +404,12 @@ impl OpenFile {
 
             if file.state().contains(FileState::CLOSED) {
                 // panic if debug assertions are enabled
-                debug_panic!("Creating an `OpenFile` object for a closed file");
+                warn_and_debug_panic!("Creating an `OpenFile` object for a closed file");
             }
 
             if file.has_open_file() {
                 // panic if debug assertions are enabled
-                debug_panic!(
+                warn_and_debug_panic!(
                     "Creating an `OpenFile` object for a file that already has an `OpenFile` object"
                 );
             }
@@ -582,7 +582,7 @@ impl Descriptor {
 impl Drop for Descriptor {
     fn drop(&mut self) {
         if self.file.is_some() {
-            debug_panic!("Dropped descriptor without closing");
+            warn_and_debug_panic!("Dropped descriptor without closing");
         }
     }
 }
