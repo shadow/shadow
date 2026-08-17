@@ -687,10 +687,10 @@ impl RunnableProcess {
 }
 
 impl ExplicitDrop for RunnableProcess {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         let threads = std::mem::take(self.threads.get_mut());
         for thread in threads.into_values() {
             thread.explicit_drop_recursive(host.root(), host);
@@ -767,7 +767,7 @@ impl ZombieProcess {
 
         let Some(parent_runnable) = parent.as_runnable() else {
             trace!("Not notifying parent of exit: {parent_pid:?} not running");
-            debug_panic!("Non-running parent process shouldn't be possible.");
+            warn_and_debug_panic!("Non-running parent process shouldn't be possible.");
             #[allow(unreachable_code)]
             {
                 return;
@@ -869,10 +869,10 @@ impl ProcessState {
 }
 
 impl ExplicitDrop for ProcessState {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(self, host: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         match self {
             ProcessState::Runnable(r) => r.explicit_drop(host),
             ProcessState::Zombie(_) => (),
@@ -1054,7 +1054,7 @@ impl Process {
         )?;
         let native_pid = mthread.native_pid();
         let main_thread =
-            Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id).unwrap();
+            Thread::wrap_mthread(host, mthread, desc_table, process_id, main_thread_id);
 
         debug!("process '{plugin_name:?}' started");
 
@@ -1874,10 +1874,10 @@ impl Drop for Process {
 }
 
 impl ExplicitDrop for Process {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Self::ExplicitDropParam) -> Self::ExplicitDropResult {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
         // Should normally only be dropped in the zombie state.
         debug_assert!(self.as_zombie().is_some() || std::thread::panicking());
 

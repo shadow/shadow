@@ -259,7 +259,7 @@ impl NetworkNamespace {
 impl std::ops::Drop for NetworkNamespace {
     fn drop(&mut self) {
         if !self.has_run_cleanup.get() && !std::thread::panicking() {
-            debug_panic!("Dropped the network namespace before it has been cleaned up");
+            warn_and_debug_panic!("Dropped the network namespace before it has been cleaned up");
         }
     }
 }

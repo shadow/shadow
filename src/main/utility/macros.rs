@@ -1,5 +1,5 @@
 /// Log a warning, and if a debug build then panic.
-macro_rules! debug_panic {
+macro_rules! warn_and_debug_panic {
     ($($x:tt)+) => {
         log::warn!($($x)+);
         #[cfg(debug_assertions)]
@@ -308,15 +308,15 @@ mod tests {
     #[test]
     #[cfg(debug_assertions)]
     #[should_panic]
-    fn debug_panic_macro() {
-        debug_panic!("Hello {}", "World");
+    fn warn_and_debug_panic_macro() {
+        warn_and_debug_panic!("Hello {}", "World");
     }
 
     // will *not* panic in release mode
     #[test]
     #[cfg(not(debug_assertions))]
-    fn debug_panic_macro() {
-        debug_panic!("Hello {}", "World");
+    fn warn_and_debug_panic_macro() {
+        warn_and_debug_panic!("Hello {}", "World");
     }
 
     #[test]

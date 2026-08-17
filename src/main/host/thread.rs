@@ -471,8 +471,8 @@ impl Thread {
         desc_table: RootedRc<RootedRefCell<DescriptorTable>>,
         pid: ProcessId,
         tid: ThreadId,
-    ) -> Result<Thread, Errno> {
-        let child = Self {
+    ) -> Thread {
+        Self {
             mthread: RefCell::new(mthread),
             syscallhandler: RootedRefCell::new(
                 host.root(),
@@ -502,8 +502,7 @@ impl Thread {
             )),
             desc_table: Some(desc_table),
             _counter: ObjectCounter::new("Thread"),
-        };
-        Ok(child)
+        }
     }
 
     /// Shared memory for this thread.
@@ -608,10 +607,10 @@ impl Drop for Thread {
 }
 
 impl ExplicitDrop for Thread {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Host) {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
         if let Some(table) = self.desc_table.take() {
             table.explicit_drop_recursive(host.root(), host);
         }

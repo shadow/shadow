@@ -17,6 +17,7 @@ use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
+use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 
 pub mod descriptor_table;
 pub mod epoll;
@@ -403,12 +404,12 @@ impl OpenFile {
 
             if file.state().contains(FileState::CLOSED) {
                 // panic if debug assertions are enabled
-                debug_panic!("Creating an `OpenFile` object for a closed file");
+                warn_and_debug_panic!("Creating an `OpenFile` object for a closed file");
             }
 
             if file.has_open_file() {
                 // panic if debug assertions are enabled
-                debug_panic!(
+                warn_and_debug_panic!(
                     "Creating an `OpenFile` object for a file that already has an `OpenFile` object"
                 );
             }
@@ -475,7 +476,9 @@ impl std::ops::Drop for OpenFileInner {
 #[derive(Debug, Clone)]
 pub struct Descriptor {
     /// The file that this descriptor points to.
-    file: CompatFile,
+    // `Option` wrapper so that our `Drop` implementation can ensure that the
+    // file was closed or removed before drop.
+    file: Option<CompatFile>,
     /// Descriptor flags.
     flags: DescriptorFlags,
     _counter: ObjectCounter,
@@ -488,14 +491,14 @@ impl IsSync for Descriptor {}
 impl Descriptor {
     pub fn new(file: CompatFile) -> Self {
         Self {
-            file,
+            file: Some(file),
             flags: DescriptorFlags::empty(),
             _counter: ObjectCounter::new("Descriptor"),
         }
     }
 
     pub fn file(&self) -> &CompatFile {
-        &self.file
+        self.file.as_ref().unwrap()
     }
 
     pub fn flags(&self) -> DescriptorFlags {
@@ -506,8 +509,8 @@ impl Descriptor {
         self.flags = flags;
     }
 
-    pub fn into_file(self) -> CompatFile {
-        self.file
+    pub fn into_file(mut self) -> CompatFile {
+        self.file.take().unwrap()
     }
 
     /// Close the descriptor. The `host` option is a legacy option for legacy file.
@@ -516,7 +519,7 @@ impl Descriptor {
         host: &Host,
         cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
-        self.file.close(host, cb_queue)
+        self.into_file().close(host, cb_queue)
     }
 
     /// Duplicate the descriptor, with both descriptors pointing to the same `OpenFile`. In
@@ -573,6 +576,24 @@ impl Descriptor {
         assert!(remaining.is_empty());
         descriptor.set_flags(descriptor_flags);
         descriptor
+    }
+}
+
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        if self.file.is_some() {
+            warn_and_debug_panic!("Dropped descriptor without closing");
+        }
+    }
+}
+
+impl ExplicitDrop for Descriptor {
+    type ExplicitDropParam<'p> = (&'p Host, &'p mut CallbackQueue);
+    type ExplicitDropResult = Option<Result<(), SyscallError>>;
+
+    fn explicit_drop<'p>(self, param: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
+        let (host, cb_queue) = param;
+        self.close(host, cb_queue)
     }
 }
 

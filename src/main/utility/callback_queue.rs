@@ -98,7 +98,7 @@ impl Drop for CallbackQueue {
 
         if !self.is_empty() {
             // panic in debug builds since the backtrace will be helpful for debugging
-            debug_panic!("Dropping EventQueue while it still has events pending.");
+            warn_and_debug_panic!("Dropping EventQueue while it still has events pending.");
         }
     }
 }

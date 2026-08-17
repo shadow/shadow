@@ -130,7 +130,7 @@ impl NetworkInterface {
             entry.insert(socket.clone());
         } else {
             // TODO: Return an error if the association fails.
-            debug_panic!("Entry is unexpectedly occupied");
+            warn_and_debug_panic!("Entry is unexpectedly occupied");
         }
     }
 

@@ -191,10 +191,13 @@ impl DescriptorTable {
 
     /// Remove and return all descriptors.
     pub fn remove_all(&mut self) -> impl Iterator<Item = Descriptor> {
-        // reset the descriptor table
-        let old_self = std::mem::take(self);
+        // reset `self` to default state.
+        let mut old_self = std::mem::take(self);
+        // take the descriptors out of the table, so that our `Drop` check
+        // doesn't think we forgot to close them.
+        let old_descriptors = std::mem::take(&mut old_self.descriptors);
         // return the old descriptors
-        old_self.descriptors.into_values()
+        old_descriptors.into_values()
     }
 
     /// Remove and return all descriptors in the range. If you want to remove all descriptors, you
@@ -236,10 +239,10 @@ impl Default for DescriptorTable {
 }
 
 impl ExplicitDrop for DescriptorTable {
-    type ExplicitDropParam = Host;
+    type ExplicitDropParam<'p> = &'p Host;
     type ExplicitDropResult = ();
 
-    fn explicit_drop(mut self, host: &Host) {
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
         // Drop all descriptors using a callback queue.
         //
         // Doing this explicitly instead of letting `DescriptorTable`'s `Drop`
@@ -252,6 +255,16 @@ impl ExplicitDrop for DescriptorTable {
                 desc.close(host, cb_queue);
             }
         });
+    }
+}
+
+impl Drop for DescriptorTable {
+    fn drop(&mut self) {
+        if !self.descriptors.is_empty() {
+            warn_and_debug_panic!(
+                "Dropped DescriptorTable without closing (or taking) descriptors"
+            );
+        }
     }
 }
 

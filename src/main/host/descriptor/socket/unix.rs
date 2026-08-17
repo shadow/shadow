@@ -1997,7 +1997,7 @@ impl UnixSocketCommon {
             );
 
             // panic in debug builds since the backtrace will be helpful for debugging
-            debug_panic!("When closing a unix socket, the CLOSED flag was not set");
+            warn_and_debug_panic!("When closing a unix socket, the CLOSED flag was not set");
         }
 
         Ok(())

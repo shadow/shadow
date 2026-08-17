@@ -243,7 +243,7 @@ impl Drop for SharedBuf {
         // listeners waiting for `NO_READERS` or `NO_WRITERS` status changes will never be notified
         if self.num_readers != 0 || self.num_writers != 0 {
             // panic in debug builds since the backtrace will be helpful for debugging
-            debug_panic!(
+            warn_and_debug_panic!(
                 "Dropping SharedBuf while it still has {} readers and {} writers.",
                 self.num_readers,
                 self.num_writers,
@@ -297,7 +297,7 @@ impl Drop for ReaderHandle {
         }
 
         // panic in debug builds since the backtrace will be helpful for debugging
-        debug_panic!(
+        warn_and_debug_panic!(
             "Dropping ReaderHandle without returning it to SharedBuf. \
              This likely indicates a bug in Shadow."
         );
@@ -312,7 +312,7 @@ impl Drop for WriterHandle {
         }
 
         // panic in debug builds since the backtrace will be helpful for debugging
-        debug_panic!(
+        warn_and_debug_panic!(
             "Dropping WriterHandle without returning it to SharedBuf. \
              This likely indicates a bug in Shadow."
         );
