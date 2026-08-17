@@ -677,30 +677,12 @@ impl LegacyFileCounter {
     }
 
     pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
-        let mut libc_stat: libc::stat = shadow_pod::zeroed();
-        let rv = unsafe { c::legacyfile_fstat(self.ptr(), &mut libc_stat) };
+        let mut statbuf: linux_api::stat::stat = shadow_pod::zeroed();
+        let rv = unsafe { c::legacyfile_fstat(self.ptr(), &mut statbuf) };
         if rv < 0 {
             return Err(Errno::from_libc_errnum(-rv).unwrap().into());
         }
-        Ok(linux_api::stat::linux_stat {
-            st_dev: libc_stat.st_dev,
-            st_ino: libc_stat.st_ino,
-            st_nlink: libc_stat.st_nlink,
-            st_mode: libc_stat.st_mode,
-            st_uid: libc_stat.st_uid,
-            st_gid: libc_stat.st_gid,
-            st_rdev: libc_stat.st_rdev,
-            st_size: libc_stat.st_size,
-            st_blksize: libc_stat.st_blksize,
-            st_blocks: libc_stat.st_blocks,
-            st_atime: libc_stat.st_atime as u64,
-            st_atime_nsec: libc_stat.st_atime_nsec as u64,
-            st_mtime: libc_stat.st_mtime as u64,
-            st_mtime_nsec: libc_stat.st_mtime_nsec as u64,
-            st_ctime: libc_stat.st_ctime as u64,
-            st_ctime_nsec: libc_stat.st_ctime_nsec as u64,
-            ..shadow_pod::zeroed()
-        })
+        Ok(statbuf)
     }
 
     /// Should drop `self` immediately after calling this.

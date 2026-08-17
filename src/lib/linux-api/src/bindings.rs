@@ -4531,7 +4531,7 @@ pub struct linux__fpstate_64 {
     pub rdp: linux___u64,
     pub mxcsr: linux___u32,
     pub mxcsr_mask: linux___u32,
-    pub st_space: [linux___u32; 32usize],
+    pub lst_space: [linux___u32; 32usize],
     pub xmm_space: [linux___u32; 64usize],
     pub reserved2: [linux___u32; 12usize],
     pub l__bindgen_anon_1: linux__fpstate_64__bindgen_ty_1,
@@ -4578,8 +4578,8 @@ const _: () = {
         [::core::mem::offset_of!(linux__fpstate_64, mxcsr) - 24usize];
     ["Offset of field: linux__fpstate_64::mxcsr_mask"]
         [::core::mem::offset_of!(linux__fpstate_64, mxcsr_mask) - 28usize];
-    ["Offset of field: linux__fpstate_64::st_space"]
-        [::core::mem::offset_of!(linux__fpstate_64, st_space) - 32usize];
+    ["Offset of field: linux__fpstate_64::lst_space"]
+        [::core::mem::offset_of!(linux__fpstate_64, lst_space) - 32usize];
     ["Offset of field: linux__fpstate_64::xmm_space"]
         [::core::mem::offset_of!(linux__fpstate_64, xmm_space) - 160usize];
     ["Offset of field: linux__fpstate_64::reserved2"]
@@ -4589,7 +4589,7 @@ impl ::core::fmt::Debug for linux__fpstate_64 {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         write!(
             f,
-            "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, st_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}",
+            "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, lst_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}",
             self.cwd,
             self.swd,
             self.twd,
@@ -4598,7 +4598,7 @@ impl ::core::fmt::Debug for linux__fpstate_64 {
             self.rdp,
             self.mxcsr,
             self.mxcsr_mask,
-            self.st_space,
+            self.lst_space,
             self.xmm_space,
             self.reserved2,
             self.l__bindgen_anon_1
@@ -4757,59 +4757,61 @@ impl ::core::fmt::Debug for linux_sigcontext {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_stat {
-    pub st_dev: linux___kernel_ulong_t,
-    pub st_ino: linux___kernel_ulong_t,
-    pub st_nlink: linux___kernel_ulong_t,
-    pub st_mode: ::core::ffi::c_uint,
-    pub st_uid: ::core::ffi::c_uint,
-    pub st_gid: ::core::ffi::c_uint,
+    pub lst_dev: linux___kernel_ulong_t,
+    pub lst_ino: linux___kernel_ulong_t,
+    pub lst_nlink: linux___kernel_ulong_t,
+    pub lst_mode: ::core::ffi::c_uint,
+    pub lst_uid: ::core::ffi::c_uint,
+    pub lst_gid: ::core::ffi::c_uint,
     pub l__pad0: ::core::ffi::c_uint,
-    pub st_rdev: linux___kernel_ulong_t,
-    pub st_size: linux___kernel_long_t,
-    pub st_blksize: linux___kernel_long_t,
-    pub st_blocks: linux___kernel_long_t,
-    pub st_atime: linux___kernel_ulong_t,
-    pub st_atime_nsec: linux___kernel_ulong_t,
-    pub st_mtime: linux___kernel_ulong_t,
-    pub st_mtime_nsec: linux___kernel_ulong_t,
-    pub st_ctime: linux___kernel_ulong_t,
-    pub st_ctime_nsec: linux___kernel_ulong_t,
+    pub lst_rdev: linux___kernel_ulong_t,
+    pub lst_size: linux___kernel_long_t,
+    pub lst_blksize: linux___kernel_long_t,
+    pub lst_blocks: linux___kernel_long_t,
+    pub lst_atime: linux___kernel_ulong_t,
+    pub lst_atime_nsec: linux___kernel_ulong_t,
+    pub lst_mtime: linux___kernel_ulong_t,
+    pub lst_mtime_nsec: linux___kernel_ulong_t,
+    pub lst_ctime: linux___kernel_ulong_t,
+    pub lst_ctime_nsec: linux___kernel_ulong_t,
     pub l__unused: [linux___kernel_long_t; 3usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of linux_stat"][::core::mem::size_of::<linux_stat>() - 144usize];
     ["Alignment of linux_stat"][::core::mem::align_of::<linux_stat>() - 8usize];
-    ["Offset of field: linux_stat::st_dev"][::core::mem::offset_of!(linux_stat, st_dev) - 0usize];
-    ["Offset of field: linux_stat::st_ino"][::core::mem::offset_of!(linux_stat, st_ino) - 8usize];
-    ["Offset of field: linux_stat::st_nlink"]
-        [::core::mem::offset_of!(linux_stat, st_nlink) - 16usize];
-    ["Offset of field: linux_stat::st_mode"]
-        [::core::mem::offset_of!(linux_stat, st_mode) - 24usize];
-    ["Offset of field: linux_stat::st_uid"][::core::mem::offset_of!(linux_stat, st_uid) - 28usize];
-    ["Offset of field: linux_stat::st_gid"][::core::mem::offset_of!(linux_stat, st_gid) - 32usize];
+    ["Offset of field: linux_stat::lst_dev"][::core::mem::offset_of!(linux_stat, lst_dev) - 0usize];
+    ["Offset of field: linux_stat::lst_ino"][::core::mem::offset_of!(linux_stat, lst_ino) - 8usize];
+    ["Offset of field: linux_stat::lst_nlink"]
+        [::core::mem::offset_of!(linux_stat, lst_nlink) - 16usize];
+    ["Offset of field: linux_stat::lst_mode"]
+        [::core::mem::offset_of!(linux_stat, lst_mode) - 24usize];
+    ["Offset of field: linux_stat::lst_uid"]
+        [::core::mem::offset_of!(linux_stat, lst_uid) - 28usize];
+    ["Offset of field: linux_stat::lst_gid"]
+        [::core::mem::offset_of!(linux_stat, lst_gid) - 32usize];
     ["Offset of field: linux_stat::l__pad0"]
         [::core::mem::offset_of!(linux_stat, l__pad0) - 36usize];
-    ["Offset of field: linux_stat::st_rdev"]
-        [::core::mem::offset_of!(linux_stat, st_rdev) - 40usize];
-    ["Offset of field: linux_stat::st_size"]
-        [::core::mem::offset_of!(linux_stat, st_size) - 48usize];
-    ["Offset of field: linux_stat::st_blksize"]
-        [::core::mem::offset_of!(linux_stat, st_blksize) - 56usize];
-    ["Offset of field: linux_stat::st_blocks"]
-        [::core::mem::offset_of!(linux_stat, st_blocks) - 64usize];
-    ["Offset of field: linux_stat::st_atime"]
-        [::core::mem::offset_of!(linux_stat, st_atime) - 72usize];
-    ["Offset of field: linux_stat::st_atime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_atime_nsec) - 80usize];
-    ["Offset of field: linux_stat::st_mtime"]
-        [::core::mem::offset_of!(linux_stat, st_mtime) - 88usize];
-    ["Offset of field: linux_stat::st_mtime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_mtime_nsec) - 96usize];
-    ["Offset of field: linux_stat::st_ctime"]
-        [::core::mem::offset_of!(linux_stat, st_ctime) - 104usize];
-    ["Offset of field: linux_stat::st_ctime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_ctime_nsec) - 112usize];
+    ["Offset of field: linux_stat::lst_rdev"]
+        [::core::mem::offset_of!(linux_stat, lst_rdev) - 40usize];
+    ["Offset of field: linux_stat::lst_size"]
+        [::core::mem::offset_of!(linux_stat, lst_size) - 48usize];
+    ["Offset of field: linux_stat::lst_blksize"]
+        [::core::mem::offset_of!(linux_stat, lst_blksize) - 56usize];
+    ["Offset of field: linux_stat::lst_blocks"]
+        [::core::mem::offset_of!(linux_stat, lst_blocks) - 64usize];
+    ["Offset of field: linux_stat::lst_atime"]
+        [::core::mem::offset_of!(linux_stat, lst_atime) - 72usize];
+    ["Offset of field: linux_stat::lst_atime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_atime_nsec) - 80usize];
+    ["Offset of field: linux_stat::lst_mtime"]
+        [::core::mem::offset_of!(linux_stat, lst_mtime) - 88usize];
+    ["Offset of field: linux_stat::lst_mtime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_mtime_nsec) - 96usize];
+    ["Offset of field: linux_stat::lst_ctime"]
+        [::core::mem::offset_of!(linux_stat, lst_ctime) - 104usize];
+    ["Offset of field: linux_stat::lst_ctime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_ctime_nsec) - 112usize];
     ["Offset of field: linux_stat::l__unused"]
         [::core::mem::offset_of!(linux_stat, l__unused) - 120usize];
 };

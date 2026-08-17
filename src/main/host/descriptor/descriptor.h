@@ -29,7 +29,7 @@ void legacyfile_unref(gpointer data);
 void legacyfile_refWeak(gpointer data);
 void legacyfile_unrefWeak(gpointer data);
 void legacyfile_close(LegacyFile* descriptor, const Host* host);
-int legacyfile_fstat(LegacyFile* descriptor, struct stat* statbuf);
+int legacyfile_fstat(LegacyFile* descriptor, struct linux_stat* statbuf);
 off_t legacyfile_lseek(LegacyFile* descriptor, off_t offset, int whence);
 
 const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* descriptor);

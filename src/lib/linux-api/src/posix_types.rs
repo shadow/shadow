@@ -10,6 +10,10 @@ pub use bindings::linux___kernel_mode_t;
 #[allow(non_camel_case_types)]
 pub type kernel_mode_t = bindings::linux___kernel_mode_t;
 
+pub use bindings::linux___kernel_long_t;
+#[allow(non_camel_case_types)]
+pub type kernel_long_t = bindings::linux___kernel_long_t;
+
 pub use bindings::linux___kernel_ulong_t;
 #[allow(non_camel_case_types)]
 pub type kernel_ulong_t = bindings::linux___kernel_ulong_t;

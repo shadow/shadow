@@ -154,7 +154,7 @@ void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     descriptor->funcTable->close(descriptor, host);
 }
 
-int legacyfile_fstat(LegacyFile* descriptor, struct stat* statbuf) {
+int legacyfile_fstat(LegacyFile* descriptor, struct linux_stat* statbuf) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
 

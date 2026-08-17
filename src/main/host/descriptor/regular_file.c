@@ -694,7 +694,7 @@ ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iov
 }
 #endif
 
-int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
+int regularfile_fstat(RegularFile* file, struct linux_stat* statbuf) {
     MAGIC_ASSERT(file);
 
     if (!_fd_isValid(_regularfile_getOSBackedFD(file))) {
@@ -703,11 +703,10 @@ int regularfile_fstat(RegularFile* file, struct stat* statbuf) {
 
     trace("RegularFile %p fstat os-backed file %i", file, _regularfile_getOSBackedFD(file));
 
-    int result = fstat(_regularfile_getOSBackedFD(file), statbuf);
-    return (result < 0) ? -errno : result;
+    return linux_fstat(_regularfile_getOSBackedFD(file), statbuf);
 }
 
-int _regularfile_fstat(LegacyFile* desc, struct stat* statbuf) {
+int _regularfile_fstat(LegacyFile* desc, struct linux_stat* statbuf) {
     RegularFile* file = _regularfile_legacyFileToRegularFile(desc);
     return regularfile_fstat(file, statbuf);
 }

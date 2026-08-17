@@ -101,6 +101,8 @@ def prefix_field_names(fields, s):
             t.startswith('si_')
             # sigaction fields; sometimes collide with macros in libc
             or t.startswith('sa_')
+            # stat fields; collides with macros in libc
+            or t.startswith('st_')
             # libc reserves identifiers starting with _ in general.
             or t.startswith('_')
             ):
