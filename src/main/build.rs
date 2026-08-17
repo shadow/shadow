@@ -264,7 +264,7 @@ fn run_bindgen(build_common: &ShadowBuildCommon) {
         .blocklist_type("HashSet_String")
         // Imported from libc crate below
         .blocklist_type("stat")
-        // Imported from libc crate below
+        // Import from libc crate below if we need it again.
         .blocklist_type("siginfo_t")
         .blocklist_type("SyscallReg")
         .blocklist_type("SyscallArgs")
