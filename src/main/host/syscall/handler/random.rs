@@ -25,28 +25,20 @@ impl SyscallHandler {
 
         trace!("Trying to read {count} random bytes.");
 
-        // Get a native-process mem buffer where we can copy the random bytes.
-        let dst_ptr = ForeignArrayPtr::new(buf_ptr, count);
-        let mut memory = ctx.objs.process.memory_borrow_mut();
-        let mut mem_ref = match memory.memory_ref_mut_uninit(dst_ptr) {
-            Ok(m) => m,
-            Err(e) => {
-                warn!("Failed to get memory ref: {e:?}");
-                return Err(Errno::EFAULT);
-            }
+        // Get random bytes using host rng to maintain determinism.
+        let rnd_bytes = {
+            let mut v = vec![0u8; count];
+            let mut rng = ctx.objs.host.random_mut();
+            rng.fill_bytes(&mut v);
+            v
         };
 
-        // Get random bytes using host rng to maintain determinism.
-        let mut rng = ctx.objs.host.random_mut();
-        rng.fill_bytes(&mut mem_ref);
+        // Copy to managed process.
+        ctx.objs
+            .process
+            .memory_borrow_mut()
+            .copy_to_ptr(ForeignArrayPtr::new(buf_ptr, count), &rnd_bytes)?;
 
-        // We must flush the memory reference to write it back.
-        match mem_ref.flush() {
-            Ok(()) => Ok(isize::try_from(count).unwrap()),
-            Err(e) => {
-                warn!("Failed to flush writes: {e:?}");
-                Err(Errno::EFAULT)
-            }
-        }
+        Ok(isize::try_from(count).unwrap())
     }
 }

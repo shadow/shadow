@@ -74,10 +74,6 @@ impl SyscallHandler {
 
             handled_flags.insert(CloneFlags::CLONE_THREAD);
         } else {
-            if ctx.objs.process.memory_borrow().has_mapper() {
-                warn!("Fork with memory mapper unimplemented");
-                return Err(Errno::ENOTSUP);
-            }
             // Make shadow the parent process
             native_flags.insert(CloneFlags::CLONE_PARENT);
         }

@@ -28,7 +28,7 @@ add_shadow_tests(
     # potential source of hard-to-debug errors.
     #
     # See https://github.com/shadow/shadow/issues/2919
-    ARGS --strace-logging-mode=off --use-memory-manager=false
+    ARGS --strace-logging-mode=off
 )
 
 # FIXME: Currently broken, probably because this test
@@ -47,7 +47,4 @@ add_shadow_tests(
 )
 
 add_linux_tests(BASENAME fork COMMAND sh -c "../../target/debug/test_fork --libc-passing")
-add_shadow_tests(
-    BASENAME fork
-    # The memory mapper is not currently supported with fork
-    ARGS --use-memory-manager=false)
+add_shadow_tests(BASENAME fork)

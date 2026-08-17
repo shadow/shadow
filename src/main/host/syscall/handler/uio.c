@@ -143,13 +143,6 @@ static SyscallReturn _syscallhandler_readvHelper(SyscallHandler* sys, int fd,
                 SyscallReturn scr =
                     _syscallhandler_readHelper(sys, fd, bufPtr, bufSize, thisOffset, doPreadv);
 
-                // if the above syscall handler created any pointers, we may
-                // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(rustsyscallhandler_getProcess(sys));
-                if (result != 0) {
-                    break;
-                }
-
                 switch (scr.tag) {
                     case SYSCALL_RETURN_DONE: {
                         result = syscallreturn_done(&scr)->retval.as_i64;
@@ -273,13 +266,6 @@ static SyscallReturn _syscallhandler_writevHelper(SyscallHandler* sys, int fd,
 
                 SyscallReturn scr =
                     _syscallhandler_writeHelper(sys, fd, bufPtr, bufSize, thisOffset, doPwritev);
-
-                // if the above syscall handler created any pointers, we may
-                // need to flush them before calling the syscall handler again
-                result = process_flushPtrs(rustsyscallhandler_getProcess(sys));
-                if (result != 0) {
-                    break;
-                }
 
                 switch (scr.tag) {
                     case SYSCALL_RETURN_DONE: {

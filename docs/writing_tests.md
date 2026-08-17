@@ -144,32 +144,11 @@ Shadow supports unit tests for rust code. These can be written as standard rust
 unit tests. These tests run natively and not under Shadow, but they are also
 run under [Miri][miri] and [Loom][loom] as "extra" tests.
 
-For example see the [`IntervalMap`][interval-map] tests.
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ...
-
-    #[test]
-    fn test_insert_into_empty() {
-        let mut m = IntervalMap::new();
-        insert_and_validate(&mut m, 10..20, "x", &[], &[(10..20, "x")]);
-    }
-
-    // ...
-}
-```
-
-```text
-1/1 Test #1: rust-unit-tests ..................   Passed  149.52 sec
-```
+For example see the [`ByteQueue`][byte-queue] tests.
 
 [miri]: https://github.com/rust-lang/miri
 [loom]: https://github.com/tokio-rs/loom
-[interval-map]: https://github.com/shadow/shadow/blob/main/src/main/utility/interval_map.rs
+[byte-queue]: https://github.com/shadow/shadow/blob/main/src/main/utility/byte_queue.rs
 
 ## Regression tests
 

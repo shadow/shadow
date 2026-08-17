@@ -23,9 +23,8 @@
 ///////////////////////////////////////////////////////////
 
 SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedForeignPtr bufPtr,
-                                         size_t bufSize, off_t offset, bool doPread) {
-    trace(
-        "trying to read %zu bytes on fd %i at offset %li", bufSize, fd, offset);
+                                         size_t reqBufSize, off_t offset, bool doPread) {
+    trace("trying to read %zu bytes on fd %i at offset %li", reqBufSize, fd, offset);
 
     /* Get the descriptor. */
     LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
@@ -55,7 +54,9 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+    size_t bufSize = MIN(reqBufSize, SYSCALL_IO_BUFSIZE);
+    char* buf = malloc(bufSize);
+    utility_alwaysAssert(buf != NULL);
 
     ssize_t result = 0;
     switch (dType) {
@@ -63,14 +64,10 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
             if (!doPread) {
                 utility_debugAssert(offset == 0);
                 result = regularfile_read(
-                    (RegularFile*)desc, rustsyscallhandler_getHost(sys),
-                    process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
-                    sizeNeeded);
+                    (RegularFile*)desc, rustsyscallhandler_getHost(sys), buf, bufSize);
             } else {
                 result = regularfile_pread(
-                    (RegularFile*)desc, rustsyscallhandler_getHost(sys),
-                    process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
-                    sizeNeeded, offset);
+                    (RegularFile*)desc, rustsyscallhandler_getHost(sys), buf, bufSize, offset);
             }
             break;
         case DT_TCPSOCKET:
@@ -84,13 +81,23 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
             break;
     }
 
+    if (result > 0) {
+        // Write back `result` bytes of the data.
+        int errcode = process_writePtr(rustsyscallhandler_getProcess(sys), bufPtr, buf, result);
+        if (errcode < 0) {
+            result = errcode;
+        }
+    }
+    free(buf);
+    buf = NULL;
+
     if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
             error("Indefinitely blocking a read of %zu bytes on file %i at "
                   "offset %li",
-                  bufSize, fd, offset);
+                  reqBufSize, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to read. */
@@ -104,9 +111,8 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
 }
 
 SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedForeignPtr bufPtr,
-                                          size_t bufSize, off_t offset, bool doPwrite) {
-    trace("trying to write %zu bytes on fd %i at offset %li", bufSize, fd,
-          offset);
+                                          size_t reqBufSize, off_t offset, bool doPwrite) {
+    trace("trying to write %zu bytes on fd %i at offset %li", reqBufSize, fd, offset);
 
     /* Get the descriptor. */
     LegacyFile* desc = thread_getRegisteredLegacyFile(rustsyscallhandler_getThread(sys), fd);
@@ -136,22 +142,23 @@ SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedFo
 
     /* TODO: Dynamically compute size based on how much data is actually
      * available in the descriptor. */
-    size_t sizeNeeded = MIN(bufSize, SYSCALL_IO_BUFSIZE);
+    size_t bufSize = MIN(reqBufSize, SYSCALL_IO_BUFSIZE);
+    char* buf = malloc(bufSize);
+    utility_alwaysAssert(buf != NULL);
+    errorCode = process_readPtr(rustsyscallhandler_getProcess(sys), buf, bufPtr, bufSize);
+    if (errorCode < 0) {
+        return syscallreturn_makeDoneErrno(-errorCode);
+    }
 
     ssize_t result = 0;
+
     switch (dType) {
         case DT_FILE:
             if (!doPwrite) {
                 utility_debugAssert(offset == 0);
-                result = regularfile_write(
-                    (RegularFile*)desc,
-                    process_getReadablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
-                    sizeNeeded);
+                result = regularfile_write((RegularFile*)desc, buf, bufSize);
             } else {
-                result = regularfile_pwrite(
-                    (RegularFile*)desc,
-                    process_getReadablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeNeeded),
-                    sizeNeeded, offset);
+                result = regularfile_pwrite((RegularFile*)desc, buf, bufSize, offset);
             }
             break;
         case DT_TCPSOCKET:
@@ -165,13 +172,16 @@ SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedFo
             break;
     }
 
+    free(buf);
+    buf = NULL;
+
     if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
             error("Indefinitely blocking a write of %zu bytes on file %i at "
                   "offset %li",
-                  bufSize, fd, offset);
+                  reqBufSize, fd, offset);
         }
 
         /* We need to block until the descriptor is ready to write. */
