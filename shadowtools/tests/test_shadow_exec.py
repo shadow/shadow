@@ -103,3 +103,32 @@ class TestShadowExecCLI(unittest.TestCase):
             text=True,
         )
         self.assertNotEqual(res1, res2)
+
+    def test_floaty_env(self) -> None:
+        # check that shadow-exec can pass through an environment variable that
+        # happens to look like a float.  we've had problems before where our
+        # encoder doesn't quote the output, and shadow's decoder interprets the
+        # output as a float and rejects the config file.
+        env_name = "FLOATY_ENV_VAR"
+        env_value = "123e10"
+        env = dict(os.environ) | {env_name: env_value}
+        res = subprocess.check_output(
+            [
+                "python3",
+                "-m",
+                "shadowtools.shadow_exec",
+                f"--shadow-bin={SHADOW_BIN}",
+                "--preserve=on-error",
+                "--no-ignore-env",
+                "--",
+                "bash",
+                "-c",
+                f"echo ${env_name}",
+            ],
+            env=env,
+            text=True,
+        )
+        self.assertEqual(
+            res.strip(),
+            env_value,
+        )
