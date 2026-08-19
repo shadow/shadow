@@ -31,7 +31,7 @@ import shutil
 import sys
 import tempfile
 import textwrap
-import yaml
+import json
 
 from pathlib import Path
 from typing import TextIO, BinaryIO, Final, Optional, List, Iterable, Dict, Literal
@@ -293,7 +293,20 @@ def _main(
     config["hosts"][hostname] = _make_controller_host(args, environ)
 
     config_path = tmpdir.joinpath("shadow.yaml")
-    config_path.write_text(yaml.safe_dump(config))
+    # Encoding as yaml using pyyaml leads to ambiguities; since yaml is a superset
+    # of json, we use the json encoder instead.
+    #
+    # In particular pyyaml encodes to the yaml 1.1 spec
+    # <https://github.com/yaml/pyyaml/issues/486>, while shadow's serde_yaml
+    # appears to decode by the yaml 1.2 spec
+    # <https://github.com/yaml/yaml-serde/issues/14>.
+    # The main problem we've seen is that the pyyaml encoder doesn't quote
+    # some strings that, by the yaml 1.2 spec, are then interpreted as floats
+    # <https://github.com/yaml/pyyaml/issues/393>.
+    #
+    # If we ever switch back to a yaml encoder here, consider one that can
+    # encode to the 1.2 spec (like py-yaml12).
+    config_path.write_text(json.dumps(config, indent=4, sort_keys=True))
 
     # Flush before handing the underlying buffers over
     stdout.flush()
