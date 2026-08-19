@@ -437,7 +437,7 @@ Initial size of the socket's send buffer.
 #### `experimental.strace_logging_mode`
 
 Default: "off"  
-Type: "off" OR "standard" OR "deterministic"
+Type: "off" OR "standard" OR "deterministic" OR "long"
 
 Log the syscalls for each process to individual "strace" files.
 

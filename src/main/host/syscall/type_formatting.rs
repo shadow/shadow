@@ -127,9 +127,9 @@ macro_rules! deref_pointer_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, 1))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
+                    (FmtOptions::Standard | FmtOptions::Long, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals)[0], ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
+                    (FmtOptions::Standard | FmtOptions::Long, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -154,7 +154,7 @@ macro_rules! safe_pointer_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<()>::from(self.reg);
                 match options {
-                    FmtOptions::Standard => write!(f, "{ptr:p}"),
+                    FmtOptions::Standard | FmtOptions::Long => write!(f, "{ptr:p}"),
                     FmtOptions::Deterministic => write!(f, "<pointer>"),
                 }
             }
@@ -179,9 +179,9 @@ macro_rules! deref_array_impl {
             ) -> std::fmt::Result {
                 let ptr = ForeignPtr::<$type>::from(self.reg);
                 match (options, mem.memory_ref(ForeignArrayPtr::new(ptr, K))) {
-                    (FmtOptions::Standard, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
+                    (FmtOptions::Standard | FmtOptions::Long, Ok(vals)) => write!(f, "{:?} ({:p})", &(*vals), ptr),
                     // if we couldn't read the memory, just show the pointer instead
-                    (FmtOptions::Standard, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
+                    (FmtOptions::Standard | FmtOptions::Long, Err(_)) => fmt_ptr_with_suffix(f, ptr, "<invalid-read>"),
                     (FmtOptions::Deterministic, _) => write!(f, "<pointer>"),
                 }
             }
@@ -205,6 +205,7 @@ deref_pointer_impl!(linux_api::time::timespec);
 deref_pointer_impl!(linux_api::time::kernel_timespec);
 deref_pointer_impl!(linux_api::time::kernel_old_timeval);
 deref_pointer_impl!(linux_api::time::kernel_old_itimerval);
+deref_pointer_impl!(linux_api::epoll::epoll_event);
 
 deref_array_impl!(i8, i16, i32, i64, isize);
 deref_array_impl!(u8, u16, u32, u64, usize);
@@ -242,7 +243,11 @@ fn fmt_buffer(
     options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
-    const DISPLAY_LEN: usize = 40;
+    let display_len = if options == FmtOptions::Long {
+        2000
+    } else {
+        40
+    };
 
     if options == FmtOptions::Deterministic {
         return write!(f, "<pointer>");
@@ -254,7 +259,7 @@ fn fmt_buffer(
         Err(_) => return fmt_ptr_with_suffix(f, ptr, "<invalid-addr>"),
     };
 
-    let mut s = String::with_capacity(DISPLAY_LEN);
+    let mut s = String::with_capacity(display_len);
 
     // the number of plugin mem bytes used; num_bytes <= s.len()
     let mut num_plugin_bytes = 0;
@@ -262,7 +267,7 @@ fn fmt_buffer(
     for c in mem_ref.iter() {
         let escaped = std::ascii::escape_default(*c);
 
-        if s.len() + escaped.len() > DISPLAY_LEN {
+        if s.len() + escaped.len() > display_len {
             break;
         }
 
@@ -331,6 +336,74 @@ fn fmt_string(
         write!(f, "\"{s}\"")
     } else {
         write!(f, "\"{s}\"...")
+    }
+}
+
+fn fmt_array<'a, T>(
+    f: &mut std::fmt::Formatter<'_>,
+    ptr: ForeignPtr<T>,
+    len: usize,
+    args: [shadow_shim_helper_rs::syscall_types::SyscallReg; 6],
+    options: FmtOptions,
+    mem: &'a MemoryManager,
+) -> std::fmt::Result
+where
+    SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    // How many bytes we want to show.
+    // We try not to exceed this, but there may be some edge cases which do.
+    let display_len = if options == FmtOptions::Long {
+        2000
+    } else {
+        100
+    };
+
+    // Separator for items.
+    const SEPARATOR: &str = ", ";
+
+    if options == FmtOptions::Deterministic {
+        return write!(f, "<pointer>");
+    }
+
+    let mut s = String::with_capacity(display_len);
+
+    s.push('[');
+
+    let mut num_items_displayed = 0;
+
+    for idx in 0..len {
+        // We reuse the same code for displaying a `*const T` here, since an array is essentially a
+        // pointer to the first item. So we make a fake register value containing the pointer with
+        // the required offset.
+        //
+        // TODO: This is a little awkward since `deref_pointer_impl!()` prints the pointer address
+        // for each item. Ideally we'd want to print only one pointer address for the start of the
+        // array.
+        let fake_reg = ptr.add(idx).into();
+        let syscall_val: SyscallVal<'_, *const T> = SyscallVal::new(fake_reg, args, options, mem);
+
+        let item_str = format!("{syscall_val}");
+
+        let maybe_separator = if idx != 0 { SEPARATOR } else { "" };
+
+        // current string length + separator length + item length + closing ']' length
+        if s.len() + maybe_separator.len() + item_str.len() + 1 > display_len {
+            // not enough room, so stop
+            break;
+        }
+
+        // we have enough room, so add the item
+        s.push_str(maybe_separator);
+        s.push_str(&item_str);
+
+        num_items_displayed += 1;
+    }
+
+    if len > num_items_displayed {
+        // we may exceed `display_len` here, but it's not worth worrying about that
+        write!(f, "{s}, ...]")
+    } else {
+        write!(f, "{s}]")
     }
 }
 
@@ -408,6 +481,34 @@ impl SyscallDisplay for SyscallVal<'_, SyscallStringArg> {
     ) -> std::fmt::Result {
         let ptr = self.reg.into();
         fmt_string(f, ptr, None, mem)
+    }
+}
+
+/// Displays an array with a length that is specified by another syscall argument.
+///
+/// For an array of bytes (like a string or buffer),
+/// typically prefer [`SyscallBufferArg`].
+pub struct SyscallArrayArg<const LEN_INDEX: usize, T>
+where
+    for<'a> SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<const LEN_INDEX: usize, T> SyscallDisplay for SyscallVal<'_, SyscallArrayArg<LEN_INDEX, T>>
+where
+    for<'a> SyscallVal<'a, *const T>: SyscallDisplay,
+{
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        options: FmtOptions,
+        mem: &MemoryManager,
+    ) -> std::fmt::Result {
+        let ptr: ForeignPtr<T> = self.reg.into();
+        let len: libc::size_t = self.args[LEN_INDEX].into();
+        let args = self.args;
+        fmt_array::<T>(f, ptr, len, args, options, mem)
     }
 }
 

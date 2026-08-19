@@ -12,7 +12,7 @@ MAJOR changes (breaking):
 
 MINOR changes (backwards-compatible):
 
-*
+* Added a "long" option for the `experimental.strace_logging_mode` configuration option.
 
 PATCH changes (bugfixes):
 
