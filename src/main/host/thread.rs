@@ -24,6 +24,7 @@ use super::host::Host;
 use super::managed_thread::{self, ManagedThread};
 use super::process::{Process, ProcessId};
 use crate::cshadow as c;
+use crate::host::descriptor::DropPosixRecordLocks;
 use crate::host::syscall::condition::{SyscallConditionRef, SyscallConditionRefMut};
 use crate::host::syscall::handler::SyscallHandler;
 use crate::utility::callback_queue::CallbackQueue;
@@ -130,7 +131,11 @@ impl Thread {
             // Descriptor table is unshared
             let desc_table_rc = self.desc_table.take().unwrap();
             let mut desc_table = DescriptorTable::clone(&desc_table_rc.borrow(host.root()));
-            desc_table_rc.explicit_drop_recursive(host.root(), host);
+            // Don't inadvertently drop locks as part of this bookkeeping.
+            // In particular, fcntl(2): "Record locks are ... are preserved
+            // across an execve(2)".
+            let dont_drop_locks = DropPosixRecordLocks::False;
+            desc_table_rc.explicit_drop_recursive(host.root(), (host, dont_drop_locks));
 
             // Any descriptors with CLOEXEC are closed.
             let to_close: Vec<DescriptorHandle> = desc_table
@@ -146,11 +151,12 @@ impl Thread {
 
             CallbackQueue::queue_and_run_with_legacy(|q| {
                 for handle in to_close {
+                    let drop_locks = DropPosixRecordLocks::ForPid(self.process_id());
                     log::trace!("Unregistering FD_CLOEXEC descriptor {handle:?}");
                     if let Some(Err(e)) = desc_table
                         .deregister_descriptor(handle)
                         .unwrap()
-                        .close(host, q)
+                        .close(host, drop_locks, q)
                     {
                         log::debug!("Error closing {handle:?}: {e:?}");
                     };
@@ -612,7 +618,11 @@ impl ExplicitDrop for Thread {
 
     fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
         if let Some(table) = self.desc_table.take() {
-            table.explicit_drop_recursive(host.root(), host);
+            // If this is the last reference to the given table, do drop posix
+            // record locks. Typically this should only be the case if this is
+            // the last thread in the process.
+            let drop_locks = DropPosixRecordLocks::ForPid(self.process_id());
+            table.explicit_drop_recursive(host.root(), (host, drop_locks));
         }
     }
 }
