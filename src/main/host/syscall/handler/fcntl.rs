@@ -1,12 +1,111 @@
 use linux_api::errno::Errno;
-use linux_api::fcntl::{DescriptorFlags, FcntlCommand, OFlag};
+use linux_api::fcntl::{DescriptorFlags, FcntlCommand, FlockType, FlockWhence, OFlag, flock};
+use linux_api::unistd::LSeekWhence;
 use log::debug;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 use crate::cshadow;
-use crate::host::descriptor::{CompatFile, File, FileStatus};
+use crate::host::descriptor::{CompatFile, File, FileMode, FileStatus};
+use crate::host::fcntl_lock_table::{self, FileId};
+use crate::host::process::Process;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::type_formatting::SyscallNonDeterministicArg;
 use crate::host::syscall::types::SyscallError;
+
+#[derive(Debug, Copy, Clone)]
+struct CommonFlockParams {
+    file_id: fcntl_lock_table::FileId,
+    start: usize,
+    end: usize,
+    owner: fcntl_lock_table::LockOwner,
+    access: FlockType,
+}
+
+/// Common code for interpreting `flock`
+fn flock_params(
+    file: &CompatFile,
+    process: &Process,
+    flock: &linux_api::fcntl::flock,
+) -> Result<CommonFlockParams, SyscallError> {
+    let requested_access = FlockType::try_from(flock.l_type).map_err(|_| Errno::EINVAL)?;
+    let access_compat = match requested_access {
+        FlockType::F_RDLCK => file.mode().contains(FileMode::READ),
+        FlockType::F_WRLCK => file.mode().contains(FileMode::WRITE),
+        FlockType::F_UNLCK => true,
+    };
+    if !access_compat {
+        log::debug!(
+            "requested access {requested_access:?} incompatible with file mode {:?}",
+            file.mode()
+        );
+        return Err(Errno::EBADF.into());
+    }
+    let file_id = FileId::from(&file.stat()?);
+    let whence = FlockWhence::try_from(flock.l_whence).map_err(|_| Errno::EINVAL)?;
+    let origin = match whence {
+        FlockWhence::SEEK_SET => 0,
+        FlockWhence::SEEK_CUR => file.lseek(0, LSeekWhence::SEEK_CUR)?,
+        FlockWhence::SEEK_END => file.stat()?.lst_size,
+    };
+    let Some(signed_start) = origin.checked_add(flock.l_start) else {
+        return Err(Errno::EINVAL.into());
+    };
+    let (start, end) = if flock.l_len == 0 {
+        // fcntl(2): Specifying 0 for l_len has the special meaning: lock all
+        // bytes starting at the location specified by l_whence and l_start
+        // through to the end of file, no matter how large the file grows.
+        let start = usize::try_from(signed_start).map_err(|_| Errno::EINVAL)?;
+        (start, FLOCK_LENGTH_0_END)
+    } else if flock.l_len < 0 {
+        // fcntl(2): if l_len is negative, the interval described by lock
+        // covers bytes l_start+l_len  up  to  and  including  l_start-1.
+        let start = usize::try_from(signed_start + flock.l_len).map_err(|_| Errno::EINVAL)?;
+        let end = usize::try_from(signed_start).map_err(|_| Errno::EINVAL)?;
+        (start, end)
+    } else {
+        let start = usize::try_from(signed_start).map_err(|_| Errno::EINVAL)?;
+        // We know length is positive.
+        let len =
+            usize::try_from(flock.l_len).expect("Negative length should have been caught earlier");
+        let Some(end) = start.checked_add(len) else {
+            return Err(Errno::EOVERFLOW.into());
+        };
+        if end > FLOCK_MAX_RANGE_END {
+            return Err(Errno::EOVERFLOW.into());
+        }
+        (start, end)
+    };
+    if end <= start {
+        return Err(Errno::EINVAL.into());
+    }
+    let requested_owner = fcntl_lock_table::LockOwner::Process(process.id());
+    Ok(CommonFlockParams {
+        file_id,
+        start,
+        end,
+        owner: requested_owner,
+        access: requested_access,
+    })
+}
+
+// We internally represent flock ranges using an exclusive range of `usize`s.
+// Internally, Linux returns an overflow error when the calculated end is
+// greater than i64::MAX + 1.  (Perhaps suggesting that it internally uses an
+// *inclusive* range of i64s).
+const FLOCK_MAX_RANGE_END: usize = (i64::MAX as usize) + 1;
+/// flock(2): Specifying 0 for l_len has the special meaning: lock all bytes
+/// starting at the location specified by l_whence and l_start through to the
+/// end of file, no matter how large the file grows.
+///
+/// We need to "round-trip" this behavior - returning a length of 0 in `F_GETLK`
+/// for a lock that was set with length 0.
+///
+/// We do this by internally mapping length 0 locks to end at usize::MAX,
+/// which is beyond the end that can be specified otherwise.
+const FLOCK_LENGTH_0_END: usize = usize::MAX;
+const _: () = const {
+    assert!(FLOCK_LENGTH_0_END > FLOCK_MAX_RANGE_END);
+};
 
 impl SyscallHandler {
     log_syscall!(
@@ -39,11 +138,80 @@ impl SyscallHandler {
         };
 
         Ok(match cmd {
-            FcntlCommand::F_SETLK
-            | FcntlCommand::F_SETLKW
-            | FcntlCommand::F_OFD_SETLKW
-            | FcntlCommand::F_GETLK
-            | FcntlCommand::F_OFD_GETLK => {
+            FcntlCommand::F_SETLK | FcntlCommand::F_SETLKW => {
+                let flock_ptr = ForeignPtr::<()>::from(arg).cast::<flock>();
+                let flock = ctx.objs.process.memory_borrow().read(flock_ptr)?;
+                let file = desc.file();
+                let params = flock_params(file, ctx.objs.process, &flock)?;
+                let mut lock_table = ctx.objs.host.fcntl_lock_table_borrow_mut();
+                let res = lock_table
+                    .set_lock(
+                        params.file_id,
+                        params.start..params.end,
+                        params.owner,
+                        params.access,
+                    )
+                    .map_err(|()| Errno::EACCES);
+                log::trace!("setlk[w] {params:?} -> {res:?}");
+                if cmd == FcntlCommand::F_SETLKW
+                    && [Err(Errno::EACCES), Err(Errno::EAGAIN)].contains(&res)
+                {
+                    log::warn!(
+                        "SETLKW({params:?}) should block, but blocking is unimplemented. Returning {res:?}"
+                    );
+                }
+                res?;
+                0i64
+            }
+            FcntlCommand::F_GETLK => {
+                let flock_ptr = ForeignPtr::<()>::from(arg).cast::<flock>();
+                let flock = ctx.objs.process.memory_borrow().read(flock_ptr)?;
+                let file = desc.file();
+                let params = flock_params(file, ctx.objs.process, &flock)?;
+                let lock_table = ctx.objs.host.fcntl_lock_table_borrow();
+                let out_flock = match lock_table.get_coalesced_conflicting_lock(
+                    params.file_id,
+                    params.start..params.end,
+                    params.owner,
+                    params.access,
+                ) {
+                    Some((conflict_owner, conflict_range, conflict_access)) => {
+                        let length = if conflict_range.end == FLOCK_LENGTH_0_END {
+                            // "round-trip" length=0 to mean "through EOF". See `FLOCK_LENGTH_0_END`.
+                            0
+                        } else {
+                            i64::try_from(conflict_range.len()).unwrap_or_else(|_err| {
+                                panic!("Current lock range {conflict_range:?} end is out of range")
+                            })
+                        };
+                        let start = i64::try_from(conflict_range.start).unwrap_or_else(|_err| {
+                            panic!("Current lock range {conflict_range:?} start is out of range")
+                        });
+                        flock {
+                            l_type: conflict_access.into(),
+                            l_whence: FlockWhence::SEEK_SET.into(),
+                            l_start: start,
+                            l_len: length,
+                            l_pid: match conflict_owner {
+                                fcntl_lock_table::LockOwner::Process(process_id) => {
+                                    process_id.into()
+                                }
+                            },
+                        }
+                    }
+                    None => flock {
+                        l_type: FlockType::F_UNLCK.into(),
+                        ..flock
+                    },
+                };
+                ctx.objs
+                    .process
+                    .memory_borrow_mut()
+                    .write(flock_ptr, &out_flock)?;
+                log::trace!("getlk {params:?} -> {out_flock:?}");
+                0i64
+            }
+            FcntlCommand::F_OFD_SETLK | FcntlCommand::F_OFD_SETLKW | FcntlCommand::F_OFD_GETLK => {
                 match desc.file() {
                     CompatFile::New(_) => {
                         warn_once_then_debug!("fcntl({cmd:?}) unimplemented for {:?}", desc.file());
