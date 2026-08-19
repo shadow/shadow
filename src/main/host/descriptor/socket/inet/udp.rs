@@ -660,6 +660,15 @@ impl UdpSocket {
         Err(Errno::EINVAL.into())
     }
 
+    pub fn lseek(
+        &mut self,
+        _off: linux_api::posix_types::kernel_off_t,
+        _whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        warn_once_then_debug!("We do not yet handle lseek calls on udp sockets");
+        Err(Errno::EBADF.into())
+    }
+
     pub fn listen(
         _socket: &Arc<AtomicRefCell<Self>>,
         _backlog: i32,

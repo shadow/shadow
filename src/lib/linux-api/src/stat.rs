@@ -1,6 +1,7 @@
-use crate::bindings;
+use crate::{bindings, errno::Errno};
 
 pub use bindings::linux_stat;
+use linux_syscall::{Result as _, syscall};
 #[allow(non_camel_case_types)]
 pub type stat = linux_stat;
 unsafe impl shadow_pod::Pod for stat {}
@@ -32,5 +33,32 @@ bitflags::bitflags! {
         const S_IROTH = bindings::LINUX_S_IROTH;
         const S_IWOTH = bindings::LINUX_S_IWOTH;
         const S_IXOTH = bindings::LINUX_S_IXOTH;
+    }
+}
+
+/// # Safety
+///
+/// `statbuf` must be safe for the kernel to write to.
+pub unsafe fn fstat_raw(fd: core::ffi::c_uint, statbuf: *mut stat) -> Result<(), Errno> {
+    unsafe { syscall!(linux_syscall::SYS_fstat, fd, statbuf) }
+        .check()
+        .map_err(Errno::from)
+}
+
+mod export {
+    use super::linux_stat;
+
+    /// # Safety
+    ///
+    /// `statbuf` must be safe for the kernel to write to.
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C-unwind" fn linux_fstat(
+        fd: core::ffi::c_uint,
+        statbuf: *mut linux_stat,
+    ) -> i32 {
+        match unsafe { super::fstat_raw(fd, statbuf) } {
+            Ok(()) => 0,
+            Err(e) => e.to_negated_i32(),
+        }
     }
 }

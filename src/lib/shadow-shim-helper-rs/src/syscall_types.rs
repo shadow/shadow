@@ -561,6 +561,15 @@ impl TryFrom<SyscallReg> for linux_api::fcntl::FcntlCommand {
     }
 }
 
+impl TryFrom<SyscallReg> for linux_api::unistd::LSeekWhence {
+    type Error = ();
+
+    fn try_from(value: SyscallReg) -> Result<Self, Self::Error> {
+        let value = u32::try_from(u64::from(value)).map_err(|_| ())?;
+        linux_api::unistd::LSeekWhence::try_from(value).map_err(|_| ())
+    }
+}
+
 mod export {
     use super::*;
 

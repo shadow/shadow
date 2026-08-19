@@ -214,6 +214,7 @@ safe_pointer_impl!(libc::sockaddr);
 safe_pointer_impl!(linux_api::sysinfo::sysinfo);
 safe_pointer_impl!(libc::iovec);
 
+simple_debug_impl!(linux_api::unistd::LSeekWhence);
 simple_debug_impl!(linux_api::fcntl::FcntlCommand);
 simple_debug_impl!(linux_api::resource::Resource);
 simple_debug_impl!(linux_api::sched::CloneFlags);

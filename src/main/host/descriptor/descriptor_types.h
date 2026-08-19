@@ -6,6 +6,10 @@
 #ifndef SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_
 #define SRC_MAIN_HOST_DESCRIPTOR_DESCRIPTOR_TYPES_H_
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include "lib/linux-api/linux-api.h"
 #include "main/bindings/c/bindings-opaque.h"
 
 typedef enum _LegacyFileType LegacyFileType;
@@ -20,6 +24,8 @@ typedef struct _LegacyFile LegacyFile;
 typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
 
 /* required functions */
+typedef int (*LegacyFileFStatFunc)(LegacyFile* descriptor, struct linux_stat* statbuf);
+typedef off_t (*LegacyFileLSeekFunc)(LegacyFile* descriptor, off_t offset, int whence);
 typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, const Host* host);
 typedef void (*LegacyFileCleanupFunc)(LegacyFile* descriptor);
 typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
@@ -32,6 +38,8 @@ typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
  * callable functions.
  */
 struct _LegacyFileFunctionTable {
+    LegacyFileFStatFunc fstat;
+    LegacyFileLSeekFunc lseek;
     LegacyFileCloseFunc close;
     LegacyFileCleanupFunc cleanup;
     LegacyFileFreeFunc free;

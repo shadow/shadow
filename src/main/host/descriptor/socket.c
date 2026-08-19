@@ -94,8 +94,10 @@ gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
     return socket->vtable->receive(socket, thread, buffer, nBytes, ip, port);
 }
 
-LegacyFileFunctionTable socket_functions = {
-    _legacysocket_close, _legacysocket_cleanup, _legacysocket_free, MAGIC_VALUE};
+LegacyFileFunctionTable socket_functions = {.close = _legacysocket_close,
+                                            .cleanup = _legacysocket_cleanup,
+                                            .free = _legacysocket_free,
+                                            MAGIC_INITIALIZER};
 
 void legacysocket_init(LegacySocket* socket, const Host* host, SocketFunctionTable* vtable,
                        LegacyFileType type, guint receiveBufferSize, guint sendBufferSize) {

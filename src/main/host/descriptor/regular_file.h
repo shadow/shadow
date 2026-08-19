@@ -16,6 +16,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "lib/linux-api/linux-api.h"
 #include "main/core/definitions.h"
 #include "main/host/syscall/kernel_types.h"
 
@@ -99,7 +100,7 @@ ssize_t regularfile_pwritev(RegularFile* file, const struct iovec* iov, int iovc
 ssize_t regularfile_pwritev2(RegularFile* file, const struct iovec* iov, int iovcnt, off_t offset,
                              int flags);
 #endif
-int regularfile_fstat(RegularFile* file, struct stat* statbuf);
+int regularfile_fstat(RegularFile* file, struct linux_stat* statbuf);
 int regularfile_fstatfs(RegularFile* file, struct statfs* statbuf);
 int regularfile_fsync(RegularFile* file);
 int regularfile_fchown(RegularFile* file, uid_t owner, gid_t group);

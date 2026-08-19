@@ -12,6 +12,7 @@ fn run_cbindgen(build_common: &ShadowBuildCommon) {
         include: vec![
             "linux_sigaction".into(),
             "linux_siginfo_t".into(),
+            "linux_stat".into(),
             "linux___kernel_mode_t".into(),
             "linux_stack_t".into(),
             "linux_ucontext".into(),

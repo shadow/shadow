@@ -247,39 +247,48 @@ impl Pipe {
         Err(Errno::EINVAL.into())
     }
 
+    pub fn lseek(
+        &mut self,
+        _off: linux_api::posix_types::kernel_off_t,
+        _whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        Err(Errno::ESPIPE.into())
+    }
+
     pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
         warn_once_then_debug!("Not all fields of 'struct stat' are implemented for pipes");
 
         Ok(linux_api::stat::stat {
             // the device and inode are non-zero on linux, but shadow can't really give meaningful
             // values here
-            st_dev: 0,
-            st_ino: 0,
+            lst_dev: 0,
+            lst_ino: 0,
             // this may need to be >1 if shadow ever supports named pipes
-            st_nlink: 1,
+            lst_nlink: 1,
             // linux seems to use a mode of readable+writable for both ends of a pipe, but as a
             // reminder this st_mode field is the mode of the pipe in the pipefs filesystem, not the
             // mode of the pipe file (linux struct file) itself
-            st_mode: (SFlag::S_IFIFO | SFlag::S_IRUSR | SFlag::S_IWUSR).bits(),
+            lst_mode: (SFlag::S_IFIFO | SFlag::S_IRUSR | SFlag::S_IWUSR).bits(),
             // shadow pretends to run as root, although this gets messy since file-related syscalls
             // that are passed through to linux have the uid/gid of the user running the simulation
-            st_uid: 0,
-            st_gid: 0,
-            l__pad0: 0,
-            st_rdev: 0,
+            lst_uid: 0,
+            lst_gid: 0,
+            lst_rdev: 0,
             // apparently the behaviour of this field depends on what unix you're running, but on
             // linux it seems to always be 0
-            st_size: 0,
+            lst_size: 0,
             // TODO
-            st_blksize: 0,
-            st_blocks: 0,
-            st_atime: 0,
-            st_atime_nsec: 0,
-            st_mtime: 0,
-            st_mtime_nsec: 0,
-            st_ctime: 0,
-            st_ctime_nsec: 0,
-            l__unused: [0; 3],
+            lst_blksize: 0,
+            lst_blocks: 0,
+            lst_atime: 0,
+            lst_atime_nsec: 0,
+            lst_mtime: 0,
+            lst_mtime_nsec: 0,
+            lst_ctime: 0,
+            lst_ctime_nsec: 0,
+            // zero out opaque padding fields and anything else we haven't
+            // handled explicitly.
+            ..shadow_pod::zeroed()
         })
     }
 

@@ -397,6 +397,272 @@ pub const LINUX_EPOLL_CTL_ADD: u32 = 1;
 pub const LINUX_EPOLL_CTL_DEL: u32 = 2;
 pub const LINUX_EPOLL_CTL_MOD: u32 = 3;
 pub const LINUX_EPOLL_IOC_TYPE: u32 = 138;
+pub const LINUX_NR_OPEN: u32 = 1024;
+pub const LINUX_NGROUPS_MAX: u32 = 65536;
+pub const LINUX_ARG_MAX: u32 = 131072;
+pub const LINUX_LINK_MAX: u32 = 127;
+pub const LINUX_MAX_CANON: u32 = 255;
+pub const LINUX_MAX_INPUT: u32 = 255;
+pub const LINUX_NAME_MAX: u32 = 255;
+pub const LINUX_PATH_MAX: u32 = 4096;
+pub const LINUX_PIPE_BUF: u32 = 4096;
+pub const LINUX_XATTR_NAME_MAX: u32 = 255;
+pub const LINUX_XATTR_SIZE_MAX: u32 = 65536;
+pub const LINUX_XATTR_LIST_MAX: u32 = 65536;
+pub const LINUX_RTSIG_MAX: u32 = 32;
+pub const LINUX__IOC_NRBITS: u32 = 8;
+pub const LINUX__IOC_TYPEBITS: u32 = 8;
+pub const LINUX__IOC_SIZEBITS: u32 = 14;
+pub const LINUX__IOC_DIRBITS: u32 = 2;
+pub const LINUX__IOC_NRMASK: u32 = 255;
+pub const LINUX__IOC_TYPEMASK: u32 = 255;
+pub const LINUX__IOC_SIZEMASK: u32 = 16383;
+pub const LINUX__IOC_DIRMASK: u32 = 3;
+pub const LINUX__IOC_NRSHIFT: u32 = 0;
+pub const LINUX__IOC_TYPESHIFT: u32 = 8;
+pub const LINUX__IOC_SIZESHIFT: u32 = 16;
+pub const LINUX__IOC_DIRSHIFT: u32 = 30;
+pub const LINUX__IOC_NONE: u32 = 0;
+pub const LINUX__IOC_WRITE: u32 = 1;
+pub const LINUX__IOC_READ: u32 = 2;
+pub const LINUX_IOC_IN: u32 = 1073741824;
+pub const LINUX_IOC_OUT: u32 = 2147483648;
+pub const LINUX_IOC_INOUT: u32 = 3221225472;
+pub const LINUX_IOCSIZE_MASK: u32 = 1073676288;
+pub const LINUX_IOCSIZE_SHIFT: u32 = 16;
+pub const LINUX_FSCRYPT_POLICY_FLAGS_PAD_4: u32 = 0;
+pub const LINUX_FSCRYPT_POLICY_FLAGS_PAD_8: u32 = 1;
+pub const LINUX_FSCRYPT_POLICY_FLAGS_PAD_16: u32 = 2;
+pub const LINUX_FSCRYPT_POLICY_FLAGS_PAD_32: u32 = 3;
+pub const LINUX_FSCRYPT_POLICY_FLAGS_PAD_MASK: u32 = 3;
+pub const LINUX_FSCRYPT_POLICY_FLAG_DIRECT_KEY: u32 = 4;
+pub const LINUX_FSCRYPT_POLICY_FLAG_IV_INO_LBLK_64: u32 = 8;
+pub const LINUX_FSCRYPT_POLICY_FLAG_IV_INO_LBLK_32: u32 = 16;
+pub const LINUX_FSCRYPT_MODE_AES_256_XTS: u32 = 1;
+pub const LINUX_FSCRYPT_MODE_AES_256_CTS: u32 = 4;
+pub const LINUX_FSCRYPT_MODE_AES_128_CBC: u32 = 5;
+pub const LINUX_FSCRYPT_MODE_AES_128_CTS: u32 = 6;
+pub const LINUX_FSCRYPT_MODE_SM4_XTS: u32 = 7;
+pub const LINUX_FSCRYPT_MODE_SM4_CTS: u32 = 8;
+pub const LINUX_FSCRYPT_MODE_ADIANTUM: u32 = 9;
+pub const LINUX_FSCRYPT_MODE_AES_256_HCTR2: u32 = 10;
+pub const LINUX_FSCRYPT_POLICY_V1: u32 = 0;
+pub const LINUX_FSCRYPT_KEY_DESCRIPTOR_SIZE: u32 = 8;
+pub const LINUX_FSCRYPT_KEY_DESC_PREFIX: &[u8; 9] = b"fscrypt:\0";
+pub const LINUX_FSCRYPT_KEY_DESC_PREFIX_SIZE: u32 = 8;
+pub const LINUX_FSCRYPT_MAX_KEY_SIZE: u32 = 64;
+pub const LINUX_FSCRYPT_POLICY_V2: u32 = 2;
+pub const LINUX_FSCRYPT_KEY_IDENTIFIER_SIZE: u32 = 16;
+pub const LINUX_FSCRYPT_KEY_SPEC_TYPE_DESCRIPTOR: u32 = 1;
+pub const LINUX_FSCRYPT_KEY_SPEC_TYPE_IDENTIFIER: u32 = 2;
+pub const LINUX_FSCRYPT_ADD_KEY_FLAG_HW_WRAPPED: u32 = 1;
+pub const LINUX_FSCRYPT_KEY_REMOVAL_STATUS_FLAG_FILES_BUSY: u32 = 1;
+pub const LINUX_FSCRYPT_KEY_REMOVAL_STATUS_FLAG_OTHER_USERS: u32 = 2;
+pub const LINUX_FSCRYPT_KEY_STATUS_ABSENT: u32 = 1;
+pub const LINUX_FSCRYPT_KEY_STATUS_PRESENT: u32 = 2;
+pub const LINUX_FSCRYPT_KEY_STATUS_INCOMPLETELY_REMOVED: u32 = 3;
+pub const LINUX_FSCRYPT_KEY_STATUS_FLAG_ADDED_BY_SELF: u32 = 1;
+pub const LINUX_FS_KEY_DESCRIPTOR_SIZE: u32 = 8;
+pub const LINUX_FS_POLICY_FLAGS_PAD_4: u32 = 0;
+pub const LINUX_FS_POLICY_FLAGS_PAD_8: u32 = 1;
+pub const LINUX_FS_POLICY_FLAGS_PAD_16: u32 = 2;
+pub const LINUX_FS_POLICY_FLAGS_PAD_32: u32 = 3;
+pub const LINUX_FS_POLICY_FLAGS_PAD_MASK: u32 = 3;
+pub const LINUX_FS_POLICY_FLAG_DIRECT_KEY: u32 = 4;
+pub const LINUX_FS_POLICY_FLAGS_VALID: u32 = 7;
+pub const LINUX_FS_ENCRYPTION_MODE_INVALID: u32 = 0;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_256_XTS: u32 = 1;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_256_GCM: u32 = 2;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_256_CBC: u32 = 3;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_256_CTS: u32 = 4;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_128_CBC: u32 = 5;
+pub const LINUX_FS_ENCRYPTION_MODE_AES_128_CTS: u32 = 6;
+pub const LINUX_FS_ENCRYPTION_MODE_ADIANTUM: u32 = 9;
+pub const LINUX_FS_KEY_DESC_PREFIX: &[u8; 9] = b"fscrypt:\0";
+pub const LINUX_FS_KEY_DESC_PREFIX_SIZE: u32 = 8;
+pub const LINUX_FS_MAX_KEY_SIZE: u32 = 64;
+pub const LINUX_MS_RDONLY: u32 = 1;
+pub const LINUX_MS_NOSUID: u32 = 2;
+pub const LINUX_MS_NODEV: u32 = 4;
+pub const LINUX_MS_NOEXEC: u32 = 8;
+pub const LINUX_MS_SYNCHRONOUS: u32 = 16;
+pub const LINUX_MS_REMOUNT: u32 = 32;
+pub const LINUX_MS_MANDLOCK: u32 = 64;
+pub const LINUX_MS_DIRSYNC: u32 = 128;
+pub const LINUX_MS_NOSYMFOLLOW: u32 = 256;
+pub const LINUX_MS_NOATIME: u32 = 1024;
+pub const LINUX_MS_NODIRATIME: u32 = 2048;
+pub const LINUX_MS_BIND: u32 = 4096;
+pub const LINUX_MS_MOVE: u32 = 8192;
+pub const LINUX_MS_REC: u32 = 16384;
+pub const LINUX_MS_VERBOSE: u32 = 32768;
+pub const LINUX_MS_SILENT: u32 = 32768;
+pub const LINUX_MS_POSIXACL: u32 = 65536;
+pub const LINUX_MS_UNBINDABLE: u32 = 131072;
+pub const LINUX_MS_PRIVATE: u32 = 262144;
+pub const LINUX_MS_SLAVE: u32 = 524288;
+pub const LINUX_MS_SHARED: u32 = 1048576;
+pub const LINUX_MS_RELATIME: u32 = 2097152;
+pub const LINUX_MS_KERNMOUNT: u32 = 4194304;
+pub const LINUX_MS_I_VERSION: u32 = 8388608;
+pub const LINUX_MS_STRICTATIME: u32 = 16777216;
+pub const LINUX_MS_LAZYTIME: u32 = 33554432;
+pub const LINUX_MS_SUBMOUNT: u32 = 67108864;
+pub const LINUX_MS_NOREMOTELOCK: u32 = 134217728;
+pub const LINUX_MS_NOSEC: u32 = 268435456;
+pub const LINUX_MS_BORN: u32 = 536870912;
+pub const LINUX_MS_ACTIVE: u32 = 1073741824;
+pub const LINUX_MS_NOUSER: u32 = 2147483648;
+pub const LINUX_MS_RMT_MASK: u32 = 41943121;
+pub const LINUX_MS_MGC_VAL: u32 = 3236757504;
+pub const LINUX_MS_MGC_MSK: u32 = 4294901760;
+pub const LINUX_OPEN_TREE_CLONE: u32 = 1;
+pub const LINUX_OPEN_TREE_NAMESPACE: u32 = 2;
+pub const LINUX_OPEN_TREE_CLOEXEC: u32 = 524288;
+pub const LINUX_MOVE_MOUNT_F_SYMLINKS: u32 = 1;
+pub const LINUX_MOVE_MOUNT_F_AUTOMOUNTS: u32 = 2;
+pub const LINUX_MOVE_MOUNT_F_EMPTY_PATH: u32 = 4;
+pub const LINUX_MOVE_MOUNT_T_SYMLINKS: u32 = 16;
+pub const LINUX_MOVE_MOUNT_T_AUTOMOUNTS: u32 = 32;
+pub const LINUX_MOVE_MOUNT_T_EMPTY_PATH: u32 = 64;
+pub const LINUX_MOVE_MOUNT_SET_GROUP: u32 = 256;
+pub const LINUX_MOVE_MOUNT_BENEATH: u32 = 512;
+pub const LINUX_MOVE_MOUNT__MASK: u32 = 887;
+pub const LINUX_FSOPEN_CLOEXEC: u32 = 1;
+pub const LINUX_FSPICK_CLOEXEC: u32 = 1;
+pub const LINUX_FSPICK_SYMLINK_NOFOLLOW: u32 = 2;
+pub const LINUX_FSPICK_NO_AUTOMOUNT: u32 = 4;
+pub const LINUX_FSPICK_EMPTY_PATH: u32 = 8;
+pub const LINUX_FSMOUNT_CLOEXEC: u32 = 1;
+pub const LINUX_MOUNT_ATTR_RDONLY: u32 = 1;
+pub const LINUX_MOUNT_ATTR_NOSUID: u32 = 2;
+pub const LINUX_MOUNT_ATTR_NODEV: u32 = 4;
+pub const LINUX_MOUNT_ATTR_NOEXEC: u32 = 8;
+pub const LINUX_MOUNT_ATTR__ATIME: u32 = 112;
+pub const LINUX_MOUNT_ATTR_RELATIME: u32 = 0;
+pub const LINUX_MOUNT_ATTR_NOATIME: u32 = 16;
+pub const LINUX_MOUNT_ATTR_STRICTATIME: u32 = 32;
+pub const LINUX_MOUNT_ATTR_NODIRATIME: u32 = 128;
+pub const LINUX_MOUNT_ATTR_IDMAP: u32 = 1048576;
+pub const LINUX_MOUNT_ATTR_NOSYMFOLLOW: u32 = 2097152;
+pub const LINUX_MOUNT_ATTR_SIZE_VER0: u32 = 32;
+pub const LINUX_MNT_ID_REQ_SIZE_VER0: u32 = 24;
+pub const LINUX_MNT_ID_REQ_SIZE_VER1: u32 = 32;
+pub const LINUX_STATMOUNT_SB_BASIC: u32 = 1;
+pub const LINUX_STATMOUNT_MNT_BASIC: u32 = 2;
+pub const LINUX_STATMOUNT_PROPAGATE_FROM: u32 = 4;
+pub const LINUX_STATMOUNT_MNT_ROOT: u32 = 8;
+pub const LINUX_STATMOUNT_MNT_POINT: u32 = 16;
+pub const LINUX_STATMOUNT_FS_TYPE: u32 = 32;
+pub const LINUX_STATMOUNT_MNT_NS_ID: u32 = 64;
+pub const LINUX_STATMOUNT_MNT_OPTS: u32 = 128;
+pub const LINUX_STATMOUNT_FS_SUBTYPE: u32 = 256;
+pub const LINUX_STATMOUNT_SB_SOURCE: u32 = 512;
+pub const LINUX_STATMOUNT_OPT_ARRAY: u32 = 1024;
+pub const LINUX_STATMOUNT_OPT_SEC_ARRAY: u32 = 2048;
+pub const LINUX_STATMOUNT_SUPPORTED_MASK: u32 = 4096;
+pub const LINUX_STATMOUNT_MNT_UIDMAP: u32 = 8192;
+pub const LINUX_STATMOUNT_MNT_GIDMAP: u32 = 16384;
+pub const LINUX_LSMT_ROOT: i32 = -1;
+pub const LINUX_LISTMOUNT_REVERSE: u32 = 1;
+pub const LINUX_STATMOUNT_BY_FD: u32 = 1;
+pub const LINUX_INR_OPEN_CUR: u32 = 1024;
+pub const LINUX_INR_OPEN_MAX: u32 = 4096;
+pub const LINUX_BLOCK_SIZE_BITS: u32 = 10;
+pub const LINUX_BLOCK_SIZE: u32 = 1024;
+pub const LINUX_IO_INTEGRITY_CHK_GUARD: u32 = 1;
+pub const LINUX_IO_INTEGRITY_CHK_REFTAG: u32 = 2;
+pub const LINUX_IO_INTEGRITY_CHK_APPTAG: u32 = 4;
+pub const LINUX_IO_INTEGRITY_VALID_FLAGS: u32 = 7;
+pub const LINUX_SEEK_SET: u32 = 0;
+pub const LINUX_SEEK_CUR: u32 = 1;
+pub const LINUX_SEEK_END: u32 = 2;
+pub const LINUX_SEEK_DATA: u32 = 3;
+pub const LINUX_SEEK_HOLE: u32 = 4;
+pub const LINUX_SEEK_MAX: u32 = 4;
+pub const LINUX_RENAME_NOREPLACE: u32 = 1;
+pub const LINUX_RENAME_EXCHANGE: u32 = 2;
+pub const LINUX_RENAME_WHITEOUT: u32 = 4;
+pub const LINUX_LBMD_PI_CAP_INTEGRITY: u32 = 1;
+pub const LINUX_LBMD_PI_CAP_REFTAG: u32 = 2;
+pub const LINUX_LBMD_PI_CSUM_NONE: u32 = 0;
+pub const LINUX_LBMD_PI_CSUM_IP: u32 = 1;
+pub const LINUX_LBMD_PI_CSUM_CRC16_T10DIF: u32 = 2;
+pub const LINUX_LBMD_PI_CSUM_CRC64_NVME: u32 = 4;
+pub const LINUX_LBMD_SIZE_VER0: u32 = 16;
+pub const LINUX_FILE_DEDUPE_RANGE_SAME: u32 = 0;
+pub const LINUX_FILE_DEDUPE_RANGE_DIFFERS: u32 = 1;
+pub const LINUX_NR_FILE: u32 = 8192;
+pub const LINUX_FILE_ATTR_SIZE_VER0: u32 = 24;
+pub const LINUX_FILE_ATTR_SIZE_LATEST: u32 = 24;
+pub const LINUX_FS_XFLAG_REALTIME: u32 = 1;
+pub const LINUX_FS_XFLAG_PREALLOC: u32 = 2;
+pub const LINUX_FS_XFLAG_IMMUTABLE: u32 = 8;
+pub const LINUX_FS_XFLAG_APPEND: u32 = 16;
+pub const LINUX_FS_XFLAG_SYNC: u32 = 32;
+pub const LINUX_FS_XFLAG_NOATIME: u32 = 64;
+pub const LINUX_FS_XFLAG_NODUMP: u32 = 128;
+pub const LINUX_FS_XFLAG_RTINHERIT: u32 = 256;
+pub const LINUX_FS_XFLAG_PROJINHERIT: u32 = 512;
+pub const LINUX_FS_XFLAG_NOSYMLINKS: u32 = 1024;
+pub const LINUX_FS_XFLAG_EXTSIZE: u32 = 2048;
+pub const LINUX_FS_XFLAG_EXTSZINHERIT: u32 = 4096;
+pub const LINUX_FS_XFLAG_NODEFRAG: u32 = 8192;
+pub const LINUX_FS_XFLAG_FILESTREAM: u32 = 16384;
+pub const LINUX_FS_XFLAG_DAX: u32 = 32768;
+pub const LINUX_FS_XFLAG_COWEXTSIZE: u32 = 65536;
+pub const LINUX_FS_XFLAG_VERITY: u32 = 131072;
+pub const LINUX_FS_XFLAG_HASATTR: u32 = 2147483648;
+pub const LINUX_BMAP_IOCTL: u32 = 1;
+pub const LINUX_FSLABEL_MAX: u32 = 256;
+pub const LINUX_FS_SECRM_FL: u32 = 1;
+pub const LINUX_FS_UNRM_FL: u32 = 2;
+pub const LINUX_FS_COMPR_FL: u32 = 4;
+pub const LINUX_FS_SYNC_FL: u32 = 8;
+pub const LINUX_FS_IMMUTABLE_FL: u32 = 16;
+pub const LINUX_FS_APPEND_FL: u32 = 32;
+pub const LINUX_FS_NODUMP_FL: u32 = 64;
+pub const LINUX_FS_NOATIME_FL: u32 = 128;
+pub const LINUX_FS_DIRTY_FL: u32 = 256;
+pub const LINUX_FS_COMPRBLK_FL: u32 = 512;
+pub const LINUX_FS_NOCOMP_FL: u32 = 1024;
+pub const LINUX_FS_ENCRYPT_FL: u32 = 2048;
+pub const LINUX_FS_BTREE_FL: u32 = 4096;
+pub const LINUX_FS_INDEX_FL: u32 = 4096;
+pub const LINUX_FS_IMAGIC_FL: u32 = 8192;
+pub const LINUX_FS_JOURNAL_DATA_FL: u32 = 16384;
+pub const LINUX_FS_NOTAIL_FL: u32 = 32768;
+pub const LINUX_FS_DIRSYNC_FL: u32 = 65536;
+pub const LINUX_FS_TOPDIR_FL: u32 = 131072;
+pub const LINUX_FS_HUGE_FILE_FL: u32 = 262144;
+pub const LINUX_FS_EXTENT_FL: u32 = 524288;
+pub const LINUX_FS_VERITY_FL: u32 = 1048576;
+pub const LINUX_FS_EA_INODE_FL: u32 = 2097152;
+pub const LINUX_FS_EOFBLOCKS_FL: u32 = 4194304;
+pub const LINUX_FS_NOCOW_FL: u32 = 8388608;
+pub const LINUX_FS_DAX_FL: u32 = 33554432;
+pub const LINUX_FS_INLINE_DATA_FL: u32 = 268435456;
+pub const LINUX_FS_PROJINHERIT_FL: u32 = 536870912;
+pub const LINUX_FS_CASEFOLD_FL: u32 = 1073741824;
+pub const LINUX_FS_RESERVED_FL: u32 = 2147483648;
+pub const LINUX_FS_FL_USER_VISIBLE: u32 = 253951;
+pub const LINUX_FS_FL_USER_MODIFIABLE: u32 = 229631;
+pub const LINUX_SYNC_FILE_RANGE_WAIT_BEFORE: u32 = 1;
+pub const LINUX_SYNC_FILE_RANGE_WRITE: u32 = 2;
+pub const LINUX_SYNC_FILE_RANGE_WAIT_AFTER: u32 = 4;
+pub const LINUX_SYNC_FILE_RANGE_WRITE_AND_WAIT: u32 = 7;
+pub const LINUX_PROCFS_IOCTL_MAGIC: u8 = 102u8;
+pub const LINUX_PAGE_IS_WPALLOWED: u32 = 1;
+pub const LINUX_PAGE_IS_WRITTEN: u32 = 2;
+pub const LINUX_PAGE_IS_FILE: u32 = 4;
+pub const LINUX_PAGE_IS_PRESENT: u32 = 8;
+pub const LINUX_PAGE_IS_SWAPPED: u32 = 16;
+pub const LINUX_PAGE_IS_PFNZERO: u32 = 32;
+pub const LINUX_PAGE_IS_HUGE: u32 = 64;
+pub const LINUX_PAGE_IS_SOFT_DIRTY: u32 = 128;
+pub const LINUX_PAGE_IS_GUARD: u32 = 256;
+pub const LINUX_PM_SCAN_WP_MATCHING: u32 = 1;
+pub const LINUX_PM_SCAN_CHECK_WPASYNC: u32 = 2;
 pub const LINUX_FUTEX_WAIT: u32 = 0;
 pub const LINUX_FUTEX_WAKE: u32 = 1;
 pub const LINUX_FUTEX_FD: u32 = 2;
@@ -589,19 +855,6 @@ pub const LINUX_SHMDT: u32 = 22;
 pub const LINUX_SHMGET: u32 = 23;
 pub const LINUX_SHMCTL: u32 = 24;
 pub const LINUX_DIPC: u32 = 25;
-pub const LINUX_NR_OPEN: u32 = 1024;
-pub const LINUX_NGROUPS_MAX: u32 = 65536;
-pub const LINUX_ARG_MAX: u32 = 131072;
-pub const LINUX_LINK_MAX: u32 = 127;
-pub const LINUX_MAX_CANON: u32 = 255;
-pub const LINUX_MAX_INPUT: u32 = 255;
-pub const LINUX_NAME_MAX: u32 = 255;
-pub const LINUX_PATH_MAX: u32 = 4096;
-pub const LINUX_PIPE_BUF: u32 = 4096;
-pub const LINUX_XATTR_NAME_MAX: u32 = 255;
-pub const LINUX_XATTR_SIZE_MAX: u32 = 65536;
-pub const LINUX_XATTR_LIST_MAX: u32 = 65536;
-pub const LINUX_RTSIG_MAX: u32 = 32;
 pub const LINUX_MAP_32BIT: u32 = 64;
 pub const LINUX_MAP_ABOVE4G: u32 = 128;
 pub const LINUX_PROT_READ: u32 = 1;
@@ -1940,26 +2193,6 @@ pub const LINUX_P_ALL: u32 = 0;
 pub const LINUX_P_PID: u32 = 1;
 pub const LINUX_P_PGID: u32 = 2;
 pub const LINUX_P_PIDFD: u32 = 3;
-pub const LINUX__IOC_NRBITS: u32 = 8;
-pub const LINUX__IOC_TYPEBITS: u32 = 8;
-pub const LINUX__IOC_SIZEBITS: u32 = 14;
-pub const LINUX__IOC_DIRBITS: u32 = 2;
-pub const LINUX__IOC_NRMASK: u32 = 255;
-pub const LINUX__IOC_TYPEMASK: u32 = 255;
-pub const LINUX__IOC_SIZEMASK: u32 = 16383;
-pub const LINUX__IOC_DIRMASK: u32 = 3;
-pub const LINUX__IOC_NRSHIFT: u32 = 0;
-pub const LINUX__IOC_TYPESHIFT: u32 = 8;
-pub const LINUX__IOC_SIZESHIFT: u32 = 16;
-pub const LINUX__IOC_DIRSHIFT: u32 = 30;
-pub const LINUX__IOC_NONE: u32 = 0;
-pub const LINUX__IOC_WRITE: u32 = 1;
-pub const LINUX__IOC_READ: u32 = 2;
-pub const LINUX_IOC_IN: u32 = 1073741824;
-pub const LINUX_IOC_OUT: u32 = 2147483648;
-pub const LINUX_IOC_INOUT: u32 = 3221225472;
-pub const LINUX_IOCSIZE_MASK: u32 = 1073676288;
-pub const LINUX_IOCSIZE_SHIFT: u32 = 16;
 pub const LINUX_TCGETS: u32 = 21505;
 pub const LINUX_TCSETS: u32 = 21506;
 pub const LINUX_TCSETSW: u32 = 21507;
@@ -2274,6 +2507,7 @@ const _: () = {
     ["Offset of field: linux_epoll_event::data"]
         [::core::mem::offset_of!(linux_epoll_event, data) - 4usize];
 };
+pub type linux___kernel_rwf_t = ::core::ffi::c_int;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_robust_list {
@@ -4297,7 +4531,7 @@ pub struct linux__fpstate_64 {
     pub rdp: linux___u64,
     pub mxcsr: linux___u32,
     pub mxcsr_mask: linux___u32,
-    pub st_space: [linux___u32; 32usize],
+    pub lst_space: [linux___u32; 32usize],
     pub xmm_space: [linux___u32; 64usize],
     pub reserved2: [linux___u32; 12usize],
     pub l__bindgen_anon_1: linux__fpstate_64__bindgen_ty_1,
@@ -4344,8 +4578,8 @@ const _: () = {
         [::core::mem::offset_of!(linux__fpstate_64, mxcsr) - 24usize];
     ["Offset of field: linux__fpstate_64::mxcsr_mask"]
         [::core::mem::offset_of!(linux__fpstate_64, mxcsr_mask) - 28usize];
-    ["Offset of field: linux__fpstate_64::st_space"]
-        [::core::mem::offset_of!(linux__fpstate_64, st_space) - 32usize];
+    ["Offset of field: linux__fpstate_64::lst_space"]
+        [::core::mem::offset_of!(linux__fpstate_64, lst_space) - 32usize];
     ["Offset of field: linux__fpstate_64::xmm_space"]
         [::core::mem::offset_of!(linux__fpstate_64, xmm_space) - 160usize];
     ["Offset of field: linux__fpstate_64::reserved2"]
@@ -4355,7 +4589,7 @@ impl ::core::fmt::Debug for linux__fpstate_64 {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         write!(
             f,
-            "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, st_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}",
+            "linux__fpstate_64 {{ cwd: {:?}, swd: {:?}, twd: {:?}, fop: {:?}, rip: {:?}, rdp: {:?}, mxcsr: {:?}, mxcsr_mask: {:?}, lst_space: {:?}, xmm_space: {:?}, reserved2: {:?}, l__bindgen_anon_1: {:?} }}",
             self.cwd,
             self.swd,
             self.twd,
@@ -4364,7 +4598,7 @@ impl ::core::fmt::Debug for linux__fpstate_64 {
             self.rdp,
             self.mxcsr,
             self.mxcsr_mask,
-            self.st_space,
+            self.lst_space,
             self.xmm_space,
             self.reserved2,
             self.l__bindgen_anon_1
@@ -4523,59 +4757,61 @@ impl ::core::fmt::Debug for linux_sigcontext {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct linux_stat {
-    pub st_dev: linux___kernel_ulong_t,
-    pub st_ino: linux___kernel_ulong_t,
-    pub st_nlink: linux___kernel_ulong_t,
-    pub st_mode: ::core::ffi::c_uint,
-    pub st_uid: ::core::ffi::c_uint,
-    pub st_gid: ::core::ffi::c_uint,
+    pub lst_dev: linux___kernel_ulong_t,
+    pub lst_ino: linux___kernel_ulong_t,
+    pub lst_nlink: linux___kernel_ulong_t,
+    pub lst_mode: ::core::ffi::c_uint,
+    pub lst_uid: ::core::ffi::c_uint,
+    pub lst_gid: ::core::ffi::c_uint,
     pub l__pad0: ::core::ffi::c_uint,
-    pub st_rdev: linux___kernel_ulong_t,
-    pub st_size: linux___kernel_long_t,
-    pub st_blksize: linux___kernel_long_t,
-    pub st_blocks: linux___kernel_long_t,
-    pub st_atime: linux___kernel_ulong_t,
-    pub st_atime_nsec: linux___kernel_ulong_t,
-    pub st_mtime: linux___kernel_ulong_t,
-    pub st_mtime_nsec: linux___kernel_ulong_t,
-    pub st_ctime: linux___kernel_ulong_t,
-    pub st_ctime_nsec: linux___kernel_ulong_t,
+    pub lst_rdev: linux___kernel_ulong_t,
+    pub lst_size: linux___kernel_long_t,
+    pub lst_blksize: linux___kernel_long_t,
+    pub lst_blocks: linux___kernel_long_t,
+    pub lst_atime: linux___kernel_ulong_t,
+    pub lst_atime_nsec: linux___kernel_ulong_t,
+    pub lst_mtime: linux___kernel_ulong_t,
+    pub lst_mtime_nsec: linux___kernel_ulong_t,
+    pub lst_ctime: linux___kernel_ulong_t,
+    pub lst_ctime_nsec: linux___kernel_ulong_t,
     pub l__unused: [linux___kernel_long_t; 3usize],
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
     ["Size of linux_stat"][::core::mem::size_of::<linux_stat>() - 144usize];
     ["Alignment of linux_stat"][::core::mem::align_of::<linux_stat>() - 8usize];
-    ["Offset of field: linux_stat::st_dev"][::core::mem::offset_of!(linux_stat, st_dev) - 0usize];
-    ["Offset of field: linux_stat::st_ino"][::core::mem::offset_of!(linux_stat, st_ino) - 8usize];
-    ["Offset of field: linux_stat::st_nlink"]
-        [::core::mem::offset_of!(linux_stat, st_nlink) - 16usize];
-    ["Offset of field: linux_stat::st_mode"]
-        [::core::mem::offset_of!(linux_stat, st_mode) - 24usize];
-    ["Offset of field: linux_stat::st_uid"][::core::mem::offset_of!(linux_stat, st_uid) - 28usize];
-    ["Offset of field: linux_stat::st_gid"][::core::mem::offset_of!(linux_stat, st_gid) - 32usize];
+    ["Offset of field: linux_stat::lst_dev"][::core::mem::offset_of!(linux_stat, lst_dev) - 0usize];
+    ["Offset of field: linux_stat::lst_ino"][::core::mem::offset_of!(linux_stat, lst_ino) - 8usize];
+    ["Offset of field: linux_stat::lst_nlink"]
+        [::core::mem::offset_of!(linux_stat, lst_nlink) - 16usize];
+    ["Offset of field: linux_stat::lst_mode"]
+        [::core::mem::offset_of!(linux_stat, lst_mode) - 24usize];
+    ["Offset of field: linux_stat::lst_uid"]
+        [::core::mem::offset_of!(linux_stat, lst_uid) - 28usize];
+    ["Offset of field: linux_stat::lst_gid"]
+        [::core::mem::offset_of!(linux_stat, lst_gid) - 32usize];
     ["Offset of field: linux_stat::l__pad0"]
         [::core::mem::offset_of!(linux_stat, l__pad0) - 36usize];
-    ["Offset of field: linux_stat::st_rdev"]
-        [::core::mem::offset_of!(linux_stat, st_rdev) - 40usize];
-    ["Offset of field: linux_stat::st_size"]
-        [::core::mem::offset_of!(linux_stat, st_size) - 48usize];
-    ["Offset of field: linux_stat::st_blksize"]
-        [::core::mem::offset_of!(linux_stat, st_blksize) - 56usize];
-    ["Offset of field: linux_stat::st_blocks"]
-        [::core::mem::offset_of!(linux_stat, st_blocks) - 64usize];
-    ["Offset of field: linux_stat::st_atime"]
-        [::core::mem::offset_of!(linux_stat, st_atime) - 72usize];
-    ["Offset of field: linux_stat::st_atime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_atime_nsec) - 80usize];
-    ["Offset of field: linux_stat::st_mtime"]
-        [::core::mem::offset_of!(linux_stat, st_mtime) - 88usize];
-    ["Offset of field: linux_stat::st_mtime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_mtime_nsec) - 96usize];
-    ["Offset of field: linux_stat::st_ctime"]
-        [::core::mem::offset_of!(linux_stat, st_ctime) - 104usize];
-    ["Offset of field: linux_stat::st_ctime_nsec"]
-        [::core::mem::offset_of!(linux_stat, st_ctime_nsec) - 112usize];
+    ["Offset of field: linux_stat::lst_rdev"]
+        [::core::mem::offset_of!(linux_stat, lst_rdev) - 40usize];
+    ["Offset of field: linux_stat::lst_size"]
+        [::core::mem::offset_of!(linux_stat, lst_size) - 48usize];
+    ["Offset of field: linux_stat::lst_blksize"]
+        [::core::mem::offset_of!(linux_stat, lst_blksize) - 56usize];
+    ["Offset of field: linux_stat::lst_blocks"]
+        [::core::mem::offset_of!(linux_stat, lst_blocks) - 64usize];
+    ["Offset of field: linux_stat::lst_atime"]
+        [::core::mem::offset_of!(linux_stat, lst_atime) - 72usize];
+    ["Offset of field: linux_stat::lst_atime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_atime_nsec) - 80usize];
+    ["Offset of field: linux_stat::lst_mtime"]
+        [::core::mem::offset_of!(linux_stat, lst_mtime) - 88usize];
+    ["Offset of field: linux_stat::lst_mtime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_mtime_nsec) - 96usize];
+    ["Offset of field: linux_stat::lst_ctime"]
+        [::core::mem::offset_of!(linux_stat, lst_ctime) - 104usize];
+    ["Offset of field: linux_stat::lst_ctime_nsec"]
+        [::core::mem::offset_of!(linux_stat, lst_ctime_nsec) - 112usize];
     ["Offset of field: linux_stat::l__unused"]
         [::core::mem::offset_of!(linux_stat, l__unused) - 120usize];
 };

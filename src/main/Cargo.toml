@@ -80,6 +80,11 @@ system-deps = "7.0"
 # Building the C code from this crate's build script requires
 # that these bindings have been generated.
 shadow-shim-helper-rs = { path = "../lib/shadow-shim-helper-rs" }
+# This is a build-script dependency, because its generated header files are
+# needed when we run cbindgen. Since it's also a regular dependency, it will get
+# rebuilt and its header regenerated during the main build; it'd be nice if we
+# could avoid that, but it's unclear how to do so.
+linux-api = { path = "../lib/linux-api", features = ["c_bindings"] }
 
 [package.metadata.system-deps]
 # Keep consistent with the minimum version number in /CMakeLists.txt

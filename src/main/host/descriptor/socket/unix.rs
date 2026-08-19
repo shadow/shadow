@@ -213,6 +213,15 @@ impl UnixSocket {
             .ioctl(&mut self.common, request, arg_ptr, memory_manager)
     }
 
+    pub fn lseek(
+        &mut self,
+        _off: linux_api::posix_types::kernel_off_t,
+        _whence: linux_api::unistd::LSeekWhence,
+    ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError> {
+        warn_once_then_debug!("We do not yet handle lseek calls on unix sockets");
+        Err(Errno::EBADF.into())
+    }
+
     pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError> {
         warn_once_then_debug!("We do not yet handle stat calls on unix sockets");
         Err(Errno::EINVAL.into())

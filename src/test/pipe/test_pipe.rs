@@ -35,6 +35,11 @@ fn get_tests() -> Vec<test_utils::ShadowTest<(), String>> {
         test_utils::ShadowTest::new("test_null", test_null, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new("test_pipe", test_pipe, set![TestEnv::Libc, TestEnv::Shadow]),
         test_utils::ShadowTest::new(
+            "test_lseek",
+            test_lseek,
+            set![TestEnv::Libc, TestEnv::Shadow],
+        ),
+        test_utils::ShadowTest::new(
             "test_read_write",
             test_read_write,
             set![TestEnv::Libc, TestEnv::Shadow],
@@ -168,6 +173,31 @@ fn test_pipe() -> Result<(), String> {
 
     test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
     test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    Ok(())
+}
+
+fn test_lseek() -> Result<(), String> {
+    let mut fds = [0 as libc::c_int; 2];
+    test_utils::check_system_call!(|| { unsafe { libc::pipe(fds.as_mut_ptr()) } }, &[])?;
+
+    test_utils::result_assert(fds[0] > 0, "fds[0] not set")?;
+    test_utils::result_assert(fds[1] > 0, "fds[1] not set")?;
+
+    test_utils::run_and_close_fds(&fds, || -> Result<(), String> {
+        // Any lseek returns ESPIPE
+        for fd in fds {
+            for offset in [-1, 0, 1] {
+                for whence in [libc::SEEK_CUR, libc::SEEK_SET, libc::SEEK_END] {
+                    test_utils::check_system_call!(
+                        || unsafe { libc::lseek(fd, offset, whence) },
+                        &[libc::ESPIPE]
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    })?;
 
     Ok(())
 }

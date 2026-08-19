@@ -324,6 +324,13 @@ impl InetSocketRefMut<'_> {
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn stat(&self) -> Result<linux_api::stat::stat, SyscallError>
     );
+    enum_passthrough!(self, (off, whence), LegacyTcp, Tcp, Udp;
+        pub fn lseek(
+            &mut self,
+            off: linux_api::posix_types::kernel_off_t,
+            whence: linux_api::unistd::LSeekWhence,
+        ) -> Result<linux_api::posix_types::kernel_off_t, SyscallError>
+    );
     enum_passthrough!(self, (), LegacyTcp, Tcp, Udp;
         pub fn has_open_file(&self) -> bool
     );
