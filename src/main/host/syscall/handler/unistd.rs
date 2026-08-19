@@ -16,9 +16,9 @@ use crate::core::work::task::TaskRef;
 use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::descriptor::descriptor_table::DescriptorHandle;
-use crate::host::descriptor::pipe;
 use crate::host::descriptor::shared_buf::SharedBuf;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileMode, FileStatus, OpenFile};
+use crate::host::descriptor::{DropPosixRecordLocks, pipe};
 use crate::host::process::{Process, ProcessId};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{IoVec, read_cstring_vec};
@@ -50,8 +50,11 @@ impl SyscallHandler {
 
         // if there are still valid descriptors to the open file, close() will do nothing
         // and return None
-        CallbackQueue::queue_and_run_with_legacy(|cb_queue| desc.close(ctx.objs.host, cb_queue))
-            .unwrap_or(Ok(()))
+        let drop_locks = DropPosixRecordLocks::ForPid(ctx.objs.process.id());
+        CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
+            desc.close(ctx.objs.host, drop_locks, cb_queue)
+        })
+        .unwrap_or(Ok(()))
     }
 
     log_syscall!(
@@ -105,10 +108,11 @@ impl SyscallHandler {
 
         // close the replaced descriptor
         if let Some(replaced_desc) = replaced_desc {
+            let drop_locks = DropPosixRecordLocks::ForPid(ctx.objs.process.id());
             // from 'man 2 dup2': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
             CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
-                replaced_desc.close(ctx.objs.host, cb_queue)
+                replaced_desc.close(ctx.objs.host, drop_locks, cb_queue)
             });
         }
 
@@ -167,10 +171,11 @@ impl SyscallHandler {
 
         // close the replaced descriptor
         if let Some(replaced_desc) = replaced_desc {
+            let drop_locks = DropPosixRecordLocks::ForPid(ctx.objs.process.id());
             // from 'man 2 dup3': "If newfd was open, any errors that would have been reported at
             // close(2) time are lost"
             CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
-                replaced_desc.close(ctx.objs.host, cb_queue)
+                replaced_desc.close(ctx.objs.host, drop_locks, cb_queue)
             });
         }
 
@@ -519,14 +524,21 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(()),
             Err(e) => {
+                // Behave as if descriptor was never created. (Though such locks shouldn't exist
+                // for this descriptor type anyway).
+                let dont_drop_locks = DropPosixRecordLocks::False;
                 CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                     // ignore any errors when closing
-                    dt.deregister_descriptor(read_fd)
-                        .unwrap()
-                        .close(ctx.objs.host, cb_queue);
-                    dt.deregister_descriptor(write_fd)
-                        .unwrap()
-                        .close(ctx.objs.host, cb_queue);
+                    dt.deregister_descriptor(read_fd).unwrap().close(
+                        ctx.objs.host,
+                        dont_drop_locks,
+                        cb_queue,
+                    );
+                    dt.deregister_descriptor(write_fd).unwrap().close(
+                        ctx.objs.host,
+                        dont_drop_locks,
+                        cb_queue,
+                    );
                 });
                 Err(e.into())
             }

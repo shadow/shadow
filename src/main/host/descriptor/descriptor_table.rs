@@ -4,7 +4,7 @@ use log::*;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::syscall_types::SyscallReg;
 
-use crate::host::descriptor::Descriptor;
+use crate::host::descriptor::{Descriptor, DropPosixRecordLocks};
 use crate::host::host::Host;
 use crate::utility::ObjectCounter;
 use crate::utility::callback_queue::CallbackQueue;
@@ -239,10 +239,11 @@ impl Default for DescriptorTable {
 }
 
 impl ExplicitDrop for DescriptorTable {
-    type ExplicitDropParam<'p> = &'p Host;
+    type ExplicitDropParam<'p> = (&'p Host, DropPosixRecordLocks);
     type ExplicitDropResult = ();
 
-    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) {
+    fn explicit_drop<'p>(mut self, param: Self::ExplicitDropParam<'p>) {
+        let (host, drop_posix_record_locks) = param;
         // Drop all descriptors using a callback queue.
         //
         // Doing this explicitly instead of letting `DescriptorTable`'s `Drop`
@@ -252,7 +253,7 @@ impl ExplicitDrop for DescriptorTable {
         let descriptors = self.remove_all();
         CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
             for desc in descriptors {
-                desc.close(host, cb_queue);
+                desc.close(host, drop_posix_record_locks, cb_queue);
             }
         });
     }

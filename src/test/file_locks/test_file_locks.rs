@@ -1203,54 +1203,47 @@ fn main() -> anyhow::Result<()> {
             ShadowTest::new(
                 &format!("pid-lock-seek-end {cmd:?}"),
                 move || test_pid_lock_seek_end(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("pid-lock-seek-cur {cmd:?}"),
                 move || test_pid_lock_seek_cur(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("zero-len-pid-locks {cmd:?}"),
                 move || test_zero_len_pid_locks(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("negative-len-pid-locks {cmd:?}"),
                 move || test_negative_len_pid_locks(cmd),
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("contested-pid-locks {cmd:?}"),
                 move || test_contested_pid_locks(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("pid-owner_exits {cmd:?}"),
                 move || test_pid_owner_exits(cmd),
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("pid-lock-threads {cmd:?}"),
                 move || test_pid_lock_threads(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("coalesce-and-split-pid-locks {cmd:?}"),
                 move || test_coalesce_and_split_pid_locks(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("overlapping-pid-locks {cmd:?}"),
                 move || test_overlapping_pid_locks(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("block-on-pid-locks {cmd:?}"),
@@ -1261,8 +1254,7 @@ fn main() -> anyhow::Result<()> {
             ShadowTest::new(
                 &format!("unlock-pid-locks-edge-cases {cmd:?}"),
                 move || test_unlock_pid_locks_edge_cases(cmd),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("pid-lock-overflow {cmd:?}"),
@@ -1276,8 +1268,7 @@ fn main() -> anyhow::Result<()> {
             tests.extend([ShadowTest::new(
                 &format!("pid-owner-closes-descriptor {cmd:?} {close_descriptor:?}"),
                 move || test_pid_owner_closes_descriptor(cmd, close_descriptor),
-                // TODO: <https://github.com/shadow/shadow/issues/2258>
-                no_shadow_envs.clone(),
+                all_envs.clone(),
             )])
         }
     }

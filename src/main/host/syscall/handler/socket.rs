@@ -13,7 +13,9 @@ use crate::host::descriptor::socket::inet::udp::UdpSocket;
 use crate::host::descriptor::socket::netlink::{NetlinkFamily, NetlinkSocket, NetlinkSocketType};
 use crate::host::descriptor::socket::unix::{UnixSocket, UnixSocketType};
 use crate::host::descriptor::socket::{RecvmsgArgs, RecvmsgReturn, SendmsgArgs, Socket};
-use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, FileStatus, OpenFile};
+use crate::host::descriptor::{
+    CompatFile, Descriptor, DropPosixRecordLocks, File, FileState, FileStatus, OpenFile,
+};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::host::syscall::io::{self, IoVec};
 use crate::host::syscall::type_formatting::{SyscallBufferArg, SyscallSockAddrArg};
@@ -992,14 +994,22 @@ impl SyscallHandler {
         match write_res {
             Ok(_) => Ok(()),
             Err(e) => {
+                // Don't bother trying to drop locks. We couldn't have created
+                // any via these descriptors, and there can't exist any others
+                // to that point to the same underlying file description.
+                let dont_drop_locks = DropPosixRecordLocks::False;
                 CallbackQueue::queue_and_run_with_legacy(|cb_queue| {
                     // ignore any errors when closing
-                    dt.deregister_descriptor(fd_1)
-                        .unwrap()
-                        .close(ctx.objs.host, cb_queue);
-                    dt.deregister_descriptor(fd_2)
-                        .unwrap()
-                        .close(ctx.objs.host, cb_queue);
+                    dt.deregister_descriptor(fd_1).unwrap().close(
+                        ctx.objs.host,
+                        dont_drop_locks,
+                        cb_queue,
+                    );
+                    dt.deregister_descriptor(fd_2).unwrap().close(
+                        ctx.objs.host,
+                        dont_drop_locks,
+                        cb_queue,
+                    );
                 });
                 Err(e.into())
             }

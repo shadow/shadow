@@ -2,7 +2,7 @@ use linux_api::close_range::CloseRangeFlags;
 use linux_api::errno::Errno;
 use linux_api::fcntl::DescriptorFlags;
 
-use crate::host::descriptor::descriptor_table;
+use crate::host::descriptor::{DropPosixRecordLocks, descriptor_table};
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -72,7 +72,8 @@ impl SyscallHandler {
                 for desc in descriptors {
                     // close_range(2):
                     // > Errors closing a given file descriptor are currently ignored.
-                    let _ = desc.close(ctx.objs.host, cb_queue);
+                    let drop_locks = DropPosixRecordLocks::ForPid(ctx.objs.process.id());
+                    let _ = desc.close(ctx.objs.host, drop_locks, cb_queue);
                 }
             });
         }

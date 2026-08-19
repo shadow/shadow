@@ -55,6 +55,12 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         }
 
         case F_GETLK:
+        case F_SETLK:
+        case F_SETLKW:
+        {
+            utility_panic("fcntl command %ld should have already been handled in the rust fcntl handler", command);
+            break;
+        }
 #ifdef F_OFD_GETLK
         case F_OFD_GETLK:
 #endif
@@ -74,11 +80,9 @@ static int _syscallhandler_fcntlHelper(SyscallHandler* sys, RegularFile* file, i
         }
 #endif
 
-        case F_SETLK:
 #ifdef F_OFD_SETLK
         case F_OFD_SETLK:
 #endif
-        case F_SETLKW:
 #ifdef F_OFD_SETLKW
         case F_OFD_SETLKW:
 #endif
