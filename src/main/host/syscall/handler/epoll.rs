@@ -14,6 +14,7 @@ use crate::host::descriptor::epoll::Epoll;
 use crate::host::descriptor::{CompatFile, Descriptor, File, FileState, OpenFile};
 use crate::host::memory_manager::MemoryManager;
 use crate::host::syscall::handler::{SyscallContext, SyscallHandler};
+use crate::host::syscall::type_formatting::SyscallArrayArg;
 use crate::host::syscall::types::{ForeignArrayPtr, SyscallError};
 use crate::utility::callback_queue::CallbackQueue;
 
@@ -194,7 +195,7 @@ impl SyscallHandler {
         epoll_wait,
         /* rv */ std::ffi::c_int,
         /* epfd */ std::ffi::c_int,
-        /* events */ *const std::ffi::c_void,
+        /* events */ SyscallArrayArg</* max_events */ 2, linux_api::epoll::epoll_event>,
         /* max_events */ std::ffi::c_int,
         /* timeout */ std::ffi::c_int,
     );
@@ -214,7 +215,7 @@ impl SyscallHandler {
         epoll_pwait,
         /* rv */ std::ffi::c_int,
         /* epfd */ std::ffi::c_int,
-        /* events */ *const std::ffi::c_void,
+        /* events */ SyscallArrayArg</* max_events */ 2, linux_api::epoll::epoll_event>,
         /* max_events */ std::ffi::c_int,
         /* timeout */ std::ffi::c_int,
         /* sigmask */ *const std::ffi::c_void,
@@ -246,7 +247,7 @@ impl SyscallHandler {
         epoll_pwait2,
         /* rv */ std::ffi::c_int,
         /* epfd */ std::ffi::c_int,
-        /* events */ *const std::ffi::c_void,
+        /* events */ SyscallArrayArg</* max_events */ 2, linux_api::epoll::epoll_event>,
         /* max_events */ std::ffi::c_int,
         /* timeout */ *const std::ffi::c_void,
         /* sigmask */ *const std::ffi::c_void,
