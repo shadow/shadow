@@ -251,6 +251,9 @@ fn fmt_buffer(
     };
 
     if options == FmtOptions::Deterministic {
+        // The pointer address may be non-deterministic,
+        // and we don't know how many bytes were written to the buffer (see #3694)
+        // so the buffer may have some non-deterministic bytes.
         return write!(f, "<pointer>");
     }
 
@@ -363,6 +366,9 @@ where
     const SEPARATOR: &str = ", ";
 
     if options == FmtOptions::Deterministic {
+        // The pointer address may be non-deterministic,
+        // and we don't know how many bytes were written to the array (see #3694)
+        // so the array may have some non-deterministic bytes.
         return write!(f, "<pointer>");
     }
 
