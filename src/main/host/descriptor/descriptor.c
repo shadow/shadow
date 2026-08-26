@@ -284,10 +284,13 @@ gint legacyfile_getFlags(LegacyFile* descriptor) {
 
 void legacyfile_setFlags(LegacyFile* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
-    if (flags & O_CLOEXEC) {
-        warning("Adding CLOEXEC to legacy file when it should "
-                "have been added to the descriptor");
+    int creation_flags = flags & linux_file_creation_oflags();
+    if (creation_flags) {
+        warning("Caller included creation flags 0x%x, which they should have removed and handled "
+                "separately",
+                creation_flags);
     }
+    utility_debugAssert(!creation_flags);
     descriptor->flags = flags;
 }
 
