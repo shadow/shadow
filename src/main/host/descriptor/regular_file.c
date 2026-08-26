@@ -962,29 +962,12 @@ int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
         return -EBADF;
     }
 
-    if (command == F_SETFD) {
-        intptr_t arg_int = (intptr_t)arg;
-        // if the arg contains FD_CLOEXEC
-        if (arg_int & FD_CLOEXEC) {
-            file->shadowFlags |= O_CLOEXEC;
-        } else {
-            file->shadowFlags &= ~O_CLOEXEC;
-        }
-        // shadow always sets FD_CLOEXEC on the os-backed fd
-        arg_int |= FD_CLOEXEC;
-        arg = (void*)arg_int;
+    if (command == F_SETFD || command == F_GETFD) {
+        utility_panic("F_SETFD operates on file descriptor, not file description."
+                      " should have been handled in fcntl.rs handler");
     }
 
     int result = fcntl(_regularfile_getOSBackedFD(file), command, arg);
-
-    if (result >= 0 && command == F_GETFD) {
-        // if the file should have FD_CLOEXEC
-        if (file->shadowFlags & O_CLOEXEC) {
-            result |= FD_CLOEXEC;
-        } else {
-            result &= ~FD_CLOEXEC;
-        }
-    }
 
     return (result < 0) ? -errno : result;
 }
