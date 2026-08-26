@@ -58,8 +58,6 @@ struct _RegularFile {
             int fd;
             /* The flags used when opening the file; Not the file's current flags. */
             int flagsAtOpen;
-            /* The permission mode the file was opened with. */
-            mode_t modeAtOpen;
             /* The path of the file when it was opened. */
             char* absPathAtOpen;
         } osfile;
@@ -70,8 +68,6 @@ struct _RegularFile {
             char* content;
             /* The flags used when opening the file; Not the file's current flags. */
             int flagsAtOpen;
-            /* The permission mode the file was opened with. */
-            mode_t modeAtOpen;
             /* Callback to (re)-generate contents. */
             _generateInMemoryFileContentCbType generate_contents_cb;
             /* Whether contents should be re-generated on an lseek operation.
@@ -93,15 +89,6 @@ int regularfile_getFlagsAtOpen(RegularFile* file) {
         return file->osfile.flagsAtOpen;
     } else {
         return file->inMemoryFile.flagsAtOpen;
-    }
-}
-
-mode_t regularfile_getModeAtOpen(RegularFile* file) {
-    MAGIC_ASSERT(file);
-    if (file->type != FILE_TYPE_IN_MEMORY) {
-        return file->osfile.modeAtOpen;
-    } else {
-        return file->inMemoryFile.modeAtOpen;
     }
 }
 
@@ -279,7 +266,6 @@ int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode,
     file->inMemoryFile.contentLen = contentLen;
     file->inMemoryFile.content = content;
     file->inMemoryFile.flagsAtOpen = flags;
-    file->inMemoryFile.modeAtOpen = mode;
     file->inMemoryFile.generate_contents_cb = generate_contents_cb;
     file->inMemoryFile.regen_after_lseek = regen_after_lseek;
 
@@ -439,7 +425,6 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     file->osfile.fd = osfd;
     file->osfile.absPathAtOpen = abspath;
     file->osfile.flagsAtOpen = flags;
-    file->osfile.modeAtOpen = mode;
 
     trace("RegularFile %p opened os-backed file %i at absolute path %s", file,
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);

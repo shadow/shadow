@@ -67,9 +67,6 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
 /* Returns the flags that were used when opening the file. */
 int regularfile_getFlagsAtOpen(RegularFile* file);
 
-/* Returns the mode that was used when opening the file. */
-mode_t regularfile_getModeAtOpen(RegularFile* file);
-
 /* Get the file flags that shadow handles manually, but not the flags on the
  * linux-backed file. Will be a subset of SHADOW_FLAG_MASK. */
 int regularfile_getShadowFlags(RegularFile* file);
