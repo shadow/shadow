@@ -305,3 +305,29 @@ mod test {
         );
     }
 }
+
+mod export {
+    /// "file creation" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_file_creation_oflags() -> core::ffi::c_int {
+        super::FileCreationOFlag::all().bits()
+    }
+
+    /// "access mode" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_access_mode_oflags() -> core::ffi::c_int {
+        super::AccessModeOFlag::all().bits()
+    }
+
+    /// "file status" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_file_status_oflags() -> core::ffi::c_int {
+        super::FileStatusOFlag::all().bits()
+    }
+}
