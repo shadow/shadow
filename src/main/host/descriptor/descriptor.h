@@ -38,8 +38,6 @@ LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 
 gint legacyfile_getFlags(LegacyFile* descriptor);
 void legacyfile_setFlags(LegacyFile* descriptor, gint flags);
-void legacyfile_addFlags(LegacyFile* descriptor, gint flags);
-void legacyfile_removeFlags(LegacyFile* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,

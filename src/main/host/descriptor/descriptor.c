@@ -291,20 +291,6 @@ void legacyfile_setFlags(LegacyFile* descriptor, gint flags) {
     descriptor->flags = flags;
 }
 
-void legacyfile_addFlags(LegacyFile* descriptor, gint flags) {
-    MAGIC_ASSERT(descriptor);
-    if (flags & O_CLOEXEC) {
-        warning("Adding CLOEXEC to legacy file when it should "
-                "have been added to the descriptor");
-    }
-    descriptor->flags |= flags;
-}
-
-void legacyfile_removeFlags(LegacyFile* descriptor, gint flags) {
-    MAGIC_ASSERT(descriptor);
-    descriptor->flags &= ~flags;
-}
-
 bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc) {
     switch (legacyDesc->type) {
         case DT_TCPSOCKET:
