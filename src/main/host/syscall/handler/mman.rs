@@ -379,7 +379,8 @@ impl SyscallHandler {
         // /proc/<shadow-pid>/fd/<linux-fd> file, which is a symbolic link
         flags -= OFlag::O_NOFOLLOW;
 
-        let mode = unsafe { c::regularfile_getModeAtOpen(file) };
+        // Mode argument to 'open' is a no-op, since we're not creating a file.
+        let mode = 0i32;
 
         // instruct the plugin to open the file at the path we sent
         let (process_ctx, thread) = ctx.split_thread();
@@ -387,7 +388,7 @@ impl SyscallHandler {
             &process_ctx,
             plugin_buffer.ptr().ptr(),
             flags.bits() as i32,
-            mode as i32,
+            mode,
         );
 
         plugin_buffer.free(ctx);
