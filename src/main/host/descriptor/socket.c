@@ -94,7 +94,30 @@ gssize legacysocket_receiveUserData(LegacySocket* socket, const Thread* thread,
     return socket->vtable->receive(socket, thread, buffer, nBytes, ip, port);
 }
 
+void legacysocket_set_flags(LegacySocket* socket, int flags) {
+    MAGIC_ASSERT(socket);
+    socket->accessAndStatusFlags =
+        flags & (linux_access_mode_oflags() | linux_file_status_oflags());
+}
+
+static void _legacysocket_set_flags(LegacyFile* descriptor, int flags) {
+    LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
+    legacysocket_set_flags(socket, flags);
+}
+
+int legacysocket_get_flags(LegacySocket* socket) {
+    MAGIC_ASSERT(socket);
+    return socket->accessAndStatusFlags;
+}
+
+static int _legacysocket_get_flags(LegacyFile* descriptor) {
+    LegacySocket* socket = _legacysocket_fromLegacyFile(descriptor);
+    return legacysocket_get_flags(socket);
+}
+
 LegacyFileFunctionTable socket_functions = {.close = _legacysocket_close,
+                                            .get_flags = _legacysocket_get_flags,
+                                            .set_flags = _legacysocket_set_flags,
                                             .cleanup = _legacysocket_cleanup,
                                             .free = _legacysocket_free,
                                             MAGIC_INITIALIZER};

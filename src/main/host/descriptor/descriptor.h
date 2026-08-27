@@ -36,7 +36,9 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 
 LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 
+/* Get the "access" and "file status" oflags. See open(2). */
 gint legacyfile_getFlags(LegacyFile* descriptor);
+/* Set the "access" and "file status" oflags. See open(2). */
 void legacyfile_setFlags(LegacyFile* descriptor, gint flags);
 
 /*

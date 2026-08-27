@@ -33,8 +33,6 @@
 
 #define OSFILE_INVALID -1
 
-const int SHADOW_FLAG_MASK = O_CLOEXEC;
-
 /* Callback to (re)-generate contents of a `FILE_TYPE_IN_MEMORY` file.
  *
  * Should set `contents` to a malloc'd pointer containing the new contents, and
@@ -49,15 +47,12 @@ struct _RegularFile {
     /* File is a sub-type of a descriptor. */
     LegacyFile super;
     FileType type;
-    /* O file flags that we don't pass to the native fd, but instead track within
-     * Shadow and handle manually. A subset of SHADOW_FLAG_MASK. */
-    int shadowFlags;
+    /* "access" and "status" oflags */
+    int accessAndStatusFlags;
     /* Info related to our OS-backed file. */
     union {
         struct {
             int fd;
-            /* The flags used when opening the file; Not the file's current flags. */
-            int flagsAtOpen;
             /* The path of the file when it was opened. */
             char* absPathAtOpen;
         } osfile;
@@ -66,8 +61,6 @@ struct _RegularFile {
             off_t cursor;
             ssize_t contentLen;
             char* content;
-            /* The flags used when opening the file; Not the file's current flags. */
-            int flagsAtOpen;
             /* Callback to (re)-generate contents. */
             _generateInMemoryFileContentCbType generate_contents_cb;
             /* Whether contents should be re-generated on an lseek operation.
@@ -82,20 +75,6 @@ struct _RegularFile {
     };
     MAGIC_DECLARE;
 };
-
-int regularfile_getFlagsAtOpen(RegularFile* file) {
-    MAGIC_ASSERT(file);
-    if (file->type != FILE_TYPE_IN_MEMORY) {
-        return file->osfile.flagsAtOpen;
-    } else {
-        return file->inMemoryFile.flagsAtOpen;
-    }
-}
-
-int regularfile_getShadowFlags(RegularFile* file) {
-    MAGIC_ASSERT(file);
-    return file->shadowFlags;
-}
 
 FileType regularfile_getType(RegularFile* file) {
     MAGIC_ASSERT(file);
@@ -124,6 +103,33 @@ static inline int _regularfile_getOSBackedFD(RegularFile* file) {
 static inline bool _fd_isValid(int fd) { return fd >= 0; }
 
 int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBackedFD(file); }
+
+// Used internally to set accessAndStatusFlags based on the flags actually
+// set on the native file descriptor.
+static void _regularfile_try_update_flags_from_os(RegularFile* file) {
+    MAGIC_ASSERT(file);
+
+    int native_fd = _regularfile_getOSBackedFD(file);
+    if (!_fd_isValid(native_fd)) {
+        // Nothing to do.
+        debug("No native fd to update flags from");
+        return;
+    }
+
+    // Update our emulated flags to match what actually got set.
+    int rv = fcntl(native_fd, F_GETFL, 0);
+    if (rv == -1) {
+        warning("Couldn't get native flags for fd %d: %s", native_fd, strerror(errno));
+        return;
+    }
+
+    // fcntl(2) *says* that F_GETFL returns only the access and status flags,
+    // but experimentally some "creation" flags are returned as well.
+    // (e.g. O_DIRECTORY, O_NOFOLLOW).
+    rv &= linux_access_mode_oflags() | linux_file_status_oflags();
+
+    file->accessAndStatusFlags = rv;
+}
 
 static void _regularfile_closeHelper(RegularFile* file) {
     if(file && file->type != FILE_TYPE_IN_MEMORY) {
@@ -261,11 +267,11 @@ int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode,
     utility_alwaysAssert(content != NULL);
 
     file->type = FILE_TYPE_IN_MEMORY;
+    file->accessAndStatusFlags = flags & (linux_access_mode_oflags() | linux_file_status_oflags());
     file->inMemoryFile.cursor = 0;
     file->inMemoryFile.cursor = 0;
     file->inMemoryFile.contentLen = contentLen;
     file->inMemoryFile.content = content;
-    file->inMemoryFile.flagsAtOpen = flags;
     file->inMemoryFile.generate_contents_cb = generate_contents_cb;
     file->inMemoryFile.regen_after_lseek = regen_after_lseek;
 
@@ -314,6 +320,11 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     char* abspath = _regularfile_getAbsolutePath(dir, pathname, workingDir);
 
     const char* proc_prefix = "/proc/";
+
+    /* initialize to the requested access and status, though in some cases this gets overwritten
+     * later.
+     */
+    file->accessAndStatusFlags = flags & (linux_access_mode_oflags() | linux_file_status_oflags());
 
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
@@ -391,24 +402,16 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         file->type = FILE_TYPE_REGULAR;
     }
 
-    // store original flags in superclass, LegacyDescriptor.
-    // (Primarily so that rust code operating on a LegacyDescriptor
-    // can work out whether the file is readable and/or writable).
-    // TODO: track updates to status flags. Tentatively fixed in pending
-    // <https://github.com/shadow/shadow/pull/3782>.
-    legacyfile_setFlags(&file->super, flags);
-
-    // move any flags that shadow handles from 'flags' to 'shadowFlags'
-    file->shadowFlags = flags & SHADOW_FLAG_MASK;
-    flags &= ~SHADOW_FLAG_MASK;
+    // start from the emulated oflags
+    int native_oflags = flags;
 
     // we should always use O_CLOEXEC for files opened in shadow
-    flags |= O_CLOEXEC;
+    native_oflags |= O_CLOEXEC;
 
     // TODO: we should open the os-backed file in non-blocking mode even if a
     // non-block is not requested, and then properly handle the io by, e.g.,
     // epolling on all such files with a shadow support thread.
-    int osfd = open(abspath, flags, mode);
+    int osfd = open(abspath, native_oflags, mode);
     int errcode = errno;
 
     if (osfd < 0) {
@@ -423,8 +426,11 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
 
     /* Store the create information, which is used if we mmap the file later. */
     file->osfile.fd = osfd;
+    /* TODO: do we still need this? mmap uses a /proc path instead. */
     file->osfile.absPathAtOpen = abspath;
-    file->osfile.flagsAtOpen = flags;
+
+    /* fetch the actual access and status flags that got set. */
+    _regularfile_try_update_flags_from_os(file);
 
     trace("RegularFile %p opened os-backed file %i at absolute path %s", file,
           _regularfile_getOSBackedFD(file), file->osfile.absPathAtOpen);
@@ -1545,10 +1551,47 @@ int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigne
 }
 #endif
 
+void regularfile_set_flags(RegularFile* file, int flags) {
+    MAGIC_ASSERT(file);
+
+    int mask = linux_access_mode_oflags() | linux_file_status_oflags();
+    file->accessAndStatusFlags = flags & mask;
+
+    int native_fd = _regularfile_getOSBackedFD(file);
+    if (_fd_isValid(native_fd)) {
+        // Update the native descriptor to match.
+        int rv = fcntl(native_fd, F_SETFL, flags);
+        if (rv == -1) {
+            warning("Couldn't update native flags for fd %d to 0x%x: %s", native_fd, flags,
+                    strerror(errno));
+            return;
+        }
+        // Update our emulated flags to match what actually got set.
+        _regularfile_try_update_flags_from_os(file);
+    }
+}
+
+static void _regularfile_set_flags(LegacyFile* descriptor, int flags) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(descriptor);
+    regularfile_set_flags(file, flags);
+}
+
+int regularfile_get_flags(RegularFile* file) {
+    MAGIC_ASSERT(file);
+    return file->accessAndStatusFlags;
+}
+
+static int _regularfile_get_flags(LegacyFile* descriptor) {
+    RegularFile* file = _regularfile_legacyFileToRegularFile(descriptor);
+    return regularfile_get_flags(file);
+}
+
 static LegacyFileFunctionTable _fileFunctions = (LegacyFileFunctionTable){
     .close = _regularfile_close,
     .fstat = _regularfile_fstat,
     .lseek = _regularfile_lseek,
+    .get_flags = _regularfile_get_flags,
+    .set_flags = _regularfile_set_flags,
     .cleanup = NULL,
     .free = _regularfile_free,
 };

@@ -279,19 +279,16 @@ void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener)
 
 gint legacyfile_getFlags(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
-    return descriptor->flags;
+    MAGIC_ASSERT(descriptor->funcTable);
+    utility_alwaysAssert(descriptor->funcTable->get_flags != NULL);
+    return descriptor->funcTable->get_flags(descriptor);
 }
 
 void legacyfile_setFlags(LegacyFile* descriptor, gint flags) {
     MAGIC_ASSERT(descriptor);
-    int creation_flags = flags & linux_file_creation_oflags();
-    if (creation_flags) {
-        warning("Caller included creation flags 0x%x, which they should have removed and handled "
-                "separately",
-                creation_flags);
-    }
-    utility_debugAssert(!creation_flags);
-    descriptor->flags = flags;
+    MAGIC_ASSERT(descriptor->funcTable);
+    utility_alwaysAssert(descriptor->funcTable->set_flags != NULL);
+    descriptor->funcTable->set_flags(descriptor, flags);
 }
 
 bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc) {

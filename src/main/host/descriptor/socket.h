@@ -57,6 +57,8 @@ struct _LegacySocket {
     SocketFunctionTable* vtable;
 
     enum SocketFlags flags;
+    /* access and status flags, as returned by fcntl F_GETFL */
+    int accessAndStatusFlags;
     ProtocolType protocol;
 
     in_addr_t peerIP;
