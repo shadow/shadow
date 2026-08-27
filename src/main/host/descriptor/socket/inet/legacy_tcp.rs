@@ -359,7 +359,7 @@ impl LegacyTcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -470,7 +470,7 @@ impl LegacyTcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -853,7 +853,7 @@ impl LegacyTcpSocket {
             Ok(())
         };
 
-        if !socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if !socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             // this is a blocking connect call
             if errcode == Err(Errno::EINPROGRESS) {
                 // This is the first time we ever called connect, and so we need to wait for the

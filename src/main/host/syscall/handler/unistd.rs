@@ -471,8 +471,8 @@ impl SyscallHandler {
 
         for flag in flags.iter() {
             match flag {
-                OFlag::O_NONBLOCK => file_flags.insert(FileStatus::NONBLOCK),
-                OFlag::O_DIRECT => file_flags.insert(FileStatus::DIRECT),
+                OFlag::O_NONBLOCK => file_flags.insert(FileStatus::O_NONBLOCK),
+                OFlag::O_DIRECT => file_flags.insert(FileStatus::O_DIRECT),
                 OFlag::O_CLOEXEC => descriptor_flags.insert(DescriptorFlags::FD_CLOEXEC),
                 x if x == OFlag::empty() => {
                     // The "empty" flag is always present. Ignore.

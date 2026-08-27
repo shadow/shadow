@@ -128,6 +128,19 @@ bitflags::bitflags! {
     }
 }
 
+impl FileStatusOFlag {
+    pub fn as_o_flags(&self) -> OFlag {
+        OFlag::from_bits(self.bits()).unwrap()
+    }
+
+    /// Returns a tuple of the `FileStatus` and any remaining flags.
+    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
+        let status = Self::from_bits_truncate(flags.bits());
+        let remaining = flags.bits() & !status.bits();
+        (status, OFlag::from_bits(remaining).unwrap())
+    }
+}
+
 /// fcntl commands, as used with `fcntl`.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]

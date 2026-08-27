@@ -413,7 +413,7 @@ impl TcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -471,7 +471,7 @@ impl TcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -719,7 +719,7 @@ impl TcpSocket {
         // return the result
         socket_ref.connect_result_is_pending = true;
 
-        if socket_ref.status.contains(FileStatus::NONBLOCK) {
+        if socket_ref.status.contains(FileStatus::O_NONBLOCK) {
             Err(Errno::EINPROGRESS.into())
         } else {
             let err = SyscallError::new_blocked_on_file(

@@ -76,7 +76,7 @@ impl SyscallHandler {
             let arg = ctx.objs.process.memory_borrow_mut().read(arg_ptr)?;
 
             let mut status = file.status();
-            status.set(FileStatus::NONBLOCK, arg != 0);
+            status.set(FileStatus::O_NONBLOCK, arg != 0);
             file.set_status(status);
 
             return Ok(0.into());

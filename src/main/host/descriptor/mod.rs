@@ -29,23 +29,8 @@ pub mod shared_buf;
 pub mod socket;
 pub mod timerfd;
 
-bitflags::bitflags! {
-    /// These are flags that can potentially be changed from the plugin (analagous to the Linux
-    /// `filp->f_flags` status flags). Not all `O_` flags are valid here. For example file access
-    /// mode flags (ex: `O_RDWR`) are stored elsewhere, and file creation flags (ex: `O_CREAT`)
-    /// are not stored anywhere. Many of these can be represented in different ways, for example:
-    /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
-    /// same value.
-    #[derive(Copy, Clone, Debug)]
-    pub struct FileStatus: i32 {
-        const NONBLOCK = OFlag::O_NONBLOCK.bits();
-        const APPEND = OFlag::O_APPEND.bits();
-        const ASYNC = OFlag::O_ASYNC.bits();
-        const DIRECT = OFlag::O_DIRECT.bits();
-        const NOATIME = OFlag::O_NOATIME.bits();
-    }
-}
-
+// TODO: migrate users to use `FileStatusOFlag` directly.
+pub use linux_api::fcntl::FileStatusOFlag as FileStatus;
 /// For functions that involve closing descriptors; specifies for which
 /// `ProcessId` posix record locks ought to be freed, if any.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -57,19 +42,6 @@ pub enum DropPosixRecordLocks {
     False,
     // Includes associated ProcessId for which to drop locks.
     ForPid(ProcessId),
-}
-
-impl FileStatus {
-    pub fn as_o_flags(&self) -> OFlag {
-        OFlag::from_bits(self.bits()).unwrap()
-    }
-
-    /// Returns a tuple of the `FileStatus` and any remaining flags.
-    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
-        let status = Self::from_bits_truncate(flags.bits());
-        let remaining = flags.bits() & !status.bits();
-        (status, OFlag::from_bits(remaining).unwrap())
-    }
 }
 
 bitflags::bitflags! {

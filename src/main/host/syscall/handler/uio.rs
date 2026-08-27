@@ -278,7 +278,8 @@ impl SyscallHandler {
             });
 
         // if the syscall would block and it's a blocking descriptor
-        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::O_NONBLOCK)
+        {
             // TODO: should we block on the READABLE, HUP, and RDHUP states?
             // https://github.com/shadow/shadow/issues/2181
             let wait_for = FileState::READABLE;
@@ -558,7 +559,8 @@ impl SyscallHandler {
             });
 
         // if the syscall would block and it's a blocking descriptor
-        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::NONBLOCK) {
+        if result == Err(Errno::EWOULDBLOCK.into()) && !file_status.contains(FileStatus::O_NONBLOCK)
+        {
             // TODO: should we block on the WRITABLE and HUP states?
             // https://github.com/shadow/shadow/issues/2181
             let wait_for = FileState::WRITABLE;

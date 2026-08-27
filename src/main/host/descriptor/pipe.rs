@@ -188,10 +188,11 @@ impl Pipe {
             return Err(linux_api::errno::Errno::EPIPE.into());
         }
 
-        if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::DIRECT) {
+        if self.write_mode == WriteMode::Packet && !self.status.contains(FileStatus::O_DIRECT) {
             // switch to stream mode immediately, regardless of whether the buffer is empty or not
             self.write_mode = WriteMode::Stream;
-        } else if self.write_mode == WriteMode::Stream && self.status.contains(FileStatus::DIRECT) {
+        } else if self.write_mode == WriteMode::Stream && self.status.contains(FileStatus::O_DIRECT)
+        {
             // in linux, it seems that pipes only switch to packet mode when a new page is added to
             // the buffer, so we simulate that behaviour for when the first page is added (when the
             // buffer is empty)
