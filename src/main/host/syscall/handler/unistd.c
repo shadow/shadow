@@ -84,7 +84,7 @@ SyscallReturn _syscallhandler_readHelper(SyscallHandler* sys, int fd, UntypedFor
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFileStatusFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {
@@ -165,7 +165,7 @@ SyscallReturn _syscallhandler_writeHelper(SyscallHandler* sys, int fd, UntypedFo
             break;
     }
 
-    if (result == -EWOULDBLOCK && !(legacyfile_getFlags(desc) & O_NONBLOCK)) {
+    if (result == -EWOULDBLOCK && !(legacyfile_getFileStatusFlags(desc) & O_NONBLOCK)) {
         /* Blocking for file io will lock up the plugin because we don't
          * yet have a way to wait on file descriptors. */
         if (dType == DT_FILE) {

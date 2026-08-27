@@ -36,10 +36,19 @@ const RootedRefCell_StateEventSource* legacyfile_getEventSource(LegacyFile* desc
 
 LegacyFileType legacyfile_getType(LegacyFile* descriptor);
 
-/* Get the "access" and "file status" oflags. See open(2). */
-gint legacyfile_getFlags(LegacyFile* descriptor);
-/* Set the "access" and "file status" oflags. See open(2). */
-void legacyfile_setFlags(LegacyFile* descriptor, gint flags);
+/* Get the "access mode" oflags. See open(2). */
+gint legacyfile_getAccessModeFlags(LegacyFile* descriptor);
+
+/* Get the "file status" oflags. See open(2). */
+gint legacyfile_getFileStatusFlags(LegacyFile* descriptor);
+/* Set the "file status" oflags. See open(2). */
+void legacyfile_setFileStatusFlags(LegacyFile* descriptor, gint flags);
+
+/* Should be called exactly once, generally by the constructor of the specific file type.
+ * Ideally we'd make these a parameter to `legacyfile_init` instead, but that'd take
+ * more significantly more refactoring.
+ */
+void legacyfile_setAccessAndCreationFlags(LegacyFile* descriptor, gint flags);
 
 /*
  * One of the main functions of the descriptor is to track its poll status,

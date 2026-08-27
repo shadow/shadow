@@ -277,18 +277,36 @@ void legacyfile_removeListener(LegacyFile* descriptor, StatusListener* listener)
     eventsource_removeLegacyListener(descriptor->event_source, listener);
 }
 
-gint legacyfile_getFlags(LegacyFile* descriptor) {
+gint legacyfile_getAccessModeFlags(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
-    MAGIC_ASSERT(descriptor->funcTable);
-    utility_alwaysAssert(descriptor->funcTable->get_flags != NULL);
-    return descriptor->funcTable->get_flags(descriptor);
+    return descriptor->accessAndCreationFlags & linux_access_mode_oflags();
 }
 
-void legacyfile_setFlags(LegacyFile* descriptor, gint flags) {
+gint legacyfile_getFileStatusFlags(LegacyFile* descriptor) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
-    utility_alwaysAssert(descriptor->funcTable->set_flags != NULL);
-    descriptor->funcTable->set_flags(descriptor, flags);
+    utility_alwaysAssert(descriptor->funcTable->get_status_flags != NULL);
+    return descriptor->funcTable->get_status_flags(descriptor);
+}
+
+void legacyfile_setFileStatusFlags(LegacyFile* descriptor, gint flags) {
+    MAGIC_ASSERT(descriptor);
+    MAGIC_ASSERT(descriptor->funcTable);
+    utility_alwaysAssert(descriptor->funcTable->set_status_flags != NULL);
+    descriptor->funcTable->set_status_flags(descriptor, flags);
+}
+
+void legacyfile_setAccessAndCreationFlags(LegacyFile* descriptor, gint flags) {
+    MAGIC_ASSERT(descriptor);
+    if (descriptor->accessAndCreationFlags) {
+        panic("Overwriting accesss and creation flags, which should be immutable");
+    }
+    int mask = linux_access_mode_oflags() | linux_file_creation_oflags();
+    int unhandled = flags & ~mask;
+    if (unhandled) {
+        panic("Caller gave us unahndled flags 0x%x", unhandled);
+    }
+    descriptor->accessAndCreationFlags = flags;
 }
 
 bool legacyfile_supportsSaRestart(LegacyFile* legacyDesc) {

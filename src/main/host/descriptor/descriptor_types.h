@@ -26,9 +26,9 @@ typedef struct _LegacyFileFunctionTable LegacyFileFunctionTable;
 /* required functions */
 
 /* Set "file status" oflags */
-typedef void (*LegacyFileSetFlags)(LegacyFile* descriptor, int flags);
+typedef void (*LegacyFileSetStatusFlags)(LegacyFile* descriptor, int flags);
 /* Get "file status" and "access mode" oflags. */
-typedef int (*LegacyFileGetFlags)(LegacyFile* descriptor);
+typedef int (*LegacyFileGetStatusFlags)(LegacyFile* descriptor);
 typedef int (*LegacyFileFStatFunc)(LegacyFile* descriptor, struct linux_stat* statbuf);
 typedef off_t (*LegacyFileLSeekFunc)(LegacyFile* descriptor, off_t offset, int whence);
 typedef void (*LegacyFileCloseFunc)(LegacyFile* descriptor, const Host* host);
@@ -43,8 +43,8 @@ typedef void (*LegacyFileFreeFunc)(LegacyFile* descriptor);
  * callable functions.
  */
 struct _LegacyFileFunctionTable {
-    LegacyFileSetFlags set_flags;
-    LegacyFileGetFlags get_flags;
+    LegacyFileSetStatusFlags set_status_flags;
+    LegacyFileGetStatusFlags get_status_flags;
     LegacyFileFStatFunc fstat;
     LegacyFileLSeekFunc lseek;
     LegacyFileCloseFunc close;
@@ -60,6 +60,8 @@ struct _LegacyFile {
     RootedRefCell_StateEventSource* event_source;
     int refCountStrong;
     int refCountWeak;
+    // The "access" and "file creation" oflags; immutable after initialization.
+    int accessAndCreationFlags;
     // Since this structure is shared with Rust, we should always include the magic struct
     // member so that the struct is always the same size regardless of compile-time options.
     MAGIC_DECLARE_ALWAYS;

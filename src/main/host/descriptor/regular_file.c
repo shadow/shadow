@@ -24,6 +24,7 @@
 #include <syscall.h>
 #include <unistd.h>
 
+#include "descriptor.h"
 #include "lib/logger/logger.h"
 #include "main/core/worker.h"
 #include "main/host/descriptor/descriptor.h"
@@ -47,8 +48,8 @@ struct _RegularFile {
     /* File is a sub-type of a descriptor. */
     LegacyFile super;
     FileType type;
-    /* "access" and "status" oflags */
-    int accessAndStatusFlags;
+    /* "status" oflags, as documented in open(2) */
+    int statusFlags;
     /* Info related to our OS-backed file. */
     union {
         struct {
@@ -104,7 +105,7 @@ static inline bool _fd_isValid(int fd) { return fd >= 0; }
 
 int regularfile_getOSBackedFD(RegularFile* file) { return _regularfile_getOSBackedFD(file); }
 
-// Used internally to set accessAndStatusFlags based on the flags actually
+// Used internally to set statusFlags based on the flags actually
 // set on the native file descriptor.
 static void _regularfile_try_update_flags_from_os(RegularFile* file) {
     MAGIC_ASSERT(file);
@@ -123,12 +124,13 @@ static void _regularfile_try_update_flags_from_os(RegularFile* file) {
         return;
     }
 
-    // fcntl(2) *says* that F_GETFL returns only the access and status flags,
-    // but experimentally some "creation" flags are returned as well.
-    // (e.g. O_DIRECTORY, O_NOFOLLOW).
-    rv &= linux_access_mode_oflags() | linux_file_status_oflags();
-
-    file->accessAndStatusFlags = rv;
+    // fcntl(2) *says* that F_GETFL returns only the access and status flags;
+    // we only want the status flags here.
+    //
+    // Experimentally F_GETFL returns some "creation" flags as well, including
+    // O_NOFOLLOW, which seems to be undocumented, at least in the libc man
+    // pages).
+    file->statusFlags = rv & linux_file_status_oflags();
 }
 
 static void _regularfile_closeHelper(RegularFile* file) {
@@ -267,7 +269,7 @@ int _regularfile_initRoInMemoryFile(RegularFile* file, int flags, mode_t mode,
     utility_alwaysAssert(content != NULL);
 
     file->type = FILE_TYPE_IN_MEMORY;
-    file->accessAndStatusFlags = flags & (linux_access_mode_oflags() | linux_file_status_oflags());
+    file->statusFlags = flags & linux_file_status_oflags();
     file->inMemoryFile.cursor = 0;
     file->inMemoryFile.cursor = 0;
     file->inMemoryFile.contentLen = contentLen;
@@ -309,6 +311,10 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
 
     trace("Attempting to open file with pathname=%s flags=%i mode=%i workingdir=%s", pathname,
           flags, (int)mode, workingDir);
+
+    legacyfile_setAccessAndCreationFlags(
+        &file->super, flags & (linux_access_mode_oflags() | linux_file_creation_oflags()));
+
 #ifdef DEBUG
     if (flags) {
         _regularfile_print_flags(flags);
@@ -324,7 +330,7 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
     /* initialize to the requested access and status, though in some cases this gets overwritten
      * later.
      */
-    file->accessAndStatusFlags = flags & (linux_access_mode_oflags() | linux_file_status_oflags());
+    file->statusFlags = flags & linux_file_status_oflags();
 
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
@@ -1554,11 +1560,11 @@ int regularfile_statx(RegularFile* dir, const char* pathname, int flags, unsigne
 }
 #endif
 
-void regularfile_set_flags(RegularFile* file, int flags) {
+void regularfile_set_status_flags(RegularFile* file, int flags) {
     MAGIC_ASSERT(file);
 
-    int mask = linux_access_mode_oflags() | linux_file_status_oflags();
-    file->accessAndStatusFlags = flags & mask;
+    int mask = linux_file_status_oflags();
+    file->statusFlags = flags & mask;
 
     int native_fd = _regularfile_getOSBackedFD(file);
     if (_fd_isValid(native_fd)) {
@@ -1574,27 +1580,27 @@ void regularfile_set_flags(RegularFile* file, int flags) {
     }
 }
 
-static void _regularfile_set_flags(LegacyFile* descriptor, int flags) {
+static void _regularfile_set_status_flags(LegacyFile* descriptor, int flags) {
     RegularFile* file = _regularfile_legacyFileToRegularFile(descriptor);
-    regularfile_set_flags(file, flags);
+    regularfile_set_status_flags(file, flags);
 }
 
-int regularfile_get_flags(RegularFile* file) {
+int regularfile_get_status_flags(RegularFile* file) {
     MAGIC_ASSERT(file);
-    return file->accessAndStatusFlags;
+    return file->statusFlags;
 }
 
-static int _regularfile_get_flags(LegacyFile* descriptor) {
+static int _regularfile_get_status_flags(LegacyFile* descriptor) {
     RegularFile* file = _regularfile_legacyFileToRegularFile(descriptor);
-    return regularfile_get_flags(file);
+    return regularfile_get_status_flags(file);
 }
 
 static LegacyFileFunctionTable _fileFunctions = (LegacyFileFunctionTable){
     .close = _regularfile_close,
     .fstat = _regularfile_fstat,
     .lseek = _regularfile_lseek,
-    .get_flags = _regularfile_get_flags,
-    .set_flags = _regularfile_set_flags,
+    .get_status_flags = _regularfile_get_status_flags,
+    .set_status_flags = _regularfile_set_status_flags,
     .cleanup = NULL,
     .free = _regularfile_free,
 };

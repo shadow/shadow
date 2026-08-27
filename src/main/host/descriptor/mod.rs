@@ -15,7 +15,7 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
-use linux_api::fcntl::{AccessModeOFlag, DescriptorFlags, OFlag};
+use linux_api::fcntl::{DescriptorFlags, OFlag};
 use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -696,20 +696,16 @@ impl LegacyFileCounter {
     }
 
     pub fn set_status(&self, status: FileStatus) {
-        // legacyfile lumps access and status bits together. fetch
-        // the access bits so that we don't attempt to clobber them.
-        let raw = unsafe { c::legacyfile_getFlags(self.ptr()) };
-        let access = AccessModeOFlag::from_bits_truncate(raw);
-        unsafe { c::legacyfile_setFlags(self.ptr(), access.bits() | status.bits()) }
+        unsafe { c::legacyfile_setFileStatusFlags(self.ptr(), status.bits()) }
     }
 
     pub fn status(&self) -> FileStatus {
-        let raw = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        let raw = unsafe { c::legacyfile_getFileStatusFlags(self.ptr()) };
         FileStatus::from_bits_truncate(raw)
     }
 
     pub fn mode(&self) -> FileMode {
-        let raw_flags = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        let raw_flags = unsafe { c::legacyfile_getAccessModeFlags(self.ptr()) };
         let oflags = OFlag::from_bits_retain(raw_flags);
         let (mode, _other_flags) =
             FileMode::from_o_flags(oflags).expect("Invalid flags for open file");

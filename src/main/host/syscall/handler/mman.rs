@@ -352,7 +352,11 @@ impl SyscallHandler {
         // get the access and status oflags (not creation flags).
         // unclear whether the status flags are actually needed, but they may effect
         // performance (e.g. O_DIRECT).
-        let oflags = OFlag::from_bits_retain(unsafe { c::regularfile_get_flags(file) });
+        let oflags = {
+            let raw_status = unsafe { c::regularfile_get_status_flags(file) };
+            let raw_access = unsafe { c::legacyfile_getAccessModeFlags(file.cast()) };
+            OFlag::from_bits_truncate(raw_status | raw_access)
+        };
         assert_eq!(oflags.file_creation_flags(), FileCreationOFlag::empty());
 
         // Mode argument to 'open' is a no-op, since we're not creating a file.

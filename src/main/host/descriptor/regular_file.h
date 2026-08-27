@@ -108,8 +108,8 @@ int regularfile_getdents64(RegularFile* file, struct linux_dirent64* dirp, unsig
 int regularfile_ioctl(RegularFile* file, unsigned long request, void* arg);
 int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg);
 int regularfile_poll(RegularFile* file, struct pollfd* pfd);
-int regularfile_get_flags(RegularFile* file);
-void regularfile_set_flags(RegularFile* file, int flags);
+int regularfile_get_status_flags(RegularFile* file);
+void regularfile_set_status_flags(RegularFile* file, int flags);
 
 // ******************************************
 // Operations where the dir RegularFile* may be null
