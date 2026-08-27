@@ -2,6 +2,15 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{bindings, const_conversions};
 
+// open(2): The Linux header file <asm/fcntl.h> doesn't define O_ASYNC; the
+// (BSD-derived) FASYNC synonym is defined instead.
+//
+// We define with the LINUX_ prefix for C usage, and as a u32 for consistency
+// with the other c-bindgen output. We use a literal integer here instead of
+// setting directly to LINUX_FASYNC so that cbindgen can handle it.
+pub const LINUX_O_ASYNC: u32 = 0x2000;
+const _: () = const { assert!(LINUX_O_ASYNC == bindings::LINUX_FASYNC) };
+
 bitflags::bitflags! {
     /// Open flags, as used e.g. with `open`.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -27,7 +36,7 @@ bitflags::bitflags! {
         const O_PATH = const_conversions::i32_from_u32(bindings::LINUX_O_PATH);
         const O_TMPFILE = const_conversions::i32_from_u32(bindings::LINUX_O_TMPFILE);
         const O_NDELAY = const_conversions::i32_from_u32(bindings::LINUX_O_NDELAY);
-        const O_ASYNC = const_conversions::i32_from_u32(bindings::LINUX_FASYNC);
+        const O_ASYNC = const_conversions::i32_from_u32(LINUX_O_ASYNC);
     }
 }
 
