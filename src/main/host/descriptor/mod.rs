@@ -15,7 +15,7 @@ use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
 use atomic_refcell::AtomicRefCell;
 use linux_api::errno::Errno;
-use linux_api::fcntl::{DescriptorFlags, OFlag};
+use linux_api::fcntl::{AccessModeOFlag, DescriptorFlags, OFlag};
 use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -723,6 +723,19 @@ impl LegacyFileCounter {
         Ok(statbuf)
     }
 
+    pub fn set_status(&self, status: FileStatus) {
+        // legacyfile lumps access and status bits together. fetch
+        // the access bits so that we don't attempt to clobber them.
+        let raw = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        let access = AccessModeOFlag::from_bits_truncate(raw);
+        unsafe { c::legacyfile_setFlags(self.ptr(), access.bits() | status.bits()) }
+    }
+
+    pub fn status(&self) -> FileStatus {
+        let raw = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        FileStatus::from_bits_truncate(raw)
+    }
+
     /// Should drop `self` immediately after calling this.
     fn close_helper(&mut self, host: &Host) {
         // Always take out the `file` object, so that our `Drop` impl knows this object
@@ -818,6 +831,20 @@ impl CompatFile {
         match self {
             CompatFile::New(open_file) => open_file.inner_file().borrow().mode(),
             CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.mode(),
+        }
+    }
+
+    pub fn set_status(&self, status: FileStatus) {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow_mut().set_status(status),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.set_status(status),
+        }
+    }
+
+    pub fn status(&self) -> FileStatus {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow().status(),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.status(),
         }
     }
 }
