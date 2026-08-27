@@ -972,6 +972,9 @@ int regularfile_fcntl(RegularFile* file, unsigned long command, void* arg) {
         utility_panic("F_SETFD operates on file descriptor, not file description."
                       " should have been handled in fcntl.rs handler");
     }
+    if (command == F_SETFL || command == F_GETFL) {
+        utility_panic("F_SETFL and F_GETFL should have been handled in fcntl.rs handler");
+    }
 
     int result = fcntl(_regularfile_getOSBackedFD(file), command, arg);
 
