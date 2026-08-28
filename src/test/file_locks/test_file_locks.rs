@@ -283,6 +283,71 @@ fn test_pid_lock_overflow(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Res
     Ok(())
 }
 
+fn test_pid_lock_max_range(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+
+    // lock 0..i64::MAX
+    fcntl_lock(
+        file.as_raw_fd(),
+        cmd.into(),
+        &libc::flock {
+            l_type: libc::F_WRLCK.try_into().unwrap(),
+            l_whence: libc::SEEK_SET.try_into().unwrap(),
+            l_start: 0,
+            l_len: i64::MAX,
+            l_pid: 0,
+        },
+    )?;
+
+    // We can lock one more byte beyond that (see overflow test above),
+    // such that the coalesced lock has length i64::MAX+1.
+    fcntl_lock(
+        file.as_raw_fd(),
+        cmd.into(),
+        &libc::flock {
+            l_type: libc::F_WRLCK.try_into().unwrap(),
+            l_whence: libc::SEEK_SET.try_into().unwrap(),
+            l_start: i64::MAX,
+            l_len: 1,
+            l_pid: 0,
+        },
+    )?;
+
+    // Get the coalesced conflicting lock.
+    let mut child = ForkedChild::new(handle_lock_request)?;
+    let conflict_flock = {
+        // The child should successfully release the lock.
+        child
+            .send_recv(&SerializedLockRequest {
+                fd: file.as_raw_fd(),
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: libc::flock {
+                    l_type: libc::F_WRLCK.try_into().unwrap(),
+                    l_whence: libc::SEEK_SET.try_into().unwrap(),
+                    l_start: 0,
+                    l_len: 1,
+                    l_pid: 0,
+                },
+            })?
+            .to_result()?
+    };
+
+    {
+        let expected = libc::flock {
+            l_type: libc::F_WRLCK.try_into().unwrap(),
+            l_whence: libc::SEEK_SET.try_into().unwrap(),
+            l_start: 0,
+            // effective length of the coalesced lock is i64::MAX+1. This gets
+            // mapped back to length=0.
+            l_len: 0,
+            l_pid: std::process::id().try_into().unwrap(),
+        };
+        ensure_ord!(conflict_flock, ==, expected);
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum CloseDescriptor {
     Original,
@@ -1259,6 +1324,11 @@ fn main() -> anyhow::Result<()> {
             ShadowTest::new(
                 &format!("pid-lock-overflow {cmd:?}"),
                 move || test_pid_lock_overflow(cmd),
+                all_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-lock-max-range {cmd:?}"),
+                move || test_pid_lock_max_range(cmd),
                 all_envs.clone(),
             ),
         ]);
