@@ -49,6 +49,7 @@ mod signal;
 mod socket;
 mod stat;
 mod sysinfo;
+mod sysv_shm;
 mod time;
 mod timerfd;
 mod uio;
@@ -494,6 +495,10 @@ impl SyscallHandler {
             SyscallNum::NR_setsid => handle!(setsid),
             SyscallNum::NR_setsockopt => handle!(setsockopt),
             SyscallNum::NR_shutdown => handle!(shutdown),
+            SyscallNum::NR_shmat => handle!(shmat),
+            SyscallNum::NR_shmctl => handle!(shmctl),
+            SyscallNum::NR_shmdt => handle!(shmdt),
+            SyscallNum::NR_shmget => handle!(shmget),
             SyscallNum::NR_sigaltstack => handle!(sigaltstack),
             SyscallNum::NR_socket => handle!(socket),
             SyscallNum::NR_socketpair => handle!(socketpair),
