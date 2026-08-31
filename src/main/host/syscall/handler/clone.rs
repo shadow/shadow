@@ -26,6 +26,9 @@ impl SyscallHandler {
         ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
     ) -> Result<kernel_pid_t, Errno> {
+        trace!(
+            "flags:{flags:?} exit_signal:{exit_signal:?} child_stack:{child_stack:?} ptid:{ptid:?} ctid:{ctid:?} newtls:{newtls:?}"
+        );
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
         let mut handled_flags = CloneFlags::empty();

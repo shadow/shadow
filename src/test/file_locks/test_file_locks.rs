@@ -3,7 +3,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{
     io::{Seek as _, SeekFrom, Write as _},
     ops::Neg as _,
-    os::fd::AsRawFd,
+    os::fd::{AsRawFd, IntoRawFd as _},
 };
 use test_utils::{ForkedChild, ShadowTest, TestEnvironment, ensure_in, ensure_ord, set};
 
@@ -244,6 +244,220 @@ fn test_contested_pid_locks(cmd: FcntlPosixSetlkUncontestedCommand) -> anyhow::R
         let out_flock = fcntl_lock(file.as_raw_fd(), cmd.into(), &wr_flock)?;
         // output flock should be unmodified.
         ensure_ord!(out_flock, ==, wr_flock);
+    }
+
+    Ok(())
+}
+
+fn test_pid_locks_shared_descriptor_table(
+    setlk_cmd: FcntlPosixSetlkUncontestedCommand,
+) -> anyhow::Result<()> {
+    let file = tempfile::tempfile().unwrap();
+
+    // A file object would be confused by what we're doing here;
+    // convert to a raw file descriptor.
+    //
+    // We'll close this descriptor in the child with the share descriptor table
+    // as part of testing.
+    let raw_file_fd_to_close = file.into_raw_fd();
+    // We'll keep this one open throughout and use it for other operations.
+    let raw_file_fd = unsafe { libc::dup(raw_file_fd_to_close) };
+
+    // The lock we'll take and check.
+    let flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 100,
+        l_pid: 0,
+    };
+
+    // Take this lock ourselves.
+    fcntl_lock(raw_file_fd_to_close, setlk_cmd.into(), &flock)?;
+
+    // We'll use this, conventionally forked, child to check the status of the lock.
+    let mut getlk_child = ForkedChild::new(handle_lock_request)?;
+
+    // commands we'll send the child:
+    // close `raw_file_fd_to_close`; return 0 or errno.
+    const CMD_CLOSE: i32 = 0;
+    // take the lock using `raw_file_fd`; return 0 or errno.
+    const CMD_SETLOCK: i32 = 1;
+    // query the lock using `raw_file_fd`; return l_pid (owning pid) or negated errno.
+    const CMD_GETLOCK: i32 = 2;
+
+    // Create a child process with a shared descriptor table (CLONE_FILES).
+    let mut clone_files_child = {
+        let child_fn = |cmd: &i32| -> i32 {
+            match *cmd {
+                CMD_CLOSE => {
+                    // close the file.
+                    let rv = unsafe { libc::close(raw_file_fd_to_close) };
+                    if rv == 0 {
+                        0
+                    } else {
+                        unsafe { *libc::__errno_location() }
+                    }
+                }
+                CMD_SETLOCK => match fcntl_lock(raw_file_fd, setlk_cmd.into(), &flock) {
+                    Ok(_) => 0,
+                    Err(e) => i32::from(e),
+                },
+                CMD_GETLOCK => match fcntl_lock(raw_file_fd, FcntlFlockCommand::F_GETLK, &flock) {
+                    Ok(fl) => fl.l_pid,
+                    Err(e) => e.to_negated_i32(),
+                },
+                _other => -1,
+            }
+        };
+        unsafe { ForkedChild::new_with_clone_files(child_fn) }?
+    };
+
+    // Regular child should still see the lock as held by us, and have our PID
+    // associated with it.
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock,
+            })?
+            .to_result()?;
+        ensure_ord!(res.l_pid, ==, i32::try_from(std::process::id()).unwrap());
+    }
+
+    // clone_files_child sees the lock as take-able.
+    // This implies that despite the lock having our pid associated with it
+    // above, the shared *descriptor table* is the true owner of the lock, not
+    // the process.
+    {
+        let res = clone_files_child.send_recv(&CMD_GETLOCK)?;
+        ensure_ord!(res, ==, 0);
+    }
+
+    // Tell clone_files_child to close `raw_file_fd_to_close`.
+    {
+        let res = clone_files_child.send_recv(&CMD_CLOSE)?;
+        ensure_ord!(res, ==, 0);
+    }
+
+    // We should have now lost the lock.
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock,
+            })?
+            .to_result()?;
+        ensure_ord!(res.l_type, ==, i16::try_from(libc::F_UNLCK).unwrap());
+        ensure_ord!(res.l_pid, ==, 0);
+    }
+
+    // Tell clone_files_child to lock the file again, using `raw_files_fd`.
+    {
+        let res = clone_files_child.send_recv(&CMD_SETLOCK)?;
+        ensure_ord!(res, ==, 0);
+    }
+
+    // regular child should see clone_files_child as the owner of the lock.
+    // i.e. the pid associated with the lock is the one that actually did the
+    // lock operation, not the one that originally created the file descriptor
+    // and file descriptor table)
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock,
+            })?
+            .to_result()?;
+        ensure_ord!(res.l_type, ==, i16::try_from(libc::F_WRLCK).unwrap());
+        ensure_ord!(res.l_pid, ==, clone_files_child.pid());
+    }
+
+    // we should be able to take a lock that contained within clone_files_child's
+    // lock, since our shared descriptor table is the owner.
+    let contained_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 0,
+        l_len: 1,
+        l_pid: 0,
+    };
+    // operation succeeds since we have the same owner, and ...
+    fcntl_lock(raw_file_fd, setlk_cmd.into(), &contained_flock)?;
+
+    // the pid label doesn't change. it still appears as a single lock owned by
+    // the `clone_files_child`.
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: contained_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(res, ==, libc::flock {
+            l_pid: clone_files_child.pid(),
+            ..flock
+        });
+    }
+
+    // if we take a lock that *overlaps* with the clone_files_child's lock ...
+    let overlapping_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 50,
+        l_len: 100,
+        l_pid: 0,
+    };
+    fcntl_lock(raw_file_fd, setlk_cmd.into(), &overlapping_flock)?;
+
+    // the whole locked region is locked. The existing lock, with
+    // clone_files_child's pid label, gets expanded to include the new region.
+    // (i.e. the new region doesn't get our pid label).
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: libc::flock {
+                    l_len: 1,
+                    ..overlapping_flock
+                },
+            })?
+            .to_result()?;
+        ensure_ord!(res, ==, libc::flock {
+            l_start: 0,
+            l_len: 150,
+            l_pid: clone_files_child.pid(),
+            ..overlapping_flock
+        });
+    }
+
+    // taking a completely distinct lock:
+    let distinct_flock = libc::flock {
+        l_type: libc::F_WRLCK.try_into().unwrap(),
+        l_whence: libc::SEEK_SET.try_into().unwrap(),
+        l_start: 300,
+        l_len: 100,
+        l_pid: 0,
+    };
+    fcntl_lock(raw_file_fd, setlk_cmd.into(), &distinct_flock)?;
+    // here the new lock does get *our* pid label.
+    {
+        let res = getlk_child
+            .send_recv(&SerializedLockRequest {
+                fd: raw_file_fd,
+                cmd: FcntlFlockCommand::F_GETLK.into(),
+                flock: distinct_flock,
+            })?
+            .to_result()?;
+        ensure_ord!(res, ==, libc::flock {
+            l_pid: std::process::id().try_into().unwrap(),
+            ..distinct_flock
+        });
     }
 
     Ok(())
@@ -1264,6 +1478,12 @@ fn main() -> anyhow::Result<()> {
                 &format!("uncontested-pid-locks {cmd:?}"),
                 move || test_uncontested_pid_locks(cmd),
                 all_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("pid-locks-shared-descriptor-table {cmd:?}"),
+                move || test_pid_locks_shared_descriptor_table(cmd),
+                // <https://github.com/shadow/shadow/issues/3783>
+                no_shadow_envs.clone(),
             ),
             ShadowTest::new(
                 &format!("pid-lock-seek-end {cmd:?}"),
