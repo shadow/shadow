@@ -8,10 +8,12 @@
 use std::collections::HashSet;
 use std::io::{PipeReader, PipeWriter, Write};
 use std::marker::PhantomData;
+use std::os::fd::IntoRawFd as _;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
 
+use linux_api::sched::{CloneFlags, CloneResult, clone_args};
 use nix::poll::PollFlags;
 use nix::sys::signal;
 use nix::sys::time::TimeVal;
@@ -689,7 +691,7 @@ where
 // TODO: It'd be nice to wrap a generic `Write` object instead, but this is
 // tricky to do in a sound way when T may have undefined padding bytes.
 pub struct TypedWriter<W, T> {
-    fd: W,
+    writer: W,
     _t: PhantomData<T>,
 }
 impl<W, T> TypedWriter<W, T>
@@ -697,16 +699,16 @@ where
     T: shadow_pod::Pod,
     W: std::os::fd::AsRawFd,
 {
-    fn new(fd: W) -> Self {
+    fn new(writer: W) -> Self {
         Self {
-            fd,
+            writer,
             _t: PhantomData,
         }
     }
 
     /// Send `val`
     pub fn send(&mut self, val: &T) -> Result<(), std::io::Error> {
-        self.fd.write_pod(val)
+        self.writer.write_pod(val)
     }
 }
 
@@ -769,22 +771,37 @@ where
     ResponseType: shadow_pod::Pod,
 {
     /// Create a forked child process that used `f` as its handler function.
-    pub fn new<FnType>(mut f: FnType) -> Result<Self, std::io::Error>
+    ///
+    /// Safety:
+    ///
+    /// Various `clone_args` can break all sort of soundness assumptions.
+    unsafe fn new_with_clone_args<FnType>(
+        clone_args: &clone_args,
+        mut f: FnType,
+    ) -> Result<Self, std::io::Error>
     where
         FnType: FnMut(&RequestType) -> ResponseType,
     {
+        let clone_flags = CloneFlags::from_bits(clone_args.flags).unwrap();
         let (mut cmd_reader, cmd_writer) = typed_pipe::<RequestType>()?;
         let (res_reader, mut res_writer) = typed_pipe::<ResponseType>()?;
-        let fork_res = unsafe { libc::fork() };
-        let pid = match fork_res.cmp(&0) {
-            std::cmp::Ordering::Equal => {
+        let clone_res = unsafe { linux_api::sched::clone3(clone_args) };
+        let pid = match clone_res {
+            Ok(CloneResult::CallerIsChild) => {
                 // Child will run in a loop, processing requests.
                 let child_closure = || {
-                    // Close our cmd writer, to ensure we get EOF when the parent closes their copy,
-                    // which happens implicitly when the ForkedChild is dropped.
-                    drop(cmd_writer);
-                    // Close our response reader while we're at it, though not strictly necessary.
-                    drop(res_reader);
+                    if clone_flags.contains(CloneFlags::CLONE_FILES) {
+                        // We share a descriptor table with the parent. *do not* close the parent's
+                        // ends of the pipes.
+                        let _ = cmd_writer.writer.into_raw_fd();
+                        let _ = res_reader.reader.into_raw_fd();
+                    } else {
+                        // Close our cmd writer, to ensure we get EOF when the parent closes their copy,
+                        // which happens implicitly when the ForkedChild is dropped.
+                        drop(cmd_writer);
+                        // Close our response reader while we're at it, though not strictly necessary.
+                        drop(res_reader);
+                    }
                     while let Some(cmd) = cmd_reader.recv().expect("Couldn't read from parent") {
                         let res = f(&cmd);
                         res_writer.send(&res).expect("Couldn't send to parent");
@@ -806,14 +823,72 @@ where
                     libc::_exit(if res.is_ok() { 0 } else { 1 });
                 }
             }
-            std::cmp::Ordering::Greater => fork_res,
-            std::cmp::Ordering::Less => return Err(std::io::Error::last_os_error()),
+            Ok(CloneResult::CallerIsParent(pid)) => pid,
+            Err(e) => return Err(std::io::Error::from_raw_os_error(e.into())),
         };
+        if clone_flags.contains(CloneFlags::CLONE_FILES) {
+            // We share a descriptor table with the child. *do not* close the child's
+            // ends of the pipes.
+            let _ = cmd_reader.reader.into_raw_fd();
+            let _ = res_writer.writer.into_raw_fd();
+        }
         Ok(Self {
-            pid,
+            pid: pid.as_raw_nonzero().get(),
             cmd_writer: Some(cmd_writer),
             res_reader,
         })
+    }
+
+    /// Create a child process that shares its descriptor table with the parent
+    /// with the CLONE_FILES flag.
+    ///
+    /// # Safety
+    ///
+    /// TLDR: avoid manipulating shared file descriptors using Rust code that
+    /// has safety requirements around the state of those descriptors.
+    ///
+    /// The spawned child process shares a descriptor table with its parent,
+    /// similarly as if it were a thread. Unlike a thread, though, the child
+    /// process does *not* share a virtual address space, meaning that even if
+    /// we used `Send` and `Sync` requirements here, tools like
+    /// `std::sync::Mutex` that might otherwise make such sharing safe won't
+    /// work as expected.
+    ///
+    /// For example, `std::fs::File` is an "owned file descriptor", with a
+    /// safety requirement that it is open for the lifetime of the object.
+    /// <https://doc.rust-lang.org/stable/std/os/fd/trait.FromRawFd.html#tymethod.from_raw_fd>.
+    /// Sharing such an object between the parent and the child, and dropping
+    /// the object in one of them (closing the file), would violate the safety
+    /// property in the other. Even if we required that the function object is
+    /// `Send` and `Sync`, the type system would allow calling code to share an
+    /// `Arc<Mutex<Option<File>>>`, but at runtime calling
+    /// `lock().unwrap().take()` on one of the objects would close the
+    /// descriptor for both processes without actually doing any in-memory
+    /// synchronization, resulting in a safety violation.
+    pub unsafe fn new_with_clone_files<FnType>(f: FnType) -> Result<Self, std::io::Error>
+    where
+        FnType: FnMut(&RequestType) -> ResponseType + Send + Sync,
+    {
+        // equivalent to `fork`
+        let clone_args = clone_args {
+            flags: CloneFlags::CLONE_FILES.bits(),
+            exit_signal: libc::SIGCHLD.try_into().unwrap(),
+            ..shadow_pod::zeroed()
+        };
+        unsafe { Self::new_with_clone_args(&clone_args, f) }
+    }
+
+    /// Create a forked child process that used `f` as its handler function.
+    pub fn new<FnType>(f: FnType) -> Result<Self, std::io::Error>
+    where
+        FnType: FnMut(&RequestType) -> ResponseType,
+    {
+        // equivalent to `fork`
+        let clone_args = clone_args {
+            exit_signal: libc::SIGCHLD.try_into().unwrap(),
+            ..shadow_pod::zeroed()
+        };
+        unsafe { Self::new_with_clone_args(&clone_args, f) }
     }
 
     /// Send a value to the child process.

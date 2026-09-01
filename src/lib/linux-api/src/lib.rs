@@ -121,4 +121,9 @@ mod const_conversions {
 
         val as u16
     }
+
+    pub const fn i16_from_u32(val: u32) -> i16 {
+        assert!(val <= (i16::MAX as u32));
+        val as i16
+    }
 }

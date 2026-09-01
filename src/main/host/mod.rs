@@ -7,6 +7,7 @@
 pub mod context;
 pub mod cpu;
 pub mod descriptor;
+pub mod fcntl_lock_table;
 pub mod futex_table;
 #[allow(clippy::module_inception)]
 pub mod host;

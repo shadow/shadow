@@ -9,3 +9,5 @@ hosts:
     processes:
     - path: ../../target/debug/test_file_locks
       args: --shadow-passing
+      environment:
+        RUST_BACKTRACE: "1"

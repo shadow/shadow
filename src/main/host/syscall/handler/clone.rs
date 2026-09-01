@@ -9,6 +9,7 @@ use shadow_shim_helper_rs::rootedcell::rc::RootedRc;
 use shadow_shim_helper_rs::rootedcell::refcell::RootedRefCell;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
+use crate::host::descriptor::DropPosixRecordLocks;
 use crate::host::descriptor::descriptor_table::DescriptorTable;
 use crate::host::process::ProcessId;
 use crate::host::thread::Thread;
@@ -25,6 +26,9 @@ impl SyscallHandler {
         ctid: ForeignPtr<kernel_pid_t>,
         newtls: u64,
     ) -> Result<kernel_pid_t, Errno> {
+        trace!(
+            "flags:{flags:?} exit_signal:{exit_signal:?} child_stack:{child_stack:?} ptid:{ptid:?} ctid:{ctid:?} newtls:{newtls:?}"
+        );
         // We use this for a consistency check to validate that we've inspected
         // and emulated all of the provided flags.
         let mut handled_flags = CloneFlags::empty();
@@ -115,7 +119,11 @@ impl SyscallHandler {
             RootedRc::new(root, RootedRefCell::new(root, table))
         };
         let desc_table = ExplicitDropper::new(desc_table, |desc_table| {
-            desc_table.explicit_drop_recursive(ctx.objs.host.root(), ctx.objs.host);
+            // If we drop the table through this object, it means the clone
+            // failed, and we *don't* drop any posix record locks. (Particularly not the current
+            // process's locks).
+            let d = DropPosixRecordLocks::False;
+            desc_table.explicit_drop_recursive(ctx.objs.host.root(), (ctx.objs.host, d));
         });
         handled_flags.insert(CloneFlags::CLONE_FILES);
 

@@ -2,23 +2,23 @@
 
 use std::sync::Arc;
 
-use atomic_refcell::AtomicRefCell;
-use linux_api::errno::Errno;
-use linux_api::fcntl::{DescriptorFlags, OFlag};
-use linux_api::ioctls::IoctlRequest;
-use shadow_shim_helper_rs::syscall_types::ForeignPtr;
-
-use crate::core::worker;
 use crate::cshadow as c;
 use crate::host::descriptor::listener::{StateListenHandle, StateListenerFilter};
 use crate::host::descriptor::socket::{Socket, SocketRef, SocketRefMut};
+use crate::host::fcntl_lock_table::FileId;
 use crate::host::host::Host;
 use crate::host::memory_manager::MemoryManager;
+use crate::host::process::ProcessId;
 use crate::host::syscall::io::IoVec;
 use crate::host::syscall::types::{SyscallError, SyscallResult};
 use crate::utility::callback_queue::CallbackQueue;
 use crate::utility::{HostTreePointer, IsSend, IsSync, ObjectCounter};
+use atomic_refcell::AtomicRefCell;
+use linux_api::errno::Errno;
+use linux_api::fcntl::{DescriptorFlags, OFlag};
+use linux_api::ioctls::IoctlRequest;
 use shadow_shim_helper_rs::explicit_drop::ExplicitDrop;
+use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
 pub mod descriptor_table;
 pub mod epoll;
@@ -44,6 +44,19 @@ bitflags::bitflags! {
         const DIRECT = OFlag::O_DIRECT.bits();
         const NOATIME = OFlag::O_NOATIME.bits();
     }
+}
+
+/// For functions that involve closing descriptors; specifies for which
+/// `ProcessId` posix record locks ought to be freed, if any.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum DropPosixRecordLocks {
+    // Indicates to *not* drop posix record locks as part of closing a
+    // descriptor.  This should only be used for "non-user-visible" closes; e.g.
+    // we end up internally cloning and dropping descriptors as part of our fork
+    // and exec implementations.
+    False,
+    // Includes associated ProcessId for which to drop locks.
+    ForPid(ProcessId),
 }
 
 impl FileStatus {
@@ -517,12 +530,37 @@ impl Descriptor {
         self.file.take().unwrap()
     }
 
-    /// Close the descriptor. The `host` option is a legacy option for legacy file.
+    fn drop_posix_record_locks(&self, host: &Host, pid: ProcessId) {
+        let owner = super::fcntl_lock_table::LockOwner::Process(pid);
+        let stat = match self.file().stat() {
+            Ok(s) => s,
+            Err(e) => {
+                log::debug!("Couldn't stat file to drop record locks: {e:?}");
+                return;
+            }
+        };
+        let fid = FileId::from(&stat);
+        host.fcntl_lock_table_borrow_mut().remove_owner(fid, &owner);
+    }
+
+    /// Close the descriptor.
+    // Caller needs to tell us which PID to drop posix record locks for, if any.
+    // We can't store the "owning" PID in the `Descriptor`, nor the
+    // `DescriptorTable`, since both can be shared across multiple processes
+    // (e.g. after `clone` with `CLONE_FILES` and without `CLONE_THREAD`).
+    //
+    // We use the Host reference both for closing legacy files, and for
+    // accessing the record-lock table.
     pub fn close(
         self,
         host: &Host,
+        drop_posix_record_locks: DropPosixRecordLocks,
         cb_queue: &mut CallbackQueue,
     ) -> Option<Result<(), SyscallError>> {
+        match drop_posix_record_locks {
+            DropPosixRecordLocks::False => (),
+            DropPosixRecordLocks::ForPid(pid) => self.drop_posix_record_locks(host, pid),
+        }
         self.into_file().close(host, cb_queue)
     }
 
@@ -592,12 +630,12 @@ impl Drop for Descriptor {
 }
 
 impl ExplicitDrop for Descriptor {
-    type ExplicitDropParam<'p> = (&'p Host, &'p mut CallbackQueue);
+    type ExplicitDropParam<'p> = (&'p Host, DropPosixRecordLocks, &'p mut CallbackQueue);
     type ExplicitDropResult = Option<Result<(), SyscallError>>;
 
     fn explicit_drop<'p>(self, param: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
-        let (host, cb_queue) = param;
-        self.close(host, cb_queue)
+        let (host, drop_posix_record_locks, cb_queue) = param;
+        self.close(host, drop_posix_record_locks, cb_queue)
     }
 }
 
@@ -687,11 +725,16 @@ impl LegacyFileCounter {
 
     /// Should drop `self` immediately after calling this.
     fn close_helper(&mut self, host: &Host) {
+        // Always take out the `file` object, so that our `Drop` impl knows this object
+        // was closed properly.
+        let Some(file) = self.file.take() else {
+            warn_and_debug_panic!("Tried to close missing file");
+            #[allow(unreachable_code)]
+            return;
+        };
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
-        if Arc::<()>::strong_count(&self.open_count) == 1
-            && let Some(file) = self.file.take()
-        {
+        if Arc::<()>::strong_count(&self.open_count) == 1 {
             unsafe { c::legacyfile_close(file.ptr(), host) }
         }
     }
@@ -701,11 +744,32 @@ impl LegacyFileCounter {
     pub fn close(mut self, host: &Host) {
         self.close_helper(host);
     }
+
+    pub fn mode(&self) -> FileMode {
+        let raw_flags = unsafe { c::legacyfile_getFlags(self.ptr()) };
+        let oflags = OFlag::from_bits_retain(raw_flags);
+        let (mode, _other_flags) =
+            FileMode::from_o_flags(oflags).expect("Invalid flags for open file");
+        mode
+    }
 }
 
 impl std::ops::Drop for LegacyFileCounter {
     fn drop(&mut self) {
-        worker::Worker::with_active_host(|host| self.close_helper(host)).unwrap();
+        if self.file.is_some() {
+            warn_and_debug_panic!("Dropped LegacyFileCounter without explicitly closing");
+            #[allow(unreachable_code)]
+            crate::core::worker::Worker::with_active_host(|host| self.close_helper(host)).unwrap();
+        }
+    }
+}
+
+impl ExplicitDrop for LegacyFileCounter {
+    type ExplicitDropParam<'p> = &'p Host;
+    type ExplicitDropResult = ();
+
+    fn explicit_drop<'p>(mut self, host: Self::ExplicitDropParam<'p>) -> Self::ExplicitDropResult {
+        self.close_helper(host);
     }
 }
 
@@ -747,6 +811,13 @@ impl CompatFile {
         match self {
             CompatFile::New(open_file) => open_file.inner_file().borrow().stat(),
             CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.stat()?),
+        }
+    }
+
+    pub fn mode(&self) -> FileMode {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow().mode(),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.mode(),
         }
     }
 }

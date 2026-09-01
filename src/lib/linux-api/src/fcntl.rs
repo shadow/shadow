@@ -73,6 +73,19 @@ pub enum FcntlCommand {
     F_SETDELEG = bindings::LINUX_F_SETDELEG,
 }
 
+pub use bindings::linux_flock as flock;
+unsafe impl shadow_pod::Pod for flock {}
+
+// Valid values for `flock::l_whence`.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(i16)]
+#[allow(non_camel_case_types)]
+pub enum FlockWhence {
+    SEEK_SET = const_conversions::i16_from_u32(bindings::LINUX_SEEK_SET),
+    SEEK_CUR = const_conversions::i16_from_u32(bindings::LINUX_SEEK_CUR),
+    SEEK_END = const_conversions::i16_from_u32(bindings::LINUX_SEEK_END),
+}
+
 /// Owner, as used with [`FcntlCommand::F_SETOWN_EX`] and [`FcntlCommand::F_GETOWN_EX`]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
@@ -93,6 +106,17 @@ pub enum FcntlLeaseType {
     F_UNLCK = bindings::LINUX_F_UNLCK,
     F_EXLCK = bindings::LINUX_F_EXLCK,
     F_SHLCK = bindings::LINUX_F_SHLCK,
+}
+
+/// Lock type, as found in `flock::l_type`, used with e.g.
+/// [`FcntlCommand::F_SETLK`] and [`FcntlCommand::F_OFD_SETLK`]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(i16)]
+#[allow(non_camel_case_types)]
+pub enum FlockType {
+    F_RDLCK = const_conversions::i16_from_u32(bindings::LINUX_F_RDLCK),
+    F_WRLCK = const_conversions::i16_from_u32(bindings::LINUX_F_WRLCK),
+    F_UNLCK = const_conversions::i16_from_u32(bindings::LINUX_F_UNLCK),
 }
 
 /// Seal type, as used with [`FcntlCommand::F_ADD_SEALS`] and [`FcntlCommand::F_GET_SEALS`].

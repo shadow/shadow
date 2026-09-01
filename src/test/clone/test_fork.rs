@@ -40,6 +40,15 @@ fn fork_via_clone_syscall() -> Result<CloneResult, Errno> {
     }
 }
 
+fn fork_via_clone3_syscall() -> Result<CloneResult, Errno> {
+    let clone_args = linux_api::sched::clone_args {
+        flags: CloneFlags::empty().bits(),
+        exit_signal: u64::try_from(Signal::SIGCHLD.as_i32()).unwrap(),
+        ..shadow_pod::zeroed()
+    };
+    unsafe { linux_api::sched::clone3(&clone_args) }
+}
+
 fn fork_via_fork_syscall() -> Result<CloneResult, Errno> {
     unsafe { linux_api::sched::fork() }
 }
@@ -1311,10 +1320,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tests: Vec<test_utils::ShadowTest<(), anyhow::Error>> = Vec::new();
 
     #[allow(clippy::type_complexity)]
-    let fork_fns: [(&str, Arc<dyn Fn() -> Result<CloneResult, Errno>>); 3] = [
+    let fork_fns: [(&str, Arc<dyn Fn() -> Result<CloneResult, Errno>>); _] = [
         (
             stringify!(fork_via_clone_syscall),
             Arc::new(fork_via_clone_syscall),
+        ),
+        (
+            stringify!(fork_via_clone3_syscall),
+            Arc::new(fork_via_clone3_syscall),
         ),
         (
             stringify!(fork_via_fork_syscall),
