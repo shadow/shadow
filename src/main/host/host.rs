@@ -1008,6 +1008,7 @@ impl Drop for Host {
         assert!(self.shim_shmem_lock.borrow().is_none());
     }
 }
+
 mod export {
     use std::{os::raw::c_char, time::Duration};
 
