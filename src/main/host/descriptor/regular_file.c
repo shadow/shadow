@@ -82,6 +82,11 @@ FileType regularfile_getType(RegularFile* file) {
     return file->type;
 }
 
+LegacyFile* regularfile_getLegacyFile(RegularFile* file) {
+    MAGIC_ASSERT(file);
+    return &file->super;
+}
+
 static inline RegularFile* _regularfile_legacyFileToRegularFile(LegacyFile* desc) {
     utility_debugAssert(legacyfile_getType(desc) == DT_FILE);
     RegularFile* file = (RegularFile*)desc;

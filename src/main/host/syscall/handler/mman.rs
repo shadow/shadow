@@ -354,7 +354,8 @@ impl SyscallHandler {
         // performance (e.g. O_DIRECT).
         let oflags = {
             let raw_status = unsafe { c::regularfile_get_status_flags(file) };
-            let raw_access = unsafe { c::legacyfile_getAccessModeFlags(file.cast()) };
+            let lf = unsafe { c::regularfile_getLegacyFile(file) };
+            let raw_access = unsafe { c::legacyfile_getAccessModeFlags(lf) };
             OFlag::from_bits_truncate(raw_status | raw_access)
         };
         assert_eq!(oflags.file_creation_flags(), FileCreationOFlag::empty());

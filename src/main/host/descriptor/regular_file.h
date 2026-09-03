@@ -18,6 +18,7 @@
 
 #include "lib/linux-api/linux-api.h"
 #include "main/core/definitions.h"
+#include "main/host/descriptor/descriptor_types.h"
 #include "main/host/syscall/kernel_types.h"
 
 /* Opaque type representing a file-backed file descriptor. */
@@ -62,6 +63,9 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
 
 /* Get the type of file. */
 FileType regularfile_getType(RegularFile* file);
+
+/* Get a "superclass" pointer to the LegacyFile */
+LegacyFile* regularfile_getLegacyFile(RegularFile* file);
 
 /* Returns the linux-backed fd that shadow uses to perform the file operations.  */
 int regularfile_getOSBackedFD(RegularFile* file);
