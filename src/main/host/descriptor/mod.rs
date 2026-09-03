@@ -29,23 +29,8 @@ pub mod shared_buf;
 pub mod socket;
 pub mod timerfd;
 
-bitflags::bitflags! {
-    /// These are flags that can potentially be changed from the plugin (analagous to the Linux
-    /// `filp->f_flags` status flags). Not all `O_` flags are valid here. For example file access
-    /// mode flags (ex: `O_RDWR`) are stored elsewhere, and file creation flags (ex: `O_CREAT`)
-    /// are not stored anywhere. Many of these can be represented in different ways, for example:
-    /// `O_NONBLOCK`, `SOCK_NONBLOCK`, `EFD_NONBLOCK`, `GRND_NONBLOCK`, etc, and not all have the
-    /// same value.
-    #[derive(Copy, Clone, Debug)]
-    pub struct FileStatus: i32 {
-        const NONBLOCK = OFlag::O_NONBLOCK.bits();
-        const APPEND = OFlag::O_APPEND.bits();
-        const ASYNC = OFlag::O_ASYNC.bits();
-        const DIRECT = OFlag::O_DIRECT.bits();
-        const NOATIME = OFlag::O_NOATIME.bits();
-    }
-}
-
+// TODO: migrate users to use `FileStatusOFlag` directly.
+pub use linux_api::fcntl::FileStatusOFlag as FileStatus;
 /// For functions that involve closing descriptors; specifies for which
 /// `ProcessId` posix record locks ought to be freed, if any.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -57,19 +42,6 @@ pub enum DropPosixRecordLocks {
     False,
     // Includes associated ProcessId for which to drop locks.
     ForPid(ProcessId),
-}
-
-impl FileStatus {
-    pub fn as_o_flags(&self) -> OFlag {
-        OFlag::from_bits(self.bits()).unwrap()
-    }
-
-    /// Returns a tuple of the `FileStatus` and any remaining flags.
-    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
-        let status = Self::from_bits_truncate(flags.bits());
-        let remaining = flags.bits() & !status.bits();
-        (status, OFlag::from_bits(remaining).unwrap())
-    }
 }
 
 bitflags::bitflags! {
@@ -723,6 +695,23 @@ impl LegacyFileCounter {
         Ok(statbuf)
     }
 
+    pub fn set_status(&self, status: FileStatus) {
+        unsafe { c::legacyfile_setFileStatusFlags(self.ptr(), status.bits()) }
+    }
+
+    pub fn status(&self) -> FileStatus {
+        let raw = unsafe { c::legacyfile_getFileStatusFlags(self.ptr()) };
+        FileStatus::from_bits_truncate(raw)
+    }
+
+    pub fn mode(&self) -> FileMode {
+        let raw_flags = unsafe { c::legacyfile_getAccessModeFlags(self.ptr()) };
+        let oflags = OFlag::from_bits_retain(raw_flags);
+        let (mode, _other_flags) =
+            FileMode::from_o_flags(oflags).expect("Invalid flags for open file");
+        mode
+    }
+
     /// Should drop `self` immediately after calling this.
     fn close_helper(&mut self, host: &Host) {
         // Always take out the `file` object, so that our `Drop` impl knows this object
@@ -743,14 +732,6 @@ impl LegacyFileCounter {
     /// the legacy file as well.
     pub fn close(mut self, host: &Host) {
         self.close_helper(host);
-    }
-
-    pub fn mode(&self) -> FileMode {
-        let raw_flags = unsafe { c::legacyfile_getFlags(self.ptr()) };
-        let oflags = OFlag::from_bits_retain(raw_flags);
-        let (mode, _other_flags) =
-            FileMode::from_o_flags(oflags).expect("Invalid flags for open file");
-        mode
     }
 }
 
@@ -811,6 +792,20 @@ impl CompatFile {
         match self {
             CompatFile::New(open_file) => open_file.inner_file().borrow().stat(),
             CompatFile::Legacy(legacy_file_counter) => Ok(legacy_file_counter.stat()?),
+        }
+    }
+
+    pub fn set_status(&self, status: FileStatus) {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow_mut().set_status(status),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.set_status(status),
+        }
+    }
+
+    pub fn status(&self) -> FileStatus {
+        match self {
+            CompatFile::New(open_file) => open_file.inner_file().borrow().status(),
+            CompatFile::Legacy(legacy_file_counter) => legacy_file_counter.status(),
         }
     }
 

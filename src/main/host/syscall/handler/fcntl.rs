@@ -236,32 +236,15 @@ impl SyscallHandler {
                 };
             }
             FcntlCommand::F_GETFL => {
-                let file = match desc.file() {
-                    CompatFile::New(d) => d,
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return legacy_syscall_fn(ctx);
-                    }
-                };
-
-                let file = file.inner_file().borrow();
+                let file = desc.file();
                 // combine the file status and access mode flags
                 let flags = file.status().as_o_flags() | file.mode().as_o_flags();
                 flags.bits().into()
             }
             FcntlCommand::F_SETFL => {
-                let file = match desc.file() {
-                    CompatFile::New(d) => d,
-                    // if it's a legacy file, use the C syscall handler instead
-                    CompatFile::Legacy(_) => {
-                        drop(desc_table);
-                        return legacy_syscall_fn(ctx);
-                    }
-                };
-
                 let status = i32::try_from(arg).or(Err(Errno::EINVAL))?;
                 let mut status = OFlag::from_bits(status).ok_or(Errno::EINVAL)?;
+
                 // remove access mode flags
                 status.remove(OFlag::O_RDONLY | OFlag::O_WRONLY | OFlag::O_RDWR | OFlag::O_PATH);
                 // remove file creation flags
@@ -276,8 +259,7 @@ impl SyscallHandler {
                         | OFlag::O_TRUNC,
                 );
 
-                let mut file = file.inner_file().borrow_mut();
-                let old_flags = file.status().as_o_flags();
+                let old_flags = desc.file().status().as_o_flags();
 
                 // fcntl(2): "On Linux, this command can change only the O_APPEND, O_ASYNC, O_DIRECT,
                 // O_NOATIME, and O_NONBLOCK flags"
@@ -310,7 +292,7 @@ impl SyscallHandler {
                     return Err(Errno::EINVAL.into());
                 }
 
-                file.set_status(status);
+                desc.file().set_status(status);
                 0
             }
             FcntlCommand::F_GETFD => desc.flags().bits().into(),

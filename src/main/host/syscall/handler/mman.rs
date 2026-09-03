@@ -2,7 +2,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use linux_api::errno::Errno;
-use linux_api::fcntl::OFlag;
+use linux_api::fcntl::{FileCreationOFlag, OFlag};
 use linux_api::mman::{MapFlags, ProtFlags};
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
 
@@ -347,48 +347,26 @@ impl SyscallHandler {
         }
 
         // attempt to open the file in the plugin with the same flags as what the shadow RegularFile
-        // object has
+        // object has.
 
-        // from man 2 open
-        let creation_flags = OFlag::empty()
-            | OFlag::O_CLOEXEC
-            | OFlag::O_CREAT
-            | OFlag::O_DIRECTORY
-            | OFlag::O_EXCL
-            | OFlag::O_NOCTTY
-            | OFlag::O_NOFOLLOW
-            | OFlag::O_TMPFILE
-            | OFlag::O_TRUNC;
+        // get the access and status oflags (not creation flags).
+        // unclear whether the status flags are actually needed, but they may effect
+        // performance (e.g. O_DIRECT).
+        let oflags = {
+            let raw_status = unsafe { c::regularfile_get_status_flags(file) };
+            let lf = unsafe { c::regularfile_getLegacyFile(file) };
+            let raw_access = unsafe { c::legacyfile_getAccessModeFlags(lf) };
+            OFlag::from_bits_truncate(raw_status | raw_access)
+        };
+        assert_eq!(oflags.file_creation_flags(), FileCreationOFlag::empty());
 
-        // the flags linux is using
-        let native_flags = OFlag::from_bits_retain(unsafe {
-            libc::fcntl(c::regularfile_getOSBackedFD(file), libc::F_GETFL)
-        });
-
-        // get original flags that were used to open the file
-        let mut flags = OFlag::from_bits_retain(unsafe { c::regularfile_getFlagsAtOpen(file) });
-        // use only the file creation flags, except O_CLOEXEC
-        flags &= creation_flags.difference(OFlag::O_CLOEXEC);
-        // add any file access mode and file status flags that shadow doesn't implement
-        flags |= native_flags.difference(OFlag::from_bits_retain(unsafe { c::SHADOW_FLAG_MASK }));
-        // add any flags that shadow implements
-        flags |= OFlag::from_bits_retain(unsafe { c::regularfile_getShadowFlags(file) });
-        // be careful not to try re-creating or truncating it
-        flags -= OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_TMPFILE | OFlag::O_TRUNC;
-        // don't use O_NOFOLLOW since it will prevent the plugin from opening the
-        // /proc/<shadow-pid>/fd/<linux-fd> file, which is a symbolic link
-        flags -= OFlag::O_NOFOLLOW;
-
-        let mode = unsafe { c::regularfile_getModeAtOpen(file) };
+        // Mode argument to 'open' is a no-op, since we're not creating a file.
+        let mode = 0i32;
 
         // instruct the plugin to open the file at the path we sent
         let (process_ctx, thread) = ctx.split_thread();
-        let open_result = thread.native_open(
-            &process_ctx,
-            plugin_buffer.ptr().ptr(),
-            flags.bits() as i32,
-            mode as i32,
-        );
+        let open_result =
+            thread.native_open(&process_ctx, plugin_buffer.ptr().ptr(), oflags.bits(), mode);
 
         plugin_buffer.free(ctx);
 

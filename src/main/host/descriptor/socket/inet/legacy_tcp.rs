@@ -99,7 +99,7 @@ impl LegacyTcpSocket {
     }
 
     pub fn status(&self) -> FileStatus {
-        let o_flags = unsafe { c::legacyfile_getFlags(self.as_legacy_file()) };
+        let o_flags = unsafe { c::legacyfile_getFileStatusFlags(self.as_legacy_file()) };
         let o_flags =
             linux_api::fcntl::OFlag::from_bits(o_flags).expect("Not a valid OFlag: {o_flags:?}");
         let (status, extra_flags) = FileStatus::from_o_flags(o_flags);
@@ -112,7 +112,7 @@ impl LegacyTcpSocket {
 
     pub fn set_status(&mut self, status: FileStatus) {
         let o_flags = status.as_o_flags().bits();
-        unsafe { c::legacyfile_setFlags(self.as_legacy_file(), o_flags) };
+        unsafe { c::legacyfile_setFileStatusFlags(self.as_legacy_file(), o_flags) };
     }
 
     pub fn mode(&self) -> FileMode {
@@ -359,7 +359,7 @@ impl LegacyTcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -470,7 +470,7 @@ impl LegacyTcpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -853,7 +853,7 @@ impl LegacyTcpSocket {
             Ok(())
         };
 
-        if !socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if !socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             // this is a blocking connect call
             if errcode == Err(Errno::EINPROGRESS) {
                 // This is the first time we ever called connect, and so we need to wait for the

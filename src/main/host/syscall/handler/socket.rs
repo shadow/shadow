@@ -46,7 +46,7 @@ impl SyscallHandler {
         let mut descriptor_flags = DescriptorFlags::empty();
 
         if flags & libc::SOCK_NONBLOCK != 0 {
-            file_flags.insert(FileStatus::NONBLOCK);
+            file_flags.insert(FileStatus::O_NONBLOCK);
         }
 
         if flags & libc::SOCK_CLOEXEC != 0 {
@@ -765,7 +765,7 @@ impl SyscallHandler {
 
         // if the syscall would block and it's a blocking descriptor
         if result.as_ref().err() == Some(&Errno::EWOULDBLOCK.into())
-            && !file_status.contains(FileStatus::NONBLOCK)
+            && !file_status.contains(FileStatus::O_NONBLOCK)
         {
             return Err(SyscallError::new_blocked_on_file(
                 file.clone(),
@@ -796,7 +796,7 @@ impl SyscallHandler {
             new_socket
                 .inner_file()
                 .borrow_mut()
-                .set_status(FileStatus::NONBLOCK);
+                .set_status(FileStatus::O_NONBLOCK);
         }
 
         let mut new_desc = Descriptor::new(CompatFile::New(new_socket));
@@ -951,7 +951,7 @@ impl SyscallHandler {
         let mut descriptor_flags = DescriptorFlags::empty();
 
         if flags & libc::SOCK_NONBLOCK != 0 {
-            file_flags.insert(FileStatus::NONBLOCK);
+            file_flags.insert(FileStatus::O_NONBLOCK);
         }
 
         if flags & libc::SOCK_CLOEXEC != 0 {

@@ -354,7 +354,7 @@ impl UdpSocket {
             },
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -495,7 +495,7 @@ impl UdpSocket {
             return Err(Errno::EINVAL.into());
         };
 
-        if socket_ref.status().contains(FileStatus::NONBLOCK) {
+        if socket_ref.status().contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 

@@ -58,7 +58,7 @@ impl SyscallHandler {
         let mut semaphore_mode = false;
 
         if flags.contains(EfdFlags::EFD_NONBLOCK) {
-            file_flags.insert(FileStatus::NONBLOCK);
+            file_flags.insert(FileStatus::O_NONBLOCK);
         }
 
         if flags.contains(EfdFlags::EFD_CLOEXEC) {

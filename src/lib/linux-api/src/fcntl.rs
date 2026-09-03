@@ -2,6 +2,15 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{bindings, const_conversions};
 
+// open(2): The Linux header file <asm/fcntl.h> doesn't define O_ASYNC; the
+// (BSD-derived) FASYNC synonym is defined instead.
+//
+// We define with the LINUX_ prefix for C usage, and as a u32 for consistency
+// with the other c-bindgen output. We use a literal integer here instead of
+// setting directly to LINUX_FASYNC so that cbindgen can handle it.
+pub const LINUX_O_ASYNC: u32 = 0x2000;
+const _: () = const { assert!(LINUX_O_ASYNC == bindings::LINUX_FASYNC) };
+
 bitflags::bitflags! {
     /// Open flags, as used e.g. with `open`.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -27,7 +36,108 @@ bitflags::bitflags! {
         const O_PATH = const_conversions::i32_from_u32(bindings::LINUX_O_PATH);
         const O_TMPFILE = const_conversions::i32_from_u32(bindings::LINUX_O_TMPFILE);
         const O_NDELAY = const_conversions::i32_from_u32(bindings::LINUX_O_NDELAY);
-        const O_ASYNC = const_conversions::i32_from_u32(bindings::LINUX_FASYNC);
+        const O_ASYNC = const_conversions::i32_from_u32(LINUX_O_ASYNC);
+    }
+}
+
+impl OFlag {
+    pub fn access_mode_flags(&self) -> AccessModeOFlag {
+        AccessModeOFlag::from_bits_truncate(self.bits())
+    }
+
+    pub fn file_creation_flags(&self) -> FileCreationOFlag {
+        FileCreationOFlag::from_bits_truncate(self.bits())
+    }
+
+    pub fn file_status_flags(&self) -> FileStatusOFlag {
+        FileStatusOFlag::from_bits_truncate(self.bits())
+    }
+
+    /// Split into access-mode, creation, and status flags.
+    pub fn partition(&self) -> (AccessModeOFlag, FileCreationOFlag, FileStatusOFlag) {
+        (
+            self.access_mode_flags(),
+            self.file_creation_flags(),
+            self.file_status_flags(),
+        )
+    }
+}
+
+impl From<AccessModeOFlag> for OFlag {
+    fn from(value: AccessModeOFlag) -> Self {
+        Self::from_bits(value.bits()).unwrap()
+    }
+}
+
+impl From<FileCreationOFlag> for OFlag {
+    fn from(value: FileCreationOFlag) -> Self {
+        Self::from_bits(value.bits()).unwrap()
+    }
+}
+
+impl From<FileStatusOFlag> for OFlag {
+    fn from(value: FileStatusOFlag) -> Self {
+        Self::from_bits(value.bits()).unwrap()
+    }
+}
+
+bitflags::bitflags! {
+    /// "Access mode" flags as specified in open(2); Subset of OFlag.
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct AccessModeOFlag: i32 {
+        const O_RDONLY = OFlag::O_RDONLY.bits();
+        const O_WRONLY = OFlag::O_WRONLY.bits();
+        const O_RDWR = OFlag::O_RDWR.bits();
+    }
+}
+
+bitflags::bitflags! {
+    /// "File creation flags" as specified in open(2). Subset of OFlag.
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct FileCreationOFlag : i32 {
+        const O_CLOEXEC = OFlag::O_CLOEXEC.bits();
+        const O_CREAT= OFlag::O_CREAT.bits();
+        const O_DIRECTORY= OFlag::O_DIRECTORY.bits();
+        const O_EXCL= OFlag::O_EXCL.bits();
+        const O_NOCTTY= OFlag::O_NOCTTY.bits();
+        const O_NOFOLLOW= OFlag::O_NOFOLLOW.bits();
+        const O_TMPFILE= OFlag::O_TMPFILE.bits();
+        const O_TRUNC= OFlag::O_TRUNC.bits();
+    }
+}
+
+bitflags::bitflags! {
+    /// "File status flags" as specified in open(2), as "all the remaining flags"
+    /// that aren't specified as creation or access flags.
+    ///
+    /// open(2): "The file status flags can be retrieved and (in some cases)
+    /// modified; see fcntl(2) for details."
+    ///
+    /// Subset of OFlag.
+    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+    pub struct FileStatusOFlag: i32 {
+        const O_APPEND= OFlag::O_APPEND.bits();
+        const O_ASYNC= OFlag::O_ASYNC.bits();
+        const O_DIRECT= OFlag::O_DIRECT.bits();
+        const O_NOATIME= OFlag::O_NOATIME.bits();
+        const O_NONBLOCK= OFlag::O_NONBLOCK.bits();
+        const O_DSYNC= OFlag::O_DSYNC.bits();
+        const O_SYNC= OFlag::O_SYNC.bits();
+        const O_LARGEFILE= OFlag::O_LARGEFILE.bits();
+        const O_PATH= OFlag::O_PATH.bits();
+    }
+}
+
+impl FileStatusOFlag {
+    pub fn as_o_flags(&self) -> OFlag {
+        OFlag::from_bits(self.bits()).unwrap()
+    }
+
+    /// Returns a tuple of the `FileStatus` and any remaining flags.
+    pub fn from_o_flags(flags: OFlag) -> (Self, OFlag) {
+        let status = Self::from_bits_truncate(flags.bits());
+        let remaining = flags.bits() & !status.bits();
+        (status, OFlag::from_bits(remaining).unwrap())
     }
 }
 
@@ -183,5 +293,63 @@ bitflags::bitflags! {
         const AT_EMPTY_PATH = const_conversions::i32_from_u32(bindings::LINUX_AT_EMPTY_PATH);
         const AT_SYMLINK_NOFOLLOW = const_conversions::i32_from_u32(bindings::LINUX_AT_SYMLINK_NOFOLLOW);
         const AT_EXECVE_CHECK = const_conversions::i32_from_u32(bindings::LINUX_AT_EXECVE_CHECK);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_partition_oflags() {
+        let all_o_flags = OFlag::all();
+        let (access_mode, creation, status) = all_o_flags.partition();
+
+        // all defined bits should be set in partitions.
+        assert_eq!(access_mode, AccessModeOFlag::all());
+        assert_eq!(creation, FileCreationOFlag::all());
+        assert_eq!(status, FileStatusOFlag::all());
+
+        // convert back to OFlag.
+        let access_mode = OFlag::from(access_mode);
+        let creation = OFlag::from(creation);
+        let status = OFlag::from(status);
+
+        // they should all be mutually exclusive.
+        assert_eq!(access_mode & creation, OFlag::empty());
+        assert_eq!(access_mode & status, OFlag::empty());
+        assert_eq!(creation & status, OFlag::empty());
+
+        // together they should cover all of the OFlag bits.
+        assert_eq!(
+            OFlag::all() - (access_mode | creation | status),
+            OFlag::empty()
+        );
+    }
+}
+
+mod export {
+    /// "file creation" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_file_creation_oflags() -> core::ffi::c_int {
+        super::FileCreationOFlag::all().bits()
+    }
+
+    /// "access mode" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_access_mode_oflags() -> core::ffi::c_int {
+        super::AccessModeOFlag::all().bits()
+    }
+
+    /// "file status" "oflags", as per `open(2)`.
+    // TODO: export as a plain constant, if/when cbindgen handles evaluation of
+    // const functions.
+    #[unsafe(no_mangle)]
+    pub extern "C-unwind" fn linux_file_status_oflags() -> core::ffi::c_int {
+        super::FileStatusOFlag::all().bits()
     }
 }

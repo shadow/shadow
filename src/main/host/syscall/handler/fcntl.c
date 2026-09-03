@@ -193,14 +193,6 @@ SyscallReturn syscallhandler_fcntl(SyscallHandler* sys, const SyscallArgs* args)
     } else {
         /* TODO: add additional support for important operations. */
         switch (command) {
-            case F_GETFL: {
-                result = legacyfile_getFlags(desc);
-                break;
-            }
-            case F_SETFL: {
-                legacyfile_setFlags(desc, argReg.as_i64);
-                break;
-            }
             default: {
                 warning("We do not support fcntl command %lu on descriptor %i",
                         command, fd);

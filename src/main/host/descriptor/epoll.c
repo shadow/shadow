@@ -113,6 +113,9 @@ struct _Epoll {
     /* A counter for sorting watches, for guaranteeing determinism when reporting events. */
     uint64_t watch_id_counter;
 
+    /* status flags, as documented in open(2) */
+    int statusFlags;
+
     MAGIC_DECLARE;
 };
 
@@ -322,8 +325,32 @@ static void _epoll_close(LegacyFile* descriptor, const Host* host) {
     epoll_clearWatchListeners(epoll);
 }
 
-LegacyFileFunctionTable epollFunctions = {
-    .close = _epoll_close, .cleanup = NULL, .free = _epoll_free, MAGIC_INITIALIZER};
+void epoll_set_status_flags(Epoll* epoll, int flags) {
+    MAGIC_ASSERT(epoll);
+    epoll->statusFlags = flags & linux_file_status_oflags();
+}
+
+static void _epoll_set_status_flags(LegacyFile* descriptor, int flags) {
+    Epoll* epoll = _epoll_fromLegacyFile(descriptor);
+    epoll_set_status_flags(epoll, flags);
+}
+
+int epoll_get_status_flags(Epoll* epoll) {
+    MAGIC_ASSERT(epoll);
+    return epoll->statusFlags;
+}
+
+static int _epoll_get_status_flags(LegacyFile* descriptor) {
+    Epoll* epoll = _epoll_fromLegacyFile(descriptor);
+    return epoll_get_status_flags(epoll);
+}
+
+LegacyFileFunctionTable epollFunctions = {.close = _epoll_close,
+                                          .cleanup = NULL,
+                                          .set_status_flags = _epoll_set_status_flags,
+                                          .get_status_flags = _epoll_get_status_flags,
+                                          .free = _epoll_free,
+                                          MAGIC_INITIALIZER};
 
 Epoll* epoll_new() {
     Epoll* epoll = g_new0(Epoll, 1);

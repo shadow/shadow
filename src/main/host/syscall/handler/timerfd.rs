@@ -49,7 +49,7 @@ impl SyscallHandler {
         let mut desc_flags = DescriptorFlags::empty();
 
         if flags.contains(TimerFlags::TFD_NONBLOCK) {
-            file_flags.insert(FileStatus::NONBLOCK);
+            file_flags.insert(FileStatus::O_NONBLOCK);
         }
 
         if flags.contains(TimerFlags::TFD_CLOEXEC) {

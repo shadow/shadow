@@ -1142,7 +1142,7 @@ impl NetlinkSocketCommon {
             return Err(Errno::EINVAL.into());
         }
 
-        if self.status.contains(FileStatus::NONBLOCK) {
+        if self.status.contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
@@ -1218,7 +1218,7 @@ impl NetlinkSocketCommon {
             return Err(Errno::EINVAL.into());
         }
 
-        if self.status.contains(FileStatus::NONBLOCK) {
+        if self.status.contains(FileStatus::O_NONBLOCK) {
             flags.insert(MsgFlags::MSG_DONTWAIT);
         }
 
