@@ -145,6 +145,9 @@ impl SyscallHandler {
             return Err(Errno::EINVAL);
         }
 
+        // We currently throw away the mask. TODO: store it, and return it
+        // in sched_getaffinity.
+
         Ok(())
     }
 
