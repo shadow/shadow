@@ -6,6 +6,7 @@ use nix::unistd;
 
 /// When we expect an event to be ready quickly, use a long timeout that
 /// shouldn't normally trigger but provides an upper bound on error.
+#[allow(dead_code)]
 pub const LONG_DUR: Duration = Duration::from_secs(10);
 
 /// When we expect that the timeout will be reached, use a shorter one to
@@ -85,6 +86,7 @@ impl EpollWaiter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn wait_then_read(&self) -> WaiterResult {
         let result = self.wait();
 
