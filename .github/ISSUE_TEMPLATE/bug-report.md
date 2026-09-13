@@ -2,7 +2,7 @@
 name: 'Bug report'
 about: 'An error or flaw producing unexpected results'
 title: ''
-labels: 'Type: Bug'
+type: 'Bug'
 assignees: ''
 
 ---
