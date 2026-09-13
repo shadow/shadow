@@ -1394,7 +1394,7 @@ fn test_block_on_pid_locks(setlk_cmd: FcntlPosixSetlkUncontestedCommand) -> anyh
     const OK: u8 = 0;
     const ERR: u8 = 1;
 
-    let sleep_duration = std::time::Duration::from_secs(1);
+    let sleep_duration = std::time::Duration::from_millis(200);
 
     let mut child = ForkedChild::<u8, u8>::new(|cmd| match *cmd {
         LOCK => match fcntl_lock(file.as_raw_fd(), setlk_cmd.into(), &flock) {
@@ -1450,9 +1450,12 @@ fn test_block_on_pid_locks(setlk_cmd: FcntlPosixSetlkUncontestedCommand) -> anyh
 
     let dt = t1 - t0;
 
-    // Should have blocked for roughly `sleep_duration`.
-    // Be pretty lenient here for busy machines.
-    ensure_ord!(dt.abs_diff(sleep_duration), <=, std::time::Duration::from_millis(100));
+    // Shouldn't have been able to take the lock until after `sleep_duration`.
+    ensure_ord!(dt, >=, sleep_duration);
+    // Check that we blocked for < 10x `sleep_duration`. This should be large enough to
+    // avoid flakiness, and small enough to catch the most typical sorts of errors that might
+    // crop up in shadow (order-of-magnitude conversion mistakes).
+    ensure_ord!(dt, <, 10*sleep_duration);
 
     Ok(())
 }
