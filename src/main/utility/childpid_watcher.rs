@@ -142,8 +142,12 @@ impl ChildPidWatcher {
         let mut commands = Vec::new();
         let mut done = false;
         let mut events = Vec::<epoll::Event>::with_capacity(10);
+
         while !done {
+            // Start each loop iteration with a clear vec.
+            events.clear();
             let spare_buf = rustix::buffer::spare_capacity(&mut events);
+
             match epoll::wait(epoll.as_fd(), spare_buf, None) {
                 Ok(_) => (),
                 Err(rustix::io::Errno::INTR) => {
@@ -171,6 +175,7 @@ impl ChildPidWatcher {
                 inner.run_callbacks_for_pid(pid);
                 inner.maybe_remove_pid(epoll.as_fd(), pid);
             }
+
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
             let mut buf = [0; 8];
@@ -181,6 +186,7 @@ impl ChildPidWatcher {
                 Err(rustix::io::Errno::AGAIN) => true,
                 Err(e) => panic!("Unexpected error {e:?}"),
             });
+
             // Run commands
             std::mem::swap(&mut commands, &mut inner.commands);
             for cmd in commands.drain(..) {
