@@ -4,7 +4,7 @@ Changes since v3.3.0:
 
 Documentation / policy updates:
 
-*
+* Ended support for Debian 11 (the LTS support ended 31 Aug 2026: https://endoflife.date/debian)
 
 MAJOR changes (breaking):
 

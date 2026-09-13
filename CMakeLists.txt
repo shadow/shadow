@@ -4,8 +4,8 @@
 ## requests that we don't get new behaviors introduced since that lowest version.
 ##
 ## We use the oldest version provided in our supported platforms, which
-## is currently 3.18.4 on debian 11.
-cmake_minimum_required(VERSION 3.18.4...3.18.4 FATAL_ERROR)
+## is currently 3.22.1 on Ubuntu 22.04.
+cmake_minimum_required(VERSION 3.22.1...3.22.1 FATAL_ERROR)
 
 ## set build parameters
 project(Shadow)

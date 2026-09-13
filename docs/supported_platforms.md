@@ -5,7 +5,7 @@
 We support the following Linux x86-64 distributions:
 
 - Ubuntu 22.04, 24.04
-- Debian 11, 12, 13
+- Debian 12, 13
 - Fedora 42
 
 We do not provide official support for other platforms. This means that we do
@@ -25,8 +25,8 @@ distribution (the GA kernel). However,
 we are currently only able to regularly test on the latest Ubuntu kernel,
 since that's what GitHub Actions provides.
 
-By these criteria, Shadow's oldest supported kernel version is currently 5.10
-(the default kernel in Debian 11).
+By these criteria, Shadow's oldest supported kernel version is currently 5.15
+(the default kernel in Ubuntu 22.04).
 
 ## Docker
 
