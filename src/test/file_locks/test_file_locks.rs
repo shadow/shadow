@@ -1394,7 +1394,7 @@ fn test_block_on_pid_locks(setlk_cmd: FcntlPosixSetlkUncontestedCommand) -> anyh
     const OK: u8 = 0;
     const ERR: u8 = 1;
 
-    let sleep_duration = std::time::Duration::from_secs(1);
+    let sleep_duration = std::time::Duration::from_millis(200);
 
     let mut child = ForkedChild::<u8, u8>::new(|cmd| match *cmd {
         LOCK => match fcntl_lock(file.as_raw_fd(), setlk_cmd.into(), &flock) {
