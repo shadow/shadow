@@ -930,7 +930,7 @@ impl<RequestType, ResponseType> Drop for ForkedChild<RequestType, ResponseType> 
             .expect("failed to wait for child {pid:?}")
             .expect("missing exit status for child {pid:?}");
         assert_eq!(
-            res.exit_status(),
+            res.1.exit_status(),
             Some(0),
             "Unexpected child {pid:?} exit status: {res:?}"
         );

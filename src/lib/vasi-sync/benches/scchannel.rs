@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use criterion::{Bencher, Criterion, criterion_group, criterion_main};
-use rustix::process::{CpuSet, Pid};
+use rustix::thread::{CpuSet, Pid};
 use vasi_sync::scchannel::SelfContainedChannel;
 
 /// Mock-up of Ipc between Shadow and its plugin.
@@ -15,7 +15,7 @@ struct Ipc(SelfContainedChannel<()>, SelfContainedChannel<()>);
 const PID_ZERO: Option<Pid> = Pid::from_raw(0);
 
 fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
-    let initial_cpu_set = rustix::process::sched_getaffinity(PID_ZERO).unwrap();
+    let initial_cpu_set = rustix::thread::sched_getaffinity(PID_ZERO).unwrap();
     let pinned_cpu_id = (0..).find(|i| initial_cpu_set.is_set(*i)).unwrap();
     let pinned_cpu_set = {
         let mut s = CpuSet::new();
@@ -23,7 +23,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
         s
     };
     if do_pinning {
-        rustix::process::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
+        rustix::thread::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
     }
 
     let ipc = Arc::new(Ipc(
@@ -35,7 +35,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
         let ipc = ipc.clone();
         std::thread::spawn(move || {
             if do_pinning {
-                rustix::process::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
+                rustix::thread::sched_setaffinity(PID_ZERO, &pinned_cpu_set).unwrap();
             }
             loop {
                 if ipc.0.receive().is_err() {
@@ -54,7 +54,7 @@ fn ping_pong(bencher: &mut Bencher, do_pinning: bool) {
     ipc.0.close_writer();
     receiver_thread.join().unwrap();
     if do_pinning {
-        rustix::process::sched_setaffinity(PID_ZERO, &initial_cpu_set).unwrap();
+        rustix::thread::sched_setaffinity(PID_ZERO, &initial_cpu_set).unwrap();
     }
 }
 
