@@ -98,7 +98,6 @@ class Experimental(TypedDict, total=False):
     unblocked_vdso_latency: str
     use_cpu_pinning: bool
     use_dynamic_runahead: bool
-    use_memory_manager: bool
     use_new_tcp: bool
     use_object_counters: bool
     use_preload_libc: bool

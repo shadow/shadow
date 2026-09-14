@@ -5,10 +5,12 @@
 
 #include "main/host/syscall/handler/fileat.h"
 
+#include <asm-generic/errno.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/syscall.h>
+#include <linux/limits.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -58,7 +60,8 @@ static int _syscallhandler_validateDirHelper(SyscallHandler* sys, int dirfd,
 static int _syscallhandler_validateDirAndPathnameHelper(SyscallHandler* sys, int dirfd,
                                                         UntypedForeignPtr pathnamePtr,
                                                         RegularFile** dir_desc_out,
-                                                        const char** pathname_out) {
+                                                        char* pathname_out,
+                                                        size_t pathname_out_len) {
     /* Validate the directory fd. */
     RegularFile* dir_desc = NULL;
     int errcode = _syscallhandler_validateDirHelper(sys, dirfd, dir_desc_out);
@@ -67,8 +70,8 @@ static int _syscallhandler_validateDirAndPathnameHelper(SyscallHandler* sys, int
     }
 
     /* Get the path string from the plugin. */
-    return process_getReadableString(
-        rustsyscallhandler_getProcess(sys), pathnamePtr, PATH_MAX, pathname_out, NULL);
+    return process_readString(
+        rustsyscallhandler_getProcess(sys), pathname_out, pathnamePtr, pathname_out_len);
 }
 
 static SyscallReturn _syscallhandler_renameatHelper(SyscallHandler* sys, int olddirfd,
@@ -77,19 +80,19 @@ static SyscallReturn _syscallhandler_renameatHelper(SyscallHandler* sys, int old
                                                     unsigned int flags) {
     /* Validate params. */
     RegularFile* olddir_desc = NULL;
-    const char* oldpath;
 
+    char oldpath[PATH_MAX];
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, olddirfd, oldpathPtr, &olddir_desc, &oldpath);
+        sys, olddirfd, oldpathPtr, &olddir_desc, oldpath, sizeof(oldpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     RegularFile* newdir_desc = NULL;
-    const char* newpath;
 
+    char newpath[PATH_MAX];
     errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, newdirfd, newpathPtr, &newdir_desc, &newpath);
+        sys, newdirfd, newpathPtr, &newdir_desc, newpath, sizeof(newpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -115,10 +118,10 @@ SyscallReturn syscallhandler_openat(SyscallHandler* sys, const SyscallArgs* args
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -165,16 +168,21 @@ SyscallReturn syscallhandler_newfstatat(SyscallHandler* sys, const SyscallArgs* 
     }
 
     /* Get some memory in which to return the result. */
-    struct stat* buf =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, sizeof(*buf));
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
+    struct stat buf = {0};
 
     const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
 
-    return syscallreturn_makeDoneI64(
-        regularfile_fstatat(dir_desc, pathname, buf, flags, plugin_cwd));
+    int res = regularfile_fstatat(dir_desc, pathname, &buf, flags, plugin_cwd);
+    if (res < 0) {
+        return syscallreturn_makeDoneErrno(-res);
+    }
+
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), bufPtr, &buf, sizeof(buf));
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_fchownat(SyscallHandler* sys, const SyscallArgs* args) {
@@ -186,10 +194,10 @@ SyscallReturn syscallhandler_fchownat(SyscallHandler* sys, const SyscallArgs* ar
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
 
+    char pathname[PATH_MAX];
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -207,10 +215,10 @@ SyscallReturn syscallhandler_fchmodat(SyscallHandler* sys, const SyscallArgs* ar
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
 
+    char pathname[PATH_MAX];
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -229,10 +237,10 @@ SyscallReturn syscallhandler_fchmodat2(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
 
+    char pathname[PATH_MAX];
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -250,18 +258,19 @@ SyscallReturn syscallhandler_futimesat(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
 
+    char pathname[PATH_MAX];
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const struct timeval* times =
-        process_getReadablePtr(rustsyscallhandler_getProcess(sys), timesPtr, 2 * sizeof(*times));
-    if (!times) {
-        return syscallreturn_makeDoneErrno(EFAULT);
+    struct timeval times[2] = {0};
+    errcode =
+        process_readPtr(rustsyscallhandler_getProcess(sys), &times[0], timesPtr, sizeof(times));
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
@@ -277,7 +286,8 @@ SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname = NULL;
+    char pathname_buf[PATH_MAX];
+    char* pathname = NULL;
     int errcode = 0;
 
     if (untypedforeignpointer_is_null(pathnamePtr)) {
@@ -288,16 +298,18 @@ SyscallReturn syscallhandler_utimensat(SyscallHandler* sys, const SyscallArgs* a
         errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     } else {
         errcode = _syscallhandler_validateDirAndPathnameHelper(
-            sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+            sys, dirfd, pathnamePtr, &dir_desc, pathname_buf, sizeof(pathname_buf));
+        pathname = pathname_buf;
     }
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    const struct timespec* times =
-        process_getReadablePtr(rustsyscallhandler_getProcess(sys), timesPtr, 2 * sizeof(*times));
-    if (!times) {
-        return syscallreturn_makeDoneErrno(EFAULT);
+    struct timespec times[2] = {0};
+    errcode =
+        process_readPtr(rustsyscallhandler_getProcess(sys), &times[0], timesPtr, sizeof(times));
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
     }
 
     const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
@@ -313,10 +325,10 @@ SyscallReturn syscallhandler_faccessat(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -335,10 +347,10 @@ SyscallReturn syscallhandler_faccessat2(SyscallHandler* sys, const SyscallArgs* 
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -356,10 +368,10 @@ SyscallReturn syscallhandler_mkdirat(SyscallHandler* sys, const SyscallArgs* arg
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -377,10 +389,10 @@ SyscallReturn syscallhandler_mknodat(SyscallHandler* sys, const SyscallArgs* arg
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -400,19 +412,19 @@ SyscallReturn syscallhandler_linkat(SyscallHandler* sys, const SyscallArgs* args
 
     /* Validate params. */
     RegularFile* olddir_desc = NULL;
-    const char* oldpath;
+    char oldpath[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, olddirfd, oldpathPtr, &olddir_desc, &oldpath);
+        sys, olddirfd, oldpathPtr, &olddir_desc, oldpath, sizeof(oldpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     RegularFile* newdir_desc = NULL;
-    const char* newpath;
+    char newpath[PATH_MAX];
 
     errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, newdirfd, newpathPtr, &newdir_desc, &newpath);
+        sys, newdirfd, newpathPtr, &newdir_desc, newpath, sizeof(newpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -430,10 +442,10 @@ SyscallReturn syscallhandler_unlinkat(SyscallHandler* sys, const SyscallArgs* ar
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* pathname;
+    char pathname[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, pathnamePtr, &dir_desc, &pathname);
+        sys, dirfd, pathnamePtr, &dir_desc, pathname, sizeof(pathname));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -450,18 +462,18 @@ SyscallReturn syscallhandler_symlinkat(SyscallHandler* sys, const SyscallArgs* a
 
     /* Validate params. */
     RegularFile* dir_desc = NULL;
-    const char* linkpath;
+    char linkpath[PATH_MAX];
 
     int errcode = _syscallhandler_validateDirAndPathnameHelper(
-        sys, dirfd, linkpathPtr, &dir_desc, &linkpath);
+        sys, dirfd, linkpathPtr, &dir_desc, linkpath, sizeof(linkpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
     /* Get the path string from the plugin. */
-    const char* targetpath;
-    errcode = process_getReadableString(
-        rustsyscallhandler_getProcess(sys), targetpathPtr, PATH_MAX, &targetpath, NULL);
+    char targetpath[PATH_MAX];
+    errcode = process_readString(
+        rustsyscallhandler_getProcess(sys), targetpath, targetpathPtr, sizeof(targetpath));
     if (errcode < 0) {
         return syscallreturn_makeDoneErrno(-errcode);
     }
@@ -478,12 +490,15 @@ SyscallReturn syscallhandler_readlinkat(SyscallHandler* sys, const SyscallArgs* 
     UntypedForeignPtr bufPtr = args->args[2].as_ptr;      // char*
     size_t bufSize = args->args[3].as_u64;
 
-    /* Validate params. */
+    char* buf = NULL;
     RegularFile* dir_desc = NULL;
+    ssize_t errcode = 0;
+    ssize_t res = -1;
 
-    ssize_t errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
+    /* Validate params. */
+    errcode = _syscallhandler_validateDirHelper(sys, dirfd, &dir_desc);
     if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
+        goto out;
     }
 
     /* Copy the path rather than getting a reference, so that the MemoryManager
@@ -492,19 +507,35 @@ SyscallReturn syscallhandler_readlinkat(SyscallHandler* sys, const SyscallArgs* 
     char pathname[PATH_MAX];
     errcode = process_readString(rustsyscallhandler_getProcess(sys), pathname, pathnamePtr, PATH_MAX);
     if (errcode < 0) {
-        return syscallreturn_makeDoneErrno(-errcode);
+        goto out;
     }
 
-    /* Get the path string from the plugin. */
-    char* buf = process_getWriteablePtr(rustsyscallhandler_getProcess(sys), bufPtr, bufSize);
-    if (!buf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
+    buf = malloc(bufSize);
+    if (buf == NULL) {
+        warning("Internally failed to allocate %lu bytes", bufSize);
+        errcode = -ENOMEM;
+        goto out;
     }
 
     const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
 
-    return syscallreturn_makeDoneI64(
-        regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd));
+    errcode = regularfile_readlinkat(dir_desc, pathname, buf, bufSize, plugin_cwd);
+    if (errcode < 0) {
+        goto out;
+    }
+    res = errcode;
+
+    /* Write back `res` bytes of `buf` */
+    errcode = process_writePtr(rustsyscallhandler_getProcess(sys), bufPtr, buf, res);
+    if (errcode < 0) {
+        goto out;
+    }
+
+out:
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+    return syscallreturn_makeDoneI64(res);
 }
 
 SyscallReturn syscallhandler_renameat(SyscallHandler* sys, const SyscallArgs* args) {
@@ -544,16 +575,21 @@ SyscallReturn syscallhandler_statx(SyscallHandler* sys, const SyscallArgs* args)
         return syscallreturn_makeDoneErrno(-errcode);
     }
 
-    /* Get the path string from the plugin. */
-    struct statx* statxbuf =
-        process_getWriteablePtr(rustsyscallhandler_getProcess(sys), statxbufPtr, sizeof(*statxbuf));
-    if (!statxbuf) {
-        return syscallreturn_makeDoneErrno(EFAULT);
-    }
+    struct statx statxbuf = {0};
 
     const char* plugin_cwd = process_getWorkingDir(rustsyscallhandler_getProcess(sys));
 
-    return syscallreturn_makeDoneI64(
-        regularfile_statx(dir_desc, pathname, flags, mask, statxbuf, plugin_cwd));
+    int res = regularfile_statx(dir_desc, pathname, flags, mask, &statxbuf, plugin_cwd);
+    if (res < 0) {
+        return syscallreturn_makeDoneErrno(-res);
+    }
+
+    errcode = process_writePtr(
+        rustsyscallhandler_getProcess(sys), statxbufPtr, &statxbuf, sizeof(statxbuf));
+    if (errcode < 0) {
+        return syscallreturn_makeDoneErrno(-errcode);
+    }
+
+    return syscallreturn_makeDoneI64(res);
 }
 #endif

@@ -20,33 +20,8 @@ impl MemoryCopier {
         Self { pid }
     }
 
-    /// Copy the region.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem<T: Pod>(&self, ptr: ForeignArrayPtr<T>) -> Result<Vec<T>, Errno> {
-        let mut v = Vec::with_capacity(ptr.len());
-        unsafe { v.set_len(v.capacity()) };
-        unsafe { self.copy_from_ptr(&mut v, ptr)? };
-        Ok(v)
-    }
-
-    /// Copy the readable prefix of the region.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    #[allow(clippy::uninit_vec)]
-    pub unsafe fn clone_mem_prefix<T: Pod>(
-        &self,
-        ptr: ForeignArrayPtr<T>,
-    ) -> Result<Vec<T>, Errno> {
-        let mut v = Vec::with_capacity(ptr.len());
-        unsafe { v.set_len(v.capacity()) };
-        let copied = unsafe { self.copy_prefix_from_ptr(&mut v, ptr)? };
-        v.truncate(copied);
-        Ok(v)
-    }
-
     // Read as much of `ptr` as is accessible into `dst`.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    pub unsafe fn copy_prefix_from_ptr<T>(
+    pub fn copy_prefix_from_ptr<T>(
         &self,
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
@@ -89,13 +64,12 @@ impl MemoryCopier {
             // up to however much is left.
             next_bytes_toread = std::cmp::min(total_bytes_toread, page_size());
         }
-        let bytes_read = unsafe { self.readv_ptrs(&mut slices, &[ptr])? };
+        let bytes_read = self.readv_ptrs(&mut slices, &[ptr])?;
         Ok(bytes_read / std::mem::size_of::<T>())
     }
 
     // Copy `dst` into `src`.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    pub unsafe fn copy_from_ptr<T: Pod>(
+    pub fn copy_from_ptr<T: Pod>(
         &self,
         dst: &mut [T],
         src: ForeignArrayPtr<T>,
@@ -110,7 +84,7 @@ impl MemoryCopier {
         let buf: &mut [u8] =
             unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, buf.len()) };
         let ptr = src.cast_u8();
-        let bytes_read = unsafe { self.readv_ptrs(&mut [buf], &[ptr])? };
+        let bytes_read = self.readv_ptrs(&mut [buf], &[ptr])?;
         if bytes_read != buf.len() {
             warn!(
                 "Tried to read {} bytes but only got {}",
@@ -125,8 +99,7 @@ impl MemoryCopier {
     // Low level helper for reading directly from `srcs` to `dsts`.
     // Returns the number of bytes read. Panics if the
     // MemoryManager's process isn't currently active.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    unsafe fn readv_ptrs(
+    fn readv_ptrs(
         &self,
         dsts: &mut [&mut [u8]],
         srcs: &[ForeignArrayPtr<u8>],
@@ -143,14 +116,13 @@ impl MemoryCopier {
             .map(|dst: &mut &mut [u8]| -> std::io::IoSliceMut { std::io::IoSliceMut::new(dst) })
             .collect();
 
-        unsafe { self.readv_iovecs(&mut dsts, &srcs) }
+        self.readv_iovecs(&mut dsts, &srcs)
     }
 
     // Low level helper for reading directly from `srcs` to `dsts`.
     // Returns the number of bytes read. Panics if the
     // MemoryManager's process isn't currently active.
-    /// SAFETY: A mutable reference to the process memory must not exist.
-    unsafe fn readv_iovecs(
+    fn readv_iovecs(
         &self,
         dsts: &mut [std::io::IoSliceMut],
         srcs: &[nix::sys::uio::RemoteIoVec],
@@ -191,12 +163,7 @@ impl MemoryCopier {
 
     // Low level helper for writing directly to `dst`. Panics if the
     // MemoryManager's process isn't currently active.
-    /// SAFETY: A reference to the process memory must not exist.
-    pub unsafe fn copy_to_ptr<T: Pod>(
-        &self,
-        dst: ForeignArrayPtr<T>,
-        src: &[T],
-    ) -> Result<(), Errno> {
+    pub fn copy_to_ptr<T: Pod>(&self, dst: ForeignArrayPtr<T>, src: &[T]) -> Result<(), Errno> {
         let dst = dst.cast_u8();
         let src: &[std::mem::MaybeUninit<u8>] = shadow_pod::to_u8_slice(src);
         // SAFETY: We *should* never actually read from this buffer in this process;
