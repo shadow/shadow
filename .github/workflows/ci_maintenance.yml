@@ -17,11 +17,11 @@ jobs:
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          github.rest.issues.create({
+          const response = await github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
             title: 'Update versions of tools used in CI',
-            labels: ['Component: Testing', 'Priority: Low', 'Type: Maintenance'],
+            type: 'Task',
             body:
           `The Shadow CI environment has hard-coded versions of some tools. These versions should be periodically updated, and any compatibility issues fixed.
 
@@ -41,4 +41,15 @@ jobs:
 
           *This issue is automatically generated every 4 months by the workflow "${{ github.workflow }}".*
           `
-          })
+          });
+
+          # field 253576 is 'Priority', field 46890830 is 'Component'
+          await github.rest.issues.setIssueFieldValues({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: response.data.number,
+            issue_field_values: [
+              { field_id: 253576, value: 'Low' },
+              { field_id: 46890830, value: 'Build' }
+            ]
+          });
