@@ -18,3 +18,4 @@ updates:
     # and create many hours of unnecessary workflow runs
     rebase-strategy: 'disabled'
     milestone: 24 # "Code health and maintenance"
+    labels: [ ] # disable adding labels to opened PRs
