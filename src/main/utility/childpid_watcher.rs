@@ -141,10 +141,15 @@ impl ChildPidWatcher {
     fn thread_loop(inner: &Mutex<Inner>, epoll: impl AsFd) {
         let mut commands = Vec::new();
         let mut done = false;
+        let mut events = Vec::<epoll::Event>::with_capacity(10);
+
         while !done {
-            let mut events = epoll::EventVec::with_capacity(10);
-            match epoll::wait(epoll.as_fd(), &mut events, -1) {
-                Ok(()) => (),
+            // Start each loop iteration with a clear vec.
+            events.clear();
+            let spare_buf = rustix::buffer::spare_capacity(&mut events);
+
+            match epoll::wait(epoll.as_fd(), spare_buf, None) {
+                Ok(_) => (),
                 Err(rustix::io::Errno::INTR) => {
                     // Just try again.
                     continue;
@@ -159,7 +164,7 @@ impl ChildPidWatcher {
             // caller unregisters it.
             let mut inner = inner.lock().unwrap();
 
-            for event in events.into_iter() {
+            for event in events.drain(..) {
                 if event.data.u64() == 0 {
                     // We get an event for pid=0 when there's a write to the
                     // command_notifier; Ignore that here and handle below.
@@ -170,6 +175,7 @@ impl ChildPidWatcher {
                 inner.run_callbacks_for_pid(pid);
                 inner.maybe_remove_pid(epoll.as_fd(), pid);
             }
+
             // Reading an eventfd always returns an 8 byte integer. Do so to ensure it's
             // no longer marked 'readable'.
             let mut buf = [0; 8];
@@ -180,6 +186,7 @@ impl ChildPidWatcher {
                 Err(rustix::io::Errno::AGAIN) => true,
                 Err(e) => panic!("Unexpected error {e:?}"),
             });
+
             // Run commands
             std::mem::swap(&mut commands, &mut inner.commands);
             for cmd in commands.drain(..) {
@@ -433,7 +440,7 @@ mod tests {
         let status = waitpid(Some(child.into()), WaitOptions::empty())
             .unwrap()
             .unwrap();
-        assert_eq!(status.exit_status(), Some(42));
+        assert_eq!(status.1.exit_status(), Some(42));
     }
 
     #[test]
@@ -490,6 +497,7 @@ mod tests {
             waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
+                .1
                 .exit_status(),
             Some(42)
         );
@@ -542,6 +550,7 @@ mod tests {
             waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
+                .1
                 .exit_status(),
             Some(42)
         );
@@ -610,6 +619,7 @@ mod tests {
             waitpid(Some(child.into()), WaitOptions::empty())
                 .unwrap()
                 .unwrap()
+                .1
                 .exit_status(),
             Some(42)
         );
