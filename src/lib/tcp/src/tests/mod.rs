@@ -130,12 +130,11 @@ impl EventQueue {
 
     // Pop the next event if it is before or equal to `time`.
     pub fn pop_up_to(&mut self, time: Instant) -> Option<(Instant, Box<dyn FnOnce()>)> {
-        if let Some(event) = self.queue.peek() {
+        {
+            let event = self.queue.peek()?;
             if event.0.time > time {
                 return None;
             }
-        } else {
-            return None;
         }
 
         let event = self.queue.pop().unwrap().0;

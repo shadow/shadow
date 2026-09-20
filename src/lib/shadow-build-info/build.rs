@@ -30,7 +30,7 @@ fn main() {
 
 fn timestamp() -> String {
     let date_format = "[year]-[month]-[day]--[hour]:[minute]:[second]";
-    let date_format = time::format_description::parse(date_format).unwrap();
+    let date_format = time::format_description::parse_borrowed::<3>(date_format).unwrap();
     time::OffsetDateTime::now_utc()
         .format(&date_format)
         .unwrap()
