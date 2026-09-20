@@ -35,7 +35,7 @@ env_logger = "0.11.11"
 test-log = "0.2.21"
 
 [build-dependencies]
-bindgen = { version = "0.72.1" }
+bindgen = { version = "0.73.2" }
 cbindgen = { version = "0.29.4", default-features = false }
 cc = { version = "1.2", features = ["parallel"] }
 shadow-build-common = { path = "../shadow-build-common", features = ["bindgen", "cbindgen"] }
