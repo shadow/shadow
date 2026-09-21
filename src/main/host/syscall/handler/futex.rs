@@ -16,7 +16,7 @@ impl SyscallHandler {
         futex,
         /* rv */ std::ffi::c_int,
         /* uaddr */ *const u32,
-        /* op */ std::ffi::c_int,
+        /* op */ FutexOpFlags,
         /* val */ u32,
         /* utime */ *const std::ffi::c_void,
         /* uaddr2 */ *const u32,

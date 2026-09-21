@@ -434,6 +434,12 @@ impl core::fmt::Debug for SyscallReg {
 
 // implement conversions from `SyscallReg`
 
+impl From<SyscallReg> for linux_api::futex::FutexOpFlags {
+    fn from(value: SyscallReg) -> Self {
+        Self::from_bits_retain(value.into())
+    }
+}
+
 impl From<SyscallReg> for linux_api::sched::CloneFlags {
     fn from(value: SyscallReg) -> Self {
         Self::from_bits_retain(value.into())
