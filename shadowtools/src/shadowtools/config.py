@@ -92,7 +92,7 @@ class Experimental(TypedDict, total=False):
     socket_send_autotune: bool
     socket_send_buffer: Union[str, int]
     strace_logging_mode: Union[
-        Literal["off"], Literal["standard"], Literal["deterministic"]
+        Literal["off"], Literal["standard"], Literal["deterministic"], Literal["long"]
     ]
     unblocked_syscall_latency: str
     unblocked_vdso_latency: str
