@@ -145,5 +145,5 @@ class Config(TypedDict, total=False):
     general: General
     network: Network
     experimental: Experimental
-    host_options_defaults: HostOptions
+    host_option_defaults: HostOptions
     hosts: Dict[str, Host]
