@@ -1,0 +1,29 @@
+# https://github.com/shadow/shadow/issues/3684
+
+general:
+  stop_time: 15s
+
+network:
+  graph:
+    type: 1_gbit_switch
+
+hosts:
+  host:
+    network_node_id: 0
+    processes:
+    # Validate that /dev/tty doesn't exist.
+    # If for some reason we decide to emulate /dev/tty, this test will need to
+    # be removed or updated to test that emulation.
+    - path: python3
+      args:
+      - -c
+      - |
+        import sys
+        try:
+          f = open("/dev/tty")
+        except OSError:
+          print("Failed to open /dev/tty, as we want")
+          sys.exit(0)
+        print("Was able to open /dev/tty")
+        sys.exit(1)
+      start_time: 1s
