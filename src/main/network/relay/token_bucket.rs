@@ -3,6 +3,7 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 use crate::core::worker::Worker;
 
+#[derive(Debug)]
 pub struct TokenBucket {
     capacity: u64,
     balance: u64,
@@ -122,7 +123,9 @@ impl TokenBucket {
     /// was not in use. No refills will occur if called multiple times within
     /// the same refill interval. Returns the duration to the next refill event.
     fn lazy_refill(&mut self, now: &EmulatedTime) -> SimulationTime {
-        let mut span = now.duration_since(&self.last_refill);
+        // Use saturating to tolerate small clock skew between worker threads
+        // that might cause `now` to appear earlier than `last_refill`.
+        let mut span = now.saturating_duration_since(&self.last_refill);
 
         if span >= self.refill_interval {
             // Apply refills for the scheduled refill events that have passed.
@@ -146,7 +149,7 @@ impl TokenBucket {
                 .saturating_mul(num_refills.try_into().unwrap());
             self.last_refill = self.last_refill.saturating_add(inc);
 
-            span = now.duration_since(&self.last_refill);
+            span = now.saturating_duration_since(&self.last_refill);
         }
 
         debug_assert!(span < self.refill_interval);
