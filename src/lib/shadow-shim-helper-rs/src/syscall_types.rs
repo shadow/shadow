@@ -570,6 +570,13 @@ impl TryFrom<SyscallReg> for linux_api::unistd::LSeekWhence {
     }
 }
 
+impl TryFrom<SyscallReg> for linux_api::futex::FutexOpAndFlags {
+    type Error = linux_api::futex::FutexOpAndFlagsTryFromI32Error;
+    fn try_from(reg: SyscallReg) -> Result<Self, Self::Error> {
+        linux_api::futex::FutexOpAndFlags::try_from(i32::from(reg))
+    }
+}
+
 mod export {
     use super::*;
 
