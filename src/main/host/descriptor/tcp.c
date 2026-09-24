@@ -244,9 +244,10 @@ struct _TCP {
     MAGIC_DECLARE;
 };
 
+#define _rswlog(tcp, fmt, ...) trace("(%s %s)" fmt, tcp->super.boundString, tcp->super.peerString, __VA_ARGS__)
+/*
 static void _rswlog(const TCP *tcp, const char *format, ...) {
-#ifdef RSWLOG
-    SimulationTime now = worker_getCurrentTime();
+    CSimulationTime now = worker_getCurrentTime();
     double dtime = (double)(now) / (1.0E9);
 
     fprintf(stderr, "@%fs (%s %s)\t", dtime, tcp->super.boundString, tcp->super.peerString);
@@ -254,8 +255,7 @@ static void _rswlog(const TCP *tcp, const char *format, ...) {
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-#endif // RSWLOG
-}
+}*/
 
 static guint _ipPortHash(in_addr_t ip, in_port_t port) {
     GString* buffer = g_string_new(NULL);
@@ -782,7 +782,8 @@ gsize tcp_getOutputBufferLength(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* this does not include the socket output buffer to avoid double counting, since the
      * data in the socket output buffer is already counted as part of the tcp retransmit queue */
-    trace("throttledOutputLength:%zd queueLength:%ld", (ssize_t)tcp->throttledOutputLength, (ssize_t)tcp->retransmit.queueLength);
+    trace("%p: throttledOutputLength:%zd queueLength:%ld", tcp, (ssize_t)tcp->throttledOutputLength, (ssize_t)tcp->retransmit.queueLength);
+
     return tcp->throttledOutputLength + tcp->retransmit.queueLength;
 }
 
@@ -1520,15 +1521,19 @@ static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidIn
         return;
     }
 
+    trace("%s retransmit queue size:%zu", tcp->super.boundString, g_hash_table_size(tcp->retransmit.queue));
     if(g_hash_table_size(tcp->retransmit.queue) == 0) {
         _tcp_stopRetransmitTimer(tcp);
         return;
     }
 
     /* if the timer should be off or was reset, ignore this event */
+    trace("%s desiredTimerExpiration: %zu", tcp->super.boundString, tcp->retransmit.desiredTimerExpiration);
     if(tcp->retransmit.desiredTimerExpiration == 0) {
+        trace("%s zero desiredtimerexpiration", tcp->super.boundString);
         return;
     } else if(tcp->retransmit.desiredTimerExpiration > now) {
+        trace("%s desiredtimerexpiration is > now", tcp->super.boundString);
         /* the timer was reset after this event was scheduled, check if we need to
          * schedule another event, or if we can do it when the next event fires instead */
         _tcp_scheduleRetransmitTimerIfNeeded(tcp, host, now);
@@ -1539,6 +1544,7 @@ static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidIn
      * if we get here, this is a valid timer expiration and we need to do a retransmission
      * do exponential backoff */
     tcp->retransmit.backoffCount++;
+    trace("%s retransmit backoffCount:%zu", tcp->super.boundString, tcp->retransmit.backoffCount);
     _tcp_setRetransmitTimeout(tcp, tcp->retransmit.timeout * 2);
     _tcp_setRetransmitTimer(tcp, host, now);
 
@@ -1551,6 +1557,7 @@ static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidIn
     retransmit_tally_mark_lost(tcp->retransmit.tally,
                                tcp->receive.lastAcknowledgment,
                                tcp->send.highestSequence + 1);
+    trace("%s retransmit lastAck:%zu highestSequence:%zu", tcp->super.boundString, (size_t)tcp->receive.lastAcknowledgment, (size_t)tcp->send.highestSequence);
 
     _rswlog(tcp, "Timeout, marking %d as lost.\n", tcp->receive.lastAcknowledgment);
 
