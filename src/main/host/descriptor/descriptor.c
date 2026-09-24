@@ -141,6 +141,7 @@ void legacyfile_unrefWeak(gpointer data) {
 void legacyfile_close(LegacyFile* descriptor, const Host* host) {
     MAGIC_ASSERT(descriptor);
     MAGIC_ASSERT(descriptor->funcTable);
+    trace("legacyfile_close");
 
     // if it's already closed, exit early
     if ((legacyfile_getStatus(descriptor) & FileState_CLOSED) != 0) {

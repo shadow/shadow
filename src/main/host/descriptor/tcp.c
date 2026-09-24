@@ -782,6 +782,7 @@ gsize tcp_getOutputBufferLength(TCP* tcp) {
     MAGIC_ASSERT(tcp);
     /* this does not include the socket output buffer to avoid double counting, since the
      * data in the socket output buffer is already counted as part of the tcp retransmit queue */
+    trace("throttledOutputLength:%zd queueLength:%ld", (ssize_t)tcp->throttledOutputLength, (ssize_t)tcp->retransmit.queueLength);
     return tcp->throttledOutputLength + tcp->retransmit.queueLength;
 }
 
@@ -2788,7 +2789,7 @@ static void _tcp_close(LegacyFile* descriptor, const Host* host) {
     /* We always return FALSE because we handle process deregististration
      * on our own. */
 
-    trace("%s <-> %s:  user closed connection", tcp->super.boundString, tcp->super.peerString);
+    trace("%s <-> %s (%s): user closed connection", tcp->super.boundString, tcp->super.peerString, _tcp_stateToAscii(tcp->state));
     tcp->flags |= TCPF_LOCAL_CLOSED_WR;
     tcp->flags |= TCPF_LOCAL_CLOSED_RD;
 
@@ -2798,6 +2799,7 @@ static void _tcp_close(LegacyFile* descriptor, const Host* host) {
     switch (tcp->state) {
         case TCPS_LISTEN:
         case TCPS_SYNSENT: {
+            trace("LISTEN|SYNSENT -> CLOSED");
             _tcp_setState(tcp, host, TCPS_CLOSED);
             return;
         }
@@ -2805,6 +2807,7 @@ static void _tcp_close(LegacyFile* descriptor, const Host* host) {
         case TCPS_SYNRECEIVED:
         case TCPS_ESTABLISHED:
         case TCPS_CLOSEWAIT: {
+            trace("SYNRECEIVED|ESTABLISHED|CLOSEWAIT, with pending output %zd", (ssize_t)tcp_getOutputBufferLength(tcp));
             if(tcp_getOutputBufferLength(tcp) == 0) {
                 _tcp_sendShutdownFin(tcp, host);
             } else {
@@ -2819,11 +2822,13 @@ static void _tcp_close(LegacyFile* descriptor, const Host* host) {
         case TCPS_CLOSING:
         case TCPS_TIMEWAIT:
         case TCPS_LASTACK: {
+            trace("FINWAIT1|... -> do nothing");
             /* close was already called, do nothing */
             return;
         }
 
         default: {
+            trace("default -> close");
             /* if we didnt start connection yet, we still want to make sure
              * we set the state to closed so we unbind the socket */
             _tcp_setState(tcp, host, TCPS_CLOSED);

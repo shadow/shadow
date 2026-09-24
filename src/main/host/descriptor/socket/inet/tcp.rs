@@ -312,6 +312,7 @@ impl TcpSocket {
     }
 
     pub fn close(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
+        log::trace!("TcpSocket.close");
         // we don't expect close() to ever have an error
         self.with_tcp_state(cb_queue, |state| state.close())
             .unwrap();

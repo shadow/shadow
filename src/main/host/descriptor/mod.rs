@@ -422,8 +422,22 @@ impl OpenFile {
     pub fn close(self, cb_queue: &mut CallbackQueue) -> Option<Result<(), SyscallError>> {
         let OpenFile { inner, _counter } = self;
 
+        log::trace!("OpenFile strong:{} weak:{}",
+            Arc::strong_count(&inner), Arc::weak_count(&inner)
+        );
+
         // if this is the last reference, call close() on the file
-        Arc::into_inner(inner).map(|inner| inner.close(cb_queue))
+        // Arc::into_inner(inner).map(|inner| inner.close(cb_queue))
+        match Arc::into_inner(inner) {
+            Some(inner) => {
+                log::trace!("Last reference; closing inner file");
+                Some(inner.close(cb_queue))
+            },
+            None => {
+                log::trace!("Not last reference; not closing inner file");
+                None
+            },
+        }
     }
 }
 
@@ -447,7 +461,10 @@ impl OpenFileInner {
 
     fn close_helper(&mut self, cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         if let Some(file) = self.file.take() {
+            log::debug!("OpenFileInner.close_helper closing");
             file.borrow_mut().close(cb_queue)?;
+        } else {
+            log::warn!("OpenFileInner.close_helper file missing");
         }
         Ok(())
     }
@@ -721,9 +738,12 @@ impl LegacyFileCounter {
             #[allow(unreachable_code)]
             return;
         };
+        let open_count = Arc::<()>::strong_count(&self.open_count);
+        log::debug!("open_count before close : {open_count}");
         // this isn't subject to race conditions since we should never access descriptors
         // from multiple threads at the same time
         if Arc::<()>::strong_count(&self.open_count) == 1 {
+            log::debug!("calling legacyfile_close");
             unsafe { c::legacyfile_close(file.ptr(), host) }
         }
     }

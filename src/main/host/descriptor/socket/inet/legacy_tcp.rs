@@ -230,6 +230,7 @@ impl LegacyTcpSocket {
 
     pub fn close(&mut self, _cb_queue: &mut CallbackQueue) -> Result<(), SyscallError> {
         Worker::with_active_host(|h| {
+            log::trace!("legacytcptocket.close");
             unsafe { c::legacyfile_close(self.as_legacy_file(), h) };
         })
         .unwrap();
