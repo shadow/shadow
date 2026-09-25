@@ -983,6 +983,11 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     PacketTCPHeader header = packet_getTCPHeader(packet);
     gpointer key = GINT_TO_POINTER(header.sequence);
 
+    if (header.sequence < tcp->receive.lastAcknowledgment) {
+        warning("retransmit queue: adding packet with seq:%u, but already-ack'd:%u", header.sequence, tcp->receive.lastAcknowledgment);
+        abort();
+    }
+
     /* if it is already in the queue, it won't consume another packet reference */
     if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
         /* its not in the queue yet */
