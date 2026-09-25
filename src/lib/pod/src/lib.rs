@@ -37,6 +37,10 @@ pub unsafe trait Pod: Copy + 'static {}
 /// Convert to a slice of raw bytes.
 ///
 /// Some bytes may be uninitialized if T has padding.
+///
+/// Requiring `Pod` for this function is overly strict,
+/// but we need some way to prevent providing types that have interior mutability.
+/// So `Pod` works well enough for us here, and in similar functions below.
 pub fn to_u8_slice<T>(slice: &[T]) -> &[MaybeUninit<u8>]
 where
     T: Pod,
