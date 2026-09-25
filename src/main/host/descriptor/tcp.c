@@ -988,6 +988,12 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
         return;
     }
 
+    if (retransmit_tally_seq_is_ackd(tcp->retransmit.tally, header.sequence)) {
+        debug("%s, seq:%u is already ackd; not adding to retransmit queue", tcp->super.boundString,
+              header.sequence);
+        return;
+    }
+
     /* its not in the queue yet */
     g_hash_table_insert(tcp->retransmit.queue, key, packet);
     packet_ref(packet);
