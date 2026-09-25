@@ -981,18 +981,22 @@ static void _tcp_addRetransmit(TCP* tcp, Packet* packet) {
     PacketTCPHeader header = packet_getTCPHeader(packet);
     gpointer key = GINT_TO_POINTER(header.sequence);
 
-    /* if it is already in the queue, it won't consume another packet reference */
-    if(g_hash_table_lookup(tcp->retransmit.queue, key) == NULL) {
-        /* its not in the queue yet */
-        g_hash_table_insert(tcp->retransmit.queue, key, packet);
-        packet_ref(packet);
+    if (g_hash_table_lookup(tcp->retransmit.queue, key) != NULL) {
+        /* if it is already in the queue, it won't consume another packet reference */
+        debug(
+            "%s, already have seq:%u in retransmit queue", tcp->super.boundString, header.sequence);
+        return;
+    }
 
-        packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_RETRANSMIT);
+    /* its not in the queue yet */
+    g_hash_table_insert(tcp->retransmit.queue, key, packet);
+    packet_ref(packet);
 
-        tcp->retransmit.queueLength += packet_getPayloadSize(packet);
-        if(_tcp_getBufferSpaceOut(tcp) == 0) {
-            legacyfile_adjustStatus((LegacyFile*)tcp, FileState_WRITABLE, FALSE, 0);
-        }
+    packet_addDeliveryStatus(packet, PDS_SND_TCP_ENQUEUE_RETRANSMIT);
+
+    tcp->retransmit.queueLength += packet_getPayloadSize(packet);
+    if (_tcp_getBufferSpaceOut(tcp) == 0) {
+        legacyfile_adjustStatus((LegacyFile*)tcp, FileState_WRITABLE, FALSE, 0);
     }
 }
 
