@@ -28,7 +28,8 @@
 
 #define USAGE "USAGE: '%s iomode type server_address server_port'; iomode=('blocking'|'nonblocking-poll'|'nonblocking-epoll'|'nonblocking-select') type=('client'|'server')"
 #define MYLOG(...) _mylog(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
-#define BUFFERSIZE 20000
+//#define BUFFERSIZE 20000
+#define BUFFERSIZE 10485760
 #define ARRAY_LENGTH(arr)  (sizeof (arr) / sizeof ((arr)[0]))
 // Env variable that contains the message queue id used for server port exchange
 #define MESSAGE_QUEUE_ID_ENV_NAME "QUEUE"
@@ -738,7 +739,7 @@ static int _run_client(iowait_func iowait, const char* servername, int serverpor
 
     if (!use_iov) {
         /* now prepare a message */
-        char outbuf[BUFFERSIZE];
+        char *outbuf = malloc(BUFFERSIZE); // XXX leak
         memset(outbuf, 0, BUFFERSIZE);
         _fillcharbuf(outbuf, BUFFERSIZE);
 
@@ -748,7 +749,7 @@ static int _run_client(iowait_func iowait, const char* servername, int serverpor
         }
 
         /* get ready to recv the response */
-        char inbuf[BUFFERSIZE];
+        char *inbuf = malloc(BUFFERSIZE);  // XXX leak
         memset(inbuf, 0, BUFFERSIZE);
 
         /* recv from server */
@@ -769,6 +770,22 @@ static int _run_client(iowait_func iowait, const char* servername, int serverpor
         if (_test_iov_client(serversd) < 0) {
             return -1;
         }
+    }
+
+    // wait for server to close the socket
+    if (_make_socket_blocking(serversd) != 0) {
+        MYLOG("failed to make blocking");
+        return -1;
+    }
+    char buf[1];
+    MYLOG("Waiting for server to close the connection");
+    int n= recv(serversd, buf, 1, 0);
+    if (n < 0) {
+        MYLOG("recv failed: %s", strerror(errno));
+        return -1;
+    } else if (n != 0) {
+        MYLOG("Unexpectedly got n=%d", n);
+        return -1;
     }
 
     close(serversd);
@@ -796,7 +813,7 @@ static int _run_server(iowait_func iowait, const char *servername, int serverpor
 
     if (!use_iov) {
         /* got one, now read the entire message */
-        char buf[BUFFERSIZE];
+        char *buf = malloc(BUFFERSIZE);  // XXX leak
         memset(buf, 0, BUFFERSIZE);
 
         if(_do_recv(clientsd, buf, iowait) < 0) {
