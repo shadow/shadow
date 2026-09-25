@@ -1012,6 +1012,7 @@ static gint _tcp_compare_sequence_data(gconstpointer ptr_1, gconstpointer ptr_2,
 /* remove all packets with a sequence number less than the sequence parameter */
 static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
     MAGIC_ASSERT(tcp);
+    trace("%s clearing retransmit to %u", tcp->super.boundString, sequence);
 
     // Clear the retrans packets in a deterministic order
     GQueue* keys_sorted = g_queue_new();
@@ -1052,6 +1053,7 @@ static void _tcp_clearRetransmit(TCP* tcp, guint sequence) {
 static void _tcp_clearRetransmitRange(TCP* tcp, guint begin, guint end) {
     MAGIC_ASSERT(tcp);
 
+    trace("%s clearing retransmitrange [%u,%u)", tcp->super.boundString, begin, end);
 
     for (uint32_t seq = begin; seq < end; ++seq) {
         Packet *packet = g_hash_table_lookup(tcp->retransmit.queue,
@@ -1505,6 +1507,17 @@ static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidIn
     TCP* tcp = inetsocket_asLegacyTcp(inetSocket);
     MAGIC_ASSERT(tcp);
 
+    trace("%s retransmit queue size:%zu", tcp->super.boundString, g_hash_table_size(tcp->retransmit.queue));
+    if (g_hash_table_size(tcp->retransmit.queue) < 5 ) {
+        GHashTableIter iter;
+        gpointer key;
+        g_hash_table_iter_init(&iter, tcp->retransmit.queue);
+        while (g_hash_table_iter_next(&iter, &key, NULL)) {
+            guint ackedSequence = GPOINTER_TO_INT(key);
+            trace("%s: seq still in retransmit queue: %u", tcp->super.boundString, ackedSequence);
+        }
+    }
+
     /* a timer expired, update our timer tracking state */
     CSimulationTime now = worker_getCurrentSimulationTime();
     CSimulationTime* scheduledTimerExpirationPtr =
@@ -1521,7 +1534,6 @@ static void _tcp_runRetransmitTimerExpiredTask(const Host* host, gpointer voidIn
         return;
     }
 
-    trace("%s retransmit queue size:%zu", tcp->super.boundString, g_hash_table_size(tcp->retransmit.queue));
     if(g_hash_table_size(tcp->retransmit.queue) == 0) {
         _tcp_stopRetransmitTimer(tcp);
         return;
@@ -1954,13 +1966,14 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, const Host* host, Packet* packet,
                                    PacketTCPHeader* header) {
     MAGIC_ASSERT(tcp);
 
-    trace("processing acks");
-
     TCPProcessFlags flags = TCP_PF_PROCESSED;
     CSimulationTime now = worker_getCurrentSimulationTime();
 
     guint32 prevAck = tcp->receive.lastAcknowledgment;
     guint32 prevWin = tcp->receive.lastWindow;
+
+    trace("%s processing ack seq:%u ack:%u n_sacks:%u", tcp->super.boundString, header->sequence, header->acknowledgment, header->selectiveACKs.len);
+    trace("%s processing ack; prevAck:%u prevWin:%u", tcp->super.boundString, prevAck, prevWin);
 
     /* the ack is in our send window */
     gboolean isValidAck = (header->acknowledgment > (guint)tcp->send.unacked) &&
@@ -1971,11 +1984,14 @@ TCPProcessFlags _tcp_ackProcessing(TCP* tcp, const Host* host, Packet* packet,
                     (header->window != (guint)prevWin));
 
     if(header->window != (guint)prevWin) {
+        trace("%s header->window:%u != prevWin:%u", tcp->super.boundString, header->window, prevWin);
         flags |= TCP_PF_RWND_UPDATED;
     }
 
     /* duplicate acks indicate out of order data on the other end of connection. */
     bool is_dup = (header->flags & PTCP_DUPACK);
+    trace("%s isValidAck:%d isValidWindow:%d is_dup:%d prevWin:%u",
+        tcp->super.boundString, (int)isValidAck, (int)isValidWindow, (int)is_dup, prevWin);
 
     flags |= retransmit_tally_update(tcp->retransmit.tally,
                                     (guint32)header->acknowledgment,

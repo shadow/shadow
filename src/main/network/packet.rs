@@ -403,7 +403,8 @@ impl Packet {
             if let Some(vec) = self.meta.statuses.as_ref() {
                 vec.borrow_mut().push(status);
             }
-            log::trace!("[{status:?}] {self:?}");
+            //XXX log::trace!("[{status:?}] {self:?}");
+            log::trace!("[{status:?}]");
         }
     }
 
