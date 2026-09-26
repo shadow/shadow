@@ -1,5 +1,6 @@
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use std::{fs, thread};
 
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
@@ -50,6 +51,12 @@ impl Latch {
             cvar.notify_all();
         }
     }
+
+    fn tripped(&self) -> bool {
+        let (lock, _) = self.state.as_ref();
+        let is_open = lock.lock().unwrap();
+        *is_open
+    }
 }
 
 #[derive(Debug)]
@@ -62,15 +69,15 @@ pub struct WaiterResult {
 pub struct EpollWaiter {
     epoll_fd: i32,
     timeout_ms: isize,
-    pre_syscall_latch: Latch,
+    syscall_latch: Latch,
 }
 
 impl EpollWaiter {
-    pub fn new(epoll_fd: i32, timeout: Duration, pre_syscall_latch: Latch) -> Self {
+    pub fn new(epoll_fd: i32, timeout: Duration, syscall_latch: Latch) -> Self {
         Self {
             epoll_fd,
             timeout_ms: timeout.as_millis().try_into().unwrap(),
-            pre_syscall_latch,
+            syscall_latch,
         }
     }
 
@@ -78,10 +85,16 @@ impl EpollWaiter {
         let mut events = Vec::new();
         events.resize(10, epoll::EpollEvent::empty());
 
-        let t0 = std::time::Instant::now();
-        self.pre_syscall_latch.trip();
+        // Set up a thread to trip the latch when we're blocked in epoll_wait().
+        trip_when_blocked(self.syscall_latch.clone());
+
+        let t0 = Instant::now();
         let res = epoll::epoll_wait(self.epoll_fd, &mut events, self.timeout_ms);
-        let t1 = std::time::Instant::now();
+        let t1 = Instant::now();
+
+        // We are now certain that the syscall has been made. We trip the latch
+        // just in case the background thread failed to do so yet.
+        self.syscall_latch.trip();
 
         events.resize(res.unwrap_or(0), epoll::EpollEvent::empty());
 
@@ -115,4 +128,56 @@ pub fn init(epoll_fd: i32, timeout: Duration) -> (EpollWaiter, Latch) {
 
 pub fn readable_zero() -> epoll::EpollEvent {
     epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0)
+}
+
+fn trip_when_blocked(latch: Latch) {
+    // Get the calling thread id.
+    let raw_tid = rustix::thread::gettid().as_raw_nonzero().get();
+
+    // Spawn a background thread to trip when the current thread blocks.
+    thread::spawn(move || {
+        if test_utils::running_in_shadow() {
+            // When running in Shadow, sleeping any amount of time should
+            // advance the clock enough forward that the parent will have made
+            // the syscall and be in a blocked state.
+            thread::sleep(Duration::from_millis(1));
+            latch.trip();
+            return;
+        }
+
+        // Running in Linux: use procfs to check the parent thread status.
+        let stat_path = format!("/proc/self/task/{}/stat", raw_tid);
+
+        while !latch.tripped() {
+            // Give our parent a chance to run in case we are CPU constrained.
+            thread::yield_now();
+
+            if let Ok(stat) = fs::read_to_string(&stat_path) {
+                let parts: Vec<&str> = stat.split_whitespace().collect();
+                if parts.len() > 2 && parts[2] == "S" {
+                    // The parent is in the sleeping state ('S').
+                    latch.trip();
+                    return;
+                } else {
+                    // Avoid busy wait.
+                    thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+            } else {
+                // Cannot get procfs data so we use a probabilistic workaraound.
+                // There is still a race here. If we trip the latch to signal to
+                // another thread that our parent is inside a syscall, the other
+                // thread might wake up and run _before_ our parent is actually
+                // blocked. For now we just delay the trip() call a bit to bias
+                // the race toward the desired outcome.
+                //
+                // TODO: can we solve this by using ptrace to manually trace the
+                // parent and trip the latch only when we can guarantee that it
+                // has made the syscall and is blocked?
+                thread::sleep(Duration::from_millis(10));
+                latch.trip();
+                return;
+            }
+        }
+    });
 }
