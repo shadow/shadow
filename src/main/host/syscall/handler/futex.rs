@@ -1,5 +1,5 @@
 use linux_api::errno::Errno;
-use linux_api::futex::{FUTEX_BITSET_MATCH_ANY, FutexOpFlags};
+use linux_api::futex::{FUTEX_BITSET_MATCH_ANY, FutexFlags, FutexOp, FutexOpAndFlags};
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 use shadow_shim_helper_rs::syscall_types::ForeignPtr;
@@ -16,7 +16,7 @@ impl SyscallHandler {
         futex,
         /* rv */ std::ffi::c_int,
         /* uaddr */ *const u32,
-        /* op */ std::ffi::c_int,
+        /* op */ FutexOpAndFlags,
         /* val */ u32,
         /* utime */ *const std::ffi::c_void,
         /* uaddr2 */ *const u32,
@@ -36,36 +36,53 @@ impl SyscallHandler {
         // hardware address (i.e., page table and offset). This is needed, e.g., when using
         // futexes across process boundaries.
 
-        let op = FutexOpFlags::from_bits_retain(op);
+        let op = FutexOpAndFlags::try_from(op).map_err(|_| Errno::EINVAL)?;
+        log::trace!("futex called with addr={uaddr:p} op={op:?}) and val={val}",);
 
-        const POSSIBLE_OPTIONS: FutexOpFlags =
-            FutexOpFlags::FUTEX_PRIVATE_FLAG.union(FutexOpFlags::FUTEX_CLOCK_REALTIME);
-        let options = op.intersection(POSSIBLE_OPTIONS);
-        let operation = op.difference(POSSIBLE_OPTIONS);
+        let options = op.flags();
+        let operation = op.op();
 
-        log::trace!(
-            "futex called with addr={uaddr:p} op={op:?} (operation={operation:?} and options={options:?}) and val={val}",
-        );
+        for option in options.iter() {
+            match option {
+                FutexFlags::FUTEX_PRIVATE_FLAG => {
+                    // Tells the kernel that this futex isn't shared across processes,
+                    // allowing it to perform some optimizations.
+                    //
+                    // No action needed. Maybe we ought to warn if this flag *isn't*
+                    // included, since we don't implement correctly otherwise
+                    // (see TODO above re address spaces).
+                }
+                FutexFlags::FUTEX_CLOCK_REALTIME => {
+                    // Measure timeouts against CLOCK_REALTIME instead of CLOCK_MONOTONIC.
+                    // Currently they're the same clock for us.
+                }
+                unhandled_flag => {
+                    // We can get here either because we don't have a case for a named FutexFlag,
+                    // or because this value doesn't correspond to any named flags.
+                    log::warn!("Unhandled futex flag: {unhandled_flag:?}");
+                }
+            }
+        }
 
         match operation {
-            FutexOpFlags::FUTEX_WAIT => {
+            FutexOp::FUTEX_WAIT => {
                 log::trace!("Handling FUTEX_WAIT operation {operation:?}");
                 return Self::futex_wait_helper(ctx, uaddr, val, utime, TimeoutType::Relative);
             }
-            FutexOpFlags::FUTEX_WAKE => {
+            FutexOp::FUTEX_WAKE => {
                 log::trace!("Handling FUTEX_WAKE operation {operation:?}");
                 // TODO: Should we do better than a cast here? Maybe should add a test for this,
                 // and/or warn if it overflows?
                 return Ok(Self::futex_wake_helper(ctx, uaddr.cast::<()>(), val) as i32);
             }
-            FutexOpFlags::FUTEX_WAIT_BITSET => {
+            FutexOp::FUTEX_WAIT_BITSET => {
                 log::trace!("Handling FUTEX_WAIT_BITSET operation {operation:?} bitset {val3:b}");
                 if val3 == FUTEX_BITSET_MATCH_ANY {
                     return Self::futex_wait_helper(ctx, uaddr, val, utime, TimeoutType::Absolute);
                 }
                 // Other bitsets not yet handled.
             }
-            FutexOpFlags::FUTEX_WAKE_BITSET => {
+            FutexOp::FUTEX_WAKE_BITSET => {
                 log::trace!("Handling FUTEX_WAKE_BITSET operation {operation:?} bitset {val3:b}");
                 if val3 == FUTEX_BITSET_MATCH_ANY {
                     // TODO: Should we do better than a cast here? Maybe should add a test for this,

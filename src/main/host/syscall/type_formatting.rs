@@ -217,6 +217,7 @@ safe_pointer_impl!(libc::iovec);
 
 simple_debug_impl!(linux_api::unistd::LSeekWhence);
 simple_debug_impl!(linux_api::fcntl::FcntlCommand);
+simple_debug_impl!(linux_api::futex::FutexOpAndFlags);
 simple_debug_impl!(linux_api::resource::Resource);
 simple_debug_impl!(linux_api::sched::CloneFlags);
 simple_debug_impl!(linux_api::time::ITimerId);
