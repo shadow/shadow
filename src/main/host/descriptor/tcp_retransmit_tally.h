@@ -43,6 +43,7 @@ void retransmit_tally_mark_retransmitted(void *p, uint32_t begin, uint32_t end);
 void retransmit_tally_clear_retransmitted(void *p);
 size_t retransmit_tally_num_lost_ranges(const void *p);
 void retransmit_tally_populate_lost_ranges(const void *p, uint32_t *lost);
+bool retransmit_tally_seq_is_ackd(const void* p, uint32_t seq);
 
 #ifdef __cplusplus
 } // extern "C"

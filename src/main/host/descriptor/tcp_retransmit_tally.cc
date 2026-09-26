@@ -270,6 +270,17 @@ void retransmit_tally_populate_lost_ranges(const void *p, uint32_t *lost) {
    }
 }
 
+bool retransmit_tally_seq_is_ackd(const void* p, uint32_t seq) {
+    auto rt = cast_and_assert(p);
+    if (rt->last_ack_ > seq) {
+        return true;
+    }
+    if (ranges_contains(rt->sacked_, seq)) {
+        return true;
+    }
+    return false;
+}
+
 } // extern "C"
 
 RetransmitTally::RetransmitTally()
