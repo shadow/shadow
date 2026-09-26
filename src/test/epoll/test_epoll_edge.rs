@@ -1,5 +1,5 @@
 use std::io::Cursor;
-use std::time::Duration;
+use std::sync::mpsc;
 
 use neli::ToBytes;
 use neli::consts::nl::NlmF;
@@ -13,43 +13,9 @@ use nix::unistd;
 use test_utils::socket_utils::{SocketInitMethod, socket_init_helper};
 use test_utils::{ShadowTest, TestEnvironment, ensure_ord, set};
 
-#[derive(Debug)]
-struct WaiterResult {
-    duration: Duration,
-    epoll_res: nix::Result<usize>,
-    events: Vec<epoll::EpollEvent>,
-}
+use crate::util::*;
 
-fn do_epoll_wait(epoll_fd: i32, timeout: Duration, do_read: bool) -> WaiterResult {
-    let mut events = Vec::new();
-    events.resize(10, epoll::EpollEvent::empty());
-
-    let t0 = std::time::Instant::now();
-
-    let res = epoll::epoll_wait(
-        epoll_fd,
-        &mut events,
-        timeout.as_millis().try_into().unwrap(),
-    );
-
-    let t1 = std::time::Instant::now();
-
-    events.resize(res.unwrap_or(0), epoll::EpollEvent::empty());
-
-    if do_read {
-        for ev in &events {
-            let fd = ev.data() as i32;
-            // we don't care if the read is successful or not (another thread may have already read)
-            let _ = unistd::read(fd, &mut [0]);
-        }
-    }
-
-    WaiterResult {
-        duration: t1.duration_since(t0),
-        epoll_res: res,
-        events,
-    }
-}
+mod util;
 
 fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result<()> {
     let epollfd = epoll::epoll_create()?;
@@ -63,39 +29,37 @@ fn test_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(200);
+        // We expect the first two will not reach the timeout, use LONG_DUR.
+        let (waiter1, block1) = init(epollfd, LONG_DUR);
+        let (waiter2, block2) = init(epollfd, LONG_DUR);
+        // We expect the last one will reach the timeout, use SHORT_DUR.
+        let (waiter3, block3) = init(epollfd, SHORT_DUR);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        let thread =
+            std::thread::spawn(move || vec![waiter1.wait(), waiter2.wait(), waiter3.wait()]);
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
-
-        // Make the read-end readable.
+        // Wait for the thread to start and execute the first epoll_wait,
+        // then write to the write end so the read end becomes readable.
+        block1.wait();
         unistd::write(writefd, &[0])?;
 
-        // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        // Wait until inside the next epoll_wait, make the read-end readable again.
+        block2.wait();
         unistd::write(writefd, &[0])?;
 
+        block3.wait();
         let results = thread.join().unwrap();
 
         // The first two waits should have received the event
         for res in &results[..2] {
             ensure_ord!(res.epoll_res, ==, Ok(1));
-            ensure_ord!(res.duration, <, timeout);
-            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+            ensure_ord!(res.duration, <, LONG_DUR);
+            ensure_ord!(res.events[0], ==, readable_zero());
         }
 
         // The last wait should have timed out with no events received.
         ensure_ord!(results[2].epoll_res, ==, Ok(0));
-        ensure_ord!(results[2].duration, >=, timeout);
+        ensure_ord!(results[2].duration, >=, SHORT_DUR);
 
         Ok(())
     })
@@ -113,36 +77,31 @@ fn test_write_then_partial_read(readfd: libc::c_int, writefd: libc::c_int) -> an
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(200);
+        // We expect the first one will not reach the timeout, use LONG_DUR.
+        let (waiter1, block1) = init(epollfd, LONG_DUR);
+        // We expect the second one will reach the timeout, use SHORT_DUR.
+        let (waiter2, block2) = init(epollfd, SHORT_DUR);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The second one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
-
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        let thread = std::thread::spawn(move || vec![waiter1.wait(), waiter2.wait()]);
 
         // Make the read-end readable.
+        block1.wait();
         unistd::write(writefd, &[0, 0])?;
 
         // Wait and read some, but not all, from the buffer.
-        std::thread::sleep(timeout / 3);
+        block2.wait();
         unistd::read(readfd, &mut [0])?;
 
         let results = thread.join().unwrap();
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
-        ensure_ord!(results[0].duration, <, timeout);
-        ensure_ord!(results[0].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        ensure_ord!(results[0].duration, <, LONG_DUR);
+        ensure_ord!(results[0].events[0], ==, readable_zero());
 
         // The second wait should have timed out with no events received.
         ensure_ord!(results[1].epoll_res, ==, Ok(0));
-        ensure_ord!(results[1].duration, >=, timeout);
+        ensure_ord!(results[1].duration, >=, SHORT_DUR);
 
         Ok(())
     })
@@ -160,25 +119,38 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(200);
+        // For communicating results from the spawned threads to the main thread.
+        let (tx1, rx) = mpsc::sync_channel(3);
+        let (tx2, tx3) = (tx1.clone(), tx1.clone());
+
+        let (waiter1, block1) = init(epollfd, SHORT_DUR);
+        let (waiter2, _block2) = init(epollfd, SHORT_DUR);
+        let (waiter3, _block3) = init(epollfd, SHORT_DUR);
 
         let threads = [
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
-            std::thread::spawn(move || do_epoll_wait(epollfd, timeout, /* do_read= */ false)),
+            std::thread::spawn(move || tx1.send(waiter1.wait()).unwrap()),
+            std::thread::spawn(move || tx2.send(waiter2.wait()).unwrap()),
+            std::thread::spawn(move || tx3.send(waiter3.wait()).unwrap()),
         ];
 
-        // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        // Wait for at least one thread to be ready.
+        block1.wait();
 
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
 
-        // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
-        unistd::write(writefd, &[0])?;
+        // Wait for the event to be collected.
+        let result1 = rx.recv().unwrap();
 
-        let mut results = threads.map(|t| t.join().unwrap());
+        // Make the read-end readable again and collect the result.
+        unistd::write(writefd, &[0])?;
+        let result2 = rx.recv().unwrap();
+
+        // Collect the final event (probably the timeout).
+        let result3 = rx.recv().unwrap();
+
+        let _ = threads.map(|t| t.join().unwrap());
+        let mut results = [result1, result2, result3];
 
         // Two of the threads should have gotten an event, but we don't know which one.
         // Sort results by number of events received.
@@ -186,13 +158,13 @@ fn test_threads_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
 
         // One thread should have timed out with no events received.
         ensure_ord!(results[0].epoll_res, ==, Ok(0));
-        ensure_ord!(results[0].duration, >=, timeout);
+        ensure_ord!(results[0].duration, >=, SHORT_DUR);
 
         // The rest should have received the event
         for res in &results[1..] {
             ensure_ord!(res.epoll_res, ==, Ok(1));
-            ensure_ord!(res.duration, <, timeout);
-            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+            ensure_ord!(res.duration, <, SHORT_DUR);
+            ensure_ord!(res.events[0], ==, readable_zero());
         }
 
         Ok(())
@@ -214,28 +186,26 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
             Some(&mut event),
         )?;
 
-        let timeout = Duration::from_millis(200);
+        // We expect the first and last will not reach the timeout, use LONG_DUR.
+        let (waiter1, block1) = init(epollfd, LONG_DUR);
+        let (waiter2, block2) = init(epollfd, SHORT_DUR);
+        let (waiter3, block3) = init(epollfd, LONG_DUR);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        let thread =
+            std::thread::spawn(move || vec![waiter1.wait(), waiter2.wait(), waiter3.wait()]);
 
         // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        block1.wait();
 
         // Make the read-end readable.
         unistd::write(writefd, &[0])?;
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        block2.wait();
         unistd::write(writefd, &[0])?;
 
         // Wait for the second wait to time out.
-        std::thread::sleep(timeout);
+        block3.wait();
 
         epoll::epoll_ctl(
             epollfd,
@@ -251,17 +221,17 @@ fn test_oneshot_multi_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow
 
         // The first wait should have received the event
         ensure_ord!(results[0].epoll_res, ==, Ok(1));
-        ensure_ord!(results[0].duration, <, timeout);
-        ensure_ord!(results[0].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        ensure_ord!(results[0].duration, <, LONG_DUR);
+        ensure_ord!(results[0].events[0], ==, readable_zero());
 
         // The second wait should have timed out with no events received.
         ensure_ord!(results[1].epoll_res, ==, Ok(0));
-        ensure_ord!(results[1].duration, >=, timeout);
+        ensure_ord!(results[1].duration, >=, SHORT_DUR);
 
         // The third wait should have received the event
         ensure_ord!(results[2].epoll_res, ==, Ok(1));
-        ensure_ord!(results[2].duration, <, timeout);
-        ensure_ord!(results[2].events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+        ensure_ord!(results[2].duration, <, LONG_DUR);
+        ensure_ord!(results[2].events[0], ==, readable_zero());
 
         Ok(())
     })
@@ -277,44 +247,48 @@ fn test_eventfd_multi_write() -> anyhow::Result<()> {
         let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
         epoll::epoll_ctl(epollfd, epoll::EpollOp::EpollCtlAdd, efd, Some(&mut event))?;
 
-        let timeout = Duration::from_millis(200);
+        // We expect the first three will not reach the timeout, use LONG_DUR.
+        let (waiter1, block1) = init(epollfd, LONG_DUR);
+        let (waiter2, block2) = init(epollfd, LONG_DUR);
+        let (waiter3, block3) = init(epollfd, LONG_DUR);
+        let (waiter4, block4) = init(epollfd, SHORT_DUR);
 
         let thread = std::thread::spawn(move || {
             vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
+                waiter1.wait(),
+                waiter2.wait(),
+                waiter3.wait(),
+                waiter4.wait(),
             ]
         });
 
         // Wait for readers to block.
-        std::thread::sleep(timeout / 4);
+        block1.wait();
 
         // Make the read-end readable.
         unistd::write(efd, &1u64.to_le_bytes())?;
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 4);
+        block2.wait();
         unistd::write(efd, &1u64.to_le_bytes())?;
 
         // Wait again and make the read-end readable again, but with zero value this time.
-        std::thread::sleep(timeout / 4);
+        block3.wait();
         unistd::write(efd, &0u64.to_le_bytes())?;
 
+        block4.wait();
         let results = thread.join().unwrap();
 
         // The first three waits should have received the event
         for res in &results[..3] {
             ensure_ord!(res.epoll_res, ==, Ok(1));
-            ensure_ord!(res.duration, <, timeout);
-            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+            ensure_ord!(res.duration, <, LONG_DUR);
+            ensure_ord!(res.events[0], ==, readable_zero());
         }
 
         // The last wait should have timed out with no events received.
         ensure_ord!(results[3].epoll_res, ==, Ok(0));
-        ensure_ord!(results[3].duration, >=, timeout);
+        ensure_ord!(results[3].duration, >=, SHORT_DUR);
 
         Ok(())
     })
@@ -355,39 +329,38 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
         let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLIN, 0);
         epoll::epoll_ctl(epollfd, epoll::EpollOp::EpollCtlAdd, fd, Some(&mut event))?;
 
-        let timeout = Duration::from_millis(200);
+        // We expect the first two will not reach the timeout, use LONG_DUR.
+        let (waiter1, block1) = init(epollfd, LONG_DUR);
+        let (waiter2, block2) = init(epollfd, LONG_DUR);
+        // We expect the last one will reach the timeout, use SHORT_DUR.
+        let (waiter3, block3) = init(epollfd, SHORT_DUR);
 
-        let thread = std::thread::spawn(move || {
-            vec![
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-                // The last one is supposed to timeout.
-                do_epoll_wait(epollfd, timeout, /* do_read= */ false),
-            ]
-        });
+        let thread =
+            std::thread::spawn(move || vec![waiter1.wait(), waiter2.wait(), waiter3.wait()]);
 
         // Wait for readers to block.
-        std::thread::sleep(timeout / 3);
+        block1.wait();
 
         // Make the read-end readable.
         unistd::write(fd, buffer.as_slice())?;
 
         // Wait again and make the read-end readable again.
-        std::thread::sleep(timeout / 3);
+        block2.wait();
         unistd::write(fd, buffer.as_slice())?;
 
+        block3.wait();
         let results = thread.join().unwrap();
 
         // The first two waits should have received the event
         for res in &results[..2] {
             ensure_ord!(res.epoll_res, ==, Ok(1));
-            ensure_ord!(res.duration, <, timeout);
-            ensure_ord!(res.events[0], ==, epoll::EpollEvent::new(EpollFlags::EPOLLIN, 0));
+            ensure_ord!(res.duration, <, LONG_DUR);
+            ensure_ord!(res.events[0], ==, readable_zero());
         }
 
         // The last wait should have timed out with no events received.
         ensure_ord!(results[2].epoll_res, ==, Ok(0));
-        ensure_ord!(results[2].duration, >=, timeout);
+        ensure_ord!(results[2].duration, >=, SHORT_DUR);
 
         Ok(())
     })
