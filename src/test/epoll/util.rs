@@ -13,34 +13,40 @@ pub const LONG_DUR: Duration = Duration::from_secs(10);
 /// prevent the test from consuming too much runtime.
 pub const SHORT_DUR: Duration = Duration::from_millis(200);
 
+/// A one-shot synchronization gate that blocks threads until it is tripped.
+/// Once tripped, it stays open permanently.
 #[derive(Debug, Clone)]
-pub struct Notify {
+pub struct Latch {
     state: Arc<(Mutex<bool>, Condvar)>,
 }
 
-impl Notify {
+impl Latch {
+    /// Creates a new, closed Latch.
     pub fn new() -> Self {
         Self {
             state: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 
-    /// Waits for a notify signal to be sent by another thread.
+    /// Blocks the current thread until the latch is tripped. If the latch is
+    /// already open, it returns immediately.
     pub fn wait(&self) {
         let (lock, cvar) = self.state.as_ref();
-        let mut value = lock.lock().unwrap();
-        while !*value {
-            value = cvar.wait(value).unwrap();
+        let mut is_open = lock.lock().unwrap();
+
+        // The loop should handle spurious wakeups safely.
+        while !*is_open {
+            is_open = cvar.wait(is_open).unwrap();
         }
     }
 
-    /// Sets the value to true and notifies the condition variable if the value
-    /// changed from false to true.
-    pub fn notify(&self) {
+    /// Permanently opens the latch and wakes up all waiting threads.
+    pub fn trip(&self) {
         let (lock, cvar) = self.state.as_ref();
-        let mut value = lock.lock().unwrap();
-        if !*value {
-            *value = true;
+        let mut is_open = lock.lock().unwrap();
+
+        if !*is_open {
+            *is_open = true;
             cvar.notify_all();
         }
     }
@@ -56,15 +62,15 @@ pub struct WaiterResult {
 pub struct EpollWaiter {
     epoll_fd: i32,
     timeout_ms: isize,
-    notify: Notify,
+    pre_syscall_latch: Latch,
 }
 
 impl EpollWaiter {
-    pub fn new(epoll_fd: i32, timeout: Duration, notify: Notify) -> Self {
+    pub fn new(epoll_fd: i32, timeout: Duration, pre_syscall_latch: Latch) -> Self {
         Self {
             epoll_fd,
             timeout_ms: timeout.as_millis().try_into().unwrap(),
-            notify,
+            pre_syscall_latch,
         }
     }
 
@@ -73,7 +79,7 @@ impl EpollWaiter {
         events.resize(10, epoll::EpollEvent::empty());
 
         let t0 = std::time::Instant::now();
-        self.notify.notify();
+        self.pre_syscall_latch.trip();
         let res = epoll::epoll_wait(self.epoll_fd, &mut events, self.timeout_ms);
         let t1 = std::time::Instant::now();
 
@@ -102,9 +108,9 @@ impl EpollWaiter {
 
 /// Create epoll_wait state that can be run inside a thread, with linked sync
 /// primitives that give the main thread some semblence of control.
-pub fn init(epoll_fd: i32, timeout: Duration) -> (EpollWaiter, Notify) {
-    let notify = Notify::new();
-    (EpollWaiter::new(epoll_fd, timeout, notify.clone()), notify)
+pub fn init(epoll_fd: i32, timeout: Duration) -> (EpollWaiter, Latch) {
+    let latch = Latch::new();
+    (EpollWaiter::new(epoll_fd, timeout, latch.clone()), latch)
 }
 
 pub fn readable_zero() -> epoll::EpollEvent {
