@@ -15,10 +15,7 @@ asm_util = { path = "../lib/asm-util" }
 atomic_refcell = "0.1"
 backtrace = "0.3.76"
 bitflags = "2.13"
-# custom version of the bytes crate required to make the 'try_unsplit' method public
-# issue: https://github.com/tokio-rs/bytes/issues/287
-# pr: https://github.com/tokio-rs/bytes/pull/513
-bytes = { git = "https://github.com/shadow/bytes", rev = "c48bd4439e7e043300521925524ecdcce7ff6bcc" }
+bytes = "1.12.1"
 clap = { version = "4.6.1", features = ["derive", "wrap_help"] }
 crossbeam = "0.8.4"
 gml-parser = { path = "../lib/gml-parser" }
