@@ -272,3 +272,4 @@ static_assertions = "1.1.0"
 tempfile = "3.27.0"
 tor-llcrypto = "0.44.0"
 num_enum = "0.7.6"
+procfs = { version = "0.18.0", default-features = false }

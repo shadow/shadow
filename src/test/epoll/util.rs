@@ -1,9 +1,10 @@
 use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
-use std::{fs, thread};
 
 use nix::sys::epoll::{self, EpollFlags};
 use nix::unistd;
+use procfs::process::{ProcState, Process};
 
 /// When we expect an event to be ready quickly, use a long timeout that
 /// shouldn't normally trigger but provides an upper bound on error.
@@ -132,30 +133,32 @@ pub fn readable_zero() -> epoll::EpollEvent {
 
 fn trip_when_blocked(latch: Latch) {
     // Get the calling thread id.
-    let raw_tid = rustix::thread::gettid().as_raw_nonzero().get();
+    let caller_tid = rustix::thread::gettid().as_raw_nonzero().get();
 
     // Spawn a background thread to trip when the current thread blocks.
     thread::spawn(move || {
         if test_utils::running_in_shadow() {
             // When running in Shadow, sleeping any amount of time should
-            // advance the clock enough forward that the parent will have made
+            // advance the clock enough forward that the caller will have made
             // the syscall and be in a blocked state.
             thread::sleep(Duration::from_millis(1));
             latch.trip();
             return;
         }
 
-        // Running in Linux: use procfs to check the parent thread status.
-        let stat_path = format!("/proc/self/task/{}/stat", raw_tid);
-
+        // We are running in Linux.
         while !latch.tripped() {
-            // Give our parent a chance to run in case we are CPU constrained.
+            // Give our caller a chance to run in case we are CPU constrained.
             thread::yield_now();
 
-            if let Ok(stat) = fs::read_to_string(&stat_path) {
-                let parts: Vec<&str> = stat.split_whitespace().collect();
-                if parts.len() > 2 && parts[2] == "S" {
-                    // The parent is in the sleeping state ('S').
+            // Prefer to use procfs to check the caller thread status.
+            if let Ok(proc) = Process::myself()
+                && let Ok(caller) = proc.task_from_tid(caller_tid)
+                && let Ok(stat) = caller.stat()
+                && let Ok(state) = stat.state()
+            {
+                if state == ProcState::Sleeping {
+                    // The caller is in the sleeping state ('S').
                     latch.trip();
                     return;
                 } else {
@@ -166,13 +169,13 @@ fn trip_when_blocked(latch: Latch) {
             } else {
                 // Cannot get procfs data so we use a probabilistic workaraound.
                 // There is still a race here. If we trip the latch to signal to
-                // another thread that our parent is inside a syscall, the other
-                // thread might wake up and run _before_ our parent is actually
+                // another thread that our caller is inside a syscall, the other
+                // thread might wake up and run _before_ our caller is actually
                 // blocked. For now we just delay the trip() call a bit to bias
                 // the race toward the desired outcome.
                 //
                 // TODO: can we solve this by using ptrace to manually trace the
-                // parent and trip the latch only when we can guarantee that it
+                // caller and trip the latch only when we can guarantee that it
                 // has made the syscall and is blocked?
                 thread::sleep(Duration::from_millis(10));
                 latch.trip();
