@@ -1,0 +1,23 @@
+[package]
+name = "qperf"
+edition.workspace = true
+publish.workspace = true
+
+[features]
+extra_tests = []
+
+[[bin]]
+name = "qperf"
+path = "src/main.rs"
+required-features = ["extra_tests"]
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
+env_logger = "0.11"
+futures = "0.3"
+log = "0.4"
+quiche = { version = "0.30", features = ["qlog"] }
+rand = "0.10"
+rcgen = "0.14"
+smol = "2.0"
