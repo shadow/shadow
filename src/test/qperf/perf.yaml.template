@@ -1,0 +1,40 @@
+general:
+  stop_time: 30 sec
+network:
+  graph:
+    type: gml
+    inline: |
+      graph [
+        directed 0
+        node [
+          id 0
+          host_bandwidth_down ${BWDOWN}
+          host_bandwidth_up ${BWUP}
+        ]
+        edge [
+          source 0
+          target 0
+          latency ${LATENCY}
+          jitter "0 ms"
+          packet_loss ${PACKETLOSS}
+        ]
+      ]
+hosts:
+  server:
+    network_node_id: 0
+    ip_addr: 10.0.0.1
+    processes:
+    - path: ../../target/debug/qperf
+      args: server --bind="10.0.0.1:4433" --num-bytes=${NUMBYTES}
+      environment: { RUST_LOG: debug, QLOGDIR: "./" }
+      start_time: 1
+      expected_final_state: { exited: 0 }
+  client:
+    network_node_id: 0
+    ip_addr: 10.0.0.2
+    processes:
+    - path: ../../target/debug/qperf
+      args: client --bind="10.0.0.2:0" --connect="10.0.0.1:4433" --num-bytes=${NUMBYTES}
+      environment: { RUST_LOG: debug, QLOGDIR: "./" }
+      start_time: 2
+      expected_final_state: { exited: 0 }
