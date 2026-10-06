@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d5" for="node" attr.name="count" attr.type="string"/>
+<key id="d4" for="node" attr.name="recvsize" attr.type="string"/>
+<key id="d3" for="node" attr.name="sendsize" attr.type="string"/>
+<key id="d2" for="node" attr.name="timeout" attr.type="string"/>
+<key id="d1" for="node" attr.name="peers" attr.type="string"/>
+<key id="d0" for="node" attr.name="time" attr.type="string"/>
+<graph edgedefault="directed"><node id="start">
+  <data key="d0">1 second</data>
+  <data key="d1">server:80</data>
+  <data key="d2">180 seconds</data>
+  <data key="d3">1 mib</data>
+  <data key="d4">1 mib</data>
+</node>
+<node id="end">
+  <data key="d5">1</data>
+</node>
+<node id="stream0"/>
+<edge source="start" target="stream0"/>
+<edge source="end" target="start"/>
+<edge source="stream0" target="end"/>
+</graph></graphml>

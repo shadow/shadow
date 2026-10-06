@@ -367,7 +367,77 @@ impl Worker {
             return;
         }
 
-        let delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
+        let mut delay = Worker::with(|w| w.shared.latency(src_ip, dst_ip).unwrap()).unwrap();
+
+        // experimental per-edge bandwidth limiting: if enabled and not in bootstrap,
+        // enforce bandwidth per hop along the selected route. For hops without a bucket, assume
+        // no limit. We sum the required conforming delays across hops.
+        if Worker::with(|w| w.shared.edge_bw_enabled).unwrap() && !is_bootstrapping {
+            if let (Some(src_node), Some(dst_node)) = Worker::with(|w| {
+                let src = w.shared.ip_assignment.get_node(src_ip);
+                let dst = w.shared.ip_assignment.get_node(dst_ip);
+                (src, dst)
+            })
+            .unwrap()
+            {
+                let nodes_vec = Worker::with(|w| {
+                    w.shared
+                        .routing_info
+                        .path_nodes(src_node, dst_node)
+                        .map(|s| s.to_vec())
+                })
+                .unwrap();
+                if let Some(nodes) = nodes_vec {
+                    // Use a conservative MTU-sized decrement so large application payloads
+                    // that are segmented at lower layers still experience rate limiting.
+                    let needed_bytes = if payload_size == 0 {
+                        0u64
+                    } else {
+                        std::cmp::min(payload_size as u64, 1500u64)
+                    };
+                    let mut total_block =
+                        shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0);
+                    for pair in nodes.windows(2) {
+                        let u = pair[0];
+                        let v = pair[1];
+                        if u == v {
+                            continue;
+                        }
+                        let hop_block = if needed_bytes == 0 {
+                            None
+                        } else {
+                            Worker::with(|w| {
+                                let mut buckets = w.shared.edge_bw_buckets.write().unwrap();
+                                if let Some(tb) = buckets.get_mut(&(u, v)) {
+                                    match tb.comforming_remove(needed_bytes) {
+                                        Ok(_remaining) => None,
+                                        Err(blocking) => Some(blocking),
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap()
+                        };
+                        if let Some(extra) = hop_block {
+                            total_block = total_block.saturating_add(extra);
+                            log::info!(
+                                "Edge bandwidth limiting: delaying packet hop src_node={} dst_node={} bytes={} extra_delay={:?}",
+                                u,
+                                v,
+                                needed_bytes,
+                                extra
+                            );
+                        }
+                    }
+                    if total_block
+                        > shadow_shim_helper_rs::simulation_time::SimulationTime::from_nanos(0)
+                    {
+                        delay = delay.saturating_add(total_block);
+                    }
+                }
+            }
+        }
 
         Worker::update_lowest_used_latency(delay);
         Worker::with(|w| w.shared.increment_packet_count(src_ip, dst_ip)).unwrap();
@@ -507,6 +577,11 @@ pub struct WorkerShared {
     pub event_queues: HashMap<HostId, Arc<Mutex<EventQueue>>>,
     pub bootstrap_end_time: EmulatedTime,
     pub sim_end_time: EmulatedTime,
+    // per-edge bandwidth limit token buckets keyed by (src_node_id, dst_node_id)
+    pub edge_bw_enabled: bool,
+    pub edge_bw_buckets: std::sync::RwLock<
+        std::collections::HashMap<(u32, u32), crate::network::relay::TokenBucket>,
+    >,
 }
 
 impl WorkerShared {
