@@ -64,7 +64,12 @@ function(add_qperf_test BWDOWN BWUP LATENCY PACKETLOSS NUMBYTES NAME)
         "PACKETLOSS=${PACKETLOSS}"
         "NUMBYTES=${NUMBYTES}"
     )
+    
+    math(EXPR RTT "${LATENCY} * 2")
 
+    # Note: below we set some initially wide tolerances on the expected
+    # bandwidth and median RTT targets. We can and should tighten these as we
+    # improve the simulator over time.
     add_shadow_tests(
         BASENAME ${NAME}
         SHADOW_CONFIG ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.yaml
@@ -72,6 +77,16 @@ function(add_qperf_test BWDOWN BWUP LATENCY PACKETLOSS NUMBYTES NAME)
             --strace-logging-mode=off
             --parallelism 2
         LOGLEVEL info
+        POST_CMD "${CMAKE_CURRENT_BINARY_DIR}/../../target/debug/qperf_check \
+            --bw-down-mbps=${BWDOWN} \
+            --bw-up-mbps=${BWUP} \
+            --bw-percent-tol=80.0 \
+            --rtt-min-ms=${RTT} \
+            --rtt-min-ms-tol=333.0 \
+            --rtt-med-ms=${RTT} \
+            --rtt-med-ms-tol=333.0 \
+            ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-shadow.data/hosts/client/client-trace.sqlog
+            "
         CONFIGURATIONS extra
         PROPERTIES
           TIMEOUT 300
@@ -81,11 +96,11 @@ endfunction()
 
 if(SHADOW_EXTRA_TESTS STREQUAL ON)
     # Test a single quic connection across a variety of network characteristics.
-    add_qperf_test(1 1  10 0.0 1048576 qperf_1mbit_10ms)
-    add_qperf_test(1 1 100 0.0 1048576 qperf_1mbit_100ms)
-    add_qperf_test(1 1 300 0.0 1048576 qperf_1mbit_300ms)
+    add_qperf_test(1 1  10 0.0 524288 qperf_1mbit_10ms)
+    add_qperf_test(1 1 100 0.0 524288 qperf_1mbit_100ms)
+    add_qperf_test(1 1 300 0.0 524288 qperf_1mbit_300ms)
 
-    add_qperf_test(10 10  10 0.0 1048576 qperf_10mbit_10ms)
-    add_qperf_test(10 10 100 0.0 1048576 qperf_10mbit_100ms)
-    add_qperf_test(10 10 300 0.0 1048576 qperf_10mbit_300ms)
+    add_qperf_test(10 10  10 0.0 2097152 qperf_10mbit_10ms)
+    add_qperf_test(10 10 100 0.0 2097152 qperf_10mbit_100ms)
+    add_qperf_test(10 10 300 0.0 2097152 qperf_10mbit_300ms)
 endif()
