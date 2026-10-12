@@ -2533,6 +2533,7 @@ dependencies = [
  "quiche",
  "rand 0.10.2",
  "rcgen",
+ "serde_json",
  "smol",
 ]
 
