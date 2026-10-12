@@ -20,12 +20,18 @@ extra_tests = [
     "dep:quiche",
     "dep:rand",
     "dep:rcgen",
+    "dep:serde_json",
     "dep:smol"
 ]
 
 [[bin]]
 name = "qperf"
 path = "src/main.rs"
+required-features = ["extra_tests"]
+
+[[bin]]
+name = "qperf_check"
+path = "src/check.rs"
 required-features = ["extra_tests"]
 
 [dependencies]
@@ -37,4 +43,5 @@ log = { version = "0.4", optional = true }
 quiche = { version = "0.30", features = ["qlog"], optional = true }
 rand = { version = "0.10", optional = true }
 rcgen = { version = "0.14", optional = true }
+serde_json = { version = "1.0", optional = true }
 smol = { version = "2.0", optional = true }
