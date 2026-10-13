@@ -102,6 +102,10 @@ def _make_base_config() -> scfg.Config:
             # pinning is probably more trouble than its worth. e.g. multiple
             # simulations run at once will pin to the same cpu.
             use_cpu_pinning=False,
+            # Similarly, this is sometimes an optimization, but can
+            # be a pessimization and use more resources than expected.
+            # 'off' is a better default for small sims.
+            use_worker_spinning=False,
         ),
         network=scfg.Network(graph=scfg.Graph(type="1_gbit_switch")),
         hosts={},
