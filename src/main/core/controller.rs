@@ -57,6 +57,7 @@ impl<'a> Controller<'a> {
             routing_info: sim_config.routing_info,
             host_bandwidths: sim_config.host_bandwidths,
             hosts: sim_config.hosts,
+            edge_bandwidths_bytes: sim_config.edge_bandwidths_bytes,
         };
 
         let manager = Manager::new(manager_config, &self, self.config, self.end_time)
