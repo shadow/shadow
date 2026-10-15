@@ -51,7 +51,10 @@ ExternalProject_Add(
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
-        --workspace --exclude shadow-tests --exclude shadow-shim \
+        --workspace \
+        --exclude shadow-tests \
+        --exclude shadow-shim \
+        --exclude qperf \
         ${RUST_BUILD_FLAG} \
         ${RUST_TARGETS} \
         --target-dir \"${TARGETDIR}\" \
@@ -67,6 +70,7 @@ ExternalProject_Add(
         ${CARGO_ENV_VARS} \
         cargo build \
         --package shadow-tests \
+        --package qperf \
         --target-dir \"${TARGETDIR}\" \
         --features \"${TEST_FEATURES}\" \
         "
