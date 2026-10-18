@@ -90,11 +90,11 @@ function(add_qperf_test BWDOWN BWUP LATENCY PACKETLOSS NUMBYTES NAME)
         CONFIGURATIONS extra
         PROPERTIES
           TIMEOUT 300
-          LABELS quic
+          LABELS qperf
     )
 endfunction()
 
-if(SHADOW_EXTRA_TESTS STREQUAL ON)
+if(SHADOW_PERF_TESTS STREQUAL ON)
     # Test a single quic connection across a variety of network characteristics.
     add_qperf_test(1 1  10 0.0 524288 qperf_1mbit_10ms)
     add_qperf_test(1 1 100 0.0 524288 qperf_1mbit_100ms)

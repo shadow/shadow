@@ -11,6 +11,10 @@ if(SHADOW_EXTRA_TESTS STREQUAL ON)
   set(TEST_FEATURES "${TEST_FEATURES} extra_tests")
 endif()
 
+if(SHADOW_PERF_TESTS STREQUAL ON)
+  set(TEST_FEATURES "${TEST_FEATURES} perf_tests")
+endif()
+
 if(SHADOW_WERROR STREQUAL ON)
   set(RUSTFLAGS "${RUSTFLAGS} -Dwarnings")
 endif()
