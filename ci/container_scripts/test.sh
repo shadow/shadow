@@ -15,10 +15,10 @@ FLAGS+=("--extra")
 # Following flags passed through to ctest
 FLAGS+=("--")
 
-# * Exclude tgen and tor tests as we test them in a different workflow.
+# * Exclude qperf, tgen, and tor tests as we test them in a different workflow.
 # * Exclude examples as we don't have all the required dependencies.
 # * Exclude flaky tests.
-FLAGS+=("--label-exclude" "tgen|tor|example|flaky")
+FLAGS+=("--label-exclude" "qperf|tgen|tor|example|flaky")
 
 FLAGS+=("--output-on-failure")
 

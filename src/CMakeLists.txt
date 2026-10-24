@@ -11,6 +11,10 @@ if(SHADOW_EXTRA_TESTS STREQUAL ON)
   set(TEST_FEATURES "${TEST_FEATURES} extra_tests")
 endif()
 
+if(SHADOW_PERF_TESTS STREQUAL ON)
+  set(TEST_FEATURES "${TEST_FEATURES} perf_tests")
+endif()
+
 if(SHADOW_WERROR STREQUAL ON)
   set(RUSTFLAGS "${RUSTFLAGS} -Dwarnings")
 endif()
@@ -51,7 +55,10 @@ ExternalProject_Add(
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
-        --workspace --exclude shadow-tests --exclude shadow-shim \
+        --workspace \
+        --exclude shadow-tests \
+        --exclude shadow-shim \
+        --exclude qperf \
         ${RUST_BUILD_FLAG} \
         ${RUST_TARGETS} \
         --target-dir \"${TARGETDIR}\" \
@@ -67,6 +74,7 @@ ExternalProject_Add(
         ${CARGO_ENV_VARS} \
         cargo build \
         --package shadow-tests \
+        --package qperf \
         --target-dir \"${TARGETDIR}\" \
         --features \"${TEST_FEATURES}\" \
         "
