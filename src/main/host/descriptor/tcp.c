@@ -2497,10 +2497,10 @@ gssize tcp_sendUserData(TCP* tcp, const Host* host, UntypedForeignPtr buffer, gs
         }
     }
 
-    /* maximum data we can send network, o/w tcp truncates and only sends 65536*/
-    gsize acceptable = MIN(nBytes, 65535);
-    gsize space = _tcp_getBufferSpaceOut(tcp);
-    gsize remaining = MIN(acceptable, space);
+    /* Accept as much as the send buffer has room for. As on Linux, a short write must mean that
+     * the buffer is full: applications such as tokio then wait for EPOLLOUT, which comes only once
+     * the buffer becomes writable again. */
+    gsize remaining = MIN(nBytes, _tcp_getBufferSpaceOut(tcp));
 
     /* break data into segments and send each in a packet */
     gsize maxPacketLength = CONFIG_TCP_MAX_SEGMENT_SIZE;

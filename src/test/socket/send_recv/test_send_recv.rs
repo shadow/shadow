@@ -2026,13 +2026,21 @@ fn test_large_buf(
             (_, libc::SOCK_SEQPACKET) => &[libc::EMSGSIZE][..],
             _ => &[],
         };
-        simple_sendto_helper(
+        let rv = simple_sendto_helper(
             sys_method,
             fd_client,
             &[1u8; 1_000_000],
             expected_err,
             false,
         )?;
+
+        // a tcp send is short only if the send buffer is full, which takes more than 64 KiB on a
+        // new connection
+        if (init_method.domain(), sock_type) == (libc::AF_INET, libc::SOCK_STREAM) && rv <= 65535 {
+            return Err(format!(
+                "Expected to send more than 65535 bytes, but sent {rv}"
+            ));
+        }
 
         // shadow needs to run events
         assert_eq!(unsafe { libc::usleep(10000) }, 0);
