@@ -5,6 +5,7 @@
 set -euo pipefail
 
 APT_PACKAGES=(
+  git
   cmake
   findutils
   golang-go
@@ -30,6 +31,7 @@ APT_CI_PACKAGES=(
   )
 
 RPM_PACKAGES=(
+  git
   clang-devel
   cmake
   findutils

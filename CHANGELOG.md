@@ -23,6 +23,11 @@ MINOR changes (backwards-compatible):
   `ptrace`, which made it nearly as fast as the "mapped" path.  Meanwhile, the
   "mapped" path has been expensive to maintain and prone to subtle bugs, and has
   never updated to be compatible with emulating the `exec` syscall. (#3780)
+* Add new quic-based performance testing code and test cases. These only build
+  when using `./setup build --perf`, and then can be tested with
+  `./setup test qperf`. Added a new CI job to build and run the qperf tests in
+  a separate CI container.
+  
 
 PATCH changes (bugfixes):
 
