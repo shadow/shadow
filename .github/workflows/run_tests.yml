@@ -48,16 +48,17 @@ jobs:
           - container: 'ubuntu:22.04'
             cc: 'clang'
             buildtype: 'debug'
-    # Tests are all run in containers, but natively run tests still share the host's kernel.
-    # ubuntu-26.04 (now ubuntu-latest) hangs in the native unix-socket epoll tests (#3837).
-    runs-on: ubuntu-24.04
+    # Tests are all run in containers; just use the latest base image.
+    runs-on: ubuntu-latest
     container:
       image: ${{ matrix.container }}
       # the default shm-size for ubuntu:18.04, but with the size increased from
       # 65536k. github's default docker seccomp policy seems to disallow
       # process_vm_readv and process_vm_writev; disable it altogether. See
       # https://docs.docker.com/engine/security/seccomp/
-      options: '--shm-size=1024g --security-opt seccomp=unconfined'
+      # AppArmor is disabled too: with the runners' Linux 7.0 kernel, its unix-socket mediation
+      # hangs the natively run epoll tests (#3837).
+      options: '--shm-size=1024g --security-opt seccomp=unconfined --security-opt apparmor=unconfined'
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
