@@ -56,8 +56,8 @@ jobs:
       # 65536k. github's default docker seccomp policy seems to disallow
       # process_vm_readv and process_vm_writev; disable it altogether. See
       # https://docs.docker.com/engine/security/seccomp/
-      # AppArmor is disabled too: with the runners' Linux 7.0 kernel, its unix-socket mediation
-      # hangs the natively run epoll tests (#3837).
+      # AppArmor is disabled too: with the Linux 7.0 kernel of the current runner images, tests hang
+      # or time out with it enabled, including some tests run in Shadow (#3837).
       options: '--shm-size=1024g --security-opt seccomp=unconfined --security-opt apparmor=unconfined'
     env:
       CC: ${{ matrix.cc }}
