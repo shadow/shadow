@@ -621,7 +621,7 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn upstream_router_borrow_mut(&self) -> impl DerefMut<Target = Router> + '_ {
+    fn upstream_router_borrow_mut(&self) -> impl DerefMut<Target = Router> + '_ {
         self.router.borrow_mut()
     }
 
@@ -1101,12 +1101,6 @@ mod export {
     pub unsafe extern "C-unwind" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.init_sock_send_buf_size
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C-unwind" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        &mut *hostrc.upstream_router_borrow_mut()
     }
 
     #[unsafe(no_mangle)]
