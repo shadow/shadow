@@ -10,7 +10,6 @@ use crate::network::packet::PacketRc;
 pub mod dns;
 pub mod graph;
 pub mod packet;
-pub mod relay;
 pub mod router;
 
 pub trait PacketDevice {

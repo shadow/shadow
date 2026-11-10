@@ -45,7 +45,7 @@ use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
 use crate::network::PacketDevice;
-use crate::network::relay::{RateLimit, Relay};
+use crate::network::router::relay::{RateLimit, Relay};
 use crate::network::router::Router;
 use crate::utility;
 #[cfg(feature = "perf_timers")]

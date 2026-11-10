@@ -6,7 +6,10 @@ use crate::core::worker::Worker;
 use crate::network::PacketDevice;
 use crate::network::packet::PacketRc;
 use crate::utility::{Magic, ObjectCounter};
+
 mod codel_queue;
+pub mod relay;
+pub mod token_bucket;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 
