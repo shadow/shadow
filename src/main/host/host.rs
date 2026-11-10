@@ -680,6 +680,50 @@ impl Host {
         self.net_ns.interface_borrow(addr)
     }
 
+    /// Get the packet device that handles packets for the given address. This
+    /// could be the source device from which we forward packets, or the device
+    /// that will receive and process packets with a given destination address.
+    /// In the latter case, if the packet destination is not on this host, we
+    /// return the router to route it to the correct host.
+    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
+        if address == Ipv4Addr::LOCALHOST {
+            self.net_ns.localhost.borrow()
+        } else if address == self.default_ip() {
+            self.net_ns.internet.borrow()
+        } else {
+            self.router.borrow()
+        }
+    }
+
+    /// Call to trigger the forwarding of packets from the router to the network
+    /// interface.
+    pub fn notify_router_has_packets(&self) {
+        self.relay_inet_in.notify(self);
+    }
+
+    /// Call to trigger the forwarding of packets from the network interface to
+    /// the next hop (either back to the network interface for loopback, or up to
+    /// the router for internet-bound packets).
+    ///
+    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
+    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
+    /// code called in any indirect way from here.
+    pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
+        if self.in_notify_socket_has_packets.replace(&self.root, true) {
+            panic!("Recursively calling host.notify_socket_has_packets()");
+        }
+
+        if let Some(iface) = self.interface_borrow(addr) {
+            iface.add_data_source(socket);
+            match addr {
+                Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
+                _ => self.relay_inet_out.notify(self),
+            };
+        }
+
+        self.in_notify_socket_has_packets.set(&self.root, false);
+    }
+
     #[track_caller]
     pub fn random_mut(&self) -> impl DerefMut<Target = Xoshiro256PlusPlus> + '_ {
         self.random.borrow_mut()
@@ -935,50 +979,6 @@ impl Host {
     /// the native Timestamp Counter, if we were able to find it.
     pub fn tsc(&self) -> &Tsc {
         &self.tsc
-    }
-
-    /// Get the packet device that handles packets for the given address. This
-    /// could be the source device from which we forward packets, or the device
-    /// that will receive and process packets with a given destination address.
-    /// In the latter case, if the packet destination is not on this host, we
-    /// return the router to route it to the correct host.
-    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
-        if address == Ipv4Addr::LOCALHOST {
-            self.net_ns.localhost.borrow()
-        } else if address == self.default_ip() {
-            self.net_ns.internet.borrow()
-        } else {
-            self.router.borrow()
-        }
-    }
-
-    /// Call to trigger the forwarding of packets from the router to the network
-    /// interface.
-    pub fn notify_router_has_packets(&self) {
-        self.relay_inet_in.notify(self);
-    }
-
-    /// Call to trigger the forwarding of packets from the network interface to
-    /// the next hop (either back to the network interface for loopback, or up to
-    /// the router for internet-bound packets).
-    ///
-    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
-    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
-    /// code called in any indirect way from here.
-    pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
-        if self.in_notify_socket_has_packets.replace(&self.root, true) {
-            panic!("Recursively calling host.notify_socket_has_packets()");
-        }
-
-        if let Some(iface) = self.interface_borrow(addr) {
-            iface.add_data_source(socket);
-            match addr {
-                Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
-                _ => self.relay_inet_out.notify(self),
-            };
-        }
-
-        self.in_notify_socket_has_packets.set(&self.root, false);
     }
 
     /// Returns the Session ID for the given process group ID, if it exists.
