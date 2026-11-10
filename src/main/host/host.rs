@@ -44,8 +44,8 @@ use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, Pcap
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
-use crate::network::PacketDevice;
-use crate::network::router::relay::{RateLimit, Relay};
+use crate::network::{PacketDevice, RateLimit};
+use crate::network::router::relay::Relay;
 use crate::network::router::Router;
 use crate::utility;
 #[cfg(feature = "perf_timers")]

@@ -10,6 +10,7 @@ use crate::core::worker::Worker;
 use crate::cshadow as c;
 use crate::host::host::Host;
 use crate::network::PacketRc;
+use crate::network::RateLimit;
 use crate::network::packet::PacketStatus;
 use crate::network::router::token_bucket::TokenBucket;
 use crate::utility::ObjectCounter;
@@ -72,12 +73,6 @@ enum RelayState {
     Pending,
     /// We are currently running our packet forwarding loop.
     Forwarding,
-}
-
-/// Specifies a throughput limit the relay should enforce when forwarding packets.
-pub enum RateLimit {
-    BytesPerSecond(u64),
-    Unlimited,
 }
 
 impl Relay {
