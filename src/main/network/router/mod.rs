@@ -1,17 +1,20 @@
 use std::cell::RefCell;
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 
 use self::codel_queue::CoDelQueue;
 use crate::core::worker::Worker;
 use crate::cshadow;
-use crate::network::PacketDevice;
+use crate::host::host::Host;
 use crate::network::packet::PacketRc;
+use crate::network::router::relay::Relay;
 use crate::network::router::token_bucket::TokenBucket;
+use crate::network::{PacketDevice, RateLimit};
 use crate::utility::{Magic, ObjectCounter};
 
 mod codel_queue;
-pub mod relay;
-pub mod token_bucket;
+mod relay;
+mod token_bucket;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
@@ -19,6 +22,42 @@ use shadow_shim_helper_rs::simulation_time::SimulationTime;
 /// A router assists with moving packets between hosts across the simulated
 /// network.
 pub struct Router {
+    // Forwards packets out from our internet interface to the router.
+    relay_inet_out: Arc<Relay>,
+    // Forwards packets from the router in to our internet interface.
+    relay_inet_in: Arc<Relay>,
+    // Forwards packets from the localhost interface back to itself.
+    relay_loopback: Arc<Relay>,
+}
+
+impl Router {
+    /// Create a new router at the default address that will assist with moving
+    /// packets between interfaces and across the network.
+    pub fn new(addr: Ipv4Addr, limit_up: RateLimit, limit_down: RateLimit) -> Router {
+        Router {
+            relay_inet_out: Arc::new(Relay::new(limit_up, addr)),
+            relay_inet_in: Arc::new(Relay::new(limit_down, Ipv4Addr::UNSPECIFIED)),
+            relay_loopback: Arc::new(Relay::new(RateLimit::Unlimited, Ipv4Addr::LOCALHOST)),
+        }
+    }
+
+    pub fn notify_loopback(&self, host: &Host) {
+        self.relay_loopback.notify(host)
+    }
+
+    pub fn notify_default_out(&self, host: &Host) {
+        self.relay_inet_out.notify(host)
+    }
+
+    pub fn notify_default_in(&self, host: &Host) {
+        self.relay_inet_in.notify(host);
+    }
+}
+
+// Offers a device for handling packets coming in from the internet. Note: this
+// is a temporary workaround, and will be removed when the router redesign is
+// complete.
+pub struct RouterDevice {
     magic: Magic<Self>,
     _counter: ObjectCounter,
     address: Ipv4Addr,
@@ -26,12 +65,12 @@ pub struct Router {
     inbound_packets: RefCell<CoDelQueue>,
 }
 
-impl Router {
+impl RouterDevice {
     /// Create a new router for a host that will help route packets between it
     /// and other hosts. The `address` must uniquely identify this router to the
     /// host that owns it.
-    pub fn new(address: Ipv4Addr) -> Router {
-        Router {
+    pub fn new(address: Ipv4Addr) -> RouterDevice {
+        RouterDevice {
             magic: Magic::new(),
             address,
             _counter: ObjectCounter::new("Router"),
@@ -63,7 +102,7 @@ impl Router {
     }
 }
 
-impl PacketDevice for Router {
+impl PacketDevice for RouterDevice {
     fn get_address(&self) -> Ipv4Addr {
         self.address
     }
@@ -132,7 +171,7 @@ mod tests {
     #[test]
     fn empty() {
         let now = mock_time_millis(1000);
-        let router = Router::new(Ipv4Addr::UNSPECIFIED);
+        let router = RouterDevice::new(Ipv4Addr::UNSPECIFIED);
         assert!(router.inbound_packets.borrow().peek().is_none());
         assert!(router.pop_inner(now).is_none());
     }
@@ -142,7 +181,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn push_pop_simple() {
         let now = mock_time_millis(1000);
-        let router = Router::new(Ipv4Addr::UNSPECIFIED);
+        let router = RouterDevice::new(Ipv4Addr::UNSPECIFIED);
 
         const N: usize = 10;
 

@@ -44,9 +44,8 @@ use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, Pcap
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
+use crate::network::router::{Router, RouterDevice};
 use crate::network::{PacketDevice, RateLimit};
-use crate::network::router::relay::Relay;
-use crate::network::router::Router;
 use crate::utility;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -116,17 +115,17 @@ pub struct Host {
 
     random: RefCell<Xoshiro256PlusPlus>,
 
-    // The upstream router that will queue packets until we can receive them.
+    // A new centralized router to assist with moving packets between network
+    // interfaces and the simulated network while conforming to configured rate
+    // limits.
+    router: Arc<Router>,
+    // The device that will queue internet packets until we can receive them.
     // This only applies to the internet interface; the localhost interface
-    // does not receive packets from a router.
-    router: RefCell<Router>,
-
-    // Forwards packets out from our internet interface to the router.
-    relay_inet_out: Arc<Relay>,
-    // Forwards packets from the router in to our internet interface.
-    relay_inet_in: Arc<Relay>,
-    // Forwards packets from the localhost interface back to itself.
-    relay_loopback: Arc<Relay>,
+    // does not receive packets from the internet.
+    //
+    // Note: this is a temporary workaround, and will be removed when the
+    // router redesign is complete.
+    router_device: RefCell<RouterDevice>,
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
@@ -270,19 +269,8 @@ impl Host {
         // Packets that are not for localhost or our public ip go to the router.
         // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
         // routing table logic inside of `Host::get_packet_device()`.
-        let router = Router::new(Ipv4Addr::UNSPECIFIED);
-        let relay_inet_out = Relay::new(
-            RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8),
-            net_ns.internet.borrow().get_address(),
-        );
-        let relay_inet_in = Relay::new(
-            RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8),
-            router.get_address(),
-        );
-        let relay_loopback = Relay::new(
-            RateLimit::Unlimited,
-            net_ns.localhost.borrow().get_address(),
-        );
+        let rate_limit_up = RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8);
+        let rate_limit_down = RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8);
 
         let in_notify_socket_has_packets = RootedCell::new(&root, false);
 
@@ -291,10 +279,8 @@ impl Host {
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
-            router: RefCell::new(router),
-            relay_inet_out: Arc::new(relay_inet_out),
-            relay_inet_in: Arc::new(relay_inet_in),
-            relay_loopback: Arc::new(relay_loopback),
+            router: Arc::new(Router::new(public_ip, rate_limit_up, rate_limit_down)),
+            router_device: RefCell::new(RouterDevice::new(Ipv4Addr::UNSPECIFIED)),
             futex_table: RefCell::new(FutexTable::new()),
             fcntl_lock_table: RefCell::new(FcntlLockTable::new()),
             random,
@@ -621,11 +607,6 @@ impl Host {
     }
 
     #[track_caller]
-    fn upstream_router_borrow_mut(&self) -> impl DerefMut<Target = Router> + '_ {
-        self.router.borrow_mut()
-    }
-
-    #[track_caller]
     pub fn network_namespace_borrow(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
         &self.net_ns
     }
@@ -691,14 +672,8 @@ impl Host {
         } else if address == self.default_ip() {
             self.net_ns.internet.borrow()
         } else {
-            self.router.borrow()
+            self.router_device.borrow()
         }
-    }
-
-    /// Call to trigger the forwarding of packets from the router to the network
-    /// interface.
-    pub fn notify_router_has_packets(&self) {
-        self.relay_inet_in.notify(self);
     }
 
     /// Call to trigger the forwarding of packets from the network interface to
@@ -716,8 +691,8 @@ impl Host {
         if let Some(iface) = self.interface_borrow(addr) {
             iface.add_data_source(socket);
             match addr {
-                Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
-                _ => self.relay_inet_out.notify(self),
+                Ipv4Addr::LOCALHOST => self.router.notify_loopback(self),
+                _ => self.router.notify_default_out(self),
             };
         }
 
@@ -861,9 +836,10 @@ impl Host {
             self.continue_execution_timer();
             match event.data() {
                 EventData::Packet(data) => {
-                    self.upstream_router_borrow_mut()
+                    self.router_device
+                        .borrow()
                         .route_incoming_packet(data.into());
-                    self.notify_router_has_packets();
+                    self.router.notify_default_in(self);
                 }
                 EventData::Local(data) => TaskRef::from(data).execute(self),
             }
