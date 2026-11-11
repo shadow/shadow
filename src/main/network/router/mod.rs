@@ -674,8 +674,12 @@ impl RateLimitedQueue {
             }
         }
 
-        // TODO: clear irq if empty after this?
-        self.packets.pop(ctx.now)
+        let result = self.packets.pop(ctx.now);
+        // If we had a pending irq but now emptied the queue, cancel it.
+        if self.irq && self.packets.is_empty() {
+            self.irq = false;
+        }
+        result
     }
 
     /// Returns true if we have an outstanding interrupt request, and clears our
