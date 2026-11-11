@@ -1,8 +1,7 @@
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
-use crate::core::worker::Worker;
-
+#[derive(Clone, Debug)]
 pub struct TokenBucket {
     capacity: u64,
     balance: u64,
@@ -62,14 +61,7 @@ impl TokenBucket {
     /// would have enough tokens to allow the decrement to conform on error
     /// (returned durations always align with this `TokenBucket`'s discrete
     /// refill interval boundaries). Passing a 0 `decrement` always succeeds.
-    pub fn comforming_remove(&mut self, decrement: u64) -> Result<u64, SimulationTime> {
-        let now = Worker::current_time().unwrap();
-        self.conforming_remove_inner(decrement, &now)
-    }
-
-    /// Implements the functionality of `comforming_remove()` without calling into the
-    /// `Worker` module. Useful for testing.
-    fn conforming_remove_inner(
+    pub fn comforming_remove(
         &mut self,
         decrement: u64,
         now: &EmulatedTime,
@@ -191,14 +183,14 @@ mod tests {
         assert_eq!(tb.balance, capacity);
 
         // Remove all tokens
-        assert!(tb.conforming_remove_inner(capacity, &now).is_ok());
+        assert!(tb.comforming_remove(capacity, &now).is_ok());
         assert_eq!(tb.balance, 0);
 
         for i in 1..=(capacity / increment) {
             // One more interval of time passes
             let later = now + interval.saturating_mul(i);
             // Should cause an increment to the balance
-            let result = tb.conforming_remove_inner(0, &later);
+            let result = tb.comforming_remove(0, &later);
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), tb.balance);
             assert_eq!(tb.balance, increment.saturating_mul(i));
@@ -211,13 +203,13 @@ mod tests {
         let mut tb = TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now).unwrap();
 
         // Remove all tokens
-        assert!(tb.conforming_remove_inner(100, &now).is_ok());
+        assert!(tb.comforming_remove(100, &now).is_ok());
         assert_eq!(tb.balance, 0);
 
         // 5 Refill intervals have passed
         let later = now + SimulationTime::from_millis(50);
 
-        let result = tb.conforming_remove_inner(0, &later);
+        let result = tb.comforming_remove(0, &later);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), tb.balance);
         assert_eq!(tb.balance, 50);
@@ -229,14 +221,14 @@ mod tests {
         let mut tb = TokenBucket::new_inner(100, 10, SimulationTime::from_millis(10), now).unwrap();
 
         // Remove all tokens
-        assert!(tb.conforming_remove_inner(100, &now).is_ok());
+        assert!(tb.comforming_remove(100, &now).is_ok());
         assert_eq!(tb.balance, 0);
 
         // Far into the future
         let later = now + SimulationTime::from_secs(60);
 
         // Should not exceed capacity
-        let result = tb.conforming_remove_inner(0, &later);
+        let result = tb.comforming_remove(0, &later);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), tb.balance);
         assert_eq!(tb.balance, 100);
@@ -249,12 +241,12 @@ mod tests {
             TokenBucket::new_inner(100, 10, SimulationTime::from_millis(125), now).unwrap();
 
         // Clear the bucket
-        let result = tb.conforming_remove_inner(100, &now);
+        let result = tb.comforming_remove(100, &now);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
 
         // This many tokens are not available
-        let result = tb.conforming_remove_inner(50, &now);
+        let result = tb.comforming_remove(50, &now);
         assert!(result.is_err());
 
         // Refilling 10 tokens every 125 millis will require 5 refills
@@ -264,7 +256,7 @@ mod tests {
         // Moving time forward is still an error
         let inc = 10;
         let now = mock_time_millis(1000 + inc);
-        let result = tb.conforming_remove_inner(50, &now);
+        let result = tb.comforming_remove(50, &now);
         assert!(result.is_err());
 
         // We still need 5 refills, but we are 10 millis closer until it conforms

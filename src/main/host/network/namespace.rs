@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -10,6 +10,7 @@ use crate::core::worker::Worker;
 use crate::host::descriptor::socket::abstract_unix_ns::AbstractUnixNamespace;
 use crate::host::descriptor::socket::inet::InetSocket;
 use crate::host::network::interface::{NetworkInterface, PcapOptions};
+use crate::network::PacketDevice;
 use crate::network::packet::IanaProtocol;
 
 // The start of our random port range in host order, used if application doesn't
@@ -91,17 +92,24 @@ impl NetworkNamespace {
         &self,
         addr: Ipv4Addr,
     ) -> Option<impl DerefMut<Target = NetworkInterface> + '_> {
-        // Notes:
-        // - The `is_loopback` matches all loopback addresses, but shadow will only work correctly
-        //   with 127.0.0.1. Using any other loopback address will lead to problems.
-        // - If the address is 0.0.0.0, we return the `internet` interface. This is not ideal if a
-        //   socket bound to 0.0.0.0 is trying to send a localhost packet and uses this method to
-        //   get the network interface, since the packet will be sent on the internet interface
-        //   instead of loopback. It's not clear if this will lead to bugs.
+        // Same notes as for [`Self::interface_borrow`].
         if addr.is_loopback() {
             Some(self.localhost.borrow_mut())
         } else if addr == self.default_ip || addr.is_unspecified() {
             Some(self.internet.borrow_mut())
+        } else {
+            None
+        }
+    }
+
+    /// Returns `None` if there is no such interface.
+    #[track_caller]
+    pub fn packet_device_borrow(&self, addr: Ipv4Addr) -> Option<Ref<'_, dyn PacketDevice>> {
+        // Same notes as for [`Self::interface_borrow`].
+        if addr.is_loopback() {
+            Some(self.localhost.borrow())
+        } else if addr == self.default_ip || addr.is_unspecified() {
+            Some(self.internet.borrow())
         } else {
             None
         }
