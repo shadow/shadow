@@ -212,10 +212,23 @@ impl Relay {
                 return None;
             };
 
-            // The packet is local if the src and dst refer to the same device.
-            // This can happen for the loopback device, and for the inet device
-            // if both sockets use the public ip to communicate over localhost.
-            let is_local = src.get_address() == *packet.dst_ipv4_address().ip();
+            // The packet is local if the packet's src and dst addresses are the
+            // same, or the packet's dst is loopback. This can happen for the
+            // loopback device, and for the inet device if both sockets use the
+            // public ip to communicate over localhost.
+            //
+            // Note: The `is_loopback` matches all loopback addresses, but
+            // shadow will only work correctly with 127.0.0.1. Using any other
+            // loopback address will lead to problems.
+            let src_addr = *packet.src_ipv4_address().ip();
+            let dst_addr = *packet.dst_ipv4_address().ip();
+            let is_local = src_addr == dst_addr || dst_addr.is_loopback();
+
+            log::trace!(
+                "Relaying {} packet from device {}: {src_addr} -> {dst_addr}",
+                if is_local { "local" } else { "nonlocal" },
+                internal.src_dev_address,
+            );
 
             // Check if we have enough tokens for forward the packet. Rate
             // limits do not apply during bootstrapping, or if the source and
@@ -252,13 +265,13 @@ impl Relay {
 
             // Forward the packet to the destination device now.
             packet.add_status(PacketStatus::RelayForwarded);
-            if is_local {
-                // The source and destination are the same. Avoid a double
-                // mutable borrow of the packet device.
+            if dst_addr == internal.src_dev_address {
+                // The source and destination are the same underlying device.
+                // Avoid a double mutable borrow of the packet device.
                 src.push(packet);
             } else {
-                // The source and destination are different.
-                let dst = host.get_packet_device(*packet.dst_ipv4_address().ip());
+                // The source and destination devices are different.
+                let dst = host.get_packet_device(dst_addr);
                 dst.push(packet);
             }
         }
