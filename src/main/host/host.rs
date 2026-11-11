@@ -44,9 +44,8 @@ use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, Pcap
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
-use crate::network::PacketDevice;
-use crate::network::relay::{RateLimit, Relay};
-use crate::network::router::Router;
+use crate::network::router::{Router, RouterDevice};
+use crate::network::{PacketDevice, RateLimit};
 use crate::utility;
 #[cfg(feature = "perf_timers")]
 use crate::utility::perf_timer::PerfTimer;
@@ -116,17 +115,17 @@ pub struct Host {
 
     random: RefCell<Xoshiro256PlusPlus>,
 
-    // The upstream router that will queue packets until we can receive them.
+    // A new centralized router to assist with moving packets between network
+    // interfaces and the simulated network while conforming to configured rate
+    // limits.
+    router: Arc<Router>,
+    // The device that will queue internet packets until we can receive them.
     // This only applies to the internet interface; the localhost interface
-    // does not receive packets from a router.
-    router: RefCell<Router>,
-
-    // Forwards packets out from our internet interface to the router.
-    relay_inet_out: Arc<Relay>,
-    // Forwards packets from the router in to our internet interface.
-    relay_inet_in: Arc<Relay>,
-    // Forwards packets from the localhost interface back to itself.
-    relay_loopback: Arc<Relay>,
+    // does not receive packets from the internet.
+    //
+    // Note: this is a temporary workaround, and will be removed when the
+    // router redesign is complete.
+    router_device: RefCell<RouterDevice>,
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
@@ -270,19 +269,8 @@ impl Host {
         // Packets that are not for localhost or our public ip go to the router.
         // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
         // routing table logic inside of `Host::get_packet_device()`.
-        let router = Router::new(Ipv4Addr::UNSPECIFIED);
-        let relay_inet_out = Relay::new(
-            RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8),
-            net_ns.internet.borrow().get_address(),
-        );
-        let relay_inet_in = Relay::new(
-            RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8),
-            router.get_address(),
-        );
-        let relay_loopback = Relay::new(
-            RateLimit::Unlimited,
-            net_ns.localhost.borrow().get_address(),
-        );
+        let rate_limit_up = RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8);
+        let rate_limit_down = RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8);
 
         let in_notify_socket_has_packets = RootedCell::new(&root, false);
 
@@ -291,10 +279,8 @@ impl Host {
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
-            router: RefCell::new(router),
-            relay_inet_out: Arc::new(relay_inet_out),
-            relay_inet_in: Arc::new(relay_inet_in),
-            relay_loopback: Arc::new(relay_loopback),
+            router: Arc::new(Router::new(public_ip, rate_limit_up, rate_limit_down)),
+            router_device: RefCell::new(RouterDevice::new(Ipv4Addr::UNSPECIFIED)),
             futex_table: RefCell::new(FutexTable::new()),
             fcntl_lock_table: RefCell::new(FcntlLockTable::new()),
             random,
@@ -621,11 +607,6 @@ impl Host {
     }
 
     #[track_caller]
-    pub fn upstream_router_borrow_mut(&self) -> impl DerefMut<Target = Router> + '_ {
-        self.router.borrow_mut()
-    }
-
-    #[track_caller]
     pub fn network_namespace_borrow(&self) -> impl Deref<Target = NetworkNamespace> + '_ {
         &self.net_ns
     }
@@ -678,6 +659,44 @@ impl Host {
         addr: Ipv4Addr,
     ) -> Option<impl Deref<Target = NetworkInterface> + '_> {
         self.net_ns.interface_borrow(addr)
+    }
+
+    /// Get the packet device that handles packets for the given address. This
+    /// could be the source device from which we forward packets, or the device
+    /// that will receive and process packets with a given destination address.
+    /// In the latter case, if the packet destination is not on this host, we
+    /// return the router to route it to the correct host.
+    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
+        if address == Ipv4Addr::LOCALHOST {
+            self.net_ns.localhost.borrow()
+        } else if address == self.default_ip() {
+            self.net_ns.internet.borrow()
+        } else {
+            self.router_device.borrow()
+        }
+    }
+
+    /// Call to trigger the forwarding of packets from the network interface to
+    /// the next hop (either back to the network interface for loopback, or up to
+    /// the router for internet-bound packets).
+    ///
+    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
+    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
+    /// code called in any indirect way from here.
+    pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
+        if self.in_notify_socket_has_packets.replace(&self.root, true) {
+            panic!("Recursively calling host.notify_socket_has_packets()");
+        }
+
+        if let Some(iface) = self.interface_borrow(addr) {
+            iface.add_data_source(socket);
+            match addr {
+                Ipv4Addr::LOCALHOST => self.router.notify_loopback(self),
+                _ => self.router.notify_default_out(self),
+            };
+        }
+
+        self.in_notify_socket_has_packets.set(&self.root, false);
     }
 
     #[track_caller]
@@ -817,9 +836,10 @@ impl Host {
             self.continue_execution_timer();
             match event.data() {
                 EventData::Packet(data) => {
-                    self.upstream_router_borrow_mut()
+                    self.router_device
+                        .borrow()
                         .route_incoming_packet(data.into());
-                    self.notify_router_has_packets();
+                    self.router.notify_default_in(self);
                 }
                 EventData::Local(data) => TaskRef::from(data).execute(self),
             }
@@ -935,50 +955,6 @@ impl Host {
     /// the native Timestamp Counter, if we were able to find it.
     pub fn tsc(&self) -> &Tsc {
         &self.tsc
-    }
-
-    /// Get the packet device that handles packets for the given address. This
-    /// could be the source device from which we forward packets, or the device
-    /// that will receive and process packets with a given destination address.
-    /// In the latter case, if the packet destination is not on this host, we
-    /// return the router to route it to the correct host.
-    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
-        if address == Ipv4Addr::LOCALHOST {
-            self.net_ns.localhost.borrow()
-        } else if address == self.default_ip() {
-            self.net_ns.internet.borrow()
-        } else {
-            self.router.borrow()
-        }
-    }
-
-    /// Call to trigger the forwarding of packets from the router to the network
-    /// interface.
-    pub fn notify_router_has_packets(&self) {
-        self.relay_inet_in.notify(self);
-    }
-
-    /// Call to trigger the forwarding of packets from the network interface to
-    /// the next hop (either back to the network interface for loopback, or up to
-    /// the router for internet-bound packets).
-    ///
-    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
-    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
-    /// code called in any indirect way from here.
-    pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
-        if self.in_notify_socket_has_packets.replace(&self.root, true) {
-            panic!("Recursively calling host.notify_socket_has_packets()");
-        }
-
-        if let Some(iface) = self.interface_borrow(addr) {
-            iface.add_data_source(socket);
-            match addr {
-                Ipv4Addr::LOCALHOST => self.relay_loopback.notify(self),
-                _ => self.relay_inet_out.notify(self),
-            };
-        }
-
-        self.in_notify_socket_has_packets.set(&self.root, false);
     }
 
     /// Returns the Session ID for the given process group ID, if it exists.
@@ -1101,12 +1077,6 @@ mod export {
     pub unsafe extern "C-unwind" fn host_getConfiguredSendBufSize(hostrc: *const Host) -> u64 {
         let hostrc = unsafe { hostrc.as_ref().unwrap() };
         hostrc.params.init_sock_send_buf_size
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C-unwind" fn host_getUpstreamRouter(hostrc: *const Host) -> *mut Router {
-        let hostrc = unsafe { hostrc.as_ref().unwrap() };
-        &mut *hostrc.upstream_router_borrow_mut()
     }
 
     #[unsafe(no_mangle)]

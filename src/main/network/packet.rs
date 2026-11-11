@@ -125,14 +125,30 @@ impl PacketRc {
         Self::from(Packet::new_ipv4_udp(src, dst, payload, priority))
     }
 
-    /// Creates a thread-safe shared reference to a new `Packet` using the provided information.
+    /// Creates a new IPv4 UDP packet for unit tests with unspecified source and destination
+    /// addresses and header information and a payload of 1_000 bytes.
     /// Additional references to the `Packet` can be cheaply obtained by cloning the returned
     /// `PacketRc`. The `Packet` is dropped when its last `PacketRc` reference is dropped.
     ///
     /// See `Packet::new_ipv4_udp_mock()` for more details.
     #[cfg(test)]
     pub fn new_ipv4_udp_mock() -> Self {
-        Self::from(Packet::new_ipv4_udp_mock())
+        let unspec = SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0);
+        Self::new_ipv4_udp_mock_with(unspec, unspec, 1_000)
+    }
+
+    /// Creates a thread-safe shared reference to a new `Packet` using the provided information.
+    /// Additional references to the `Packet` can be cheaply obtained by cloning the returned
+    /// `PacketRc`. The `Packet` is dropped when its last `PacketRc` reference is dropped.
+    ///
+    /// See `Packet::new_ipv4_udp_mock()` for more details.
+    #[cfg(test)]
+    pub fn new_ipv4_udp_mock_with(
+        src: SocketAddrV4,
+        dst: SocketAddrV4,
+        payload_len: usize,
+    ) -> Self {
+        Self::from(Packet::new_ipv4_udp_mock(src, dst, payload_len))
     }
 
     /// Creates a thread-safe shared reference to a new `Packet` that is created by performing a
@@ -317,13 +333,12 @@ impl Packet {
         Self::new(header, data, meta)
     }
 
-    /// Creates a new IPv4 UDP packet for unit tests with unspecified source and destination
-    /// addresses and header information and a payload of 1_000 bytes.
+    /// Creates a new IPv4 UDP packet for unit tests with given `src` and `dst`
+    /// addresses and a payload of `size` bytes.
     #[cfg(test)]
-    pub fn new_ipv4_udp_mock() -> Self {
-        let unspec = SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0);
+    pub fn new_ipv4_udp_mock(src: SocketAddrV4, dst: SocketAddrV4, payload_len: usize) -> Self {
         // Some of our tests require packets with payloads.
-        Self::new_ipv4_udp(unspec, unspec, Bytes::copy_from_slice(&[0; 1000]), 0)
+        Self::new_ipv4_udp(src, dst, Bytes::from(vec![0u8; payload_len]), 0)
     }
 
     /// If the packet is an IPv4 TCP packet, returns a copy of the TCP header in a format defined by

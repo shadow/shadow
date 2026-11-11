@@ -10,8 +10,13 @@ use crate::network::packet::PacketRc;
 pub mod dns;
 pub mod graph;
 pub mod packet;
-pub mod relay;
 pub mod router;
+
+/// Specifies a throughput limit that should be enforced when forwarding packets.
+pub enum RateLimit {
+    BytesPerSecond(u64),
+    Unlimited,
+}
 
 pub trait PacketDevice {
     fn get_address(&self) -> Ipv4Addr;
