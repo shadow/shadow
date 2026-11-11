@@ -212,12 +212,16 @@ impl Relay {
                 return None;
             };
 
-            // The packet is local if the src and dst refer to the same device.
-            // This can happen for the loopback device, and for the inet device
-            // if both sockets use the public ip to communicate over localhost.
+            // The packet is local if the packet's src and dst addresses are the
+            // same, or the packet's dst is loopback. This can happen for the
+            // loopback device, and for the inet device if both sockets use the
+            // public ip to communicate over localhost.
+            //
+            // Note: The `is_loopback` matches all loopback addresses, but
+            // shadow will only work correctly with 127.0.0.1. Using any other
+            // loopback address will lead to problems.
             let src_addr = *packet.src_ipv4_address().ip();
             let dst_addr = *packet.dst_ipv4_address().ip();
-
             let is_local = src_addr == dst_addr || dst_addr.is_loopback();
 
             log::trace!(
