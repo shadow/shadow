@@ -17,20 +17,44 @@ use shadow_shim_helper_rs::{emulated_time::EmulatedTime, simulation_time::Simula
 use crate::cshadow as c;
 use crate::network::packet::{PacketRc, PacketStatus};
 
-/// The target minimum standing queue delay time, corresponding to the "TARGET"
-/// parameter in the RFC. This is recommended to be set to 5 milliseconds in
-/// internet routers, but in Shadow we increase it to 10 milliseconds.
-const TARGET: SimulationTime = SimulationTime::from_duration(Duration::from_millis(10));
+/// Shadow's default target value is 10 milliseconds, an increase over the
+/// recommended value of 5 milliseconds for internet routers.
+const DEFAULT_TARGET: SimulationTime = SimulationTime::from_duration(Duration::from_millis(10));
 
-/// The most recent time interval over which the standing delay is computed,
-/// corresponding to the "INTERVAL" parameter in the RFC. This is recommended to
-/// be set to 100 milliseconds in internet routers.
-const INTERVAL: SimulationTime = SimulationTime::from_duration(Duration::from_millis(100));
+/// Shadow uses a default of 100 milliseconds, which is the same value
+/// recommended for internet routers.
+const DEFAULT_INTERVAL: SimulationTime = SimulationTime::from_duration(Duration::from_millis(100));
 
-/// The maximum number of packets we will store, corresponding to the "limit"
-/// parameter in the codel man page. This is recommended to be 1000 in internet
-/// routers, but in Shadow we don't enforce a limit due to our batched sending.
-const LIMIT: usize = usize::MAX;
+/// Even though the recommended value is 1000 for internet routers, Shadow's
+/// default is no limit due to our batched sending.
+const DEFAULT_LIMIT: usize = usize::MAX;
+
+// Collects the configuration values needed for running a codel queue.
+#[derive(Debug)]
+pub struct CoDelConfig {
+    /// The target minimum standing queue delay time, corresponding to the "TARGET"
+    /// parameter in the RFC. This is recommended to be set to 5 milliseconds in
+    /// internet routers.
+    pub target: SimulationTime,
+    /// The most recent time interval over which the standing delay is computed,
+    /// corresponding to the "INTERVAL" parameter in the RFC. This is recommended to
+    /// be set to 100 milliseconds in internet routers.
+    pub interval: SimulationTime,
+    /// The maximum number of packets we will store, corresponding to the "limit"
+    /// parameter in the codel man page. This is recommended to be 1000 in internet
+    /// routers.
+    pub limit: usize,
+}
+
+impl Default for CoDelConfig {
+    fn default() -> Self {
+        Self {
+            target: DEFAULT_TARGET,
+            interval: DEFAULT_INTERVAL,
+            limit: DEFAULT_LIMIT,
+        }
+    }
+}
 
 /// Encodes if CoDel determines that the next available packet can be dropped.
 struct CoDelPopItem {
@@ -39,15 +63,17 @@ struct CoDelPopItem {
 }
 
 /// Represents the possible states of the CoDel algorithm.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Default)]
 enum CoDelMode {
     /// Under good conditions, we store and forward packets
+    #[default]
     Store,
     /// Under bad conditions, we occasionally drop packets
     Drop,
 }
 
 /// An entry in the CoDel queque.
+#[derive(Debug)]
 struct CoDelElement {
     packet: PacketRc,
     enqueue_ts: EmulatedTime,
@@ -62,7 +88,10 @@ struct CoDelElement {
 /// host. However, if memory overhead becomes problematic, we can consider
 /// occasionally shrinking the queue's capacity or using a backing that is more
 /// memory-efficient (e.g. a LinkedList).
+#[derive(Debug, Default)]
 pub struct CoDelQueue {
+    /// The configured parameter values for this codel queue.
+    config: CoDelConfig,
     /// A queue holding packets and insertion times.
     elements: VecDeque<CoDelElement>,
     /// The running sum of the sizes of packets stored in the queue.
@@ -82,15 +111,11 @@ pub struct CoDelQueue {
 
 impl CoDelQueue {
     /// Creates a new empty packet queue.
-    pub fn new() -> CoDelQueue {
+    #[allow(unused)]
+    pub fn new(config: CoDelConfig) -> CoDelQueue {
         CoDelQueue {
-            elements: VecDeque::new(),
-            total_bytes_stored: 0,
-            mode: CoDelMode::Store,
-            interval_end: None,
-            drop_next: None,
-            current_drop_count: 0,
-            previous_drop_count: 0,
+            config,
+            ..Default::default() // Fill remaining with default values.
         }
     }
 
@@ -163,7 +188,7 @@ impl CoDelQueue {
             true => delta,
             false => 1,
         };
-        self.drop_next = Some(CoDelQueue::apply_control_law(now, self.current_drop_count));
+        self.drop_next = Some(self.apply_control_law(now));
         self.previous_drop_count = self.current_drop_count;
 
         next_item.map(|x| x.packet)
@@ -188,10 +213,8 @@ impl CoDelQueue {
                 true => {
                     // Set the next drop time based on CoDel control law.
                     // `self.drop_next` is already set in `drop_from_store_mode()`
-                    self.drop_next = Some(CoDelQueue::apply_control_law(
-                        &self.drop_next.unwrap(),
-                        self.current_drop_count,
-                    ));
+                    let time = self.drop_next.unwrap();
+                    self.drop_next = Some(self.apply_control_law(&time));
                 }
                 false => self.mode = CoDelMode::Store,
             }
@@ -233,7 +256,9 @@ impl CoDelQueue {
         now: &EmulatedTime,
         standing_delay: SimulationTime,
     ) -> bool {
-        if standing_delay < TARGET || self.total_bytes_stored <= c::CONFIG_MTU.try_into().unwrap() {
+        if standing_delay < self.config.target
+            || self.total_bytes_stored <= c::CONFIG_MTU.try_into().unwrap()
+        {
             // We are in a good state, i.e., below the target delay. We reset
             // the interval expiration, so that we wait for at least one full
             // interval if the delay exceeds the target again.
@@ -254,7 +279,7 @@ impl CoDelQueue {
                     // entered a bad state. If we stay in the bad state for a
                     // full interval, we will need to enter drop mode later.
                     // Mark the end of the interval now so we can track it.
-                    self.interval_end = Some(now.saturating_add(INTERVAL));
+                    self.interval_end = Some(now.saturating_add(self.config.interval));
                     false
                 }
             }
@@ -274,7 +299,7 @@ impl CoDelQueue {
         match self.drop_next {
             Some(drop_next) => {
                 // now < drop_next + interval*16
-                now.saturating_duration_since(&drop_next) < INTERVAL.saturating_mul(16)
+                now.saturating_duration_since(&drop_next) < self.config.interval.saturating_mul(16)
             }
             None => false, // Have not yet dropped a packet
         }
@@ -282,12 +307,12 @@ impl CoDelQueue {
 
     /// Apply the CoDel control law using the inverse sqrt of the drop count,
     /// i.e., `time + (INTERVAL / sqrt(count));`.
-    fn apply_control_law(time: &EmulatedTime, count: usize) -> EmulatedTime {
+    fn apply_control_law(&self, time: &EmulatedTime) -> EmulatedTime {
         let increment = {
-            let interval = INTERVAL.as_nanos_f64();
-            let sqrt_count = match count {
+            let interval = self.config.interval.as_nanos_f64();
+            let sqrt_count = match self.current_drop_count {
                 0 => 1f64,
-                _ => (count as f64).sqrt(),
+                _ => (self.current_drop_count as f64).sqrt(),
             };
             let div = interval / sqrt_count;
             SimulationTime::from_nanos(div.round() as u64)
@@ -301,7 +326,7 @@ impl CoDelQueue {
     /// Requires the current time as an argument to avoid calling into the
     /// worker module internally.
     pub fn push(&mut self, packet: PacketRc, now: EmulatedTime) {
-        if self.elements.len() < LIMIT {
+        if self.elements.len() < self.config.limit {
             packet.add_status(PacketStatus::RouterEnqueued);
             self.total_bytes_stored += packet.len();
             self.elements.push_back(CoDelElement {
@@ -332,7 +357,7 @@ mod tests {
     #[test]
     fn empty() {
         let now = mock_time_millis(1000);
-        let mut cdq = CoDelQueue::new();
+        let mut cdq = CoDelQueue::default();
         assert_eq!(cdq.len(), 0);
         assert!(cdq.is_empty());
         assert!(cdq.peek().is_none());
@@ -343,7 +368,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn push_pop_simple() {
         let now = mock_time_millis(1000);
-        let mut cdq = CoDelQueue::new();
+        let mut cdq = CoDelQueue::default();
 
         const N: usize = 10;
 
@@ -364,22 +389,25 @@ mod tests {
 
     #[test]
     fn control_law() {
+        let mut cdq = CoDelQueue::default();
         let now = mock_time_millis(1000);
 
         // The increment should be a full interval.
         for i in 0..2 {
+            cdq.current_drop_count = i;
             assert_eq!(
-                CoDelQueue::apply_control_law(&now, i).duration_since(&now),
-                INTERVAL
+                cdq.apply_control_law(&now).duration_since(&now),
+                DEFAULT_INTERVAL
             );
         }
 
         // The increment should reduce exponentially.
         for i in 2..20 {
+            cdq.current_drop_count = i;
             assert_eq!(
-                CoDelQueue::apply_control_law(&now, i).duration_since(&now),
+                cdq.apply_control_law(&now).duration_since(&now),
                 SimulationTime::from_nanos(
-                    (INTERVAL.as_nanos_f64() / (i as f64).sqrt()).round() as u64
+                    (DEFAULT_INTERVAL.as_nanos_f64() / (i as f64).sqrt()).round() as u64
                 )
             );
         }
@@ -392,7 +420,7 @@ mod tests {
 
         let start = mock_time_millis(1000);
 
-        let mut cdq = CoDelQueue::new();
+        let mut cdq = CoDelQueue::default();
         for _ in 0..5 {
             cdq.push(PacketRc::new_ipv4_udp_mock(), start);
         }
@@ -403,29 +431,38 @@ mod tests {
 
         // Not above target so interval is not set.
         assert!(cdq.interval_end.is_none());
-        let now = start + TARGET - one;
-        assert!(!cdq.process_standing_delay(&now, TARGET - one));
+        let now = start + DEFAULT_TARGET - one;
+        assert!(!cdq.process_standing_delay(&now, DEFAULT_TARGET - one));
         assert!(cdq.interval_end.is_none());
 
         // Reached target, interval is set but still not ok to drop.
-        let now = start + TARGET;
-        assert!(!cdq.process_standing_delay(&now, TARGET));
+        let now = start + DEFAULT_TARGET;
+        assert!(!cdq.process_standing_delay(&now, DEFAULT_TARGET));
         assert!(cdq.interval_end.is_some());
-        assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
+        assert_eq!(
+            cdq.interval_end.unwrap(),
+            start + DEFAULT_TARGET + DEFAULT_INTERVAL
+        );
 
         // Now we exceed target+interval, so ok to drop.
-        let now = start + TARGET + INTERVAL;
-        assert!(cdq.process_standing_delay(&now, TARGET + INTERVAL));
+        let now = start + DEFAULT_TARGET + DEFAULT_INTERVAL;
+        assert!(cdq.process_standing_delay(&now, DEFAULT_TARGET + DEFAULT_INTERVAL));
         assert!(cdq.interval_end.is_some());
-        assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
+        assert_eq!(
+            cdq.interval_end.unwrap(),
+            start + DEFAULT_TARGET + DEFAULT_INTERVAL
+        );
 
-        let now = start + TARGET + INTERVAL * 2u32;
-        assert!(cdq.process_standing_delay(&now, TARGET + INTERVAL * 2u32));
+        let now = start + DEFAULT_TARGET + DEFAULT_INTERVAL * 2u32;
+        assert!(cdq.process_standing_delay(&now, DEFAULT_TARGET + DEFAULT_INTERVAL * 2u32));
         assert!(cdq.interval_end.is_some());
-        assert_eq!(cdq.interval_end.unwrap(), start + TARGET + INTERVAL);
+        assert_eq!(
+            cdq.interval_end.unwrap(),
+            start + DEFAULT_TARGET + DEFAULT_INTERVAL
+        );
 
         // Delay back to low, interval resets, not ok to drop.
-        let now = start + TARGET + INTERVAL * 2u32;
+        let now = start + DEFAULT_TARGET + DEFAULT_INTERVAL * 2u32;
         assert!(!cdq.process_standing_delay(&now, one));
         assert!(cdq.interval_end.is_none());
     }
@@ -437,7 +474,7 @@ mod tests {
 
         let start = mock_time_millis(1000);
 
-        let mut cdq = CoDelQueue::new();
+        let mut cdq = CoDelQueue::default();
         const N: usize = 6;
         for _ in 0..N {
             cdq.push(PacketRc::new_ipv4_udp_mock(), start);
@@ -450,22 +487,22 @@ mod tests {
         // time in order to enter the drop state.
 
         // We didn't reach target yet.
-        cdq.pop(start + TARGET - one);
+        cdq.pop(start + DEFAULT_TARGET - one);
         assert_eq!(cdq.len(), N - 1);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // We now reached target.
-        cdq.pop(start + TARGET);
+        cdq.pop(start + DEFAULT_TARGET);
         assert_eq!(cdq.len(), N - 2);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Still not above target for a full interval.
-        cdq.pop(start + TARGET + INTERVAL - one);
+        cdq.pop(start + DEFAULT_TARGET + DEFAULT_INTERVAL - one);
         assert_eq!(cdq.len(), N - 3);
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Now above target for interval, should enter drop mode and drop one packet.
-        cdq.pop(start + TARGET + INTERVAL);
+        cdq.pop(start + DEFAULT_TARGET + DEFAULT_INTERVAL);
         assert_eq!(cdq.len(), N - 5);
         assert_eq!(cdq.mode, CoDelMode::Drop);
 
@@ -475,18 +512,20 @@ mod tests {
             // Add some low-delay packets
             cdq.push(
                 PacketRc::new_ipv4_udp_mock(),
-                start + TARGET + INTERVAL * 2u32 - one,
+                start + DEFAULT_TARGET + DEFAULT_INTERVAL * 2u32 - one,
             );
         }
-        cdq.pop(start + TARGET + INTERVAL * 2u32);
+        cdq.pop(start + DEFAULT_TARGET + DEFAULT_INTERVAL * 2u32);
         assert_eq!(cdq.mode, CoDelMode::Store);
     }
 
     #[test]
     fn drop_empty() {
         let start = mock_time_millis(1000);
-        let mut cdq = CoDelQueue::new();
-        cdq.mode = CoDelMode::Drop;
+        let mut cdq = CoDelQueue {
+            mode: CoDelMode::Drop,
+            ..Default::default() // Fill remaining default values.
+        };
         cdq.pop(start);
         assert_eq!(cdq.mode, CoDelMode::Store);
     }
@@ -497,7 +536,7 @@ mod tests {
         let start = mock_time_millis(1000);
         let end = mock_time_millis(1000000);
 
-        let mut cdq = CoDelQueue::new();
+        let mut cdq = CoDelQueue::default();
         const N: usize = 20;
         for _ in 0..N {
             cdq.push(PacketRc::new_ipv4_udp_mock(), start);
@@ -508,20 +547,20 @@ mod tests {
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Sets the interval.
-        cdq.pop(start + TARGET);
+        cdq.pop(start + DEFAULT_TARGET);
         assert_eq!(cdq.len(), N - 1);
         assert_eq!(cdq.current_drop_count, 0);
         assert_eq!(cdq.previous_drop_count, 0);
-        assert!(!cdq.was_dropping_recently(&(start + TARGET)));
+        assert!(!cdq.was_dropping_recently(&(start + DEFAULT_TARGET)));
         assert_eq!(cdq.mode, CoDelMode::Store);
 
         // Enters Drop mode, drops 1 packet and sets drop_next
-        cdq.pop(start + TARGET + INTERVAL);
+        cdq.pop(start + DEFAULT_TARGET + DEFAULT_INTERVAL);
         assert_eq!(cdq.len(), N - 3);
         assert_eq!(cdq.current_drop_count, 1);
         assert_eq!(cdq.previous_drop_count, 1);
         assert!(cdq.drop_next.is_some());
-        assert!(cdq.was_dropping_recently(&(start + TARGET + INTERVAL)));
+        assert!(cdq.was_dropping_recently(&(start + DEFAULT_TARGET + DEFAULT_INTERVAL)));
         assert_eq!(cdq.mode, CoDelMode::Drop);
 
         // In Drop mode, we have repeated drops, but then it leaves Drop mode

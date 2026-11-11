@@ -74,7 +74,7 @@ impl RouterDevice {
             magic: Magic::new(),
             address,
             _counter: ObjectCounter::new("Router"),
-            inbound_packets: RefCell::new(CoDelQueue::new()),
+            inbound_packets: RefCell::new(CoDelQueue::default()),
         }
     }
 
