@@ -461,10 +461,14 @@ jobs:
           . ci/container_scripts/install_extra_deps.sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # We can't re-use the previous build_shadow step, because we don't want to
+      # build qperf in that config due to its extra dependency build time.
+      # Rebuidling shadow here allows us to restrict the qperf build to a single
+      # CI instance.
       - name: Build
         run: |
           cd shadow
-          ./setup build -j4 --test --perf --werror
+          ./setup build -j4 --test --qperf --werror
 
       - name: Test
         run: |

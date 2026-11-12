@@ -94,7 +94,9 @@ function(add_qperf_test BWDOWN BWUP LATENCY PACKETLOSS NUMBYTES NAME)
     )
 endfunction()
 
-if(SHADOW_PERF_TESTS STREQUAL ON)
+# SHADOW_QPERF_TESTS tells us if the qperf bins are available, so only add the
+# qperf tests to the extra build config if it is on.
+if(SHADOW_QPERF_TESTS STREQUAL ON)
     # Test a single quic connection across a variety of network characteristics.
     add_qperf_test(1 1  10 0.0 524288 qperf_1mbit_10ms)
     add_qperf_test(1 1 100 0.0 524288 qperf_1mbit_100ms)
