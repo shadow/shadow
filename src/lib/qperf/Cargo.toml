@@ -3,22 +3,6 @@ name = "qperf"
 edition.workspace = true
 publish.workspace = true
 
-# We only want this package to build as a perf test. To do this, set each
-# binary to build only when the perf_tests feature is set.
-
-[features]
-perf_tests = []
-
-[[bin]]
-name = "qperf"
-path = "src/main.rs"
-required-features = ["perf_tests"]
-
-[[bin]]
-name = "qperf_check"
-path = "src/check.rs"
-required-features = ["perf_tests"]
-
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
