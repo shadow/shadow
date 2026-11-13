@@ -236,10 +236,8 @@ impl ConnectionManager {
         // This needs to be done in a loop, because QUIC may not process all of
         // the data at once.
         while cursor < len {
-            match self.conn.recv(&mut self.recv_buf[cursor..len], info) {
-                Ok(n) => cursor += n,
-                Err(e) => return Err(e.into()),
-            }
+            let n = self.conn.recv(&mut self.recv_buf[cursor..len], info)?;
+            cursor += n
         }
         Ok(())
     }
