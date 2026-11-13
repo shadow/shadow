@@ -17,6 +17,7 @@ members = [
     "lib/log-c2rust",
     "lib/logger",
     "lib/pod",
+    "lib/qperf",
     "lib/scheduler",
     "lib/shadow-build-common",
     "lib/shadow-build-info",

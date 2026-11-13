@@ -11,6 +11,10 @@ if(SHADOW_EXTRA_TESTS STREQUAL ON)
   set(TEST_FEATURES "${TEST_FEATURES} extra_tests")
 endif()
 
+if(SHADOW_QPERF_TESTS STREQUAL ON)
+  set(EXTRA_TEST_PACKAGES "${EXTRA_TEST_PACKAGES} --package qperf")
+endif()
+
 if(SHADOW_WERROR STREQUAL ON)
   set(RUSTFLAGS "${RUSTFLAGS} -Dwarnings")
 endif()
@@ -48,10 +52,17 @@ ExternalProject_Add(
     CONFIGURE_COMMAND ""
     BUILD_COMMAND echo "Building workspace..."
     COMMAND echo "Building workspace..."
+    # Build our main rust package, shadow-rs, and let Cargo's auto dependency
+    # resolution work out the rest. Except, we must explicitly list out the
+    # staticlib packages because those are not autodiscovered.
     COMMAND bash -c " \
         ${CARGO_ENV_VARS} \
         cargo build \
-        --workspace --exclude shadow-tests --exclude shadow-shim \
+        --package shadow-rs \
+        --package shadow-shim-helper-rs \
+        --package logger \
+        --package shadow_shmem \
+        --package asm_util \
         ${RUST_BUILD_FLAG} \
         ${RUST_TARGETS} \
         --target-dir \"${TARGETDIR}\" \
@@ -67,6 +78,7 @@ ExternalProject_Add(
         ${CARGO_ENV_VARS} \
         cargo build \
         --package shadow-tests \
+        ${EXTRA_TEST_PACKAGES} \
         --target-dir \"${TARGETDIR}\" \
         --features \"${TEST_FEATURES}\" \
         "
