@@ -1,3 +1,6 @@
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand};
 use quiche::{Config, Connection};
 
@@ -22,7 +25,7 @@ pub struct ClientArgs {
     pub common: CommonArgs,
     /// The address of the quic perf server to which we send messages.
     #[arg(short, long, value_name = "ADDR:PORT", required = true)]
-    pub connect: String,
+    pub connect: SocketAddr,
 }
 
 #[derive(Args)]
@@ -35,14 +38,18 @@ pub struct ServerArgs {
 pub struct CommonArgs {
     /// The address to bind to when receiving messages (use port 0 to auto-select).
     #[arg(short, long, value_name = "ADDR:PORT", default_value = "0.0.0.0:0")]
-    pub bind: String,
+    pub bind: SocketAddr,
     /// Number of bytes to send to the quic peer.
     #[arg(short, long, value_name = "N", default_value = "1024")]
     pub num_bytes: usize,
-}
-
-pub fn parse_cli_args() -> CliArgs {
-    CliArgs::parse()
+    /// Path to store the QUIC performance metrics in standard sqlog format.
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        default_value = "./qperf-trace.sqlog"
+    )]
+    pub sqlog_path: PathBuf,
 }
 
 /// Create a new quic config. Both the client and server should use this to
@@ -77,22 +84,19 @@ pub fn init_quic_config() -> anyhow::Result<Config> {
 
 /// Sets quic to store qlogs in the path specified in the env var `QLOGDIR` or
 /// else in the local directory if `QLOGDIR` is not set.
-pub fn enable_quic_qlog(conn: &mut Connection, prefix: &str) -> std::io::Result<()> {
-    // Use the local dir if the env var is not set.
-    let qlog_dir = std::env::var("QLOGDIR").unwrap_or(String::from("./"));
-
-    // Use the sqlog suffix to indicate quiche's "streaming qlog" format.
-    let fname = format!("{prefix}-trace.sqlog");
-
+pub fn enable_quic_qlog(
+    conn: &mut Connection,
+    sqlog_path: PathBuf,
+    role: &str,
+) -> std::io::Result<()> {
     // Create the file.
-    let path = std::path::Path::new(&qlog_dir).join(&fname);
-    let file = std::fs::File::create(path)?;
+    let file = std::fs::File::create(sqlog_path)?;
 
     // Configure the connection to store performance stats in the file.
     conn.set_qlog(
         Box::new(file),
-        format!("{prefix}-trace"),
-        format!("Quic {prefix} perf test"),
+        format!("{role}-trace"),
+        format!("Quic {role} perf test"),
     );
 
     Ok(())

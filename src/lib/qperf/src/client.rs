@@ -1,6 +1,3 @@
-use std::net::SocketAddr;
-use std::str::FromStr;
-
 use crate::config::{self, ClientArgs};
 use crate::connection::ConnectionManager;
 
@@ -11,14 +8,19 @@ pub fn run(args: ClientArgs) -> anyhow::Result<()> {
     log::info!("Running quic perf in client mode");
 
     // Validate the address strings.
-    let local = SocketAddr::from_str(args.common.bind.as_str())?;
-    let peer = SocketAddr::from_str(args.connect.as_str())?;
+    let local = args.common.bind;
+    let peer = args.connect;
 
     // Set up quic config.
     let config = config::init_quic_config()?;
 
     // Initiate quic connection in client mode.
-    let mut mgr = smol::block_on(ConnectionManager::connect(local, peer, config))?;
+    let mgr = smol::block_on(ConnectionManager::connect(
+        local,
+        peer,
+        config,
+        args.common.sqlog_path,
+    ))?;
 
     // Transfer the configured amount of stream data.
     smol::block_on(mgr.into_transfer(args.common.num_bytes))?;

@@ -85,7 +85,7 @@ function(add_qperf_test BWDOWN BWUP LATENCY PACKETLOSS NUMBYTES NAME)
             --rtt-min-ms-tol=333.0 \
             --rtt-med-ms=${RTT} \
             --rtt-med-ms-tol=333.0 \
-            ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-shadow.data/hosts/client/client-trace.sqlog
+            ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-shadow.data/hosts/client/qperf-trace.sqlog
             "
         CONFIGURATIONS extra
         PROPERTIES

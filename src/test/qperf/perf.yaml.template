@@ -26,7 +26,7 @@ hosts:
     processes:
     - path: ../../target/debug/qperf
       args: server --bind="10.0.0.1:4433" --num-bytes=${NUMBYTES}
-      environment: { RUST_LOG: debug, QLOGDIR: "./" }
+      environment: { RUST_LOG: debug }
       start_time: 1
       expected_final_state: { exited: 0 }
   client:
@@ -35,6 +35,6 @@ hosts:
     processes:
     - path: ../../target/debug/qperf
       args: client --bind="10.0.0.2:0" --connect="10.0.0.1:4433" --num-bytes=${NUMBYTES}
-      environment: { RUST_LOG: debug, QLOGDIR: "./" }
+      environment: { RUST_LOG: debug }
       start_time: 2
       expected_final_state: { exited: 0 }

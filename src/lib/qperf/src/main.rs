@@ -1,4 +1,7 @@
+use clap::Parser;
 use env_logger::{Builder, Env, Target};
+
+use crate::config::CliArgs;
 
 mod client;
 pub mod config;
@@ -7,7 +10,7 @@ mod server;
 pub mod stream;
 
 fn main() -> anyhow::Result<()> {
-    let args = config::parse_cli_args();
+    let args = CliArgs::parse();
     setup_logging();
     match args.command {
         config::Command::Client(cargs) => client::run(cargs),

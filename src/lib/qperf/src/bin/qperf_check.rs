@@ -717,8 +717,8 @@ impl Metrics {
 
     fn transfer_duration_ms(&self) -> f64 {
         let filter = |m: &Metric| match m {
-            Metric::StreamBytesSent(_, t) => Some(t.clone()),
-            Metric::StreamBytesReceived(_, t) => Some(t.clone()),
+            Metric::StreamBytesSent(_, t) => Some(*t),
+            Metric::StreamBytesReceived(_, t) => Some(*t),
             _ => None,
         };
 

@@ -1,6 +1,3 @@
-use std::net::SocketAddr;
-use std::str::FromStr;
-
 use quiche::Config;
 
 use crate::config::{self, ServerArgs};
@@ -13,7 +10,7 @@ pub fn run(args: ServerArgs) -> anyhow::Result<()> {
     log::info!("Running quic perf in server mode");
 
     // Validate the address.
-    let local = SocketAddr::from_str(args.common.bind.as_str())?;
+    let local = args.common.bind;
 
     // Set up quic config.
     let mut config = config::init_quic_config()?;
@@ -22,7 +19,11 @@ pub fn run(args: ServerArgs) -> anyhow::Result<()> {
     setup_crypto(&mut config)?;
 
     // Initiate quic connection in server mode.
-    let mut mgr = smol::block_on(ConnectionManager::listen(local, config))?;
+    let mgr = smol::block_on(ConnectionManager::listen(
+        local,
+        config,
+        args.common.sqlog_path,
+    ))?;
 
     // Transfer the configured amount of stream data.
     smol::block_on(mgr.into_transfer(args.common.num_bytes))?;

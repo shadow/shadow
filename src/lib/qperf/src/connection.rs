@@ -11,6 +11,7 @@
 //! connection retries or server-initiated streams.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use futures::future::{Either, FutureExt};
 use quiche::{Config, Connection, ConnectionId, RecvInfo, SendInfo};
@@ -29,9 +30,9 @@ const BUF_CAPACITY: usize = 65_535; // 64 KiB
 /// # Typical workflow
 /// 1. Call [`Self::connect`] (client) or [`Self::listen`] (server) to
 ///    obtain an instance.
-/// 2. Invoke [`Self::into_transfer`] with the desired payload length; the
-///    method drives the event loop until the stream and connection have both
-///    closed.
+/// 2. Both client and server invoke [`Self::into_transfer`] with the desired
+///    payload length; the method drives the event loop until the stream and
+///    connection have both closed.
 pub struct ConnectionManager {
     /// The underlying [`smol::net::UdpSocket`] used for all network I/O.
     sock: UdpSocket,
@@ -39,10 +40,10 @@ pub struct ConnectionManager {
     conn: Connection,
     /// Static, fixed-size buffer to hold inbound UDP packets until we transfer
     /// the data to QUIC.
-    recv_buf: Vec<u8>,
+    recv_buf: Box<[u8; BUF_CAPACITY]>,
     /// Static, fixed-size buffer to hold outbound UDP packets from QUIC until
     /// we transfer them to the kernel/network.
-    send_buf: Vec<u8>,
+    send_buf: Box<[u8; BUF_CAPACITY]>,
     /// If we have a UDP packet that needs to be sent out, this holds the length
     /// of the packet within our `send_buf` and the [`quiche::SendInfo`] from
     /// QUIC. (The range of bytes that make up the packet in [`Self::send_buf`]
@@ -70,14 +71,15 @@ enum Event {
 impl ConnectionManager {
     /// Creates a new client-side QUIC connection.
     ///
-    /// The function binds a [`smol::net::UdpSocket`] and initiates the QUIC
-    /// client connection via [`quiche::connect`].
+    /// The function binds local and initiates the QUIC client connection via
+    /// [`quiche::connect`].
     ///
     /// # Parameters
-    /// * `local` - The local address to bind the UDP socket to. `0.0.0.0:0` can
-    ///   be used to let the OS choose a port.
+    /// * `local` - The local address to bind the [`smol::net::UdpSocket`]
+    ///   socket to. `0.0.0.0:0` can be used to let the OS choose a port.
     /// * `peer` - The remote socket address of the QUIC server.
     /// * `config` - A mutable [`quiche::Config`] to apply when connecting.
+    /// * `sqlog_path` - The path where to write the sqlog performance metrics.
     ///
     /// # Returns
     /// A fully initialized [`ConnectionManager`] ready to drive the I/O loop. Any
@@ -86,6 +88,7 @@ impl ConnectionManager {
         local: SocketAddr,
         peer: SocketAddr,
         mut config: Config,
+        sqlog_path: PathBuf,
     ) -> anyhow::Result<Self> {
         // Get our underlying udp socket.
         let sock = UdpSocket::bind(local).await?;
@@ -101,12 +104,13 @@ impl ConnectionManager {
         let mut conn = quiche::connect(None, &cid, local, peer, &mut config)?;
 
         // Record performance metrics the connection.
-        config::enable_quic_qlog(&mut conn, "client")?;
+        config::enable_quic_qlog(&mut conn, sqlog_path, "client")?;
 
-        let (recv_buf, mut send_buf) = (vec![0u8; BUF_CAPACITY], vec![0u8; BUF_CAPACITY]);
+        let (recv_buf, mut send_buf) =
+            (Box::new([0u8; BUF_CAPACITY]), Box::new([0u8; BUF_CAPACITY]));
 
         // Queue the initial QUIC connection handshake message.
-        let (len, info) = conn.send(&mut send_buf)?;
+        let (len, info) = conn.send(&mut *send_buf)?;
 
         Ok(Self {
             sock,
@@ -125,21 +129,27 @@ impl ConnectionManager {
     /// # Parameters
     /// * `local` - The address to bind the listening [`smol::net::UdpSocket`].
     /// * `config` - A mutable [`quiche::Config`] to apply to the accepted connection.
+    /// * `sqlog_path` - The path where to write the sqlog performance metrics.
     ///
     /// # Returns
     /// A [`ConnectionManager`] ready to drive the I/O loop. Any underlying socket
     /// or QUIC error is propagated.
-    pub async fn listen(local: SocketAddr, mut config: Config) -> anyhow::Result<Self> {
+    pub async fn listen(
+        local: SocketAddr,
+        mut config: Config,
+        sqlog_path: PathBuf,
+    ) -> anyhow::Result<Self> {
         // Get our underlying udp socket.
         let sock = UdpSocket::bind(local).await?;
 
         // Use the OS-assigned address:port for our QUIC connection.
         let local = sock.local_addr()?;
 
-        let (mut recv_buf, send_buf) = (vec![0u8; BUF_CAPACITY], vec![0u8; BUF_CAPACITY]);
+        let (mut recv_buf, send_buf) =
+            (Box::new([0u8; BUF_CAPACITY]), Box::new([0u8; BUF_CAPACITY]));
 
         // Wait for the initial handshake message.
-        let (len, from) = sock.recv_from(&mut recv_buf).await?;
+        let (len, from) = sock.recv_from(&mut *recv_buf).await?;
 
         // Quic requires a connection id.
         let cid = generate_connection_id();
@@ -149,7 +159,7 @@ impl ConnectionManager {
         let mut conn = quiche::accept(&cid, None, local, from, &mut config)?;
 
         // Record performance metrics the connection.
-        config::enable_quic_qlog(&mut conn, "server")?;
+        config::enable_quic_qlog(&mut conn, sqlog_path, "server")?;
 
         let mut mgr = Self {
             sock,
@@ -170,7 +180,7 @@ impl ConnectionManager {
     /// The method creates a [`StreamManager`] with the requested payload size and
     /// then runs the main transfer I/O loop which repeatedly:
     ///
-    /// 1. Calls [`StreamManager.process()`] to let the stream feed fake stream
+    /// 1. Calls [`StreamManager::process`] to let the stream feed fake stream
     ///    data into the connection, generating QUIC frames.
     /// 2. Moves any pending outbound data from QUIC into our UDP send buffer.
     /// 3. Awaits the next multiplexed network or timeout event.
@@ -180,7 +190,7 @@ impl ConnectionManager {
     /// **and** the QUIC connection has entered the closed state
     /// ([`quiche::Connection::is_closed`]). Any I/O or QUIC error is
     /// propagated.
-    pub async fn into_transfer(&mut self, send_len: usize) -> anyhow::Result<()> {
+    pub async fn into_transfer(mut self, send_len: usize) -> anyhow::Result<()> {
         // Create a stream to generate the QUIC payload data.
         let mut stream = if self.conn.is_server() {
             StreamManager::new_server(send_len)
@@ -216,7 +226,7 @@ impl ConnectionManager {
     /// [`smol::net::UdpSocket::send_to`] call later.
     fn fill_send_buf(&mut self) -> anyhow::Result<()> {
         if self.next_send.is_none() {
-            match self.conn.send(&mut self.send_buf) {
+            match self.conn.send(&mut *self.send_buf) {
                 Ok((len, info)) => self.next_send = Some((len, info)),
                 Err(quiche::Error::Done) => {} // Valid, nothing to send for now.
                 Err(e) => return Err(e.into()),
@@ -236,10 +246,8 @@ impl ConnectionManager {
         // This needs to be done in a loop, because QUIC may not process all of
         // the data at once.
         while cursor < len {
-            match self.conn.recv(&mut self.recv_buf[cursor..len], info) {
-                Ok(n) => cursor += n,
-                Err(e) => return Err(e.into()),
-            }
+            let n = self.conn.recv(&mut self.recv_buf[cursor..len], info)?;
+            cursor += n
         }
         Ok(())
     }
@@ -260,7 +268,7 @@ impl ConnectionManager {
         .fuse();
 
         // Get the receive future.
-        let recv_fut = self.sock.recv_from(&mut self.recv_buf).fuse();
+        let recv_fut = self.sock.recv_from(&mut *self.recv_buf).fuse();
 
         // Get a future for the next time QUIC wants a timeout.
         let timeout_fut = match self.conn.timeout() {
