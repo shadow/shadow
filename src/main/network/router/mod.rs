@@ -1,26 +1,32 @@
 //! A [`Router`] routes [`PacketRc`]s between [`PacketDevice`]s and the
 //! simulated network, enforcing configured send/receive rate limits on the
-//! devices and the upstream/downstream links to a modeled network provider.
+//! interfaces and the upstream/downstream links to a modeled network provider.
 //!
 //! The [`Router`] is responsible for actually moving packets around between
 //! sockets and the simulated network. It initiates packet forwarding and
 //! internally schedules tasks to ensure that packets are continually forwarded
 //! over time without exceeding the configured [`RateLimit`]s.
 //!
-//! [`PacketDevice`]s are registered using [`Router::attach_device`], assigning
-//! an [`Ipv4Addr`] to the device. The address provided by the caller will later
-//! be passed to [`RouterContext::get_device`] to obtain the underlying device
-//! that the router interacts with. This device supplies the router with a
-//! stream of packets (through its implementation of [`PacketDevice::pop`]) that
-//! will be forwarded to the network, and it acts as a sink for incoming packets
-//! with a destination addres matching the device's address.
+//! The [`Router`] implemented here is doing the job of multiple real world
+//! physical components, rather than being a one-to-one mapping to a known
+//! network component. It is managing sending from a physical network interface
+//! card at a certain speed, and also it is managing the first-hop router device
+//! that the network interface card is attached to, shaping traffic, and using a
+//! codel queue to aggregate all its ports up through a single upstream link.
+//!
+//! [`PacketDevice`]s are registered using [`Router::attach_packet_device`],
+//! assigning an [`Ipv4Addr`] to it. The address provided by the caller will
+//! later be passed to [`RouterContext::get_packet_device_fn`] to obtain the
+//! underlying object that implements the [`PacketDevice`] trait. This packet
+//! device supplies the router with a stream of packets (through its
+//! implementation of [`PacketDevice::pop`]) that will be forwarded to the
+//! network, and it acts as a sink for incoming packets with a destination
+//! address matching the packet device's address.
 //!
 //! [`Ipv4Addr::LOCALHOST`] has special meaning, and it is expected that a
 //! packet device will be registered at this address. The router uses the device
-//! as the loopback device and will redirect outgoing local packets that are
-//! streamed from other devices through the loopback device's rate-limited
-//! queues and then back down to the device. Local packets are thus "short
-//! circuited" and are not sent through the network routing path.
+//! as the loopback device, applying its rate limits for local packets being
+//! sent from any device.
 //!
 //! The [`Router`] operates its own event management queues and its scheduler
 //! must be run at appropriate times to faciliate the routing process.
@@ -39,24 +45,24 @@
 //! router needs to function. This context must be provided when calling
 //! [`Router::run`].
 //!
-//! A variety of queues are used to model device rate limits and
-//! upstream/downstream rate limits, as shown below. Each tx queue and rx queue
-//! is a lossy rate-limited queue that can drop packets if it becomes bloated
-//! (e.g., if we are allowed to push() to a queue at a faster rate than we are
-//! allowed to pop() from it based on the configured rate limits).
+//! A variety of queues are used to model rate limits, as shown below. Each tx
+//! queue and rx queue is a lossy rate-limited queue that can drop packets if it
+//! becomes bloated (e.g., if we are allowed to push() to a queue at a faster
+//! rate than we are allowed to pop() from it based on the configured rate
+//! limits). Note, all pop() and push() actions are carried out by the router,
+//! not the individual components listed here.
 //!
-//!   +---------------+              +---------------+
-//!   | PacketDevice  |              | PacketDevice  |
-//!   |(net interface)|              |(net interface)|
-//!   +---------------+              +---------------+
+//!   +--------------+               +--------------+
+//!   | PacketDevice |               | PacketDevice |
+//!   +--------------+               +--------------+
 //!          |                              |
-//!  pop() if dev.txq.is_empty()    pop() if dev.txq.is_empty()
+//!  Event::DeviceInterrupt        Event::DeviceInterrupt
 //!          |                              |
 //!          V push()                       V push()
-//!     +----------+                  +----------+
-//!     | Device 0 |                  | Device N |
-//!     | tx queue |                  | tx queue |
-//!     +----------+                  +----------+
+//!     +-----------+                  +-----------+
+//!     | Interface |                  | Interface |
+//!     | tx queue  |                  | tx queue  |
+//!     +-----------+                  +-----------+
 //!          |                              |
 //!  pop() @ dev tx rate limit    pop() @ dev tx rate limit
 //!          |                              |
@@ -70,23 +76,21 @@
 //!                         |
 //!             pop() @ upstream tx rate limit
 //!                         |
-//!                packets to network
-//!                         |
-//!                         V
-//!               +-------------------+
-//!               |   Worker (send)   |
-//!               +-------------------+
+//!                         V Context::send_packet_fn()
+//!               +--------------------+
+//!               | packets to network |
+//!               +--------------------+
 //!                        |||
 //!              core link ||| models latency, packet loss
 //!                        ||| unlimited bandwidth
 //!                        VVV
-//!               +-------------------+
-//!               |   Worker (recv)   |
-//!               +-------------------+
+//!               +----------------------+
+//!               | packets from network |
+//!               +----------------------+
 //!                         |
-//!                packets from network
+//!              RouterEvent::PacketArrival
 //!                         |
-//!                         V push() on arrival
+//!                         V push()
 //!               +-------------------+
 //!               |   Global router   |
 //!               |     rx queue      |
@@ -97,18 +101,17 @@
 //!          +--------------+---------------+
 //!          |                              |
 //!          V push()                       V push()
-//!     +----------+                  +----------+
-//!     | Device 0 |                  | Device N |
-//!     | rx queue |                  | rx queue |
-//!     +----------+                  +----------+
+//!     +-----------+                  +-----------+
+//!     | Interface |                  | Interface |
+//!     | rx queue  |                  | rx queue  |
+//!     +-----------+                  +-----------+
 //!          |                              |
 //!  pop() @ dev rx rate limit    pop() @ dev rx rate limit
 //!          |                              |
 //!          V push()                       V push()
-//!   +---------------+              +---------------+
-//!   | PacketDevice  |              | PacketDevice  |
-//!   |(net interface)|              |(net interface)|
-//!   +---------------+              +---------------+
+//!   +--------------+               +--------------+
+//!   | PacketDevice |               | PacketDevice |
+//!   +--------------+               +--------------+
 //!
 //! Note: the cross-device loopback process is not shown above.
 //!
@@ -152,14 +155,15 @@ pub struct Context<'a, T> {
     pub is_bootstrapping: bool,
     /// The function the router will call when it needs to send a packet over
     /// the simulated network.
-    pub send_packet: fn(&'a T, PacketRc),
+    pub send_packet_fn: fn(&'a T, PacketRc),
     /// The function the router will call to obtain the underlying packet device
-    /// for the address configured in [`Router::attach_device`]. The underlying
-    /// device is a src/stream for outgoing packets and a dst/sink for incoming
-    /// packets.
-    pub get_device: fn(&'a T, Ipv4Addr) -> Option<Ref<'_, dyn PacketDevice>>,
+    /// for the address configured in [`Router::attach_packet_device`]. The
+    /// underlying device is a src/stream for outgoing packets and a dst/sink
+    /// for incoming packets.
+    pub get_packet_device_fn: fn(&'a T, Ipv4Addr) -> Option<Ref<'_, dyn PacketDevice>>,
     /// The first argument that will be supplied when calling the
-    /// [`Context::send_packet`] and [`Context::get_device`] callback functions.
+    /// [`Context::send_packet_fn`] and [`Context::get_packet_device_fn`]
+    /// callback functions.
     pub fn_arg: &'a T,
 }
 
@@ -209,15 +213,15 @@ enum State {
 
 /// A [`Router`] routes [`PacketRc`]s between [`PacketDevice`]s and the
 /// simulated network, enforcing configured send/receive rate limits on the
-/// devices and the upstream/downstream links to a modeled network provider.
+/// interfaces and the upstream/downstream links to a modeled network provider.
 ///
 /// For more information, see the module docs for [`crate::network::router`].
 #[derive(Debug)]
 pub struct Router {
     /// The router's current run state.
     state: AtomicRefCell<State>,
-    /// The inner collection of queues and devices needed to route packets while
-    /// conforming to rate limits.
+    /// The inner collection of queues and interfaces needed to route packets
+    /// while conforming to rate limits.
     inner: AtomicRefCell<Inner>,
     /// The collection of tasks the router needs to perform to function.
     tasks: AtomicRefCell<TaskQueue>,
@@ -235,8 +239,9 @@ struct Inner {
     txq: RateLimitedQueue,
     /// Our global receive queue. Packets from the network are routed to this queue.
     rxq: RateLimitedQueue,
-    /// The attached packet devices, each of which has its own tx and rx queues.
-    devices: HashMap<Ipv4Addr, Device>,
+    /// The attached packet devices, each of which is wrapped with our Interface
+    /// type to manage its tx and rx queues.
+    interfaces: HashMap<Ipv4Addr, Interface>,
 }
 
 impl Inner {
@@ -244,7 +249,7 @@ impl Inner {
         Self {
             txq: RateLimitedQueue::new(tx_rate),
             rxq: RateLimitedQueue::new(rx_rate),
-            devices: HashMap::new(),
+            interfaces: HashMap::new(),
         }
     }
 }
@@ -267,11 +272,11 @@ impl Router {
     ///
     /// It is assumed that the router will be able to obtain a reference to the
     /// underlying device implementing the [`PacketDevice`] trait when it calls
-    /// [`RouterContext::get_device`] and passes the address provided here. It
+    /// [`RouterContext::get_packet_device_fn`] and passes the address provided here. It
     /// is up to the caller to set the correct router context and addressing.
-    pub fn attach_device(&mut self, addr: Ipv4Addr, tx_rate: RateLimit, rx_rate: RateLimit) {
-        let device = Device::new(addr, tx_rate, rx_rate);
-        self.inner.borrow_mut().devices.insert(addr, device);
+    pub fn attach_packet_device(&mut self, addr: Ipv4Addr, tx_rate: RateLimit, rx_rate: RateLimit) {
+        let device = Interface::new(addr, tx_rate, rx_rate);
+        self.inner.borrow_mut().interfaces.insert(addr, device);
     }
 
     /// Run the router with the given context to handle the provided [`RouterEvent`].
@@ -334,13 +339,13 @@ impl Router {
                 TaskKind::Deliver(_) => ctx.now,
                 TaskKind::TxGlobal => inner.txq.ready_at(ctx),
                 TaskKind::RxGlobal => inner.rxq.ready_at(ctx),
-                TaskKind::TxDevice(addr) => match inner.devices.get(addr) {
-                    Some(device) => device.txq.ready_at(ctx),
-                    None => return Router::warn_schedule_failed(&kind, "device not found"),
+                TaskKind::TxDevice(addr) => match inner.interfaces.get(addr) {
+                    Some(iface) => iface.txq.ready_at(ctx),
+                    None => return Router::warn_schedule_failed(&kind, "interface not found"),
                 },
-                TaskKind::RxDevice(addr) => match inner.devices.get(addr) {
-                    Some(device) => device.rxq.ready_at(ctx),
-                    None => return Router::warn_schedule_failed(&kind, "device not found"),
+                TaskKind::RxDevice(addr) => match inner.interfaces.get(addr) {
+                    Some(iface) => iface.rxq.ready_at(ctx),
+                    None => return Router::warn_schedule_failed(&kind, "interface not found"),
                 },
                 TaskKind::ProcessQueue => ctx.now,
             }
@@ -388,10 +393,10 @@ impl Router {
         self.inner.borrow_mut().rxq.push(ctx, packet);
     }
 
-    /// Use [`Context::send_packet`] to send all packets ready to be sent.
+    /// Use [`Context::send_packet_fn`] to send all packets ready to be sent.
     fn process_tx_global<T>(&self, ctx: &Context<T>) {
         while let Some(packet) = self.inner.borrow_mut().txq.pop(ctx) {
-            (ctx.send_packet)(ctx.fn_arg, packet);
+            (ctx.send_packet_fn)(ctx.fn_arg, packet);
         }
     }
 
@@ -402,8 +407,8 @@ impl Router {
 
         while let Some(packet) = inner.rxq.pop(ctx) {
             let dst_addr = *packet.dst_ipv4_address().ip();
-            if let Some(device) = inner.devices.get_mut(&dst_addr) {
-                device.rxq.push(ctx, packet);
+            if let Some(iface) = inner.interfaces.get_mut(&dst_addr) {
+                iface.rxq.push(ctx, packet);
             } else {
                 Router::warn_process_failed(
                     &TaskKind::RxGlobal,
@@ -421,56 +426,64 @@ impl Router {
         let mut inner = self.inner.borrow_mut();
 
         // Temporarily remove the device for processing.
-        let Some(mut device) = inner.devices.remove(&addr) else {
-            Router::warn_process_failed(&TaskKind::TxDevice(addr), "device not found");
+        // TODO: add a drop guard to add it back later, so we don't return
+        // somewhere and forget?
+        let Some(mut iface) = inner.interfaces.remove(&addr) else {
+            Router::warn_process_failed(&TaskKind::TxDevice(addr), "interface not found");
             return;
         };
 
-        while let Some(pkt) = device.txq.pop(ctx).or_else(|| {
-            if device.txq.blocked_until.is_some() {
-                // We reached our rate limit, try again later.
-                //
-                // TODO: since we return here, we won't be able to redirect
-                // loopback packets from this interface (see below) while we are
-                // out of tokens. Fixing this may require a deeper redesign of
-                // shadow's network interface and socket layers.
-                return None; // returns from closure
-            }
-
-            // Not rate limited yet, check underlying interface until we get a
-            // packet for this device.
-            while let Some(pkt) = device.pop(ctx) {
-                // We got a packet, use the correct rate limit.
-                //
-                // NOTE: Unbound UDP sockets may send both local and nonlocal
-                // packets from the default interface, and may send loopback
-                // packets, so we must redirect to the right rate limiter.
-                let src_addr = *pkt.src_ipv4_address().ip();
-                let dst_addr = *pkt.dst_ipv4_address().ip();
-                let is_local = src_addr == dst_addr || src_addr.is_loopback();
-
-                if is_local && !addr.is_loopback() {
-                    if let Some(lo) = inner.devices.get_mut(&Ipv4Addr::LOCALHOST) {
-                        // Redirect over loopback, applying its configured rate
-                        // limits instead of this device's rate limits.
-                        lo.txq.push(ctx, pkt);
-                    } else {
-                        Router::warn_routing_failed(&dst_addr, "lo tx device not found");
-                    }
-                    continue;
-                } else {
-                    // Push then pop from this device's tx queue so we only
-                    // return a packet if it conforms to the device rate limit.
-                    device.txq.push(ctx, pkt);
-                    return device.txq.pop(ctx);
+        loop {
+            let pkt = iface.txq.pop(ctx).or_else(|| {
+                if iface.txq.blocked_until.is_some() {
+                    // We reached our rate limit, try again later.
+                    //
+                    // TODO: since we return here, we won't be able to redirect
+                    // loopback packets from this packet device (see below) while we
+                    // are out of tokens. Fixing this may require a deeper redesign
+                    // of shadow's network interface and socket layers.
+                    return None; // returns from closure
                 }
-            }
 
-            // The underlying device is empty for now.
-            None
-        }) {
-            // Got a conforming packet in the device's txq. Route based on the
-            // dst address. From above, packets with default ip may show up on
+                // Not rate limited yet, check underlying packet device until we get
+                // a packet.
+                while let Some(pkt) = iface.pop(ctx) {
+                    // We got a packet, use the correct rate limit.
+                    //
+                    // NOTE: Unbound UDP sockets may send both local and nonlocal
+                    // packets from the default interface, and may send loopback
+                    // packets, so we must redirect to the right rate limiter.
+                    let src_addr = *pkt.src_ipv4_address().ip();
+                    let dst_addr = *pkt.dst_ipv4_address().ip();
+                    let is_local = src_addr == dst_addr || src_addr.is_loopback();
+
+                    if is_local && !addr.is_loopback() {
+                        if let Some(lo) = inner.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
+                            // Redirect over loopback, applying its configured rate
+                            // limits instead of this device's rate limits.
+                            lo.txq.push(ctx, pkt);
+                        } else {
+                            Router::warn_routing_failed(&dst_addr, "lo tx interface not found");
+                        }
+                        continue;
+                    } else {
+                        // Push then pop from this device's tx queue so we only
+                        // return a packet if it conforms to the device rate limit.
+                        iface.txq.push(ctx, pkt);
+                        return iface.txq.pop(ctx);
+                    }
+                }
+
+                // The underlying device is empty for now.
+                None
+            });
+
+            let Some(pkt) = pkt else {
+                break;
+            };
+
+            // Got a conforming packet in the txq. Route based on the dst
+            // address. From above, packets with default ip may show up on
             // loopback for rate limiting, which we now route over to its rxq.
             let src_addr = *pkt.src_ipv4_address().ip();
             let dst_addr = *pkt.dst_ipv4_address().ip();
@@ -479,11 +492,11 @@ impl Router {
             if is_local {
                 // Route over loopback to its rxq.
                 if addr.is_loopback() {
-                    device.rxq.push(ctx, pkt);
-                } else if let Some(lo) = inner.devices.get_mut(&Ipv4Addr::LOCALHOST) {
+                    iface.rxq.push(ctx, pkt);
+                } else if let Some(lo) = inner.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
                     lo.rxq.push(ctx, pkt);
                 } else {
-                    Router::warn_routing_failed(&dst_addr, "lo rx device not found");
+                    Router::warn_routing_failed(&dst_addr, "lo rx interface not found");
                 }
             } else {
                 // Route upstream for network transmission.
@@ -492,7 +505,7 @@ impl Router {
         }
 
         // Restore the device in our collection.
-        inner.devices.insert(addr, device);
+        inner.interfaces.insert(addr, iface);
     }
 
     /// Route packets from the device receive queue to the actual underlying
@@ -501,19 +514,21 @@ impl Router {
         let mut inner = self.inner.borrow_mut();
 
         // Temporarily remove the device for processing.
-        let Some(mut device) = inner.devices.remove(&addr) else {
+        // TODO: add a drop guard to add it back later, so we don't return
+        // somewhere and forget?
+        let Some(mut iface) = inner.interfaces.remove(&addr) else {
             Router::warn_process_failed(&TaskKind::RxDevice(addr), "device not found");
             return;
         };
 
-        while let Some(pkt) = device.rxq.pop(ctx) {
+        while let Some(pkt) = iface.rxq.pop(ctx) {
             let dst_addr = *pkt.dst_ipv4_address().ip();
 
             // We may have packets in the loopback queue that have src and dst
             // ip addresses of the default interface.
             if addr == dst_addr {
-                device.push(ctx, pkt);
-            } else if let Some(other) = inner.devices.get_mut(&dst_addr) {
+                iface.push(ctx, pkt);
+            } else if let Some(other) = inner.interfaces.get_mut(&dst_addr) {
                 other.push(ctx, pkt);
             } else {
                 Router::warn_routing_failed(&dst_addr, "rx device not found");
@@ -521,7 +536,7 @@ impl Router {
         }
 
         // Restore the device in our collection.
-        inner.devices.insert(addr, device);
+        inner.interfaces.insert(addr, iface);
     }
 
     /// Checks all interrupts that have occurred on our queues since the last
@@ -539,12 +554,12 @@ impl Router {
             kinds.push(TaskKind::RxGlobal);
         }
 
-        for (addr, device) in inner.devices.iter_mut() {
-            if device.txq.take_irq() {
+        for (addr, iface) in inner.interfaces.iter_mut() {
+            if iface.txq.take_irq() {
                 kinds.push(TaskKind::TxDevice(*addr));
             }
 
-            if device.rxq.take_irq() {
+            if iface.rxq.take_irq() {
                 kinds.push(TaskKind::RxDevice(*addr));
             }
         }
@@ -566,24 +581,25 @@ impl Router {
 }
 
 /// An object to help us pop and push to an underlying packet device while
-/// conforming to configured device rate limits.
+/// conforming to configured rate limits.
 #[derive(Debug)]
-struct Device {
+struct Interface {
     /// The address associated with the underlying packet device.
     addr: Ipv4Addr,
-    /// The device's transmit queue, used to model the underlying packet devices
-    /// send speed.
+    /// The transmit queue, used to model the underlying packet devices send
+    /// speed.
     txq: RateLimitedQueue,
-    /// The device's receive queue, used to model the underlying packet devices
-    /// receive speed.
+    /// The receive queue, used to model the underlying packet devices receive
+    /// speed.
     rxq: RateLimitedQueue,
 }
 
-impl Device {
-    /// Create a new device with rate-limited transmit and receive queues.
+impl Interface {
+    /// Create a new interface with rate-limited transmit and receive queues.
     ///
-    /// The provided address will be used with [`Context::get_device`] to obtain
-    /// the underlying packet device when we need to push/pop to/from it.
+    /// The provided address will be used with [`Context::get_packet_device_fn`]
+    /// to obtain the underlying packet device when we need to push/pop to/from
+    /// it.
     fn new(addr: Ipv4Addr, tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
         Self {
             addr,
@@ -594,12 +610,12 @@ impl Device {
 
     /// Pops the next packet directly from the underlying packet device.
     fn pop<T>(&mut self, ctx: &Context<T>) -> Option<PacketRc> {
-        (ctx.get_device)(ctx.fn_arg, self.addr).and_then(|dev| dev.pop())
+        (ctx.get_packet_device_fn)(ctx.fn_arg, self.addr).and_then(|dev| dev.pop())
     }
 
     /// Pushes the packet directly to the underlying packet device.
     fn push<T>(&mut self, ctx: &Context<T>, packet: PacketRc) {
-        if let Some(dev) = (ctx.get_device)(ctx.fn_arg, self.addr) {
+        if let Some(dev) = (ctx.get_packet_device_fn)(ctx.fn_arg, self.addr) {
             dev.push(packet)
         }
     }
@@ -621,7 +637,7 @@ impl Device {
 struct RateLimitedQueue {
     /// The underlying queue storing packets.
     packets: CoDelQueue,
-    /// The object we use to enforce a rate limit.
+    /// The object we use to enforce a rate limit; None means no limit.
     limiter: Option<TokenBucket>,
     /// If we reached our rate limit, we become unblocked at this time.
     blocked_until: Option<EmulatedTime>,
@@ -779,7 +795,7 @@ mod tests {
 
     struct MockHost {
         router: Router,
-        devices: HashMap<Ipv4Addr, RefCell<MockDevice>>,
+        interfaces: HashMap<Ipv4Addr, RefCell<MockInterface>>,
         net_rx: RefCell<VecDeque<PacketRc>>,
     }
 
@@ -787,24 +803,24 @@ mod tests {
         fn new(tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
             Self {
                 router: Router::new(tx_rate, rx_rate),
-                devices: HashMap::new(),
+                interfaces: HashMap::new(),
                 net_rx: RefCell::new(VecDeque::new()),
             }
         }
 
         fn add_device(&mut self, addr: Ipv4Addr, tx: RateLimit, rx: RateLimit) {
-            let dev = RefCell::new(MockDevice::new(addr));
-            self.devices.insert(addr, dev);
-            self.router.attach_device(addr, tx, rx);
+            let dev = RefCell::new(MockInterface::new(addr));
+            self.interfaces.insert(addr, dev);
+            self.router.attach_packet_device(addr, tx, rx);
         }
 
         fn ctx<'a>(&'a self, now: EmulatedTime, boot: bool) -> RouterContext<'a, Self> {
             RouterContext {
                 now,
                 is_bootstrapping: boot,
-                send_packet: |env, pkt| env.net_rx.borrow_mut().push_back(pkt),
-                get_device: |env, addr| {
-                    env.devices
+                send_packet_fn: |env, pkt| env.net_rx.borrow_mut().push_back(pkt),
+                get_packet_device_fn: |env, addr| {
+                    env.interfaces
                         .get(&addr)
                         .map(|d| d.borrow() as Ref<'_, dyn PacketDevice>)
                 },
@@ -813,7 +829,7 @@ mod tests {
         }
 
         fn enqueue(&mut self, pkt: PacketRc) {
-            self.devices
+            self.interfaces
                 .get(pkt.src_ipv4_address().ip())
                 .unwrap()
                 .borrow_mut()
@@ -911,7 +927,7 @@ mod tests {
         }
     }
 
-    struct MockDevice {
+    struct MockInterface {
         addr: Ipv4Addr,
         // Queue of packets the device will return on `pop`.
         tx: RefCell<VecDeque<PacketRc>>,
@@ -919,7 +935,7 @@ mod tests {
         rx: RefCell<VecDeque<PacketRc>>,
     }
 
-    impl MockDevice {
+    impl MockInterface {
         fn new(addr: Ipv4Addr) -> Self {
             Self {
                 addr,
@@ -933,7 +949,7 @@ mod tests {
         }
     }
 
-    impl PacketDevice for MockDevice {
+    impl PacketDevice for MockInterface {
         fn get_address(&self) -> Ipv4Addr {
             self.addr
         }
@@ -977,7 +993,7 @@ mod tests {
         let (pkt, end) = host.route_inbound_packet(START_TIME);
 
         // The packet should have been received by the device.
-        let dev = host.devices.get(&TEST_ADDR).unwrap().borrow();
+        let dev = host.interfaces.get(&TEST_ADDR).unwrap().borrow();
         let queue = dev.rx.borrow();
         assert_eq!(queue.len(), 1);
         assert!(queue[0] == pkt);
@@ -1058,7 +1074,7 @@ mod tests {
         end: EmulatedTime,
     ) {
         // The packet should have been received by the device.
-        let dev = host.devices.get(&TEST_ADDR).unwrap().borrow();
+        let dev = host.interfaces.get(&TEST_ADDR).unwrap().borrow();
         let queue = dev.rx.borrow();
         assert_eq!(queue.len(), pkts.len());
         for i in 0..pkts.len() {

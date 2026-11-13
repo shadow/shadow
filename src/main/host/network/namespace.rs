@@ -104,7 +104,10 @@ impl NetworkNamespace {
 
     /// Returns `None` if there is no such interface.
     #[track_caller]
-    pub fn packet_device_borrow(&self, addr: Ipv4Addr) -> Option<Ref<'_, dyn PacketDevice>> {
+    pub fn interface_borrow_as_packet_device(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<Ref<'_, dyn PacketDevice>> {
         // Same notes as for [`Self::interface_borrow`].
         if addr.is_loopback() {
             Some(self.localhost.borrow())

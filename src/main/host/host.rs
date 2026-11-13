@@ -116,8 +116,11 @@ pub struct Host {
     random: RefCell<Xoshiro256PlusPlus>,
 
     // The router is our subsystem for actively sending, receiving, and routing
-    // packets accross our devices and other network hosts while conforming to
-    // the configured rate limits.
+    // packets across our devices and other network hosts while conforming to
+    // the host's configured uplink/downlink bandwidth rates. This is owned
+    // by the host and responsible for moving packets around between the host
+    // and its upstream provider, it is not a physically separate machine in
+    // the traditional sense.
     router: Arc<Router>,
 
     // map address to futex objects
@@ -277,13 +280,13 @@ impl Host {
         // upstream and downstream rates we configure in Router::new().
 
         // The localhost/loopback interface.
-        router.attach_device(
+        router.attach_packet_device(
             net_ns.localhost.borrow().get_address(),
             RateLimit::Unlimited,
             RateLimit::Unlimited,
         );
         // The default network-facing interface.
-        router.attach_device(
+        router.attach_packet_device(
             net_ns.internet.borrow().get_address(),
             inet_tx_rate, // See note above
             RateLimit::Unlimited,
@@ -684,8 +687,11 @@ impl Host {
     /// Returns [`None`] if the host does not have a device for the address.
     ///
     /// Panics if we have shut down.
-    fn packet_device_borrow(&self, addr: Ipv4Addr) -> Option<Ref<'_, dyn PacketDevice>> {
-        self.net_ns.packet_device_borrow(addr)
+    fn interface_borrow_as_packet_device(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<Ref<'_, dyn PacketDevice>> {
+        self.net_ns.interface_borrow_as_packet_device(addr)
     }
 
     /// Run the router to handle the given router event that has occurred.
@@ -694,8 +700,8 @@ impl Host {
         let ctx = RouterContext {
             now: Worker::current_time().unwrap(),
             is_bootstrapping: Worker::is_bootstrapping(),
-            send_packet: Worker::send_packet,
-            get_device: Host::packet_device_borrow,
+            send_packet_fn: Worker::send_packet,
+            get_packet_device_fn: Host::interface_borrow_as_packet_device,
             fn_arg: self,
         };
 
@@ -722,10 +728,12 @@ impl Host {
         }
 
         // Notice we carefully drop the borrow before running the router.
-        if let Some(iface_addr) = self.interface_borrow(addr).map(|iface| {
+        let iface_addr: Option<Ipv4Addr> = self.interface_borrow(addr).map(|iface| {
             iface.add_data_source(socket);
             iface.get_address()
-        }) {
+        });
+
+        if let Some(iface_addr) = iface_addr {
             // Routing action is required on the interface.
             self.run_router(RouterEvent::DeviceInterrupt(iface_addr));
         } else {
