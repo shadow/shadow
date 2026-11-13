@@ -44,7 +44,7 @@ use crate::host::network::interface::{FifoPacketPriority, NetworkInterface, Pcap
 use crate::host::network::namespace::NetworkNamespace;
 use crate::host::process::Process;
 use crate::host::thread::{Thread, ThreadId};
-use crate::network::router::{Router, RouterDevice};
+use crate::network::router::{Router, RouterContext, RouterEvent};
 use crate::network::{PacketDevice, RateLimit};
 use crate::utility;
 #[cfg(feature = "perf_timers")]
@@ -115,17 +115,13 @@ pub struct Host {
 
     random: RefCell<Xoshiro256PlusPlus>,
 
-    // A new centralized router to assist with moving packets between network
-    // interfaces and the simulated network while conforming to configured rate
-    // limits.
+    // The router is our subsystem for actively sending, receiving, and routing
+    // packets across our devices and other network hosts while conforming to
+    // the host's configured uplink/downlink bandwidth rates. This is owned
+    // by the host and responsible for moving packets around between the host
+    // and its upstream provider, it is not a physically separate machine in
+    // the traditional sense.
     router: Arc<Router>,
-    // The device that will queue internet packets until we can receive them.
-    // This only applies to the internet interface; the localhost interface
-    // does not receive packets from the internet.
-    //
-    // Note: this is a temporary workaround, and will be removed when the
-    // router redesign is complete.
-    router_device: RefCell<RouterDevice>,
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
@@ -266,11 +262,35 @@ impl Host {
 
         let net_ns = NetworkNamespace::new(public_ip, pcap_options, params.qdisc);
 
-        // Packets that are not for localhost or our public ip go to the router.
-        // Use `Ipv4Addr::UNSPECIFIED` for the router to encode this for our
-        // routing table logic inside of `Host::get_packet_device()`.
-        let rate_limit_up = RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8);
-        let rate_limit_down = RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8);
+        let inet_tx_rate = RateLimit::BytesPerSecond(params.requested_bw_up_bits / 8);
+        let inet_rx_rate = RateLimit::BytesPerSecond(params.requested_bw_down_bits / 8);
+
+        // Note: our rate limit configs below are meant to match the previous
+        // router/relay design where we popped packets from the netif according
+        // to the upstream rate limit, and we popped packets from the CoDel
+        // queue according to the downstream rate limit. For now, we mimic that
+        // same behavior within the new router design, but a future commit will
+        // change this behavior to model device rates separate from
+        // up/downstream rates.
+        let mut router = Router::new(RateLimit::Unlimited, inet_rx_rate);
+
+        // Now install routes and rate limits for our packet devices.
+        // TODO: add new shadow config options if we want to allow users to
+        // restrict the rate of these device independent of the global
+        // upstream and downstream rates we configure in Router::new().
+
+        // The localhost/loopback interface.
+        router.attach_packet_device(
+            net_ns.localhost.borrow().get_address(),
+            RateLimit::Unlimited,
+            RateLimit::Unlimited,
+        );
+        // The default network-facing interface.
+        router.attach_packet_device(
+            net_ns.internet.borrow().get_address(),
+            inet_tx_rate, // See note above
+            RateLimit::Unlimited,
+        );
 
         let in_notify_socket_has_packets = RootedCell::new(&root, false);
 
@@ -279,8 +299,7 @@ impl Host {
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
-            router: Arc::new(Router::new(public_ip, rate_limit_up, rate_limit_down)),
-            router_device: RefCell::new(RouterDevice::new(Ipv4Addr::UNSPECIFIED)),
+            router: Arc::new(router),
             futex_table: RefCell::new(FutexTable::new()),
             fcntl_lock_table: RefCell::new(FcntlLockTable::new()),
             random,
@@ -664,36 +683,61 @@ impl Host {
     /// Get the packet device that handles packets for the given address. This
     /// could be the source device from which we forward packets, or the device
     /// that will receive and process packets with a given destination address.
-    /// In the latter case, if the packet destination is not on this host, we
-    /// return the router to route it to the correct host.
-    pub fn get_packet_device(&self, address: Ipv4Addr) -> Ref<'_, dyn PacketDevice> {
-        if address == Ipv4Addr::LOCALHOST {
-            self.net_ns.localhost.borrow()
-        } else if address == self.default_ip() {
-            self.net_ns.internet.borrow()
-        } else {
-            self.router_device.borrow()
+    ///
+    /// Returns [`None`] if the host does not have a device for the address.
+    ///
+    /// Panics if we have shut down.
+    fn interface_borrow_as_packet_device(
+        &self,
+        addr: Ipv4Addr,
+    ) -> Option<Ref<'_, dyn PacketDevice>> {
+        self.net_ns.interface_borrow_as_packet_device(addr)
+    }
+
+    /// Run the router to handle the given router event that has occurred.
+    fn run_router(&self, event: RouterEvent) {
+        // Construct the router runtime context.
+        let ctx = RouterContext {
+            now: Worker::current_time().unwrap(),
+            is_bootstrapping: Worker::is_bootstrapping(),
+            send_packet_fn: Worker::send_packet,
+            get_packet_device_fn: Host::interface_borrow_as_packet_device,
+            fn_arg: self,
+        };
+
+        // Run the router to handle the event. If it wants to run again, it will
+        // return the time that we should wake it up.
+        if let Some(next_run_time) = self.router.run(&ctx, event) {
+            let task = TaskRef::new(move |host| {
+                host.run_router(RouterEvent::Wakeup);
+            });
+            self.schedule_task_at_emulated_time(task, next_run_time);
         }
     }
 
     /// Call to trigger the forwarding of packets from the network interface to
-    /// the next hop (either back to the network interface for loopback, or up to
-    /// the router for internet-bound packets).
+    /// the next hop (either back to the network interface for loopback, or to
+    /// another host for internet-bound packets).
     ///
-    /// WARNING: This is not reentrant. Do not allow this to be called recursively. Nothing in
-    /// `add_data_source()` or `notify()` can call back into this method. This includes any socket
-    /// code called in any indirect way from here.
+    /// WARNING: This is not reentrant. Do not allow this to be called
+    /// recursively. Nothing in `add_data_source()` can call back into this
+    /// method, including socket code called in any indirect way from here.
     pub fn notify_socket_has_packets(&self, addr: Ipv4Addr, socket: &InetSocket) {
         if self.in_notify_socket_has_packets.replace(&self.root, true) {
             panic!("Recursively calling host.notify_socket_has_packets()");
         }
 
-        if let Some(iface) = self.interface_borrow(addr) {
+        // Notice we carefully drop the borrow before running the router.
+        let iface_addr: Option<Ipv4Addr> = self.interface_borrow(addr).map(|iface| {
             iface.add_data_source(socket);
-            match addr {
-                Ipv4Addr::LOCALHOST => self.router.notify_loopback(self),
-                _ => self.router.notify_default_out(self),
-            };
+            iface.get_address()
+        });
+
+        if let Some(iface_addr) = iface_addr {
+            // Routing action is required on the interface.
+            self.run_router(RouterEvent::DeviceInterrupt(iface_addr));
+        } else {
+            log::warn!("Interface not found for socket addr {addr}");
         }
 
         self.in_notify_socket_has_packets.set(&self.root, false);
@@ -835,12 +879,7 @@ impl Host {
             Worker::set_current_time(event.time());
             self.continue_execution_timer();
             match event.data() {
-                EventData::Packet(data) => {
-                    self.router_device
-                        .borrow()
-                        .route_incoming_packet(data.into());
-                    self.router.notify_default_in(self);
-                }
+                EventData::Packet(data) => self.run_router(RouterEvent::PacketArrival(data.into())),
                 EventData::Local(data) => TaskRef::from(data).execute(self),
             }
             self.stop_execution_timer();

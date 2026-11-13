@@ -120,13 +120,11 @@ impl CoDelQueue {
     }
 
     /// Returns the total number of packets stored in the queue.
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.elements.len()
     }
 
     /// Returns true if the queue is holding zero packets, false otherwise.
-    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -135,7 +133,6 @@ impl CoDelQueue {
     /// empty. Note that there is no gurantee that a subsequent `pop()`
     /// operation will return the same packet, since it could be dropped by the
     /// queue between the `peek()` and `pop()` operations.
-    #[cfg(test)]
     pub fn peek(&self) -> Option<&PacketRc> {
         self.elements.front().map(|x| &x.packet)
     }
