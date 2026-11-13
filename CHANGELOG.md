@@ -27,6 +27,10 @@ MINOR changes (backwards-compatible):
   when using `./setup build --perf`, and then can be tested with
   `./setup test qperf`. Added a new CI job to build and run the qperf tests in
   a separate CI container.
+* Redesign the router subsystem Shadow uses to move packets between network
+  interfaces and through the simulated network. The new design supports setting
+  separate rate limits for network interface devices, and introduces a global
+  CoDel queue on the upstream side (in addition to the downstream side).
   
 
 PATCH changes (bugfixes):
