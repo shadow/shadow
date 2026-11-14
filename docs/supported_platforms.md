@@ -31,13 +31,13 @@ By these criteria, Shadow's oldest supported kernel version is currently 5.15
 ## Docker
 
 If you are installing Shadow within a Docker container, you must increase the
-size of the container's `/dev/shm` mount and disable the seccomp security
-profile. You can do this by passing additional flags to `docker run`.
+size of the container's `/dev/shm` mount and disable the seccomp/apparmor security
+profiles. You can do this by passing additional flags to `docker run`.
 
 Example:
 
 ```bash
-docker run -it --shm-size=1024g --security-opt seccomp=unconfined ubuntu:24.04
+docker run -it --shm-size=1024g --security-opt seccomp=unconfined --security-opt apparmor=unconfined ubuntu:24.04
 ```
 
 If you are having difficulty installing Shadow on any supported platforms, you
