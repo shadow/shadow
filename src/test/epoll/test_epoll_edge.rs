@@ -368,6 +368,122 @@ fn test_netlink_multi_write() -> anyhow::Result<()> {
     })
 }
 
+/// Size of each write in the send-buffer tests. It is larger than 65535 bytes, and none of the send
+/// buffer sizes Shadow uses (100,000, 131,072 and 4 MiB) is a multiple of it, so a buffer that
+/// fills shows as a short write rather than an exact fill.
+const BIG_WRITE: usize = 300_000;
+
+/// Upper bound on the bytes written while filling a send buffer, so that a test cannot loop
+/// forever.
+const FILL_LIMIT: usize = 64 * 1024 * 1024;
+
+/// Writes `BIG_WRITE`-byte chunks until a write is short or would block.
+fn write_until_short(fd: libc::c_int) -> anyhow::Result<()> {
+    let buf = vec![0u8; BIG_WRITE];
+    let mut total = 0;
+    while total < FILL_LIMIT {
+        match unistd::write(fd, &buf) {
+            Ok(n) if n < buf.len() => return Ok(()),
+            Ok(n) => total += n,
+            Err(nix::errno::Errno::EAGAIN) => return Ok(()),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    anyhow::bail!("wrote {total} bytes without filling the send buffer")
+}
+
+/// Fills the send buffer and the peer's receive buffer, so that no room appears until the peer
+/// reads: writes until a write after a pause would block.
+fn write_until_full(fd: libc::c_int) -> anyhow::Result<()> {
+    write_until_short(fd)?;
+    let buf = vec![0u8; BIG_WRITE];
+    let mut total = 0;
+    while total < FILL_LIMIT {
+        // let the data in flight arrive and be acknowledged
+        std::thread::sleep(SHORT_DUR);
+        match unistd::write(fd, &buf) {
+            Ok(n) => total += n,
+            Err(nix::errno::Errno::EAGAIN) => return Ok(()),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    anyhow::bail!("wrote {total} more bytes without filling the buffers")
+}
+
+/// Reads everything that has arrived, after giving the data in flight time to arrive.
+fn read_available(fd: libc::c_int) -> anyhow::Result<()> {
+    std::thread::sleep(SHORT_DUR);
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        match unistd::read(fd, &mut buf) {
+            Ok(0) => anyhow::bail!("unexpected EOF"),
+            Ok(_) => {}
+            Err(nix::errno::Errno::EAGAIN) => return Ok(()),
+            Err(e) => return Err(e.into()),
+        }
+    }
+}
+
+/// Registers `writefd` for edge-triggered `EPOLLOUT` and collects the initial edge.
+fn register_writable(epollfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result<()> {
+    let mut event = epoll::EpollEvent::new(EpollFlags::EPOLLET | EpollFlags::EPOLLOUT, 0);
+    epoll::epoll_ctl(
+        epollfd,
+        epoll::EpollOp::EpollCtlAdd,
+        writefd,
+        Some(&mut event),
+    )?;
+
+    let mut events = [epoll::EpollEvent::empty()];
+    ensure_ord!(epoll::epoll_wait(epollfd, &mut events, 0), ==, Ok(1));
+    Ok(())
+}
+
+/// Waits up to `LONG_DUR` for an `EPOLLOUT` event.
+fn ensure_writable_edge(epollfd: libc::c_int) -> anyhow::Result<()> {
+    let mut events = [epoll::EpollEvent::empty()];
+    let start = std::time::Instant::now();
+    let res = epoll::epoll_wait(
+        epollfd,
+        &mut events,
+        LONG_DUR.as_millis().try_into().unwrap(),
+    );
+    ensure_ord!(res, ==, Ok(1));
+    ensure_ord!(start.elapsed(), <, LONG_DUR);
+    ensure_ord!(events[0].events() & EpollFlags::EPOLLOUT, ==, EpollFlags::EPOLLOUT);
+    Ok(())
+}
+
+/// A writer that stops at a short write must get an `EPOLLOUT` edge once there is room again. On
+/// Linux a short write to a stream socket means its send buffer is full, and applications such as
+/// tokio rely on that: after a short write they wait for the edge before writing again.
+fn test_short_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result<()> {
+    let epollfd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        register_writable(epollfd, writefd)?;
+        write_until_short(writefd)?;
+        read_available(readfd)?;
+        ensure_writable_edge(epollfd)
+    })
+}
+
+/// A full send buffer must not report `EPOLLOUT` until the peer reads, and must report it after.
+fn test_full_write(readfd: libc::c_int, writefd: libc::c_int) -> anyhow::Result<()> {
+    let epollfd = epoll::epoll_create()?;
+
+    test_utils::run_and_close_fds(&[epollfd, readfd, writefd], || {
+        register_writable(epollfd, writefd)?;
+        write_until_full(writefd)?;
+
+        let mut events = [epoll::EpollEvent::empty()];
+        ensure_ord!(epoll::epoll_wait(epollfd, &mut events, 0), ==, Ok(0));
+
+        read_available(readfd)?;
+        ensure_writable_edge(epollfd)
+    })
+}
+
 fn socket_init(
     init_method: SocketInitMethod,
     sock_type: libc::c_int,
@@ -537,6 +653,29 @@ fn main() -> anyhow::Result<()> {
         test_netlink_multi_write,
         all_envs.clone(),
     ));
+    // add the send-buffer tests only for tcp, since other socket types and pipes limit the size
+    // of a single write in their own ways
+    for swapped in [false, true] {
+        let extend_test = |test: fn(libc::c_int, libc::c_int) -> anyhow::Result<()>| {
+            move || {
+                let (fd1, fd2) = tcp_fds_init_helper();
+                let (readfd, writefd) = if swapped { (fd2, fd1) } else { (fd1, fd2) };
+                test(readfd, writefd)
+            }
+        };
+        tests.extend(vec![
+            ShadowTest::new(
+                &format!("short-write <fds=\"tcp\",swapped={swapped:?}>"),
+                extend_test(test_short_write),
+                all_envs.clone(),
+            ),
+            ShadowTest::new(
+                &format!("full-write <fds=\"tcp\",swapped={swapped:?}>"),
+                extend_test(test_full_write),
+                all_envs.clone(),
+            ),
+        ]);
+    }
 
     if filter_shadow_passing {
         tests.retain(|x| x.passing(TestEnvironment::Shadow));
