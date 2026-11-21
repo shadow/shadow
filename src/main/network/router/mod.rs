@@ -358,116 +358,106 @@ impl Router {
     /// limits allow. Loopback packets are routed over to the loopback receive
     /// queue.
     fn process_tx_device<T>(&mut self, ctx: &Context<T>, addr: Ipv4Addr) {
-        // Temporarily remove the device for processing.
-        // TODO: add a drop guard to add it back later, so we don't return
-        // somewhere and forget?
-        let Some(mut iface) = self.interfaces.remove(&addr) else {
-            Router::warn_process_failed(&TaskKind::TxDevice(addr), "interface not found");
-            return;
-        };
-
         loop {
-            let pkt = iface.txq.pop(ctx).or_else(|| {
-                if iface.txq.blocked_until.is_some() {
-                    // We reached our rate limit, try again later.
-                    //
-                    // TODO: since we return here, we won't be able to redirect
-                    // loopback packets from this packet device (see below) while we
-                    // are out of tokens. Fixing this may require a deeper redesign
-                    // of shadow's network interface and socket layers.
-                    return None; // returns from closure
-                }
+            // Get source interface.
+            let Some(iface) = self.interfaces.get_mut(&addr) else {
+                Router::warn_process_failed(&TaskKind::TxDevice(addr), "interface not found");
+                return;
+            };
 
-                // Not rate limited yet, check underlying packet device until we get
-                // a packet.
-                while let Some(pkt) = iface.pop(ctx) {
-                    // We got a packet, use the correct rate limit.
-                    //
-                    // NOTE: Unbound UDP sockets may send both local and nonlocal
-                    // packets from the default interface, and may send loopback
-                    // packets, so we must redirect to the right rate limiter.
-                    let src_addr = *pkt.src_ipv4_address().ip();
-                    let dst_addr = *pkt.dst_ipv4_address().ip();
-                    let is_local = src_addr == dst_addr || src_addr.is_loopback();
+            // Check if we have a packet that already passed our rate limits.
+            if let Some(pkt) = iface.txq.pop(ctx) {
+                // Got a conforming packet in the txq. Route based on the dst
+                // address. From above, packets with default ip may show up on
+                // loopback for rate limiting, which we now route over to its rxq.
+                let src_addr = *pkt.src_ipv4_address().ip();
+                let dst_addr = *pkt.dst_ipv4_address().ip();
+                let is_local = src_addr == dst_addr || dst_addr.is_loopback();
 
-                    if is_local && !addr.is_loopback() {
-                        if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
-                            // Redirect over loopback, applying its configured rate
-                            // limits instead of this device's rate limits.
-                            lo.txq.push(ctx, pkt);
-                        } else {
-                            Router::warn_routing_failed(&dst_addr, "lo tx interface not found");
-                        }
-                        continue;
+                if is_local {
+                    // Route over loopback to its rxq.
+                    if addr.is_loopback() {
+                        iface.rxq.push(ctx, pkt);
+                    } else if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
+                        lo.rxq.push(ctx, pkt);
                     } else {
-                        // Push then pop from this device's tx queue so we only
-                        // return a packet if it conforms to the device rate limit.
-                        iface.txq.push(ctx, pkt);
-                        return iface.txq.pop(ctx);
+                        Router::warn_routing_failed(&dst_addr, "lo rx interface not found");
                     }
+                } else {
+                    // Route upstream for network transmission.
+                    self.txq.push(ctx, pkt);
                 }
 
-                // The underlying device is empty for now.
-                None
-            });
+                continue;
+            }
 
-            let Some(pkt) = pkt else {
+            // Check if we reached a rate limit.
+            if iface.txq.blocked_until.is_some() {
+                // We reached our rate limit, try again later.
+                //
+                // TODO: since we return here, we won't be able to redirect
+                // loopback packets from this packet device (see below) while we
+                // are out of tokens. Fixing this may require a deeper redesign
+                // of shadow's network interface and socket layers.
+                break;
+            }
+
+            // Not rate limited yet, get next packet from underlying packet device.
+            let Some(pkt) = iface.pop(ctx) else {
+                // The underlying device is empty for now.
                 break;
             };
 
-            // Got a conforming packet in the txq. Route based on the dst
-            // address. From above, packets with default ip may show up on
-            // loopback for rate limiting, which we now route over to its rxq.
+            // We got a packet, use the correct rate limit.
+            //
+            // NOTE: Unbound UDP sockets may send both local and nonlocal
+            // packets from the default interface, and may send loopback
+            // packets, so we must redirect to the right rate limiter.
             let src_addr = *pkt.src_ipv4_address().ip();
             let dst_addr = *pkt.dst_ipv4_address().ip();
-            let is_local = src_addr == dst_addr || dst_addr.is_loopback();
+            let is_local = src_addr == dst_addr || src_addr.is_loopback();
 
-            if is_local {
-                // Route over loopback to its rxq.
-                if addr.is_loopback() {
-                    iface.rxq.push(ctx, pkt);
-                } else if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
-                    lo.rxq.push(ctx, pkt);
+            if is_local && !addr.is_loopback() {
+                if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
+                    // Redirect over loopback, applying its configured rate
+                    // limits instead of this device's rate limits.
+                    lo.txq.push(ctx, pkt);
                 } else {
-                    Router::warn_routing_failed(&dst_addr, "lo rx interface not found");
+                    Router::warn_routing_failed(&dst_addr, "lo tx interface not found");
                 }
             } else {
-                // Route upstream for network transmission.
-                self.txq.push(ctx, pkt);
+                // Push to this device's tx queue to apply its rate limit.
+                iface.txq.push(ctx, pkt);
+
+                // Loop again to route the packet if the rate limit allows.
+                continue;
             }
         }
-
-        // Restore the device in our collection.
-        self.interfaces.insert(addr, iface);
     }
 
     /// Route packets from the device receive queue to the actual underlying
     /// packet device.
     fn process_rx_device<T>(&mut self, ctx: &Context<T>, addr: Ipv4Addr) {
-        // Temporarily remove the device for processing.
-        // TODO: add a drop guard to add it back later, so we don't return
-        // somewhere and forget?
-        let Some(mut iface) = self.interfaces.remove(&addr) else {
-            Router::warn_process_failed(&TaskKind::RxDevice(addr), "device not found");
-            return;
-        };
+        loop {
+            // Get source interface.
+            let Some(iface) = self.interfaces.get_mut(&addr) else {
+                Router::warn_process_failed(&TaskKind::RxDevice(addr), "interface not found");
+                break;
+            };
 
-        while let Some(pkt) = iface.rxq.pop(ctx) {
+            // Get packet from source.
+            let Some(pkt) = iface.rxq.pop(ctx) else {
+                break;
+            };
+
+            // Route to destination.
             let dst_addr = *pkt.dst_ipv4_address().ip();
-
-            // We may have packets in the loopback queue that have src and dst
-            // ip addresses of the default interface.
-            if addr == dst_addr {
+            if let Some(iface) = self.interfaces.get_mut(&dst_addr) {
                 iface.push(ctx, pkt);
-            } else if let Some(other) = self.interfaces.get_mut(&dst_addr) {
-                other.push(ctx, pkt);
             } else {
-                Router::warn_routing_failed(&dst_addr, "rx device not found");
+                Router::warn_routing_failed(&dst_addr, "rx interface not found");
             }
         }
-
-        // Restore the device in our collection.
-        self.interfaces.insert(addr, iface);
     }
 
     /// Checks all interrupts that have occurred on our queues since the last
