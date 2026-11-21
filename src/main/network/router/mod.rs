@@ -186,17 +186,6 @@ pub enum Event {
     Wakeup,
 }
 
-// In our internal implementation, every event is a task that needs to be run.
-impl From<Event> for TaskKind {
-    fn from(event: Event) -> Self {
-        match event {
-            Event::PacketArrival(packet) => TaskKind::Deliver(packet),
-            Event::DeviceInterrupt(addr) => TaskKind::TxDevice(addr),
-            Event::Wakeup => TaskKind::ProcessQueue,
-        }
-    }
-}
-
 /// A [`Router`] routes [`PacketRc`]s between [`PacketDevice`]s and the
 /// simulated network, enforcing configured send/receive rate limits on the
 /// interfaces and the upstream/downstream links to a modeled network provider.
@@ -255,12 +244,15 @@ impl Router {
     pub fn run<T>(&mut self, ctx: &Context<T>, event: RouterEvent) -> Option<EmulatedTime> {
         log::trace!("Router::run({event:?})");
 
-        if event == Event::Wakeup {
-            self.wakeup_times.remove(&ctx.now);
-            self.process_task_queue(ctx);
-        } else {
-            self.schedule(ctx, TaskKind::from(event));
-        };
+        // Handle the event.
+        match event {
+            Event::PacketArrival(packet) => self.schedule(ctx, TaskKind::Deliver(packet)),
+            Event::DeviceInterrupt(addr) => self.schedule(ctx, TaskKind::TxDevice(addr)),
+            Event::Wakeup => {
+                self.wakeup_times.remove(&ctx.now);
+                self.process_task_queue(ctx);
+            }
+        }
 
         // Decide when to run the router next.
         let next = self.tasks.peek().map(|task| task.when);
@@ -290,7 +282,6 @@ impl Router {
                     Some(iface) => iface.rxq.ready_at(ctx),
                     None => return Router::warn_schedule_failed(&kind, "interface not found"),
                 },
-                TaskKind::ProcessQueue => ctx.now,
             }
         };
 
@@ -301,15 +292,24 @@ impl Router {
     /// Process all scheduled tasks that have been schedule to run at or before
     /// the current time provided in the context.
     fn process_task_queue<T>(&mut self, ctx: &Context<T>) {
-        // Process all scheduled non-future tasks.
-        while self.tasks.peek().is_some_and(|x| x.when <= ctx.now) {
-            // Process the next operation.
-            let task = self.tasks.pop().unwrap();
-            self.process(ctx, task.kind);
+        loop {
+            // Process all scheduled non-future tasks.
+            while self.tasks.peek().is_some_and(|x| x.when <= ctx.now) {
+                // Process the next operation.
+                let task = self.tasks.pop().unwrap();
+                self.process(ctx, task.kind);
+            }
 
             // Schedule any new tasks that were generated.
             for kind in self.collect_interrupts() {
                 self.schedule(ctx, kind);
+            }
+
+            // Loop again if we generated more work at time=ctx.now.
+            if self.tasks.peek().is_some_and(|x| x.when <= ctx.now) {
+                continue;
+            } else {
+                return;
             }
         }
     }
@@ -322,7 +322,6 @@ impl Router {
             TaskKind::RxGlobal => self.process_rx_global(ctx),
             TaskKind::TxDevice(addr) => self.process_tx_device(ctx, addr),
             TaskKind::RxDevice(addr) => self.process_rx_device(ctx, addr),
-            TaskKind::ProcessQueue => {} // Already in progress.
         }
     }
 

@@ -12,7 +12,6 @@ pub enum TaskKind {
     RxGlobal,
     TxDevice(Ipv4Addr),
     RxDevice(Ipv4Addr),
-    ProcessQueue,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
