@@ -120,7 +120,6 @@ use std::cell::Ref;
 use std::collections::{BTreeSet, HashMap};
 use std::net::Ipv4Addr;
 
-use atomic_refcell::AtomicRefCell;
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
@@ -198,19 +197,6 @@ impl From<Event> for TaskKind {
     }
 }
 
-/// Tracks the current state of the router to help prevent recursive run loops.
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum State {
-    /// The router is currently not executing its runtime logic; it is waiting
-    /// to be notified that a [`Event`] has occured (via a call to
-    /// [`Router::run`]).
-    Idle,
-    /// The router is executing its runtime logic. Any [`Event`]s that occur
-    /// while in this state held in this deferred queue (to be handled when
-    /// running is complete).
-    Running(Vec<Event>),
-}
-
 /// A [`Router`] routes [`PacketRc`]s between [`PacketDevice`]s and the
 /// simulated network, enforcing configured send/receive rate limits on the
 /// interfaces and the upstream/downstream links to a modeled network provider.
@@ -218,23 +204,6 @@ enum State {
 /// For more information, see the module docs for [`crate::network::router`].
 #[derive(Debug)]
 pub struct Router {
-    /// The router's current run state.
-    state: AtomicRefCell<State>,
-    /// The inner collection of queues and interfaces needed to route packets
-    /// while conforming to rate limits.
-    inner: AtomicRefCell<Inner>,
-    /// The collection of tasks the router needs to perform to function.
-    tasks: AtomicRefCell<TaskQueue>,
-    /// The times we have requested an [`Event::Wakeup`] (i.e., the times we
-    /// have returned from [`Router::run`]) that have not yet occurred.
-    wakeup_times: AtomicRefCell<BTreeSet<EmulatedTime>>,
-    /// Counts allocations/deallocations. Declared at the end so a drop is not
-    /// counted until the other struct elements above are dropped.
-    _counter: ObjectCounter,
-}
-
-#[derive(Debug)]
-struct Inner {
     /// Our global transmit queue. Packets from this queue are routed to the network.
     txq: RateLimitedQueue,
     /// Our global receive queue. Packets from the network are routed to this queue.
@@ -242,16 +211,14 @@ struct Inner {
     /// The attached packet devices, each of which is wrapped with our Interface
     /// type to manage its tx and rx queues.
     interfaces: HashMap<Ipv4Addr, Interface>,
-}
-
-impl Inner {
-    fn new(tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
-        Self {
-            txq: RateLimitedQueue::new(tx_rate),
-            rxq: RateLimitedQueue::new(rx_rate),
-            interfaces: HashMap::new(),
-        }
-    }
+    /// The collection of tasks the router needs to perform to function.
+    tasks: TaskQueue,
+    /// The times we have requested an [`Event::Wakeup`] (i.e., the times we
+    /// have returned from [`Router::run`]) that have not yet occurred.
+    wakeup_times: BTreeSet<EmulatedTime>,
+    /// Counts allocations/deallocations. Declared at the end so a drop is not
+    /// counted until the other struct elements above are dropped.
+    _counter: ObjectCounter,
 }
 
 impl Router {
@@ -259,10 +226,11 @@ impl Router {
     /// global transmit and receive queues.
     pub fn new(tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
         Self {
-            state: AtomicRefCell::new(State::Idle),
-            inner: AtomicRefCell::new(Inner::new(tx_rate, rx_rate)),
-            tasks: AtomicRefCell::new(TaskQueue::new()),
-            wakeup_times: AtomicRefCell::new(BTreeSet::new()),
+            txq: RateLimitedQueue::new(tx_rate),
+            rxq: RateLimitedQueue::new(rx_rate),
+            interfaces: HashMap::new(),
+            tasks: TaskQueue::new(),
+            wakeup_times: BTreeSet::new(),
             _counter: ObjectCounter::new("Router"),
         }
     }
@@ -276,7 +244,7 @@ impl Router {
     /// is up to the caller to set the correct router context and addressing.
     pub fn attach_packet_device(&mut self, addr: Ipv4Addr, tx_rate: RateLimit, rx_rate: RateLimit) {
         let device = Interface::new(addr, tx_rate, rx_rate);
-        self.inner.borrow_mut().interfaces.insert(addr, device);
+        self.interfaces.insert(addr, device);
     }
 
     /// Run the router with the given context to handle the provided [`RouterEvent`].
@@ -284,45 +252,21 @@ impl Router {
     /// If this function returns [`Some`], the caller must ensure that
     /// [`Router::run`] is called again with the [`RouterEvent::Wakeup`] event
     /// at the contained [`EmulatedTime`].
-    pub fn run<T>(&self, ctx: &Context<T>, event: RouterEvent) -> Option<EmulatedTime> {
+    pub fn run<T>(&mut self, ctx: &Context<T>, event: RouterEvent) -> Option<EmulatedTime> {
         log::trace!("Router::run({event:?})");
 
-        // If we are already running, defer this event to run in our
-        // pre-existing processing loop to prevent double borrows.
-        if let State::Running(deferred) = &mut *self.state.borrow_mut() {
-            deferred.push(event);
-            return None;
-        }
-
-        // We were idle and now we are running.
-        *self.state.borrow_mut() = State::Running(Vec::new());
-
         if event == Event::Wakeup {
-            self.wakeup_times.borrow_mut().remove(&ctx.now);
+            self.wakeup_times.remove(&ctx.now);
             self.process_task_queue(ctx);
         } else {
             self.schedule(ctx, TaskKind::from(event));
         };
 
-        // Change state back from running to idle.
-        let prev_state = {
-            let state = &mut *self.state.borrow_mut();
-            std::mem::replace(state, State::Idle)
-        };
-        let State::Running(deferred) = prev_state else {
-            panic!("Expected router in State::Running");
-        };
-
-        // Schedule any events we deferred while we were running.
-        for event in deferred {
-            self.schedule(ctx, TaskKind::from(event));
-        }
-
         // Decide when to run the router next.
-        let next = self.tasks.borrow().peek().map(|task| task.when);
+        let next = self.tasks.peek().map(|task| task.when);
         next.and_then(|when| {
-            if !self.wakeup_times.borrow().contains(&when) {
-                self.wakeup_times.borrow_mut().insert(when);
+            if !self.wakeup_times.contains(&when) {
+                self.wakeup_times.insert(when);
                 Some(when)
             } else {
                 None
@@ -331,19 +275,18 @@ impl Router {
     }
 
     /// Schedules a task in the routers scheduling queue for future processing.
-    fn schedule<T>(&self, ctx: &Context<T>, kind: TaskKind) {
+    fn schedule<T>(&mut self, ctx: &Context<T>, kind: TaskKind) {
         // Compute when we are allowed to run the task based on rate limits.
         let when = {
-            let inner = self.inner.borrow();
             match &kind {
                 TaskKind::Deliver(_) => ctx.now,
-                TaskKind::TxGlobal => inner.txq.ready_at(ctx),
-                TaskKind::RxGlobal => inner.rxq.ready_at(ctx),
-                TaskKind::TxDevice(addr) => match inner.interfaces.get(addr) {
+                TaskKind::TxGlobal => self.txq.ready_at(ctx),
+                TaskKind::RxGlobal => self.rxq.ready_at(ctx),
+                TaskKind::TxDevice(addr) => match self.interfaces.get(addr) {
                     Some(iface) => iface.txq.ready_at(ctx),
                     None => return Router::warn_schedule_failed(&kind, "interface not found"),
                 },
-                TaskKind::RxDevice(addr) => match inner.interfaces.get(addr) {
+                TaskKind::RxDevice(addr) => match self.interfaces.get(addr) {
                     Some(iface) => iface.rxq.ready_at(ctx),
                     None => return Router::warn_schedule_failed(&kind, "interface not found"),
                 },
@@ -352,21 +295,16 @@ impl Router {
         };
 
         // Schedule our task, ensuring forward progression of time.
-        self.tasks.borrow_mut().schedule(kind, when.max(ctx.now));
+        self.tasks.schedule(kind, when.max(ctx.now));
     }
 
     /// Process all scheduled tasks that have been schedule to run at or before
     /// the current time provided in the context.
-    fn process_task_queue<T>(&self, ctx: &Context<T>) {
+    fn process_task_queue<T>(&mut self, ctx: &Context<T>) {
         // Process all scheduled non-future tasks.
-        while self
-            .tasks
-            .borrow()
-            .peek()
-            .is_some_and(|x| x.when <= ctx.now)
-        {
-            // Process the next operation without holding the borrow.
-            let task = self.tasks.borrow_mut().pop().unwrap();
+        while self.tasks.peek().is_some_and(|x| x.when <= ctx.now) {
+            // Process the next operation.
+            let task = self.tasks.pop().unwrap();
             self.process(ctx, task.kind);
 
             // Schedule any new tasks that were generated.
@@ -377,7 +315,7 @@ impl Router {
     }
 
     /// Process an individual task.
-    fn process<T>(&self, ctx: &Context<T>, kind: TaskKind) {
+    fn process<T>(&mut self, ctx: &Context<T>, kind: TaskKind) {
         match kind {
             TaskKind::Deliver(packet) => self.process_deliver(ctx, packet),
             TaskKind::TxGlobal => self.process_tx_global(ctx),
@@ -389,25 +327,23 @@ impl Router {
     }
 
     /// A packet arriving from the network gets pushed to our global rx queue.
-    fn process_deliver<T>(&self, ctx: &Context<T>, packet: PacketRc) {
-        self.inner.borrow_mut().rxq.push(ctx, packet);
+    fn process_deliver<T>(&mut self, ctx: &Context<T>, packet: PacketRc) {
+        self.rxq.push(ctx, packet);
     }
 
     /// Use [`Context::send_packet_fn`] to send all packets ready to be sent.
-    fn process_tx_global<T>(&self, ctx: &Context<T>) {
-        while let Some(packet) = self.inner.borrow_mut().txq.pop(ctx) {
+    fn process_tx_global<T>(&mut self, ctx: &Context<T>) {
+        while let Some(packet) = self.txq.pop(ctx) {
             (ctx.send_packet_fn)(ctx.fn_arg, packet);
         }
     }
 
     /// Route packets from the global receive queue to the corresponding device
     /// receive queue.
-    fn process_rx_global<T>(&self, ctx: &Context<T>) {
-        let mut inner = self.inner.borrow_mut();
-
-        while let Some(packet) = inner.rxq.pop(ctx) {
+    fn process_rx_global<T>(&mut self, ctx: &Context<T>) {
+        while let Some(packet) = self.rxq.pop(ctx) {
             let dst_addr = *packet.dst_ipv4_address().ip();
-            if let Some(iface) = inner.interfaces.get_mut(&dst_addr) {
+            if let Some(iface) = self.interfaces.get_mut(&dst_addr) {
                 iface.rxq.push(ctx, packet);
             } else {
                 Router::warn_process_failed(
@@ -422,13 +358,11 @@ impl Router {
     /// queue for that device, and then up to the global transmit queue as rate
     /// limits allow. Loopback packets are routed over to the loopback receive
     /// queue.
-    fn process_tx_device<T>(&self, ctx: &Context<T>, addr: Ipv4Addr) {
-        let mut inner = self.inner.borrow_mut();
-
+    fn process_tx_device<T>(&mut self, ctx: &Context<T>, addr: Ipv4Addr) {
         // Temporarily remove the device for processing.
         // TODO: add a drop guard to add it back later, so we don't return
         // somewhere and forget?
-        let Some(mut iface) = inner.interfaces.remove(&addr) else {
+        let Some(mut iface) = self.interfaces.remove(&addr) else {
             Router::warn_process_failed(&TaskKind::TxDevice(addr), "interface not found");
             return;
         };
@@ -458,7 +392,7 @@ impl Router {
                     let is_local = src_addr == dst_addr || src_addr.is_loopback();
 
                     if is_local && !addr.is_loopback() {
-                        if let Some(lo) = inner.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
+                        if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
                             // Redirect over loopback, applying its configured rate
                             // limits instead of this device's rate limits.
                             lo.txq.push(ctx, pkt);
@@ -493,30 +427,28 @@ impl Router {
                 // Route over loopback to its rxq.
                 if addr.is_loopback() {
                     iface.rxq.push(ctx, pkt);
-                } else if let Some(lo) = inner.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
+                } else if let Some(lo) = self.interfaces.get_mut(&Ipv4Addr::LOCALHOST) {
                     lo.rxq.push(ctx, pkt);
                 } else {
                     Router::warn_routing_failed(&dst_addr, "lo rx interface not found");
                 }
             } else {
                 // Route upstream for network transmission.
-                inner.txq.push(ctx, pkt);
+                self.txq.push(ctx, pkt);
             }
         }
 
         // Restore the device in our collection.
-        inner.interfaces.insert(addr, iface);
+        self.interfaces.insert(addr, iface);
     }
 
     /// Route packets from the device receive queue to the actual underlying
     /// packet device.
-    fn process_rx_device<T>(&self, ctx: &Context<T>, addr: Ipv4Addr) {
-        let mut inner = self.inner.borrow_mut();
-
+    fn process_rx_device<T>(&mut self, ctx: &Context<T>, addr: Ipv4Addr) {
         // Temporarily remove the device for processing.
         // TODO: add a drop guard to add it back later, so we don't return
         // somewhere and forget?
-        let Some(mut iface) = inner.interfaces.remove(&addr) else {
+        let Some(mut iface) = self.interfaces.remove(&addr) else {
             Router::warn_process_failed(&TaskKind::RxDevice(addr), "device not found");
             return;
         };
@@ -528,7 +460,7 @@ impl Router {
             // ip addresses of the default interface.
             if addr == dst_addr {
                 iface.push(ctx, pkt);
-            } else if let Some(other) = inner.interfaces.get_mut(&dst_addr) {
+            } else if let Some(other) = self.interfaces.get_mut(&dst_addr) {
                 other.push(ctx, pkt);
             } else {
                 Router::warn_routing_failed(&dst_addr, "rx device not found");
@@ -536,25 +468,24 @@ impl Router {
         }
 
         // Restore the device in our collection.
-        inner.interfaces.insert(addr, iface);
+        self.interfaces.insert(addr, iface);
     }
 
     /// Checks all interrupts that have occurred on our queues since the last
     /// time we checked, and collects the corresponding router tasks we need to
     /// execute to handle the interrupts.
-    fn collect_interrupts(&self) -> impl IntoIterator<Item = TaskKind> {
+    fn collect_interrupts(&mut self) -> Vec<TaskKind> {
         let mut kinds = Vec::new();
-        let mut inner = self.inner.borrow_mut();
 
-        if inner.txq.take_irq() {
+        if self.txq.take_irq() {
             kinds.push(TaskKind::TxGlobal);
         }
 
-        if inner.rxq.take_irq() {
+        if self.rxq.take_irq() {
             kinds.push(TaskKind::RxGlobal);
         }
 
-        for (addr, iface) in inner.interfaces.iter_mut() {
+        for (addr, iface) in self.interfaces.iter_mut() {
             if iface.txq.take_irq() {
                 kinds.push(TaskKind::TxDevice(*addr));
             }
@@ -795,6 +726,10 @@ mod tests {
 
     struct MockHost {
         router: Router,
+        env: MockEnv,
+    }
+
+    struct MockEnv {
         interfaces: HashMap<Ipv4Addr, RefCell<MockInterface>>,
         net_rx: RefCell<VecDeque<PacketRc>>,
     }
@@ -803,18 +738,20 @@ mod tests {
         fn new(tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
             Self {
                 router: Router::new(tx_rate, rx_rate),
-                interfaces: HashMap::new(),
-                net_rx: RefCell::new(VecDeque::new()),
+                env: MockEnv {
+                    interfaces: HashMap::new(),
+                    net_rx: RefCell::new(VecDeque::new()),
+                },
             }
         }
 
         fn add_device(&mut self, addr: Ipv4Addr, tx: RateLimit, rx: RateLimit) {
             let dev = RefCell::new(MockInterface::new(addr));
-            self.interfaces.insert(addr, dev);
+            self.env.interfaces.insert(addr, dev);
             self.router.attach_packet_device(addr, tx, rx);
         }
 
-        fn ctx<'a>(&'a self, now: EmulatedTime, boot: bool) -> RouterContext<'a, Self> {
+        fn ctx<'a>(env: &'a MockEnv, now: EmulatedTime, boot: bool) -> RouterContext<'a, MockEnv> {
             RouterContext {
                 now,
                 is_bootstrapping: boot,
@@ -824,12 +761,13 @@ mod tests {
                         .get(&addr)
                         .map(|d| d.borrow() as Ref<'_, dyn PacketDevice>)
                 },
-                fn_arg: self,
+                fn_arg: env,
             }
         }
 
         fn enqueue(&mut self, pkt: PacketRc) {
-            self.interfaces
+            self.env
+                .interfaces
                 .get(pkt.src_ipv4_address().ip())
                 .unwrap()
                 .borrow_mut()
@@ -838,9 +776,9 @@ mod tests {
 
         /// Run the router repeatedly until it returns `None`, i.e. becomes idle.
         /// Returns the final `EmulatedTime` that the router processed.
-        fn run_router_to_idle(&self, mut now: EmulatedTime) -> EmulatedTime {
+        fn run_router_to_idle(&mut self, mut now: EmulatedTime) -> EmulatedTime {
             loop {
-                let ctx = self.ctx(now, false);
+                let ctx = Self::ctx(&self.env, now, false);
                 let next = self.router.run(&ctx, Event::Wakeup);
                 match next {
                     Some(t) => now = t, // advance simulated time
@@ -869,7 +807,7 @@ mod tests {
             }
 
             // Deliver the device interrupt.
-            let ctx = self.ctx(start, false);
+            let ctx = Self::ctx(&self.env, start, false);
             let res = self.router.run(&ctx, Event::DeviceInterrupt(TEST_ADDR));
 
             // Run the router until it's idle.
@@ -900,7 +838,7 @@ mod tests {
             }
 
             // Deliver the packet arrival events.
-            let ctx = self.ctx(start, false);
+            let ctx = Self::ctx(&self.env, start, false);
 
             // Keep track of timeouts so we wake it up when requested.
             let mut timeouts = VecDeque::new();
@@ -917,7 +855,7 @@ mod tests {
 
             while let Some(next) = timeouts.pop_front() {
                 now = now.max(next);
-                let ctx = self.ctx(now, false);
+                let ctx = Self::ctx(&self.env, now, false);
                 if let Some(timeout) = self.router.run(&ctx, Event::Wakeup) {
                     timeouts.push_back(timeout);
                 }
@@ -978,8 +916,8 @@ mod tests {
         let (pkt, end) = host.route_outbound_packet(START_TIME);
 
         // The packet should have been sent to the network.
-        assert_eq!(host.net_rx.borrow().len(), 1);
-        assert!(host.net_rx.borrow()[0] == pkt);
+        assert_eq!(host.env.net_rx.borrow().len(), 1);
+        assert!(host.env.net_rx.borrow()[0] == pkt);
 
         // No time has passed.
         assert_eq!(end, START_TIME);
@@ -993,7 +931,7 @@ mod tests {
         let (pkt, end) = host.route_inbound_packet(START_TIME);
 
         // The packet should have been received by the device.
-        let dev = host.interfaces.get(&TEST_ADDR).unwrap().borrow();
+        let dev = host.env.interfaces.get(&TEST_ADDR).unwrap().borrow();
         let queue = dev.rx.borrow();
         assert_eq!(queue.len(), 1);
         assert!(queue[0] == pkt);
@@ -1009,7 +947,7 @@ mod tests {
         end: EmulatedTime,
     ) {
         // The packet should have been sent to the network.
-        let queue = host.net_rx.borrow();
+        let queue = host.env.net_rx.borrow();
         assert_eq!(queue.len(), pkts.len());
         for i in 0..pkts.len() {
             assert!(queue[i] == pkts[i]);
@@ -1074,7 +1012,7 @@ mod tests {
         end: EmulatedTime,
     ) {
         // The packet should have been received by the device.
-        let dev = host.interfaces.get(&TEST_ADDR).unwrap().borrow();
+        let dev = host.env.interfaces.get(&TEST_ADDR).unwrap().borrow();
         let queue = dev.rx.borrow();
         assert_eq!(queue.len(), pkts.len());
         for i in 0..pkts.len() {
