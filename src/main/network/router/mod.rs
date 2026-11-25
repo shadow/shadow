@@ -117,7 +117,7 @@
 //!
 
 use std::cell::Ref;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::net::Ipv4Addr;
 
 use shadow_shim_helper_rs::emulated_time::EmulatedTime;
@@ -215,8 +215,12 @@ impl Router {
     /// global transmit and receive queues.
     pub fn new(tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
         Self {
-            txq: RateLimitedQueue::new(tx_rate),
-            rxq: RateLimitedQueue::new(rx_rate),
+            // Outgoing packets coming from our connected interfaces can be
+            // dropped if the upstream network cannot receive them fast enough.
+            txq: RateLimitedQueue::new_lossy(tx_rate),
+            // Incoming packets from the network can be dropped if our connected
+            // interfaces cannot receive them fast enough.
+            rxq: RateLimitedQueue::new_lossy(rx_rate),
             interfaces: HashMap::new(),
             tasks: TaskQueue::new(),
             wakeup_times: BTreeSet::new(),
@@ -523,8 +527,12 @@ impl Interface {
     fn new(addr: Ipv4Addr, tx_rate: RateLimit, rx_rate: RateLimit) -> Self {
         Self {
             addr,
-            txq: RateLimitedQueue::new(tx_rate),
-            rxq: RateLimitedQueue::new(rx_rate),
+            // Outgoing packets cannot be dropped from the device if they have
+            // not even been sent to the network yet.
+            txq: RateLimitedQueue::new_lossless(tx_rate),
+            // Incoming packets coming from the network can be dropped if the
+            // device cannot receive them fast enough.
+            rxq: RateLimitedQueue::new_lossy(rx_rate),
         }
     }
 
@@ -556,7 +564,7 @@ impl Interface {
 #[derive(Debug)]
 struct RateLimitedQueue {
     /// The underlying queue storing packets.
-    packets: CoDelQueue,
+    packets: PacketQueue,
     /// The object we use to enforce a rate limit; None means no limit.
     limiter: Option<TokenBucket>,
     /// If we reached our rate limit, we become unblocked at this time.
@@ -566,15 +574,27 @@ struct RateLimitedQueue {
 }
 
 impl RateLimitedQueue {
-    /// Creates a new packet queue that can be popped according the the given
-    /// rate limit.
-    fn new(limit: RateLimit) -> Self {
+    /// Creates a new queue that wraps the given packet queue, enforcing that
+    /// packets can only be popped according to the given rate limit.
+    fn new(packets: PacketQueue, limit: RateLimit) -> Self {
         Self {
-            packets: CoDelQueue::default(),
+            packets,
             limiter: limit.into(),
             blocked_until: None,
             irq: false,
         }
+    }
+
+    /// Creates a new queue that wraps a lossy packet queue, enforcing that
+    /// packets can only be popped according to the given rate limit.
+    fn new_lossy(limit: RateLimit) -> Self {
+        Self::new(PacketQueue::new_lossy(), limit)
+    }
+
+    /// Creates a new queue that wraps a lossless packet queue, enforcing that
+    /// packets can only be popped according to the given rate limit.
+    fn new_lossless(limit: RateLimit) -> Self {
+        Self::new(PacketQueue::new_lossless(), limit)
     }
 
     /// Pushes a packet to the underling queue, tracking if the router needs to
@@ -629,6 +649,52 @@ impl RateLimitedQueue {
     /// rate limit block).
     fn ready_at<T>(&self, ctx: &Context<T>) -> EmulatedTime {
         self.blocked_until.unwrap_or(ctx.now)
+    }
+}
+
+/// A simple packet queue with a unified interface that supports a lossy mode
+/// using a CoDelQueue, or a lossless mode using a VecDeque.
+#[derive(Debug)]
+enum PacketQueue {
+    Lossy(CoDelQueue),
+    Lossless(VecDeque<PacketRc>),
+}
+
+impl PacketQueue {
+    fn new_lossy() -> Self {
+        Self::Lossy(CoDelQueue::default())
+    }
+
+    fn new_lossless() -> Self {
+        Self::Lossless(VecDeque::new())
+    }
+
+    fn push(&mut self, packet: PacketRc, now: EmulatedTime) {
+        match self {
+            PacketQueue::Lossy(q) => q.push(packet, now),
+            PacketQueue::Lossless(q) => q.push_back(packet),
+        }
+    }
+
+    fn peek(&self) -> Option<&PacketRc> {
+        match self {
+            PacketQueue::Lossy(q) => q.peek(),
+            PacketQueue::Lossless(q) => q.front(),
+        }
+    }
+
+    fn pop(&mut self, now: EmulatedTime) -> Option<PacketRc> {
+        match self {
+            PacketQueue::Lossy(q) => q.pop(now),
+            PacketQueue::Lossless(q) => q.pop_front(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            PacketQueue::Lossy(q) => q.is_empty(),
+            PacketQueue::Lossless(q) => q.is_empty(),
+        }
     }
 }
 
