@@ -121,7 +121,7 @@ pub struct Host {
     // by the host and responsible for moving packets around between the host
     // and its upstream provider, it is not a physically separate machine in
     // the traditional sense.
-    router: Arc<Router>,
+    router: RefCell<Router>,
 
     // map address to futex objects
     futex_table: RefCell<FutexTable>,
@@ -299,7 +299,7 @@ impl Host {
             root,
             event_queue: Arc::new(Mutex::new(EventQueue::new())),
             params,
-            router: Arc::new(router),
+            router: RefCell::new(router),
             futex_table: RefCell::new(FutexTable::new()),
             fcntl_lock_table: RefCell::new(FcntlLockTable::new()),
             random,
@@ -696,9 +696,19 @@ impl Host {
 
     /// Run the router to handle the given router event that has occurred.
     fn run_router(&self, event: RouterEvent) {
-        // Construct the router runtime context.
+        let now = Worker::current_time().unwrap();
+
+        // Get a mutable router handle.
+        let Ok(mut router) = self.router.try_borrow_mut() else {
+            // The router is currently running, defer handling the event.
+            let task = TaskRef::new(move |host| host.run_router(event.clone()));
+            self.schedule_task_at_emulated_time(task, now);
+            return;
+        };
+
+        // We can run the router, construct a runtime context.
         let ctx = RouterContext {
-            now: Worker::current_time().unwrap(),
+            now,
             is_bootstrapping: Worker::is_bootstrapping(),
             send_packet_fn: Worker::send_packet,
             get_packet_device_fn: Host::interface_borrow_as_packet_device,
@@ -707,10 +717,8 @@ impl Host {
 
         // Run the router to handle the event. If it wants to run again, it will
         // return the time that we should wake it up.
-        if let Some(next_run_time) = self.router.run(&ctx, event) {
-            let task = TaskRef::new(move |host| {
-                host.run_router(RouterEvent::Wakeup);
-            });
+        if let Some(next_run_time) = router.run(&ctx, event) {
+            let task = TaskRef::new(move |host| host.run_router(RouterEvent::Wakeup));
             self.schedule_task_at_emulated_time(task, next_run_time);
         }
     }
